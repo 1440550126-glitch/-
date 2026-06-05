@@ -1,0 +1,8 @@
+<view class="container">
+  <view class="hero">
+    <view><view class="logo">句灵</view><view class="sub">让文案活过来</view></view>
+    <button class="warm btn-ghost" bindtap="aiWarmup">AI 暖场</button>
+  </view>
+  <view class="tabs"><view class="tab {{sort==='latest'?'on':''}}" bindtap="switchLatest">最新</view><view class="tab {{sort==='hot'?'on':''}}" bindtap="switchHot">推荐</view></view>
+  <living-card wx:for="{{posts}}" wx:key="_id" post="{{item}}" bind:like="likePost" bind:collect="collectPost" bind:share="sharePost" bind:play="recordPlay" />
+</view>

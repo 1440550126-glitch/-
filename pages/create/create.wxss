@@ -1,0 +1,8 @@
+.title { font-size: 44rpx; font-weight:900; margin: 26rpx 0; }
+.input { width:100%; min-height: 230rpx; background:#fffaf4; border-radius: 30rpx; padding: 28rpx; box-sizing:border-box; font-size:32rpx; line-height:1.5; box-shadow: 0 12rpx 40rpx rgba(31,34,50,.07); }
+.label { margin: 30rpx 0 14rpx; color:#666; font-weight:700; }
+.chips { display:flex; gap:14rpx; flex-wrap:wrap; }
+.chip { padding: 14rpx 24rpx; border-radius:999rpx; background:#fff; color:#666; }
+.chip.on { background:#171923; color:#fff; }
+.action,.publish { margin-top: 34rpx; height: 88rpx; line-height:88rpx; }
+.preview-title { margin-top: 34rpx; font-size:32rpx; font-weight:800; }

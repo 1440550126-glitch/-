@@ -1,0 +1,5 @@
+<view class="container">
+  <view class="title">热门榜</view>
+  <view class="desc">按 点赞×3 + 评论×5 + 分享×8 + 收藏×6 + 长按播放×4 - 时间衰减 排序。</view>
+  <living-card wx:for="{{posts}}" wx:key="_id" post="{{item}}" bind:like="likePost" bind:collect="collectPost" bind:share="sharePost" bind:play="recordPlay" />
+</view>

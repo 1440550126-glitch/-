@@ -1,0 +1,21 @@
+<view class="post-card card-shadow {{pressing ? 'pressing' : ''}}" bindtap="openDetail">
+  <view class="user-row">
+    <image class="avatar" src="{{post.user.avatar}}" mode="aspectFill" />
+    <view class="user-copy">
+      <view class="nickname">{{post.user.nickname}} <text wx:if="{{post.is_ai_post}}" class="ai-badge">AI</text></view>
+      <view class="meta">{{post.emotion}} · {{post.theme}}</view>
+    </view>
+  </view>
+  <view class="preview" style="background: linear-gradient(135deg, {{post.preview_config.background.colors[0]}}, {{post.preview_config.background.colors[1]}});" bindlongpress="startLiving" bindtouchstart="touchStart" bindtouchend="touchEnd" catchtap="noop">
+    <view class="decor decor-a"></view><view class="decor decor-b"></view>
+    <text class="copy {{post.preview_config.layout}}">{{post.text}}</text>
+    <view class="hint">长按让文字活过来</view>
+    <line-animation-canvas id="anim" manifest="{{post.animation_manifest}}" bind:playstart="onPlayStart" />
+  </view>
+  <view class="actions">
+    <view class="action {{post.liked ? 'active' : ''}}" catchtap="like">♥ {{post.like_count}}</view>
+    <view class="action" catchtap="openDetail">💬 {{post.comment_count}}</view>
+    <view class="action" catchtap="share">↗ {{post.share_count}}</view>
+    <view class="action {{post.collected ? 'active' : ''}}" catchtap="collect">★ {{post.collect_count}}</view>
+  </view>
+</view>

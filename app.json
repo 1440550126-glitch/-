@@ -1,0 +1,28 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/create/create",
+    "pages/detail/detail",
+    "pages/profile/profile",
+    "pages/hot/hot"
+  ],
+  "window": {
+    "navigationBarTitleText": "句灵",
+    "navigationBarBackgroundColor": "#12131a",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f7f4ef"
+  },
+  "tabBar": {
+    "color": "#777777",
+    "selectedColor": "#12131a",
+    "backgroundColor": "#fffaf4",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/index/index", "text": "广场" },
+      { "pagePath": "pages/create/create", "text": "发布" },
+      { "pagePath": "pages/hot/hot", "text": "热门" },
+      { "pagePath": "pages/profile/profile", "text": "我的" }
+    ]
+  },
+  "sitemapLocation": "sitemap.json"
+}

@@ -1,0 +1,18 @@
+.post-card { margin: 24rpx 0; padding: 24rpx; border-radius: 36rpx; background: rgba(255, 250, 244, .95); transition: transform .2s ease; }
+.post-card.pressing { transform: scale(1.02); }
+.user-row { display:flex; align-items:center; gap: 18rpx; margin-bottom: 18rpx; }
+.avatar { width: 72rpx; height: 72rpx; border-radius: 50%; background:#eee; }
+.nickname { font-size: 29rpx; font-weight: 700; }
+.ai-badge { margin-left: 8rpx; padding: 2rpx 10rpx; border-radius: 999rpx; background:#171923; color:#fff; font-size:20rpx; }
+.meta { margin-top: 4rpx; color:#8b8792; font-size: 23rpx; }
+.preview { position:relative; height: 560rpx; border-radius: 32rpx; overflow:hidden; display:flex; align-items:center; justify-content:center; padding: 52rpx; box-sizing:border-box; }
+.copy { position:relative; z-index:2; text-align:center; white-space:pre-wrap; font-weight:800; color:#252632; line-height:1.35; text-shadow: 0 8rpx 28rpx rgba(255,255,255,.28); }
+.hero_sentence { font-size: 48rpx; }
+.poem_lines { font-size: 34rpx; }
+.hint { position:absolute; z-index:3; left:0; right:0; bottom: 26rpx; text-align:center; font-size: 23rpx; color: rgba(30,31,40,.55); }
+.decor { position:absolute; border: 2rpx solid rgba(40,44,60,.18); border-radius: 50%; }
+.decor-a { width: 260rpx; height: 90rpx; left:-40rpx; top: 72rpx; transform: rotate(-12deg); }
+.decor-b { width: 180rpx; height: 180rpx; right:-50rpx; bottom: 70rpx; }
+.actions { display:flex; justify-content:space-around; padding-top: 22rpx; color:#666977; font-size: 26rpx; }
+.action { padding: 12rpx 18rpx; border-radius: 999rpx; }
+.action.active { color:#e85b7d; background:rgba(232,91,125,.1); }

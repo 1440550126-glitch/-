@@ -1,0 +1,1 @@
+{ "navigationBarTitleText": "文案详情", "usingComponents": { "living-card": "/components/living-card/living-card", "comment-list": "/components/comment-list/comment-list" } }

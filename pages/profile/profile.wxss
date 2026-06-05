@@ -1,0 +1,8 @@
+.profile { display:flex; gap:22rpx; padding:30rpx; margin-top:26rpx; border-radius:36rpx; background:#fffaf4; }
+.avatar { width:128rpx; height:128rpx; border-radius:50%; background:#eee; }
+.info { flex:1; }
+.name { font-size:38rpx; font-weight:900; }
+.bio { margin:10rpx 0; color:#666; line-height:1.45; }
+.stats { color:#999; font-size:24rpx; }
+.section-title { margin:32rpx 0 8rpx; font-size:32rpx; font-weight:800; }
+.empty { padding:70rpx 20rpx; color:#999; text-align:center; }

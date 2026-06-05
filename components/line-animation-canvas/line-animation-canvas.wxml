@@ -1,0 +1,3 @@
+<view class="canvas-wrap {{playing ? 'show' : ''}}">
+  <canvas type="2d" id="livingCanvas" class="living-canvas"></canvas>
+</view>

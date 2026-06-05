@@ -1,0 +1,2 @@
+const db = require('../../utils/db');
+Page({ data: { posts: [] }, onShow() { this.load(); }, load() { this.setData({ posts: db.listPosts({ sort: 'hot' }) }); }, likePost(e) { db.toggleLike(e.detail.postId); this.load(); }, collectPost(e) { db.toggleCollect(e.detail.postId); this.load(); }, sharePost(e) { db.recordShare(e.detail.postId); wx.showToast({ title: '已记录分享' }); this.load(); }, recordPlay(e) { db.recordPlay(e.detail.postId); this.load(); } });

@@ -1,0 +1,12 @@
+<view class="container create">
+  <view class="title">写一句会动的文案</view>
+  <textarea class="input" value="{{text}}" bindinput="onText" maxlength="200" placeholder="例如：我在等风，也在等你。" />
+  <view class="label">情绪标签</view>
+  <view class="chips"><view wx:for="{{emotions}}" wx:key="*this" class="chip {{emotionTag===item?'on':''}}" bindtap="pickEmotion" data-value="{{item}}">{{item}}</view></view>
+  <view class="label">主题</view>
+  <view class="chips"><view wx:for="{{themes}}" wx:key="*this" class="chip {{theme===item?'on':''}}" bindtap="pickTheme" data-value="{{item}}">{{item}}</view></view>
+  <button class="btn-primary action" bindtap="generate">生成预览</button>
+  <view wx:if="{{previewPost}}" class="preview-title">AI 生命卡预览</view>
+  <living-card wx:if="{{previewPost}}" post="{{previewPost}}" />
+  <button wx:if="{{previewPost}}" class="btn-primary publish" bindtap="publish">发布到社交广场</button>
+</view>
