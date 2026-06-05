@@ -1,0 +1,9 @@
+<view class="container">
+  <view class="profile card-shadow">
+    <image class="avatar" src="{{user.avatar}}" />
+    <view class="info"><view class="name">{{user.nickname}}</view><view class="bio">{{user.bio}}</view><view class="stats">作品 {{posts.length}} · 收藏 {{collectCount}} · 粉丝 {{user.fans_count}}</view></view>
+  </view>
+  <view class="section-title">我的文案生命卡</view>
+  <living-card wx:for="{{posts}}" wx:key="_id" post="{{item}}" bind:like="likePost" bind:collect="collectPost" bind:share="sharePost" bind:play="recordPlay" />
+  <view wx:if="{{!posts.length}}" class="empty">还没有发布，去写第一句会动的文案吧。</view>
+</view>

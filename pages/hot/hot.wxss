@@ -1,0 +1,2 @@
+.title { font-size:48rpx; font-weight:900; margin-top:26rpx; }
+.desc { margin:12rpx 0 20rpx; color:#777; line-height:1.5; }

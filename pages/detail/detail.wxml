@@ -1,0 +1,12 @@
+<view class="container detail">
+  <living-card wx:if="{{post}}" post="{{post}}" bind:like="likePost" bind:collect="collectPost" bind:share="sharePost" bind:play="recordPlay" />
+  <view class="panel" wx:if="{{post}}">
+    <view class="panel-title">Manifest 逻辑</view>
+    <view class="manifest">情绪：{{post.emotion}}｜场景：{{post.theme}}｜对象：{{objectText}}｜声音：{{soundText}}</view>
+  </view>
+  <comment-list comments="{{comments}}" bind:reply="prepareReply" />
+  <view class="comment-bar">
+    <input class="comment-input" value="{{commentText}}" bindinput="onComment" placeholder="{{replyHint || '写一条评论，也能触发小型文字动效'}}" />
+    <button class="send btn-primary" bindtap="sendComment">发送</button>
+  </view>
+</view>

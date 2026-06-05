@@ -1,0 +1,7 @@
+.hero { display:flex; justify-content:space-between; align-items:center; padding: 18rpx 4rpx 8rpx; }
+.logo { font-size: 58rpx; font-weight: 900; letter-spacing: 4rpx; }
+.sub { margin-top: 8rpx; color:#777; font-size: 26rpx; }
+.warm { width: 170rpx; height: 66rpx; line-height:66rpx; font-size:24rpx; }
+.tabs { display:flex; gap:18rpx; margin: 28rpx 0 8rpx; }
+.tab { padding: 14rpx 34rpx; border-radius:999rpx; color:#777; background:#fff; }
+.tab.on { background:#171923; color:#fff; font-weight:700; }

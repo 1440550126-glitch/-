@@ -1,0 +1,6 @@
+.panel { margin: 20rpx 0; padding: 26rpx; background:#fffaf4; border-radius:28rpx; }
+.panel-title { font-weight:800; font-size:30rpx; margin-bottom:10rpx; }
+.manifest { color:#666; line-height:1.5; font-size:25rpx; }
+.comment-bar { position:fixed; left:0; right:0; bottom:0; display:flex; gap:16rpx; padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom)); background:rgba(255,250,244,.96); box-shadow: 0 -10rpx 30rpx rgba(0,0,0,.05); }
+.comment-input { flex:1; height:76rpx; padding:0 24rpx; background:#fff; border-radius:999rpx; }
+.send { width:136rpx; height:76rpx; line-height:76rpx; font-size:26rpx; }
