@@ -10,7 +10,11 @@ Page({
   generate() {
     const moderation = moderateText(this.data.text);
     if (moderation.status === 'blocked') { wx.showModal({ title: '无法生成', content: moderation.reason, showCancel: false }); return; }
-    if (moderation.care) wx.showModal({ title: '给你一个拥抱', content: '这类内容不会被唯美化扩散。如果你正处在危险里，请马上联系身边的人或当地紧急帮助。', showCancel: false });
+    if (moderation.status === 'review') {
+      wx.showModal({ title: '给你一个拥抱', content: '这类内容不会被唯美化扩散。如果你正处在危险里，请马上联系身边的人或当地紧急帮助。', showCancel: false });
+      this.setData({ previewPost: null });
+      return;
+    }
     const parsed = parseCopy({ text: this.data.text, emotionTag: this.data.emotionTag, theme: this.data.theme });
     const previewPost = { _id: 'preview', user: app.globalData.user, user_id: app.globalData.user._id, text: this.data.text, emotion: parsed.emotion, theme: this.data.theme, preview_config: parsed.preview_config, animation_manifest: parsed.animation_manifest, like_count:0, comment_count:0, share_count:0, collect_count:0 };
     this.setData({ previewPost });
