@@ -1,0 +1,1 @@
+{"name":"lingmirror-ai","version":"1.0.0","description":"LingMirror AI / 灵镜 AI - AI Video Production Engine with Memory","main":"backend/server.js","scripts":{"migrate":"node backend/migrate.js","start":"node backend/server.js","dev":"NODE_ENV=development node backend/server.js"},"dependencies":{},"engines":{"node":">=18"}}

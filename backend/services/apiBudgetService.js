@@ -1,0 +1,4 @@
+const {get}=require('../db'); const {num}=require('../utils/env');
+function assertWithinPlatformBudget(additionalCost=0){ const today=new Date().toISOString().slice(0,10); const month=today.slice(0,7); const daily=get("SELECT COALESCE(SUM(actual_cost),0) total FROM api_usage_logs WHERE status='succeeded' AND created_at LIKE ?",[`${today}%`]).total; const monthly=get("SELECT COALESCE(SUM(actual_cost),0) total FROM api_usage_logs WHERE status='succeeded' AND created_at LIKE ?",[`${month}%`]).total; if(daily+additionalCost>num('DAILY_PLATFORM_API_BUDGET_CNY',30)) throw new Error('daily_platform_budget_exceeded'); if(monthly+additionalCost>num('MONTHLY_PLATFORM_API_BUDGET_CNY',500)) throw new Error('monthly_platform_budget_exceeded'); return {daily,monthly}; }
+function assertUserDailyLimit(user,additionalCost=0){ return true; }
+module.exports={assertWithinPlatformBudget,assertUserDailyLimit};

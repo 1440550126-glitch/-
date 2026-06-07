@@ -1,0 +1,3 @@
+const embedding=require('./embeddingService'); const {run,now}=require('../db'); const {id}=require('../utils/ids');
+async function retrieveForShot(projectId,shot){ const emb=await embedding.createTextEmbedding(`${shot.prompt} ${shot.negative_prompt||''}`); const matches=embedding.searchSimilarMemory(projectId,emb.embedding,8); const block=matches.map((m,i)=>`${i+1}. ${m.anchor_type}/${m.title}: ${m.description}`).join('\n'); for(const m of matches){ run('INSERT INTO shot_memory_links (id,project_id,shot_id,memory_anchor_id,link_type,relevance_score,used_in_prompt,created_at) VALUES (?,?,?,?,?,?,?,?)',[id('sml'),projectId,shot.id,m.id,'prompt_injection',m.score,block,now()]); } return {matches,promptBlock:block}; }
+module.exports={retrieveForShot};
