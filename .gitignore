@@ -1,0 +1,15 @@
+.env
+node_modules/
+data/
+release/
+storage/videos/*
+!storage/videos/.gitkeep
+storage/frames/*
+!storage/frames/.gitkeep
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/renders/*
+!storage/renders/.gitkeep
+storage/logs/*
+!storage/logs/.gitkeep
+*.log
