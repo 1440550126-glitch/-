@@ -15,3 +15,6 @@ storage/logs/*
 !storage/logs/.gitkeep
 npm-debug.log*
 .DS_Store
+
+release/*.tar.gz
+release/*.zip

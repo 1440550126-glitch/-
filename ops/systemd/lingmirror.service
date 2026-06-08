@@ -1,0 +1,18 @@
+[Unit]
+Description=LingMirror AI backend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/lingmirror
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=5
+User=www-data
+Group=www-data
+StandardOutput=append:/var/www/lingmirror/storage/logs/systemd.log
+StandardError=append:/var/www/lingmirror/storage/logs/systemd-error.log
+
+[Install]
+WantedBy=multi-user.target

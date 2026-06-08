@@ -4,4 +4,7 @@ app.use('/storage', express.static(path.join(process.cwd(),'storage'))); app.use
 app.get('/health',(req,res)=>res.type('text/plain').send('OK')); app.get('/api/health',(req,res)=>res.json({status:'OK',service:'LingMirror AI',host:str('HOST','127.0.0.1'),port:num('PORT',3001)}));
 app.use('/api/auth',require('./routes/authRoutes')); app.use('/api/wallet',require('./routes/walletRoutes')); app.use('/api/payments',require('./routes/paymentRoutes')); app.use('/api/subscriptions',require('./routes/subscriptionRoutes')); app.use('/api/projects',require('./routes/projectRoutes')); app.use('/api/business',require('./routes/businessRoutes')); app.use('/api/memory',require('./routes/memoryRoutes')); app.use('/api/admin',require('./routes/adminRoutes')); app.use('/api/checkin',require('./routes/checkinRoutes'));
 app.use((err,req,res,next)=>{ logger.error(err.stack||err.message); const status=err.message?.includes('insufficient')?402:err.message?.includes('requires_upgrade')?403:500; res.status(status).json({error:err.message||'server_error'}); });
-app.listen(num('PORT',3001),str('HOST','127.0.0.1'),()=>logger.info(`LingMirror AI listening on ${str('HOST','127.0.0.1')}:${num('PORT',3001)}`));
+const server=app.listen(num('PORT',3001),str('HOST','127.0.0.1'),()=>logger.info(`LingMirror AI listening on ${str('HOST','127.0.0.1')}:${num('PORT',3001)}`));
+process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
+process.on('SIGINT',()=>server.close(()=>process.exit(0)));
+module.exports=app;
