@@ -8,7 +8,10 @@
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y nodejs npm sqlite3 nginx rsync ca-certificates
+sudo apt-get install -y curl ca-certificates gnupg sqlite3 nginx rsync
+# 如果系统 Node 低于 18，使用 NodeSource 安装 Node 20：
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+sudo apt-get install -y nodejs
 ```
 
 ## 2. 一键部署到 `/var/www/lingmirror`
@@ -21,9 +24,10 @@ sudo APP_DIR=/var/www/lingmirror DOMAIN=lingmirror.com.cn bash scripts/bootstrap
 
 脚本会：
 
-- 安装 Node/npm/sqlite3/nginx/rsync
-- 同步项目到 `/var/www/lingmirror`
-- 首次部署自动生成 `.env`、`JWT_SECRET`、`ADMIN_PASSWORD`
+- 检查 Node 版本；低于 18 时自动安装 Node 20
+- 安装 sqlite3/nginx/rsync 等依赖
+- 同步项目到 `/var/www/lingmirror`，并保留生产 `.env`、`data/`、`storage/`
+- 首次部署自动生成 `.env`、`JWT_SECRET`、`ADMIN_PASSWORD`，并默认 `ENABLE_REAL_API=false`，先保证服务器可启动
 - 执行 `npm install --omit=dev`
 - 执行 `npm run migrate`
 - 安装 systemd 服务 `lingmirror`
@@ -60,7 +64,8 @@ VOLCENGINE_ARK_API_KEY=只放服务器.env里
 
 上线顺序：
 
-1. 先让 `VOLCENGINE_ENABLE_TEXT=true`，测试 Copy Lab 和 Product Ads 文本。
+0. 一键部署生成的 `.env` 默认 `ENABLE_REAL_API=false`，先跑通 health 和 smoke test。
+1. 填写 `VOLCENGINE_ARK_API_KEY` 后，再设置 `ENABLE_REAL_API=true`、`VOLCENGINE_ENABLE_TEXT=true`，测试 Copy Lab 和 Product Ads 文本。
 2. 再测试剧本分析、Visual Bible、Memory Anchor 摘要。
 3. paid_balance、预算和成本日志确认无误后，才打开 `VOLCENGINE_ENABLE_VIDEO=true`。
 4. 视频真实调用会先做 paid balance、预算、provider balance、Seedance payload 校验和 frozen balance。
@@ -110,3 +115,33 @@ sudo nginx -t
 - 不要把 `VOLCENGINE_ARK_API_KEY`、`PAYPAL_CLIENT_SECRET`、`GOOGLE_CLIENT_SECRET`、`ALIPAY_PRIVATE_KEY`、`JWT_SECRET`、`ADMIN_PASSWORD` 写入前端或 Git。
 - 日志只允许打码显示密钥。
 - 免费用户不能直接烧真实视频；真实视频任务优先检查 `paid_balance`。
+
+## 9. 服务器部署失败时怎么排查
+
+如果服务器上部署不了，先执行：
+
+```bash
+sudo APP_DIR=/var/www/lingmirror bash scripts/doctor-server.sh
+```
+
+重点看：
+
+- Node 是否 >= 18。Ubuntu apt 默认 Node 可能过旧，bootstrap 脚本会自动安装 Node 20。
+- `/var/www/lingmirror/.env` 是否存在，是否有 `JWT_SECRET`、`ADMIN_PASSWORD`、`HOST=127.0.0.1`、`PORT=3001`。
+- `sqlite3` 是否安装。
+- `systemctl status lingmirror` 和 `journalctl -u lingmirror -n 80 --no-pager` 的错误。
+- `curl http://127.0.0.1:3001/health` 是否返回 `OK`。
+- `nginx -t` 是否通过。
+
+常用修复命令：
+
+```bash
+cd /var/www/lingmirror
+sudo npm install --omit=dev
+sudo npm run migrate
+sudo NODE_ENV=production npm run preflight
+sudo systemctl restart lingmirror
+curl http://127.0.0.1:3001/health
+```
+
+注意：新版 bootstrap 已经不会在重新部署时删除服务器上的 `.env`、`data/` 和 `storage/`。

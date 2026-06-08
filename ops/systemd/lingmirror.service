@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/var/www/lingmirror
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/npm run start
+ExecStart=/usr/bin/env npm run start
 Restart=always
 RestartSec=5
 User=www-data
