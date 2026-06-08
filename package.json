@@ -1,0 +1,19 @@
+{
+  "name": "lingmirror-ai",
+  "version": "1.0.0",
+  "description": "LingMirror AI / 灵镜 AI - AI Video Production Engine with Memory",
+  "main": "backend/server.js",
+  "scripts": {
+    "migrate": "node backend/migrate.js",
+    "preflight": "node backend/preflight.js",
+    "start": "node backend/server.js",
+    "dev": "NODE_ENV=development node backend/server.js",
+    "smoke": "bash scripts/smoke-test.sh",
+    "package:release": "bash scripts/package-release.sh",
+    "doctor": "bash scripts/doctor-server.sh"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
+}

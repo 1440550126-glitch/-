@@ -1,0 +1,3 @@
+const volc=require('../providers/volcengineProvider'); const mock=require('./mockProvider'); const {route}=require('./modelRouter');
+async function analyzeFrame(frameUrl, context={}){ try{ const r=await volc.callVisionModel({model:route('vision'),frameUrl,context}); let parsed; try{parsed=JSON.parse(r.output_text)}catch{parsed={description:r.output_text}} return {...parsed,provider:r.provider,model:r.model,fallback_used:false}; }catch(e){ const m=mock.visual_analysis_mock({frameUrl,context}); return {...JSON.parse(m.output_text),provider:'mockProvider',model:'mock-vision',fallback_used:true,warning:'vision_fallback_used',error:e.message}; } }
+module.exports={analyzeFrame};
