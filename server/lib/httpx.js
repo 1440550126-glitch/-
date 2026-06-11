@@ -62,12 +62,19 @@ function readBody(req, maxBytes = 128 * 1024) {
   });
 }
 
+const SEC_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'same-origin',
+  'X-Frame-Options': 'DENY'
+};
+
 export function sendJSON(res, status, obj) {
   if (res.writableEnded) return;
   const body = JSON.stringify(obj);
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
-    'Cache-Control': 'no-store'
+    'Cache-Control': 'no-store',
+    ...SEC_HEADERS
   });
   res.end(body);
 }
@@ -87,10 +94,14 @@ export async function handleApi(req, res, pathname, query) {
     const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || query.get('token') || '';
     ctx.user = userFromToken(token);
 
-    // 限流：登录用户按用户维度（移动网络共享出口 IP），匿名按 IP
+    // 限流：登录用户按用户维度（移动网络共享出口 IP），匿名按 IP；
+    // 对局内动作（发言/投票/夜间行动/聊天）天然高频，独立计桶
     const isWrite = req.method !== 'GET';
+    const isGameOp = isWrite && pathname.startsWith('/api/rooms/');
     const rateKey = ctx.user ? `u:${ctx.user.id}` : `ip:${ip}`;
-    if (!rateLimit(`${rateKey}:${isWrite ? 'w' : 'r'}`, isWrite ? (ctx.user ? 80 : 30) : 300, 60_000)) {
+    const bucket = isGameOp ? 'g' : isWrite ? 'w' : 'r';
+    const limit = isGameOp ? 150 : isWrite ? (ctx.user ? 80 : 30) : 300;
+    if (!rateLimit(`${rateKey}:${bucket}`, limit, 60_000)) {
       return sendJSON(res, 429, { ok: false, error: '操作太频繁了，休息一下吧' });
     }
 
@@ -169,7 +180,14 @@ export function serveStatic(res, rootDir, urlPath) {
   const ext = path.extname(file);
   res.writeHead(200, {
     'Content-Type': MIME[ext] || 'application/octet-stream',
-    'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=300'
+    'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=300',
+    ...SEC_HEADERS,
+    ...(ext === '.html' ? {
+      'Content-Security-Policy':
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+        "img-src 'self' data:; connect-src 'self'; media-src 'self'; font-src 'self'; " +
+        "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    } : {})
   });
   fs.createReadStream(file).pipe(res);
   return true;

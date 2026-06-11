@@ -1,6 +1,8 @@
 import { GET, POST, PUT, bad, notFound } from '../lib/httpx.js';
-import { q } from '../lib/db.js';
+import { q, getSetting, setSetting } from '../lib/db.js';
 import { now, dayCN, micro2yuan, fen2yuan } from '../lib/util.js';
+import { notify } from '../lib/notify.js';
+import { allRooms, destroyRoom, getRoom } from '../game/core.js';
 import { logModeration, invalidateWordCache } from '../lib/moderation.js';
 import { warmupConfig, setWarmupConfig, warmupAccountList, warmupPost, ensureTodayTopic } from '../warmup/bot.js';
 import { llmEnabled, todayCostMicro } from '../lib/llm.js';
@@ -110,6 +112,9 @@ POST('/api/admin/posts/:id/action', async (ctx) => {
   if (!map[action]) throw bad('操作无效');
   q.run('UPDATE posts SET status = ?, remove_reason = ? WHERE id = ?', map[action][0], map[action][1], id);
   logModeration(`admin:${ctx.user.id}`, action, 'post', id, map[action][1]);
+  // 审核结果通知作者
+  if (action === 'approve') notify(post.user_id, 'system', { postId: id, content: '你的内容已通过审核，现在大家都能看到啦 ✨' });
+  if (action === 'reject' || action === 'remove') notify(post.user_id, 'system', { postId: id, content: `你的内容${action === 'reject' ? '未通过审核' : '已被下架'}（${map[action][1]}）。如有疑问可申诉。` });
   return { done: true };
 }, A);
 
@@ -235,3 +240,31 @@ POST('/api/admin/sensitive-words/delete', async (ctx) => {
 
 // ---- 审核日志 ----
 GET('/api/admin/moderation-logs', async () => ({ items: q.all('SELECT * FROM moderation_logs ORDER BY id DESC LIMIT 100') }), A);
+
+// ---- 系统开关（AI 机审等） ----
+GET('/api/admin/settings', async () => ({
+  ai_moderation: !!getSetting('ai_moderation', false)
+}), A);
+PUT('/api/admin/settings', async (ctx) => {
+  if ('ai_moderation' in ctx.body) setSetting('ai_moderation', !!ctx.body.ai_moderation);
+  logModeration(`admin:${ctx.user.id}`, 'settings', 'settings', 'system', JSON.stringify(ctx.body));
+  return { ai_moderation: !!getSetting('ai_moderation', false) };
+}, A);
+
+// ---- 桌游房间管理 ----
+GET('/api/admin/rooms', async () => {
+  const live = allRooms().map((r) => ({
+    id: r.id, name: r.name, game_type: r.engine.type, status: r.status, phase: r.phase,
+    players: r.players.length, humans: r.players.filter((p) => !p.isBot).length,
+    round: r.round, created_at: r.createdAt, live: true
+  }));
+  const ended = q.all("SELECT id, name, game_type, status, round, winner, created_at FROM game_rooms WHERE status = 'ended' ORDER BY created_at DESC LIMIT 30");
+  return { live, ended };
+}, A);
+POST('/api/admin/rooms/:id/close', async (ctx) => {
+  const room = getRoom(ctx.params.id);
+  if (!room) throw notFound('房间不存在或已结束');
+  destroyRoom(room, '房间因违规被管理员关闭');
+  logModeration(`admin:${ctx.user.id}`, 'close_room', 'room', room.id, '');
+  return { done: true };
+}, A);

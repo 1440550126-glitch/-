@@ -353,3 +353,10 @@ textarea.input { resize: none; line-height: 1.7; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+.bell-badge {
+  position: absolute; top: -4px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 99px; background: var(--brand-2); color: #fff; font-size: 10px; font-weight: 700;
+  display: grid; place-items: center; box-shadow: 0 2px 6px rgba(255, 110, 160, 0.5);
+  animation: toastIn 0.4s var(--spring);
+}

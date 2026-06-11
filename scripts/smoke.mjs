@@ -266,7 +266,7 @@ try {
   async function speakAllRound() {
     for (let step = 0; step < 4; step++) {
       const st = await api('GET', `/api/rooms/${roomId}`, { token: players[0].token });
-      if (st.data.room.phase !== 'describe') return;
+      if (st.data.room.phase !== 'speak') return;
       const turn = st.data.room.turn_seat;
       const who = st.data.room.players.find((x) => x.seat === turn);
       const idx = players.findIndex((p) => p.user.id === who.user_id);
@@ -306,9 +306,9 @@ try {
     const cur = await api('GET', `/api/rooms/${room2}`, { token: u1.token });
     const r = cur.data.room;
     if (r.status === 'ended') { finished = true; break; }
-    if (r.phase === 'describe' && r.players.find((x) => x.seat === r.turn_seat)?.user_id === u1.user.id) {
+    if (r.phase === 'speak' && r.players.find((x) => x.seat === r.turn_seat)?.user_id === u1.user.id) {
       await api('POST', `/api/rooms/${room2}/speak`, { token: u1.token, body: { content: '我觉得它在生活里很常见啦' } });
-    } else if (r.phase === 'vote' && r.my_alive !== false) {
+    } else if (r.phase === 'vote' && r.my_alive !== false && !r.players.find((x) => x.user_id === u1.user.id)?.voted) {
       const target = r.players.find((x) => x.alive && x.user_id !== u1.user.id);
       if (target) await api('POST', `/api/rooms/${room2}/vote`, { token: u1.token, body: { target_seat: target.seat } }).catch(() => {});
     }
@@ -318,6 +318,82 @@ try {
   const aiPlayers = s2.events.find((e) => e.event === 'state')?.data.players.filter((p) => p.is_bot) || [];
   ok('AI 陪练带明确标识', aiPlayers.every((p) => p.ai_label === 'AI 陪练'));
   s2.close(); lobby.close();
+
+  console.log('\n== 通知中心 ==');
+  const inbox = await api('GET', '/api/notifications', { token: u1.token });
+  ok('收到互动通知（赞/评论/关注）', inbox.ok && inbox.data.items.length >= 2 && inbox.data.unread > 0, `items=${inbox.data?.items?.length} unread=${inbox.data?.unread}`);
+  const kinds = new Set(inbox.data.items.map((n) => n.kind));
+  ok('通知类型覆盖', kinds.has('comment') || kinds.has('like') || kinds.has('follow'), [...kinds].join(','));
+  await api('POST', '/api/notifications/read', { token: u1.token });
+  const unread2 = await api('GET', '/api/me/unread', { token: u1.token });
+  ok('一键已读', unread2.data.unread === 0);
+
+  console.log('\n== 狼人杀（4 真人 + AI 补位完整对局） ==');
+  const wfCreate = await api('POST', '/api/rooms', { token: u1.token, body: { name: '狼人杀测试局', game_type: 'werewolf', max_players: 8, allow_bots: true } });
+  ok('创建狼人杀房间', wfCreate.ok, JSON.stringify(wfCreate));
+  const wfId = wfCreate.data.room.id;
+  const wfPlayers = [u1, ...guests];
+  for (const g of guests) await api('POST', `/api/rooms/${wfId}/join`, { token: g.token });
+  const wfStream = sse(`/api/rooms/${wfId}/events`, u1.token);
+  for (const pl of wfPlayers) await api('POST', `/api/rooms/${wfId}/ready`, { token: pl.token, body: { ready: true } });
+  const wfStart = await api('POST', `/api/rooms/${wfId}/start`, { token: u1.token });
+  ok('开始游戏（AI 补位到 6 人）', wfStart.ok, JSON.stringify(wfStart));
+  await new Promise((r) => setTimeout(r, 400));
+  const roles = [];
+  for (const pl of wfPlayers) {
+    const st = await api('GET', `/api/rooms/${wfId}`, { token: pl.token });
+    roles.push(st.data.room.my_role);
+  }
+  ok('私发身份（4 真人均有身份）', roles.every(Boolean) && roles.every((r) => ['wolf', 'seer', 'witch', 'villager'].includes(r)), roles.join(','));
+  // 后台能看到进行中的房间
+  const adminRooms = await api('GET', '/api/admin/rooms', { token: admin.token });
+  ok('后台房间管理可见对局', adminRooms.ok && adminRooms.data.live.some((r) => r.id === wfId));
+
+  let seerSawResult = false;
+  let wfDone = false;
+  for (let guard = 0; guard < 400 && !wfDone; guard++) {
+    for (const pl of wfPlayers) {
+      const cur = await api('GET', `/api/rooms/${wfId}`, { token: pl.token });
+      const r = cur.data.room;
+      if (r.status === 'ended') { wfDone = true; break; }
+      const me = r.players.find((x) => x.user_id === pl.user.id);
+      if (!me?.alive) continue;
+      const n = r.my_night;
+      try {
+        if (r.phase === 'night' && n && !n.acted) {
+          if (n.stage === 'wolf' && n.targets?.length) {
+            await api('POST', `/api/rooms/${wfId}/action`, { token: pl.token, body: { action: 'kill', target_seat: n.targets[0].seat } });
+          } else if (n.stage === 'seer' && n.targets?.length) {
+            const res = await api('POST', `/api/rooms/${wfId}/action`, { token: pl.token, body: { action: 'check', target_seat: n.targets[0].seat } });
+            if (res.ok && /身份是/.test(res.data.result || '')) seerSawResult = true;
+          } else if (n.stage === 'witch') {
+            const act = n.can_save ? 'save' : 'skip';
+            await api('POST', `/api/rooms/${wfId}/action`, { token: pl.token, body: { action: act } });
+          }
+        } else if (r.phase === 'speak' && r.turn_seat === me.seat) {
+          await api('POST', `/api/rooms/${wfId}/speak`, { token: pl.token, body: { content: '我是好人，先听大家的' } });
+        } else if (r.phase === 'vote' && !me.voted) {
+          const target = r.players.find((x) => x.alive && x.user_id !== pl.user.id);
+          if (target) await api('POST', `/api/rooms/${wfId}/vote`, { token: pl.token, body: { target_seat: target.seat } });
+        }
+      } catch { /* 状态竞争属正常 */ }
+    }
+    if (!wfDone) await new Promise((r) => setTimeout(r, 300));
+  }
+  ok('狼人杀完整对局跑完', wfDone);
+  const wfEnd = wfStream.events.filter((e) => e.event === 'state').pop();
+  ok('胜负结算（好人/狼人）', ['good', 'wolf'].includes(wfEnd?.data?.winner), wfEnd?.data?.winner);
+  ok('结算揭示全部身份', wfEnd?.data?.reveal?.length >= 6 && wfEnd.data.reveal.some((x) => x.role === 'wolf'));
+  const seerHuman = roles.includes('seer');
+  ok('预言家查验结果可见', !seerHuman || seerSawResult, `seerHuman=${seerHuman}`);
+  const wfHost = wfStream.events.filter((e) => e.event === 'msg' && e.data.kind === 'host');
+  ok('AI 主持人全程主持（天黑/天亮/投票）', wfHost.length >= 4);
+  wfStream.close();
+
+  console.log('\n== 后台系统开关 ==');
+  const togOn = await api('PUT', '/api/admin/settings', { token: admin.token, body: { ai_moderation: true } });
+  ok('开启 AI 机审开关', togOn.ok && togOn.data.ai_moderation === true);
+  await api('PUT', '/api/admin/settings', { token: admin.token, body: { ai_moderation: false } });
 
   console.log('\n== 注销 ==');
   const deact = await api('POST', '/api/me/deactivate', { token: guests[1].token, body: { confirm: '确认注销' } });

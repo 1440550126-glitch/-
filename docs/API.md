@@ -46,9 +46,18 @@
 | POST | `.../join` `/leave` `/ready` `/start` `/kick` 🔒 | 房间动作（start 自动 AI 补位） |
 | POST | `.../speak` 🔒 | 描述发言（轮到才能说；不能含自己的词；过审核） |
 | POST | `.../vote` 🔒 | 投票（活人、不可投自己、平票无人出局） |
-| POST | `.../chat` 🔒 | 闲聊（过审核） |
-| GET (SSE) | `/api/rooms/:id/events` 🔒 | state/msg/word(私发)/kicked/closed |
+| POST | `.../chat` 🔒 | 闲聊（过审核；狼人杀夜晚禁言） |
+| POST | `.../action` 🔒 | 游戏特殊行动。狼人杀：`{action: kill\|check\|save\|poison\|skip, target_seat}`（仅对应身份+对应夜晚阶段可用，查验结果只返回给预言家本人） |
+| GET (SSE) | `/api/rooms/:id/events` 🔒 | state/msg/word(私发)/role(私发)/night(私发)/seer_result(私发)/wolf_chat(狼队)/kicked/closed；重连自动恢复私有信息 |
 | GET (SSE) | `/api/lobby/events` | rooms 实时列表 + notice（AI 组局提醒） |
+
+## 通知
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/notifications` 🔒 | 通知列表（赞/评论/回复/关注/AI/系统，含触发者资料） |
+| POST | `/api/notifications/read` 🔒 | 全部已读 |
+| GET | `/api/me/unread` 🔒 | 未读数（也包含在 /api/me） |
+| GET (SSE) | `/api/inbox/events` 🔒 | 在线实时角标推送 |
 
 ## 商城
 | 方法 | 路径 | 说明 |
@@ -60,7 +69,7 @@
 | POST | `/api/me/equip` 🔒 | 装备/卸下（校验拥有） |
 
 ## 管理后台 👑（前缀 `/api/admin`）
-`/stats` 总览 ·`/users`+`/users/:id/ban|unban` ·`/posts?status=`+`/posts/:id/action`(approve/reject/remove/restore) ·`/comments`+`/comments/:id/remove` ·`/reports`+`/reports/:id/handle` ·`/warmup`(GET/PUT 配置)+`/warmup/trigger`(手动发帖/重生话题) ·`/skins`+`/skins/:id/update`(调价/上下架) ·`/orders` ·`/ai-usage?days=`(日报/按功能/逐条) ·`/sensitive-words`(增删，30s 生效) ·`/moderation-logs`
+`/stats` 总览 ·`/users`+`/users/:id/ban|unban` ·`/posts?status=`+`/posts/:id/action`(approve/reject/remove/restore) ·`/comments`+`/comments/:id/remove` ·`/reports`+`/reports/:id/handle` ·`/warmup`(GET/PUT 配置)+`/warmup/trigger`(手动发帖/重生话题) ·`/skins`+`/skins/:id/update`(调价/上下架) ·`/orders` ·`/ai-usage?days=`(日报/按功能/逐条) ·`/sensitive-words`(增删，30s 生效) ·`/moderation-logs` ·`/settings`(GET/PUT，AI 机审开关) ·`/rooms`(进行中/已结束对局)+`/rooms/:id/close`(强制关房)
 
 ## 其他
 `GET /api/health` 健康检查 · `GET /api/bootstrap` 启动常量（头像/会员方案/举报原因/合规文案）

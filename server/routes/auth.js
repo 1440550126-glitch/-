@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword, signToken, isMember } from '../lib/auth.j
 import { now, sanitizeText, uid, jparse } from '../lib/util.js';
 import { gateContent } from '../lib/moderation.js';
 import { AVATARS } from '../lib/catalog.js';
+import { unreadCount } from '../lib/notify.js';
 
 export function publicUser(u, viewer = null) {
   if (!u) return null;
@@ -31,6 +32,7 @@ export function meView(u) {
     member_until: u.member_until,
     credits: u.credits,
     settings: jparse(u.settings, {}),
+    unread_notifications: unreadCount(u.id),
     is_guest: !u.username && !!u.device_id
   };
 }

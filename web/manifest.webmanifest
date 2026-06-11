@@ -1,0 +1,17 @@
+{
+  "name": "AI句灵 · 让每一句话活过来",
+  "short_name": "AI句灵",
+  "description": "年轻人的文案社交圈：发一句话，让它活过来",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f2fd",
+  "theme_color": "#f3eefc",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23b9a6ff'/><stop offset='1' stop-color='%23ff9ec6'/></linearGradient></defs><rect width='100' height='100' rx='24' fill='%23f6f2fd'/><path d='M50 12 C73 12 88 28 88 48 C88 71 70 86 50 88 C30 86 12 71 12 48 C12 28 27 12 50 12 Z' fill='url(%23g)'/><circle cx='39' cy='46' r='4.5' fill='%23413a5c'/><circle cx='61' cy='46' r='4.5' fill='%23413a5c'/><path d='M43 60 Q50 66 57 60' stroke='%23413a5c' stroke-width='3.5' fill='none' stroke-linecap='round'/></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

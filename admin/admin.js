@@ -75,6 +75,7 @@ const MODULES = {
   users: ['👥 用户管理', renderUsers],
   warmup: ['🤖 AI 暖场', renderWarmup],
   cost: ['💰 AI 成本', renderCost],
+  rooms: ['🎲 桌游房间', renderRooms],
   shop: ['🛍 皮肤与订单', renderShopOrders],
   words: ['🔞 敏感词', renderWords],
   logs: ['📜 审核日志', renderLogs]
@@ -128,6 +129,41 @@ async function renderDashboard() {
       stat('桌游对局', s.games.total, `今日 ${s.games.today} 局`)
     ),
     el('p', { class: 'muted' }, '提示：大模型未配置时所有 AI 功能自动走本地规则引擎，成本为 0。配置见 .env.example。')
+  );
+  try {
+    const sys = await api('GET', '/api/admin/settings');
+    main.append(el('div', { class: 'row', style: 'margin-top:14px' },
+      el('span', {}, 'AI 大模型机审（敏感词之上的第二道防线，需配置大模型）：'),
+      el('button', {
+        class: 'btn ' + (sys.ai_moderation ? 'warn' : 'ok'),
+        onclick: async () => {
+          await api('PUT', '/api/admin/settings', { ai_moderation: !sys.ai_moderation });
+          toast(sys.ai_moderation ? '已关闭 AI 机审' : '已开启 AI 机审'); load();
+        }
+      }, sys.ai_moderation ? '关闭机审' : '开启机审'),
+      el('span', { class: 'tag ' + (sys.ai_moderation ? 'green' : 'gray') }, sys.ai_moderation ? '运行中' : '未开启')
+    ));
+  } catch { /* 旧版后端无此接口 */ }
+}
+
+async function renderRooms() {
+  const data = await api('GET', '/api/admin/rooms');
+  main.innerHTML = '';
+  main.append(
+    el('h2', {}, '🎲 进行中的房间'),
+    table(['房间号', '名称', '玩法', '状态', '人数(真人)', '轮次', '创建时间', '操作'], data.live.map((r) => [
+      r.id, r.name, r.game_type === 'werewolf' ? '狼人杀' : '谁是卧底',
+      el('span', { class: 'tag ' + (r.status === 'playing' ? 'green' : '') }, r.status === 'playing' ? `游戏中·${r.phase}` : '等待中'),
+      `${r.players}(${r.humans})`, String(r.round), fmtTime(r.created_at),
+      el('button', { class: 'btn warn', onclick: async () => {
+        if (!confirm('确定关闭这个房间？玩家将被请出。')) return;
+        await api('POST', `/api/admin/rooms/${r.id}/close`); toast('已关闭'); load();
+      } }, '关闭')
+    ])),
+    el('h2', { style: 'margin-top:22px' }, '最近结束的对局'),
+    table(['房间号', '名称', '玩法', '轮次', '胜方', '时间'], data.ended.map((r) => [
+      r.id, r.name, r.game_type === 'werewolf' ? '狼人杀' : '谁是卧底', String(r.round), r.winner || '-', fmtTime(r.created_at)
+    ]))
   );
 }
 

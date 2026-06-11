@@ -15,6 +15,8 @@ import { renderRoom } from './pages/room.js';
 import { renderShop } from './pages/shop.js';
 import { renderMember } from './pages/member.js';
 import { renderSettings, renderBlocks, renderAbout } from './pages/settings.js';
+import { renderNotify } from './pages/notify.js';
+import { sse } from './api.js';
 
 const fluid = initFluid(document.getElementById('fluid-bg'));
 export const setBgDark = (v) => fluid.setDark(v);
@@ -53,6 +55,7 @@ route('/member', renderMember, { hideNav: true });
 route('/settings', renderSettings, { hideNav: true });
 route('/blocks', renderBlocks, { hideNav: true });
 route('/about/:doc', renderAbout, { hideNav: true });
+route('/notify', renderNotify, { hideNav: true });
 
 (async () => {
   buildNav();
@@ -62,4 +65,17 @@ route('/about/:doc', renderAbout, { hideNav: true });
     location.replace('#/login');
   }
   startRouter();
+  // 个人实时通道：在线时小铃铛即时更新
+  if (store.me) {
+    sse('/api/inbox/events', {
+      notify: () => {
+        store.me.unread_notifications = (store.me.unread_notifications || 0) + 1;
+        const badge = document.getElementById('bell-badge');
+        if (badge) badge.textContent = store.me.unread_notifications;
+        else document.getElementById('bell-btn')?.append(
+          Object.assign(document.createElement('span'), { id: 'bell-badge', className: 'bell-badge', textContent: store.me.unread_notifications })
+        );
+      }
+    });
+  }
 })();

@@ -146,6 +146,8 @@ export async function renderFeed(page) {
     h('div', { class: 'topbar' },
       h('div', {}, h('h1', {}, 'AI句灵'), h('div', { class: 'sub' }, '让每一句话活过来')),
       h('div', { class: 'spacer' }),
+      h('button', { class: 'icon-btn', id: 'bell-btn', style: { position: 'relative' }, onclick: () => nav('/notify') }, '🔔',
+        store.me?.unread_notifications ? h('span', { id: 'bell-badge', class: 'bell-badge' }, store.me.unread_notifications) : null),
       h('button', { class: 'icon-btn', onclick: () => nav('/member') }, '👑')
     ),
     topicSlot, chipRow, list

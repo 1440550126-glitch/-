@@ -3,6 +3,9 @@ import { q, tx } from '../lib/db.js';
 import { now } from '../lib/util.js';
 import { publicUser } from './auth.js';
 import { postView } from './posts.js';
+import { notify, unreadCount } from '../lib/notify.js';
+import { openSSE } from '../lib/httpx.js';
+import { subscribe } from '../lib/hub.js';
 
 GET('/api/users/:id', async (ctx) => {
   const u = q.get('SELECT * FROM users WHERE id = ?', Number(ctx.params.id));
@@ -55,6 +58,7 @@ POST('/api/users/:id/follow', async (ctx) => {
       q.run('INSERT INTO follows (follower_id, followee_id, created_at) VALUES (?,?,?)', ctx.user.id, target, now());
       q.run('UPDATE users SET following_count = following_count + 1 WHERE id = ?', ctx.user.id);
       q.run('UPDATE users SET follower_count = follower_count + 1 WHERE id = ?', target);
+      notify(target, 'follow', { actorId: ctx.user.id });
     }
     return { following: true };
   });
@@ -93,4 +97,29 @@ GET('/api/me/blocks', async (ctx) => {
     ctx.user.id
   );
   return { items: rows.map((u) => publicUser(u)) };
+}, { auth: true });
+
+// ---- 通知中心 ----
+GET('/api/notifications', async (ctx) => {
+  const rows = q.all('SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT 50', ctx.user.id);
+  return {
+    items: rows.map((n) => ({
+      ...n,
+      actor: n.actor_id ? publicUser(q.get('SELECT * FROM users WHERE id = ?', n.actor_id)) : null
+    })),
+    unread: unreadCount(ctx.user.id)
+  };
+}, { auth: true });
+
+POST('/api/notifications/read', async (ctx) => {
+  q.run('UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0', ctx.user.id);
+  return { done: true };
+}, { auth: true });
+
+GET('/api/me/unread', async (ctx) => ({ unread: unreadCount(ctx.user.id) }), { auth: true });
+
+// 个人实时通道（小铃铛即时 +1）
+GET('/api/inbox/events', async (ctx) => {
+  const client = openSSE(ctx.req, ctx.res);
+  subscribe('inbox', client, ctx.user.id);
 }, { auth: true });

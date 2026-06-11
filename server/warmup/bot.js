@@ -8,7 +8,8 @@ import { now, dayCN, hourCN, pick, randInt, jparse } from '../lib/util.js';
 import { llmOrFallback } from '../lib/llm.js';
 import { buildCard } from '../lib/manifest.js';
 import { publish } from '../lib/hub.js';
-import { activeRoomCount } from '../game/undercover.js';
+import { activeRoomCount } from '../game/core.js';
+import { notify } from '../lib/notify.js';
 
 export const WARMUP_DEFAULTS = {
   enabled: true,
@@ -217,6 +218,7 @@ async function flushComments() {
     );
     q.run('UPDATE posts SET comment_count = comment_count + 1 WHERE id = ?', post.id);
     logWarmup(accountId, 'comment', Number(cr.lastInsertRowid), content);
+    notify(post.user_id, 'ai', { actorId: accountId, postId: post.id, commentId: Number(cr.lastInsertRowid), content });
     // 随缘点赞：单独计数，不进热度
     if (Math.random() < cfg.like_probability) {
       q.run('UPDATE posts SET ai_like_count = ai_like_count + 1 WHERE id = ?', post.id);

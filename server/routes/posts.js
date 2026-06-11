@@ -1,12 +1,13 @@
 import { GET, POST, DEL, bad, notFound, denied } from '../lib/httpx.js';
 import { q, tx } from '../lib/db.js';
 import { now, jparse, sanitizeText } from '../lib/util.js';
-import { gateContent, logModeration } from '../lib/moderation.js';
+import { gateContent, logModeration, aiModeratePost } from '../lib/moderation.js';
 import { buildCard } from '../lib/manifest.js';
 import { onNewUserPost, ensureTodayTopic } from '../warmup/bot.js';
 import { publicUser } from './auth.js';
 import { QUOTA, REPORT_REASONS } from '../lib/catalog.js';
 import { useQuota } from '../lib/llm.js';
+import { notify } from '../lib/notify.js';
 
 // ---- 帖子视图 ----
 export function postView(row, viewer) {
@@ -121,6 +122,7 @@ POST('/api/posts', async (ctx) => {
     logModeration('system', 'review', 'post', post.id, `敏感词:${gate.hits.join(',')}${gate.care ? ' (自伤关怀)' : ''}`);
   } else {
     onNewUserPost(post, jparse(ctx.user.settings, {}));   // AI 暖场延迟评论
+    aiModeratePost(post);                                 // 大模型机审（开关+预算控制，异步不阻塞）
   }
   return { post: postView(post, ctx.user), notice: gate.notice, care: gate.care || false };
 }, { auth: true });
@@ -151,6 +153,7 @@ function toggle(table, countCol, ctx, on) {
     if (on && !exists) {
       q.run(`INSERT INTO ${table} (user_id, post_id, created_at) VALUES (?,?,?)`, ctx.user.id, postId, now());
       q.run(`UPDATE posts SET ${countCol} = ${countCol} + 1 WHERE id = ?`, postId);
+      if (table === 'likes') notify(post.user_id, 'like', { actorId: ctx.user.id, postId, content: post.content.slice(0, 40) });
     } else if (!on && exists) {
       q.run(`DELETE FROM ${table} WHERE user_id = ? AND post_id = ?`, ctx.user.id, postId);
       q.run(`UPDATE posts SET ${countCol} = MAX(0, ${countCol} - 1) WHERE id = ?`, postId);
@@ -237,6 +240,12 @@ POST('/api/posts/:id/comments', async (ctx) => {
   q.run('UPDATE posts SET comment_count = comment_count + 1 WHERE id = ?', postId);
   bumpHot(postId);
   const c = q.get('SELECT * FROM comments WHERE id = ?', Number(r.lastInsertRowid));
+  // 通知：回复→被回复人/楼主，普通评论→帖子作者（同一人不重复通知）
+  let replied = null;
+  if (replyTo) replied = replyTo;
+  else if (parentId) replied = q.get('SELECT user_id FROM comments WHERE id = ?', parentId)?.user_id;
+  if (replied) notify(replied, 'reply', { actorId: ctx.user.id, postId, commentId: c.id, content });
+  if (post.user_id !== replied) notify(post.user_id, 'comment', { actorId: ctx.user.id, postId, commentId: c.id, content });
   return { comment: { ...commentView(c, ctx.user), replies: [] } };
 }, { auth: true });
 

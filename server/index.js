@@ -6,7 +6,7 @@ import { handleApi, serveStatic, GET } from './lib/httpx.js';
 import { initSecret } from './lib/auth.js';
 import { runSeed, seedSamplePosts } from './lib/seed.js';
 import { startWarmupLoop, ensureWarmupAccounts } from './warmup/bot.js';
-import { recoverOnBoot } from './game/undercover.js';
+import { recoverOnBoot } from './game/core.js';
 import { AVATARS, MEMBER_PLANS, REPORT_REASONS } from './lib/catalog.js';
 import { llmEnabled } from './lib/llm.js';
 
@@ -58,6 +58,16 @@ const server = http.createServer((req, res) => {
   res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
   res.end('404');
 });
+
+// 生产环境安全自检
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD === 'jvling-admin-2026') {
+    console.warn('\n  ⚠️⚠️⚠️  生产环境正在使用默认管理员密码！请立即在 .env 中设置 ADMIN_PASSWORD 并重建管理员！\n');
+  }
+  if (!process.env.APP_SECRET) {
+    console.warn('  ⚠️  建议在 .env 中显式设置 APP_SECRET（当前使用首次启动时自动生成并持久化的密钥）');
+  }
+}
 
 server.listen(PORT, () => {
   console.log(`\n  ✨ AI句灵 已启动`);

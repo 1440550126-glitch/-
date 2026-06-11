@@ -223,3 +223,16 @@ CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL,            -- 接收者
+  kind       TEXT NOT NULL,               -- like | comment | reply | follow | system | ai
+  actor_id   INTEGER,                     -- 触发者（system 为空）
+  post_id    INTEGER,
+  comment_id INTEGER,
+  content    TEXT NOT NULL DEFAULT '',
+  read       INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read, id DESC);

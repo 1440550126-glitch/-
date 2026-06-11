@@ -1,36 +1,50 @@
-// 桌游大厅：房间列表（SSE 实时）+ 创建房间 + AI 暖场组局提醒
+// 桌游大厅：多玩法（谁是卧底/狼人杀）+ 房间列表（SSE 实时）+ AI 暖场组局提醒
 import { GET, POST, sse } from '../api.js';
 import { h, toast, sheet, emptyState, aiBadge } from '../ui.js';
 import { nav } from '../router.js';
 
+const GAME_DESC = {
+  undercover: '4-8 人 · 文字推理 · 十分钟一局',
+  werewolf: '6-12 人 · 狼人/预言家/女巫 · 烧脑对抗'
+};
+
 export async function renderGames(page) {
   const list = h('div', {});
   const noticeSlot = h('div', {});
+  let games = [];
 
   page.append(
     h('div', { class: 'topbar' },
-      h('div', {}, h('h1', {}, '桌游大厅'), h('div', { class: 'sub' }, '玩法全免费 · 不卖胜负')),
+      h('div', {}, h('h1', {}, '桌游大厅'), h('div', { class: 'sub' }, '玩法全免费 · 不卖胜负 · AI 主持')),
       h('div', { class: 'spacer' }),
-      h('button', { class: 'btn mini', onclick: createSheet }, '+ 开房间')
-    ),
-    h('div', { class: 'glass card', style: { display: 'flex', gap: '12px', alignItems: 'center' } },
-      h('div', { style: { fontSize: '34px' } }, '🕵️'),
-      h('div', { style: { flex: 1 } },
-        h('div', { style: { fontWeight: 700 } }, '谁是卧底'),
-        h('div', { style: { fontSize: '11.5px', color: 'var(--ink-2)', marginTop: '2px' } },
-          '4-8 人 · AI 主持 · 一个人也能玩（AI 陪练补位）')),
-      h('button', { class: 'btn mini ghost', onclick: createSheet }, '开局')
-    ),
-    h('div', { style: { display: 'flex', gap: '10px', marginBottom: '14px' } },
-      ['🐺 狼人杀', '📖 剧本杀', '🗝 密室逃脱'].map((name) =>
-        h('div', { class: 'glass', style: { flex: 1, textAlign: 'center', padding: '13px 4px', fontSize: '12px', color: 'var(--ink-3)' } },
-          h('div', { style: { fontSize: '20px', marginBottom: '3px', filter: 'grayscale(.6)', opacity: 0.7 } }, name.split(' ')[0]),
-          name.split(' ')[1], h('div', { style: { fontSize: '9px', marginTop: '2px' } }, '即将上线')))
-    ),
-    noticeSlot,
-    h('div', { style: { fontWeight: 700, fontSize: '14px', margin: '4px 2px 10px' } }, '正在等人的房间'),
-    list
+      h('button', { class: 'btn mini', onclick: () => createSheet() }, '+ 开房间')
+    )
   );
+
+  const featured = h('div', {});
+  page.append(featured, h('div', { style: { display: 'flex', gap: '10px', marginBottom: '14px' } },
+    ['📖 剧本杀', '🗝 密室逃脱', '🐢 海龟汤'].map((name) =>
+      h('div', { class: 'glass', style: { flex: 1, textAlign: 'center', padding: '13px 4px', fontSize: '12px', color: 'var(--ink-3)' } },
+        h('div', { style: { fontSize: '20px', marginBottom: '3px', filter: 'grayscale(.6)', opacity: 0.7 } }, name.split(' ')[0]),
+        name.split(' ')[1], h('div', { style: { fontSize: '9px', marginTop: '2px' } }, '即将上线')))
+  ),
+  noticeSlot,
+  h('div', { style: { fontWeight: 700, fontSize: '14px', margin: '4px 2px 10px' } }, '正在等人的房间'),
+  list);
+
+  function renderFeatured() {
+    featured.innerHTML = '';
+    for (const g of games) {
+      featured.append(h('div', { class: 'glass card', style: { display: 'flex', gap: '12px', alignItems: 'center' } },
+        h('div', { style: { fontSize: '34px' } }, g.icon),
+        h('div', { style: { flex: 1 } },
+          h('div', { style: { fontWeight: 700 } }, g.name),
+          h('div', { style: { fontSize: '11.5px', color: 'var(--ink-2)', marginTop: '2px' } },
+            `${GAME_DESC[g.type] || ''} · AI 陪练可补位`)),
+        h('button', { class: 'btn mini ghost', onclick: () => createSheet(g.type) }, '开局')
+      ));
+    }
+  }
 
   function renderRooms(items, myRoomId) {
     list.innerHTML = '';
@@ -56,30 +70,46 @@ export async function renderGames(page) {
           }
         }
       },
-        h('div', { class: 'ri-emoji' }, r.status === 'playing' ? '🎮' : '🕵️'),
+        h('div', { class: 'ri-emoji' }, r.status === 'playing' ? '🎮' : (r.icon || '🎲')),
         h('div', { style: { flex: 1 } },
-          h('div', { class: 'ri-name' }, r.name),
+          h('div', { class: 'ri-name' }, r.name, h('span', { class: 'chip', style: { marginLeft: '6px', padding: '2px 8px', fontSize: '10px' } }, r.game_name || '')),
           h('div', { class: 'ri-meta' }, `房间号 ${r.id} · ${r.players}/${r.max_players} 人 · ${r.status === 'playing' ? '游戏中' : '等待中'}${r.allow_bots ? ' · AI 可补位' : ''}`)),
         h('button', { class: 'btn mini ghost' }, r.status === 'playing' ? '围观' : '加入')
       ));
     }
   }
 
-  function createSheet() {
+  function createSheet(presetType) {
     sheet((box, close) => {
       const name = h('input', { class: 'input', placeholder: '给房间起个名字（可选）', maxlength: 20 });
-      let maxP = 6, bots = true;
-      const seatRow = h('div', { style: { display: 'flex', gap: '8px', marginTop: '4px' } });
+      let gameType = presetType || games[0]?.type || 'undercover';
+      let maxP = 0, bots = true;
+      const gameRow = h('div', { style: { display: 'flex', gap: '8px' } });
+      const seatRow = h('div', { style: { display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' } });
+
+      const renderGameChips = () => {
+        gameRow.innerHTML = '';
+        for (const g of games) {
+          gameRow.append(h('button', {
+            class: `chip ${gameType === g.type ? 'active' : ''}`,
+            onclick: () => { gameType = g.type; maxP = 0; renderGameChips(); renderSeats(); }
+          }, `${g.icon} ${g.name}`));
+        }
+      };
       const renderSeats = () => {
+        const g = games.find((x) => x.type === gameType) || { min: 4, max: 8 };
+        if (!maxP) maxP = Math.min(g.max, Math.max(g.min, gameType === 'werewolf' ? 8 : 6));
         seatRow.innerHTML = '';
-        for (const n of [4, 5, 6, 7, 8]) {
+        for (let n = g.min; n <= g.max; n++) {
           seatRow.append(h('button', { class: `chip ${maxP === n ? 'active' : ''}`, onclick: () => { maxP = n; renderSeats(); } }, `${n}人`));
         }
       };
-      renderSeats();
+      renderGameChips(); renderSeats();
+
       const botSwitch = h('button', { class: `switch ${bots ? 'on' : ''}`, onclick: () => { bots = !bots; botSwitch.classList.toggle('on', bots); } });
       box.append(
-        h('h3', {}, '开一局谁是卧底'),
+        h('h3', {}, '开一局'),
+        h('div', { class: 'field' }, h('label', {}, '玩法'), gameRow),
         h('div', { class: 'field' }, h('label', {}, '房间名'), name),
         h('div', { class: 'field' }, h('label', {}, '人数上限'), seatRow),
         h('div', { class: 'menu-item', style: { padding: '10px 0' } },
@@ -91,7 +121,7 @@ export async function renderGames(page) {
           class: 'btn block', style: { marginTop: '8px' },
           onclick: async () => {
             try {
-              const { room } = await POST('/api/rooms', { name: name.value.trim(), max_players: maxP, allow_bots: bots });
+              const { room } = await POST('/api/rooms', { name: name.value.trim(), game_type: gameType, max_players: maxP, allow_bots: bots });
               close();
               nav(`/room/${room.id}`);
             } catch (e) {
@@ -104,10 +134,11 @@ export async function renderGames(page) {
     });
   }
 
-  // 初始加载 + SSE 实时
   try {
-    const { items, my_room_id } = await GET('/api/rooms');
-    renderRooms(items, my_room_id);
+    const data = await GET('/api/rooms');
+    games = data.games || [];
+    renderFeatured();
+    renderRooms(data.items, data.my_room_id);
   } catch (e) { toast(e.message, 'warn'); }
 
   const es = sse('/api/lobby/events', {
