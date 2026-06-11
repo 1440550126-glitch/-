@@ -1,9 +1,16 @@
 {
-  "name": "juling-miniprogram",
-  "version": "1.0.0",
+  "name": "jvling",
+  "version": "0.1.0",
   "private": true,
-  "description": "句灵：让文案活过来 微信小程序 MVP",
+  "description": "AI句灵：让文案活过来的年轻人社交圈（H5 App + 零依赖 Node 服务端 + 管理后台）",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
-    "validate": "node scripts/validate.js"
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
+    "smoke": "node --disable-warning=ExperimentalWarning scripts/smoke.mjs",
+    "check": "node scripts/check-syntax.mjs"
   }
 }
