@@ -149,6 +149,28 @@ try {
   const otherEpShotWithImage = cvEp.nodes.filter((n) => n.type === 'shot' && (n.data.episode || 'e1') !== 'e2' && n.data.image).length;
   ok(epImgs.result.generated >= 1 && otherEpShotWithImage === 0, '按集批量出图只处理该集分镜');
 
+  console.log('— 创作框：按次模型/分辨率 + 主体一致性 —');
+  ok(boot.video_models?.length >= 3, `可选视频模型 ×${boot.video_models?.length}`);
+  await api('PATCH', '/api/settings', { model_video_options: 'Seedance 2.0|seedance-2-0-test\nSeedance 1.0 Pro|doubao-seedance-1-0-pro-250528' });
+  const boot2 = (await api('GET', '/api/bootstrap')).data;
+  ok(boot2.video_models.some((m) => m.id === 'seedance-2-0-test'), '设置页维护模型列表立即生效');
+  const qv = (await api('POST', '/api/ai/video', { prompt: '一只机械猫撑伞走过雨夜街头', duration: 3, ratio: '9:16', model: 'seedance-2-0-test', resolution: '720p', name: '快速短片' })).data;
+  const qvt = await until(async () => {
+    const t = (await api('GET', `/api/ai/task/${qv.taskId}`)).data;
+    return t.status === 'succeeded' ? t : null;
+  });
+  ok(qvt.result.url.startsWith('/uploads/'), '无项目快速短片生成');
+  const qvTask = (await api('GET', `/api/ai/task/${qv.taskId}`)).data;
+  ok(qvTask.params?.model === 'seedance-2-0-test' && qvTask.params?.resolution === '720p', '按次模型/分辨率已记录到任务');
+  // 主体一致性：给角色节点挂非 SVG 定妆图后，关联分镜的首帧自动带参考图
+  const cvX = (await api('GET', `/api/canvases/${(await api('GET', `/api/projects/${p.id}`)).data.canvas_id}`)).data;
+  const charNode = cvX.nodes.find((n) => n.type === 'character');
+  const linkedShot = cvX.nodes.find((n) => n.type === 'shot' && cvX.edges.some((e) => e.from === charNode.id && e.to === n.id));
+  await api('POST', '/api/agent/v1/tools/update_node', { project_id: p.id, node_id: charNode.id, patch: { image: up.url } }, token);
+  const frame = (await api('POST', '/api/ai/image', { prompt: '主角站在门口回头', kind: 'frame', project_id: p.id, node_id: linkedShot.id })).data;
+  const frameTask = (await api('GET', `/api/ai/task/${frame.taskId}`)).data;
+  ok(frame.url && frameTask.params?.ref_images >= 1, `首帧自动引用关联角色定妆图 ×${frameTask.params?.ref_images}`);
+
   console.log('— MCP over HTTP（远程助理通道） —');
   const mh = async (msg) => {
     const res = await fetch(BASE + '/api/agent/v1/mcp', {

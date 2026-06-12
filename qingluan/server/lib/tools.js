@@ -199,12 +199,14 @@ export const TOOLS = [
         prompt: str('视频动态提示词（画面内容+运镜）'),
         image_url: str('首帧图地址（可选，强烈建议传，画面更稳定）'),
         duration: num('时长（秒）2-12，默认 5'), ratio: str('画幅', { enum: ['16:9', '9:16', '1:1', '4:3', '21:9'] }),
+        model: str('视频模型 ID（可选，覆盖默认；可用 ID 见设置页模型列表）'),
+        resolution: str('分辨率（可选）', { enum: ['480p', '720p', '1080p'] }),
         project_id: str('项目 id（可选）'), node_id: str('画布分镜节点 id（可选，回写视频）'), name: str('名称')
       },
       required: ['prompt']
     },
     async execute(a) {
-      return await createVideoTask({ prompt: a.prompt, imageUrl: a.image_url, duration: a.duration || 5, ratio: a.ratio, projectId: a.project_id, nodeId: a.node_id, name: a.name });
+      return await createVideoTask({ prompt: a.prompt, imageUrl: a.image_url, duration: a.duration || 5, ratio: a.ratio, projectId: a.project_id, nodeId: a.node_id, name: a.name, model: a.model || '', resolution: a.resolution || '' });
     }
   },
   {

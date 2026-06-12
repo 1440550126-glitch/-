@@ -317,16 +317,32 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
   const project = projectId ? getProject(projectId, { required: false }) : null;
   prompt = applyStyle(prompt.trim(), project?.style);
   ratio = ratio || project?.ratio || '16:9';
+
+  // 主体一致性：分镜首帧未显式传参考图时，自动把画布上连线的角色/场景定妆图作为参考
+  let refs = (refImages || []).filter(Boolean);
+  if (!refs.length && kind === 'frame' && nodeId && project?.canvas_id) {
+    try {
+      const c = getCanvas(project.canvas_id, { required: false });
+      if (c) {
+        refs = c.edges.filter((e) => e.to === nodeId)
+          .map((e) => c.nodes.find((n) => n.id === e.from))
+          .filter((n) => n && (n.type === 'character' || n.type === 'scene') && n.data.image && !/\.svg$/i.test(n.data.image))
+          .map((n) => n.data.image)
+          .slice(0, 3);
+      }
+    } catch { /* 画布可能已删除 */ }
+  }
+
   const taskId = uid('t');
   q.run('INSERT INTO tasks (id, kind, status, provider, prompt, params, project_id, node_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
     taskId, 'image', 'running', arkEnabled() ? 'ark' : 'local', prompt.slice(0, 500),
-    JSON.stringify({ kind, ratio, name }), projectId, nodeId, now(), now());
+    JSON.stringify({ kind, ratio, name, ref_images: refs.length }), projectId, nodeId, now(), now());
 
   let url = '';
   let provider = 'local';
   try {
     if (arkEnabled()) {
-      const r = await arkImage({ prompt, ratio: kind === 'character' ? '3:4' : ratio, refImages, feature: `image:${kind}` });
+      const r = await arkImage({ prompt, ratio: kind === 'character' ? '3:4' : ratio, refImages: refs, feature: `image:${kind}` });
       url = r.url;
       provider = 'ark';
     } else {
@@ -356,21 +372,20 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
 // ---------- 视频生成（异步任务） ----------
 const LOCAL_VIDEO_MS = () => (process.env.QINGLUAN_FAST_LOCAL ? 50 : 4000);
 
-export async function createVideoTask({ prompt, imageUrl = '', duration = 5, ratio = '', projectId = '', nodeId = '', name = '', order = 0 }) {
+export async function createVideoTask({ prompt, imageUrl = '', duration = 5, ratio = '', projectId = '', nodeId = '', name = '', order = 0, model = '', resolution = '' }) {
   if (!prompt?.trim()) throw bad('缺少视频提示词 prompt');
   const project = projectId ? getProject(projectId, { required: false }) : null;
   prompt = applyStyle(prompt.trim(), project?.style);
   ratio = ratio || project?.ratio || '16:9';
   duration = clamp(duration, 2, 12);
   const taskId = uid('t');
-  const params = { ratio, duration, imageUrl, name, order };
+  const params = { ratio, duration, imageUrl, name, order, model: model || '', resolution: resolution || '' };
 
   let provider = 'local';
   let remoteId = '';
-  let model = '';
   if (arkEnabled()) {
     try {
-      const r = await arkVideoCreate({ prompt, imageUrl, ratio, duration });
+      const r = await arkVideoCreate({ prompt, imageUrl, ratio, duration, model, resolution });
       provider = 'ark';
       remoteId = r.remoteId;
       model = r.model;

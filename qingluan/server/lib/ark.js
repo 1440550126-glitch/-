@@ -14,6 +14,13 @@ export const DEFAULTS = {
   model_chat: 'doubao-seed-1-6-250615',
   model_image: 'doubao-seedream-4-0-250828',
   model_video: 'doubao-seedance-1-0-pro-250528',
+  // 创作框可选的视频模型（每行「显示名|模型ID」；Seedance 2.0 上线后加一行即可）
+  model_video_options: [
+    'Seedance 1.0 Pro|doubao-seedance-1-0-pro-250528',
+    'Seedance 1.0 Lite 文生视频|doubao-seedance-1-0-lite-t2v-250428',
+    'Seedance 1.0 Lite 图生视频|doubao-seedance-1-0-lite-i2v-250428'
+  ].join('\n'),
+  video_extra_args: '',     // 追加到视频任务文本命令的参数，如 --camerafixed true
   watermark: false,
   // 价格仅用于成本预估展示（元），请按方舟控制台实际定价在设置页调整
   price_chat_in: 0.0008,    // 元 / 千 token
@@ -37,6 +44,8 @@ export function cfg() {
     modelChat: g('model_chat', 'ARK_MODEL_CHAT', DEFAULTS.model_chat),
     modelImage: g('model_image', 'ARK_MODEL_IMAGE', DEFAULTS.model_image),
     modelVideo: g('model_video', 'ARK_MODEL_VIDEO', DEFAULTS.model_video),
+    modelVideoOptions: String(g('model_video_options', 'ARK_MODEL_VIDEO_OPTIONS', DEFAULTS.model_video_options)),
+    videoExtraArgs: String(g('video_extra_args', '', DEFAULTS.video_extra_args)),
     watermark: !!g('watermark', '', DEFAULTS.watermark),
     priceChatIn: Number(g('price_chat_in', '', DEFAULTS.price_chat_in)),
     priceChatOut: Number(g('price_chat_out', '', DEFAULTS.price_chat_out)),
@@ -46,6 +55,17 @@ export function cfg() {
 }
 
 export const arkEnabled = () => !!cfg().apiKey;
+
+/** 创作框可选的视频模型列表 [{label, id}]（默认模型自动置顶） */
+export function videoModelOptions() {
+  const c = cfg();
+  const list = c.modelVideoOptions.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
+    const [label, id] = l.split('|').map((s) => s.trim());
+    return id ? { label, id } : { label, id: label };
+  });
+  if (!list.some((o) => o.id === c.modelVideo)) list.unshift({ label: `默认（${c.modelVideo}）`, id: c.modelVideo });
+  return list;
+}
 
 // ---- 成本记账（微元 = 元 × 1e6） ----
 export function logUsage({ feature, provider = 'local', model = '', promptTokens = 0, completionTokens = 0, images = 0, videoSeconds = 0, ok = 1 }) {
@@ -178,15 +198,18 @@ export async function arkImage({ prompt, ratio = '16:9', refImages = [], feature
  * 视频生成（Seedance，异步任务）。文本命令行参数随模型版本见官方文档。
  * @returns {Promise<{remoteId:string, model:string}>}
  */
-export async function arkVideoCreate({ prompt, imageUrl = '', ratio = '16:9', duration = 5 }) {
+export async function arkVideoCreate({ prompt, imageUrl = '', ratio = '16:9', duration = 5, model = '', resolution = '' }) {
   const c = cfg();
-  const text = `${prompt} --ratio ${ratio} --duration ${Math.round(duration)} --watermark ${c.watermark ? 'true' : 'false'}`;
+  const useModel = model || c.modelVideo;
+  let text = `${prompt} --ratio ${ratio} --duration ${Math.round(duration)} --watermark ${c.watermark ? 'true' : 'false'}`;
+  if (resolution) text += ` --resolution ${String(resolution).toLowerCase().replace(/P$/i, 'p')}`;
+  if (c.videoExtraArgs) text += ` ${c.videoExtraArgs}`;
   const content = [{ type: 'text', text }];
   const ref = toArkImageUrl(imageUrl);
   if (ref) content.push({ type: 'image_url', image_url: { url: ref }, role: 'first_frame' });
-  const data = await arkFetch('/contents/generations/tasks', { model: c.modelVideo, content }, { timeoutMs: 60_000 });
+  const data = await arkFetch('/contents/generations/tasks', { model: useModel, content }, { timeoutMs: 60_000 });
   if (!data?.id) throw new Error('方舟没有返回任务 ID');
-  return { remoteId: data.id, model: c.modelVideo };
+  return { remoteId: data.id, model: useModel };
 }
 
 /** 查询视频任务。succeeded 时自动把视频落盘到本地。 */

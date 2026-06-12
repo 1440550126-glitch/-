@@ -37,13 +37,14 @@ POST('/api/ai/image', async ({ body }) => {
 POST('/api/ai/video', async ({ body }) => {
   return await createVideoTask({
     prompt: body.prompt, imageUrl: body.image_url, duration: body.duration || 5, ratio: body.ratio,
-    projectId: body.project_id, nodeId: body.node_id, name: body.name, order: body.order
+    projectId: body.project_id, nodeId: body.node_id, name: body.name, order: body.order,
+    model: body.model || '', resolution: body.resolution || ''
   });
 });
 
 GET('/api/ai/task/:id', async ({ params }) => {
   const t = await pollTask(params.id);
-  return { id: t.id, kind: t.kind, status: t.status, provider: t.provider, result: t.result, error: t.error || '', created_at: t.created_at };
+  return { id: t.id, kind: t.kind, status: t.status, provider: t.provider, result: t.result, params: t.params, error: t.error || '', created_at: t.created_at };
 });
 
 GET('/api/ai/tasks', async () => {

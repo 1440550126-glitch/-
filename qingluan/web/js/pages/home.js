@@ -1,6 +1,6 @@
 // 首页：问候 + 三种创作入口 + 项目网格
-import { GET, POST, DEL, bootstrap } from '../api.js';
-import { h, icon, toast, confirmDlg, fmtTime, STATUS_CN } from '../ui.js';
+import { GET, POST, DEL, bootstrap, pollUntilDone } from '../api.js';
+import { h, icon, toast, confirmDlg, fmtTime, STATUS_CN, mediaEl, isVideoUrl } from '../ui.js';
 import { nav } from '../main.js';
 import { loadStyles } from '../stylelib.js';
 
@@ -11,14 +11,100 @@ export async function renderHome(page) {
   const boot = await bootstrap();
   let entryTab = 'ai';
 
+  // ---------- 万能创作框：一句话 → 短片 / 图片 / 短剧项目 ----------
+  function quickBox() {
+    let mode = 'short';
+    const ta = h('textarea', { class: 'textarea', rows: 2, placeholder: '告诉我，今天想创作一点什么？例如：雨夜霓虹街头，一只机械猫撑着伞走过水洼，电影质感', onkeydown: (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) start(); } });
+    const modeChips = h('div', { style: { display: 'flex', gap: '7px', flexWrap: 'wrap' } });
+    const mk = (key, label, desc) => h('button', {
+      class: `chip ${mode === key ? 'on' : ''}`, title: desc,
+      onclick: (e) => { mode = key; modeChips.querySelectorAll('.chip').forEach((c) => c.classList.remove('on')); e.currentTarget.classList.add('on'); sync(); }
+    }, label);
+    modeChips.append(
+      mk('short', '🎬 沉浸式短片', '一句话直接出视频，自动入资产库'),
+      mk('image', '🖼 生成图片', '输入描述即刻出图，快速验证灵感'),
+      mk('drama', '📖 短剧项目', '生成剧本并创建项目，进入完整流程'));
+    const modelSel = h('select', { class: 'select', title: '视频模型（仅本次生效，列表在设置页维护）' },
+      (boot.video_models || []).map((m) => h('option', { value: m.id, selected: m.id === boot.ark.model_video }, m.label)));
+    const ratioQ = h('select', { class: 'select' }, ['16:9', '9:16', '1:1'].map((r) => h('option', { value: r }, r)));
+    const durSel = h('select', { class: 'select' }, [3, 5, 8, 10].map((n) => h('option', { value: n, selected: n === 5 }, `${n} 秒`)));
+    const resSel = h('select', { class: 'select', title: '分辨率' }, [['', '分辨率·自动'], ['480p', '480P'], ['720p', '720P'], ['1080p', '1080P']].map(([v, l]) => h('option', { value: v }, l)));
+    const startBtn = h('button', { class: 'btn accent', onclick: () => start() });
+    startBtn.innerHTML = `${icon('spark')} 立即开始`;
+    const result = h('div');
+
+    function sync() {
+      modelSel.style.display = mode === 'short' ? '' : 'none';
+      durSel.style.display = mode === 'short' ? '' : 'none';
+      resSel.style.display = mode === 'short' ? '' : 'none';
+      ta.placeholder = mode === 'drama'
+        ? '输入你构想的故事：设定、主角、剧情脉络、结局…将生成剧本并创建项目'
+        : mode === 'image'
+          ? '描述你想要的画面，例如：复古好莱坞风格，黄昏加油站旁的老式跑车'
+          : '告诉我，今天想创作一点什么？例如：雨夜霓虹街头，一只机械猫撑着伞走过水洼，电影质感';
+    }
+
+    async function start() {
+      const text = ta.value.trim();
+      if (!text) return toast('先描述一下你的想法', 'err');
+      startBtn.disabled = true;
+      startBtn.innerHTML = `${icon('loader')} 创作中…`;
+      const done = () => { startBtn.disabled = false; startBtn.innerHTML = `${icon('spark')} 立即开始`; };
+      try {
+        if (mode === 'drama') {
+          const r = await POST('/api/ai/script', { idea: text });
+          toast('剧本已生成，进入项目工作台', 'ok');
+          nav(`/project/${r.project.id}`);
+          return;
+        }
+        if (mode === 'image') {
+          const r = await POST('/api/ai/image', { prompt: text, name: text.slice(0, 16), kind: 'scene', ratio: ratioQ.value });
+          showResult(r.url, `${r.provider === 'ark' ? '方舟 Seedream 出图完成' : '本地占位图（配置方舟 Key 出真图）'} · 已存入资产库`);
+          done();
+          return;
+        }
+        const r = await POST('/api/ai/video', {
+          prompt: text, name: text.slice(0, 16), ratio: ratioQ.value, duration: Number(durSel.value),
+          model: modelSel.value, resolution: resSel.value
+        });
+        showPending(`${boot.ark.enabled ? '方舟 Seedance 生成中（约 1-3 分钟）' : '本地引擎生成中（数秒）'}…`);
+        const t = await pollUntilDone(r.taskId);
+        if (t.status === 'succeeded') showResult(t.result.url, `${t.provider === 'ark' ? '方舟出片完成' : '本地预览片'} · 已存入资产库`);
+        else { result.innerHTML = ''; toast('生成失败：' + (t.error || ''), 'err'); }
+        done();
+      } catch (e) { toast(e.message, 'err'); done(); }
+    }
+
+    function showPending(text) {
+      result.innerHTML = '';
+      result.append(h('div', { class: 'quick-result' }, h('div', { class: 'spinner' }), h('div', { class: 'qr-info' }, text)));
+    }
+    function showResult(url, caption) {
+      result.innerHTML = '';
+      const m = mediaEl(url);
+      if (isVideoUrl(url)) m.autoplay = true;
+      result.append(h('div', { class: 'quick-result' },
+        h('div', { class: 'qr-media' }, m),
+        h('div', { class: 'qr-info' }, h('b', {}, caption),
+          h('a', { href: '#/assets', style: { color: '#7fd8c9' } }, '打开资产库 →'))));
+    }
+
+    sync();
+    return h('div', {},
+      h('div', { class: 'quickbox' }, ta,
+        h('div', { class: 'quick-controls' }, modeChips, h('span', { class: 'grow' }), modelSel, ratioQ, durSel, resSel, startBtn)),
+      result);
+  }
+
   const hero = h('div', { class: 'hero fadein' },
     h('h2', { html: `Hi ${boot.user_name}，和 <em>青鸾</em> 一起创作专属短剧` }),
-    h('p', {}, '剧本 → 分镜 → 画布 → 成片，全流程开放：网页操作，或让任何 Agent 替你动手'),
-    h('div', { class: 'hero-pills' },
+    h('p', {}, '一句话成片 · 剧本 → 分镜 → 画布 → 成片全流程 · 任何 Agent 都能替你动手'),
+    quickBox(),
+    h('div', { class: 'hero-pills', style: { marginTop: '14px' } },
       h('span', { class: 'pill' }, boot.ark.enabled ? `火山方舟 · ${boot.ark.model_video}` : '本地引擎模式 · 配置方舟 Key 解锁真实生成'),
       h('span', { class: 'pill' }, 'MCP / OpenAPI 全开放'),
       h('span', { class: 'pill' }, `今日成本 ¥${boot.stats.cost_today_yuan}`)),
-    h('div', { class: 'bird', html: `<svg viewBox="0 0 100 100" width="120" height="120"><path d="M22 62 Q40 30 64 34 Q80 37 84 24 Q83 44 70 50 Q84 52 88 46 Q83 62 66 60 Q52 59 44 66 Q38 71 38 80 L33 70 Q24 70 18 76 Q19 66 22 62 Z" fill="rgba(255,255,255,.14)"/></svg>` }));
+    h('div', { class: 'bird', style: { top: '18%', transform: 'none' }, html: `<svg viewBox="0 0 100 100" width="110" height="110"><path d="M22 62 Q40 30 64 34 Q80 37 84 24 Q83 44 70 50 Q84 52 88 46 Q83 62 66 60 Q52 59 44 66 Q38 71 38 80 L33 70 Q24 70 18 76 Q19 66 22 62 Z" fill="rgba(255,255,255,.13)"/></svg>` }));
 
   const entryBody = h('div', { class: 'entry-body' });
   const tabs = h('div', { class: 'tabs' },

@@ -10,6 +10,8 @@ export async function renderSettings(page) {
   const chatIn = h('input', { class: 'input', value: s.model_chat });
   const imageIn = h('input', { class: 'input', value: s.model_image });
   const videoIn = h('input', { class: 'input', value: s.model_video });
+  const videoOptsIn = h('textarea', { class: 'textarea', rows: 4, value: s.model_video_options || '', placeholder: 'Seedance 1.0 Pro|doubao-seedance-1-0-pro-250528' });
+  const extraIn = h('input', { class: 'input', value: s.video_extra_args || '', placeholder: '如 --camerafixed true' });
   const wmSel = h('select', { class: 'select' }, [['false', '不加水印'], ['true', '加 AI 水印']].map(([v, l]) => h('option', { value: v, selected: String(s.watermark) === v }, l)));
   const nameIn = h('input', { class: 'input', value: s.user_name });
   const p1 = h('input', { class: 'input', type: 'number', step: '0.0001', value: s.price_chat_in });
@@ -25,6 +27,7 @@ export async function renderSettings(page) {
     try {
       const body = {
         ark_base_url: baseIn.value.trim(), model_chat: chatIn.value.trim(), model_image: imageIn.value.trim(), model_video: videoIn.value.trim(),
+        model_video_options: videoOptsIn.value.trim(), video_extra_args: extraIn.value.trim(),
         watermark: wmSel.value === 'true', user_name: nameIn.value.trim() || '创作者',
         price_chat_in: Number(p1.value), price_chat_out: Number(p2.value), price_image: Number(p3.value), price_video_sec: Number(p4.value)
       };
@@ -62,7 +65,9 @@ export async function renderSettings(page) {
     fld('接口地址', baseIn),
     fld('对话模型（剧本/解析/Agent）', chatIn, '如 doubao-seed-1-6-250615 或接入点 ep-xxxx'),
     fld('图像模型（Seedream）', imageIn, '如 doubao-seedream-4-0-250828'),
-    fld('视频模型（Seedance）', videoIn, 'Seedance 2.0 发布后直接替换模型 ID 即可'),
+    fld('视频模型（Seedance，默认）', videoIn, 'Seedance 2.0 发布后直接替换模型 ID 即可'),
+    fld('创作框可选视频模型（每行：显示名|模型ID）', videoOptsIn, '首页创作框与 Agent 可按次选用；加一行 Seedance 2.0|<模型ID> 即生效'),
+    fld('视频任务附加参数', extraIn, '追加到 Seedance 文本命令末尾（按官方文档填，如 --camerafixed true）'),
     fld('水印', wmSel),
     h('div', { style: { display: 'flex', gap: '10px', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap' } }, saveBtn, testBtn, testOut));
 

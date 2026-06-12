@@ -403,6 +403,17 @@ svg.flow-edges path.temp { fill: none; stroke: #54c2b4; stroke-width: 2; stroke-
 .stat-table td, .stat-table th { padding: 6px 10px; border-bottom: 1px dashed var(--line); text-align: left; }
 .stat-table th { color: var(--ink3); font-weight: 600; }
 
+/* ============ 万能创作框（首页 Hero） ============ */
+.quickbox { margin-top: 20px; background: rgba(255, 255, 255, .97); border-radius: 16px; padding: 14px 16px 12px; color: var(--ink); box-shadow: var(--shadow); position: relative; z-index: 3; }
+.quickbox .textarea { border: none; box-shadow: none; padding: 4px 4px 6px; min-height: 52px; font-size: 14.5px; background: transparent; resize: none; }
+.quickbox .textarea:focus { box-shadow: none; }
+.quick-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.quick-controls .select { width: auto; padding: 6px 26px 6px 10px; font-size: 13px; border-radius: 9px; }
+.quick-result { margin-top: 14px; background: rgba(10, 16, 24, .55); border-radius: 14px; padding: 12px 14px; display: flex; gap: 14px; align-items: center; color: #eef5f3; position: relative; z-index: 3; }
+.quick-result .qr-media { width: 300px; flex: none; border-radius: 10px; overflow: hidden; background: #0c1118; }
+.quick-result .qr-media img, .quick-result .qr-media video { width: 100%; display: block; }
+.quick-result .qr-info { font-size: 13px; color: rgba(238, 245, 243, .85); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
 /* ============ 风格库 ============ */
 .style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .style-card {

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { GET, POST, PATCH, DEL, bad, notFound } from '../lib/httpx.js';
 import { q, getSetting, setSetting, UPLOAD_DIR, DB_PATH } from '../lib/db.js';
 import { uid, now, jparse, micro2yuan, token32 } from '../lib/util.js';
-import { arkEnabled, cfg, arkChat, DEFAULTS } from '../lib/ark.js';
+import { arkEnabled, cfg, arkChat, DEFAULTS, videoModelOptions } from '../lib/ark.js';
 import { createProject, getProject, projectOut, touchProject, getCanvas } from '../lib/pipeline.js';
 import { STYLES, STYLE_CATS } from '../lib/styles.js';
 
@@ -18,6 +18,8 @@ GET('/api/bootstrap', async () => {
     app: { name: '青鸾', full: '青鸾 · AI 短剧创作工坊', slogan: '比云雀飞得更高', version: '0.1.0' },
     user_name: getSetting('user_name', '创作者'),
     ark: { enabled: arkEnabled(), base_url: c.baseUrl, model_chat: c.modelChat, model_image: c.modelImage, model_video: c.modelVideo },
+    video_models: videoModelOptions(),
+    video_resolutions: ['', '480p', '720p', '1080p'],
     agent_token: getSetting('agent_token', ''),
     mcp_path: path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..', 'mcp', 'server.mjs'),
     stats: statsSummary()
@@ -161,7 +163,7 @@ DEL('/api/canvases/:id', async ({ params }) => {
 });
 
 // ---------- 设置 ----------
-const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_video', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio'];
+const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_video', 'model_video_options', 'video_extra_args', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio'];
 
 GET('/api/settings', async () => {
   const c = cfg();
@@ -170,6 +172,7 @@ GET('/api/settings', async () => {
     ark_api_key_masked: key ? `${key.slice(0, 4)}****${key.slice(-4)}` : '',
     ark_key_source: getSetting('ark_api_key', '') ? 'settings' : (process.env.ARK_API_KEY ? 'env' : ''),
     ark_base_url: c.baseUrl, model_chat: c.modelChat, model_image: c.modelImage, model_video: c.modelVideo,
+    model_video_options: c.modelVideoOptions, video_extra_args: c.videoExtraArgs,
     watermark: c.watermark,
     price_chat_in: c.priceChatIn, price_chat_out: c.priceChatOut, price_image: c.priceImage, price_video_sec: c.priceVideoSec,
     user_name: getSetting('user_name', '创作者'),
