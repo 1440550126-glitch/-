@@ -176,6 +176,13 @@ try {
   const ren = (await api('PATCH', `/api/assets/${up.id}`, { name: '重命名图' })).data;
   ok(ren.name === '重命名图', '重命名资产');
 
+  console.log('— 资产分页 —');
+  const pg = (await api('GET', '/api/assets?paged=1&limit=2')).data;
+  ok(typeof pg.total === 'number' && pg.items.length <= 2, `分页返回（total=${pg.total}）`);
+  const pg2 = (await api('GET', '/api/assets?paged=1&limit=2&offset=2')).data;
+  ok(pg2.offset === 2 && (pg.total <= 2 || pg2.items[0]?.id !== pg.items[0]?.id), '偏移翻页生效');
+  ok(Array.isArray((await api('GET', '/api/assets')).data), '旧数组形态保持兼容');
+
   console.log('— Agent API（Token 鉴权） —');
   const noAuth = await api('GET', '/api/agent/v1/ping');
   ok(noAuth.status === 401, '无 Token 拒绝（401）');

@@ -334,7 +334,18 @@ export async function renderCanvas(page, params) {
     projectId ? h('button', { class: 'btn sm', onclick: () => nav(`/project/${projectId}`), html: `${icon('film', 15)} 剧本` }) : null,
     batchBtn);
 
+  const showShortcuts = () => modal({
+    title: h('span', { html: `⌨ 画布快捷键` }),
+    body: h('table', { class: 'tool-table' }, h('tbody', {},
+      [['滚轮', '缩放（光标为中心）'], ['拖拽空白', '平移画布'], ['Shift+拖拽空白', '框选多选'], ['Shift+点击节点', '增减选择'],
+        ['拖拽端口→分镜', '建立关联连线'], ['F', '适配全部节点'], ['D', '涂鸦笔开/关'], ['⌘/Ctrl+C / V', '复制 / 粘贴节点'],
+        ['⌘/Ctrl+Z / ⇧Z', '撤销 / 重做'], ['Delete', '删除选中'], ['Esc', '取消选择 / 退出涂鸦'], ['⌘/Ctrl+S', '立即保存']]
+        .map(([k, d]) => h('tr', {}, h('td', {}, h('span', { class: 'kbd' }, k)), h('td', {}, d))))),
+    actions: [{ label: '知道了', kind: 'primary' }]
+  });
+
   const zoombar = h('div', { class: 'cv-zoombar' },
+    h('button', { class: 'btn sm ghost', html: '⌨', title: '快捷键速查', onclick: showShortcuts, style: { color: '#dfe6f0' } }),
     h('button', { class: 'btn sm ghost', html: icon('zoomout', 15), onclick: () => graph.zoomBy(0.85), style: { color: '#dfe6f0' } }),
     pct,
     h('button', { class: 'btn sm ghost', html: icon('zoomin', 15), onclick: () => graph.zoomBy(1.18), style: { color: '#dfe6f0' } }),

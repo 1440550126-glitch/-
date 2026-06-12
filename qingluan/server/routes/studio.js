@@ -110,10 +110,16 @@ DEL('/api/projects/:id', async ({ params, query }) => {
 GET('/api/assets', async ({ query }) => {
   const tab = query.get('tab') || '';
   const kw = (query.get('q') || '').trim();
-  let rows = q.all('SELECT * FROM assets ORDER BY created_at DESC LIMIT 300');
+  let rows = q.all('SELECT * FROM assets ORDER BY created_at DESC LIMIT 2000');
   if (tab) rows = rows.filter((r) => r.tab === tab);
   if (kw) rows = rows.filter((r) => r.name.includes(kw) || r.prompt.includes(kw));
-  return rows;
+  // paged=1 时分页返回（资产库页用）；否则保持旧数组形态（选择器/Agent 兼容）
+  if (query.get('paged') === '1') {
+    const offset = Math.max(0, Number(query.get('offset')) || 0);
+    const limit = Math.min(120, Math.max(1, Number(query.get('limit')) || 48));
+    return { total: rows.length, offset, limit, items: rows.slice(offset, offset + limit) };
+  }
+  return rows.slice(0, 300);
 });
 
 POST('/api/assets', async ({ body }) => {

@@ -134,7 +134,9 @@ export async function renderProject(page, params) {
 
   function download(name, text, mime = 'text/plain') {
     const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: `${mime};charset=utf-8` })), download: name });
+    document.body.append(a);   // 入 DOM 才能保证下载文件名生效
     a.click();
+    a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
   function storyboardMarkdown() {
@@ -227,6 +229,11 @@ export async function renderProject(page, params) {
         rTab('shots', '分镜', sb?.shots?.length), rTab('cast', '角色', sb?.characters?.length),
         rTab('scenes', '场景/道具', (sb?.scenes?.length || 0) + (sb?.props?.length || 0)), rTab('agent', 'Agent')),
       h('span', { class: 'grow' }),
+      sb ? h('button', { class: 'btn xs ghost', title: '导出 SRT 字幕（按分镜时长排时间轴）', onclick: async () => {
+        const { buildSRT } = await import('../srt.js');
+        download(`${project.title}-字幕.srt`, buildSRT(sb.shots));
+        toast('SRT 字幕已导出', 'ok');
+      } }, 'SRT') : null,
       sb ? h('button', { class: 'btn xs ghost', title: '导出分镜表 Markdown', html: icon('download', 14), onclick: () => download(`${project.title}-分镜表.md`, storyboardMarkdown(), 'text/markdown') }) : null));
     const body = h('div', { style: { minHeight: '420px', display: 'flex', flexDirection: 'column' } });
     rightCard.append(body);

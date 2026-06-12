@@ -42,7 +42,29 @@ export function createGraph(root, {
   // ---------- 视图 ----------
   function applyView() {
     world.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+    scheduleCull();
     onView?.(zoom, panX, panY);
+  }
+
+  // 视口剔除：大画布只显示可见节点（visibility 保留布局尺寸，连线锚点不受影响）
+  let cullTimer = 0;
+  function scheduleCull() {
+    clearTimeout(cullTimer);
+    cullTimer = setTimeout(cull, 90);
+  }
+  function cull() {
+    if (nodes.length < 40) return;          // 小画布无需剔除
+    const r = vp.getBoundingClientRect();
+    const margin = 420 / zoom;
+    const x1 = -panX / zoom - margin, y1 = -panY / zoom - margin;
+    const x2 = (r.width - panX) / zoom + margin, y2 = (r.height - panY) / zoom + margin;
+    for (const n of nodes) {
+      const el = nodeEls.get(n.id);
+      if (!el) continue;
+      const w = el.offsetWidth || 220, hh = el.offsetHeight || 160;
+      const visible = n.x < x2 && n.x + w > x1 && n.y < y2 && n.y + hh > y1;
+      el.style.visibility = visible ? '' : 'hidden';
+    }
   }
   function screenToWorld(cx, cy) {
     const r = vp.getBoundingClientRect();
@@ -163,6 +185,7 @@ export function createGraph(root, {
     onChange?.();
   }
   function refreshEdges() {
+    scheduleCull();
     const byId = new Map(nodes.map((n) => [n.id, n]));
     for (const e of edges) {
       const els = edgeEls.get(e.id);

@@ -88,10 +88,23 @@ export async function renderAssets(page, params = {}) {
       stagger(grid, 35);
       return;
     }
-    const list = await GET(`/api/assets?tab=${tab}&q=${encodeURIComponent(keyword)}`);
+    const page1 = await GET(`/api/assets?paged=1&limit=48&tab=${tab}&q=${encodeURIComponent(keyword)}`);
     grid.innerHTML = '';
-    if (!list.length) return grid.append(emptyBox(keyword ? '没有匹配的资产' : '空空如也，点右上角「新增」上传或 AI 生成'));
-    for (const a of list) grid.append(assetCard(a));
+    if (!page1.items.length) return grid.append(emptyBox(keyword ? '没有匹配的资产' : '空空如也，点右上角「新增」上传或 AI 生成'));
+    let loaded = 0;
+    const appendPage = (pg) => {
+      for (const a of pg.items) grid.append(assetCard(a));
+      loaded += pg.items.length;
+      grid.querySelector('.load-more')?.remove();
+      if (loaded < pg.total) {
+        const moreBtn = h('button', { class: 'btn load-more', style: { gridColumn: '1/-1', justifySelf: 'center' }, onclick: async () => {
+          moreBtn.disabled = true;
+          appendPage(await GET(`/api/assets?paged=1&limit=48&offset=${loaded}&tab=${tab}&q=${encodeURIComponent(keyword)}`));
+        } }, `加载更多（${loaded}/${pg.total}）`);
+        grid.append(moreBtn);
+      }
+    };
+    appendPage(page1);
     stagger(grid, 28);
   }
 

@@ -1,6 +1,7 @@
 // 青鸾 · 放映室：按分镜顺序连播预览成片效果（mp4 用 video，本地 SVG 预览用 img + 计时）
 import { POST } from './api.js';
 import { h, icon, toast, isVideoUrl } from './ui.js';
+import { buildSRT, downloadText } from './srt.js';
 
 /**
  * @param {{title:string, projectId:string, groups:Array<{key:string,label:string,shots:Array<{order,name,url,poster,dialogue,action,duration}>}>, startGroup?:string}} opts
@@ -79,6 +80,10 @@ export function openScreeningRoom({ title, projectId = '', groups, startGroup = 
   const room = h('div', { class: 'screen-room' },
     h('div', { class: 'sr-top' },
       h('b', {}, `放映室 · ${title}`), groupSel, h('span', { class: 'grow' }),
+      h('button', { class: 'btn sm', title: '导出当前分组的 SRT 字幕（可导入剪映/CapCut）', onclick: () => {
+        downloadText(`${title}-${group.label}.srt`, buildSRT(group.shots));
+        toast('SRT 字幕已导出', 'ok');
+      } }, '字幕'),
       voiceBtn,
       projectId ? exportBtn : null,
       h('button', { class: 'btn sm', html: icon('x', 15), title: '关闭 (Esc)', onclick: () => close() })),
