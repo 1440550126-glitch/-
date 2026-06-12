@@ -15,6 +15,9 @@ export function createGraph(root, {
 } = {}) {
   let nodes = [];
   let edges = [];
+  let doodles = [];             // 涂鸦笔手绘批注 [{id,color,width,points:[[x,y]...]}]
+  let tool = null;              // null | 'pen' | 'eraser'
+  const toolOpts = { color: '#54c2b4', width: 3.5 };
   let zoom = 1, panX = 60, panY = 40;
   let selected = null;          // {kind, id}
 
@@ -23,7 +26,11 @@ export function createGraph(root, {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('class', 'flow-edges');
   const nodeLayer = h('div', {});
-  world.append(svg, nodeLayer);
+  // 涂鸦层独立 SVG，置于节点之上（批注覆盖一切，可被橡皮命中）
+  const svgDd = document.createElementNS(SVG_NS, 'svg');
+  svgDd.setAttribute('class', 'flow-edges dd-svg');
+  svgDd.style.pointerEvents = 'none';
+  world.append(svg, nodeLayer, svgDd);
   vp.append(world);
   root.append(vp);
 
@@ -68,13 +75,17 @@ export function createGraph(root, {
   }
 
   // ---------- 节点渲染 ----------
-  function mountNode(n) {
+  function mountNode(n, pop = false) {
     const el = h('div', { class: `ql-node node-${n.type}`, dataset: { id: n.id } });
     el.style.left = n.x + 'px';
     el.style.top = n.y + 'px';
     el.append(renderNode(n));
     if (sourcePort(n)) el.append(h('span', { class: 'flow-port out', dataset: { node: n.id }, title: '拖到分镜节点上建立关联' }));
     if (targetPort(n)) el.append(h('span', { class: 'flow-port in', title: '接收角色/场景/道具关联' }));
+    if (pop) {
+      el.classList.add('pop');
+      el.addEventListener('animationend', () => el.classList.remove('pop'), { once: true });
+    }
     nodeLayer.append(el);
     nodeEls.set(n.id, el);
     return el;
@@ -102,14 +113,53 @@ export function createGraph(root, {
     const dx = Math.min(170, Math.max(46, Math.abs(b.x - a.x) * 0.45));
     return `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`;
   }
-  function mountEdge(e) {
+  function mountEdge(e, animate = false) {
     const hit = document.createElementNS(SVG_NS, 'path');
     hit.setAttribute('class', 'hit');
     hit.dataset.id = e.id;
     const line = document.createElementNS(SVG_NS, 'path');
-    line.setAttribute('class', 'edge');
+    line.setAttribute('class', 'edge' + (animate ? ' draw' : ''));
+    line.setAttribute('pathLength', '1');
     svg.append(hit, line);
     edgeEls.set(e.id, { hit, line });
+  }
+
+  // ---------- 涂鸦层 ----------
+  function smoothPath(pts) {
+    if (!pts.length) return '';
+    if (pts.length < 3) {
+      const a = pts[0], b = pts[pts.length - 1];
+      return `M ${a[0]} ${a[1]} L ${b[0] + 0.01} ${b[1] + 0.01}`;
+    }
+    let d = `M ${pts[0][0]} ${pts[0][1]}`;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const mx = (pts[i][0] + pts[i + 1][0]) / 2;
+      const my = (pts[i][1] + pts[i + 1][1]) / 2;
+      d += ` Q ${pts[i][0]} ${pts[i][1]} ${mx} ${my}`;
+    }
+    return d;
+  }
+  function mountDoodle(dd) {
+    const p = document.createElementNS(SVG_NS, 'path');
+    p.setAttribute('class', 'dd-stroke');
+    p.dataset.id = dd.id;
+    p.setAttribute('stroke', dd.color);
+    p.setAttribute('stroke-width', dd.width);
+    p.setAttribute('d', smoothPath(dd.points));
+    p.style.pointerEvents = 'stroke';
+    svgDd.append(p);
+    return p;
+  }
+  function eraseAt(cx, cy) {
+    const p = screenToWorld(cx, cy);
+    const hit = doodles.find((d) => {
+      const tol = Math.max(14 / zoom, d.width * 1.6);
+      return d.points.some(([x, y]) => (x - p.x) ** 2 + (y - p.y) ** 2 < tol * tol);
+    });
+    if (!hit) return;
+    doodles = doodles.filter((d) => d.id !== hit.id);
+    svgDd.querySelector(`path[data-id="${hit.id}"]`)?.remove();
+    onChange?.();
   }
   function refreshEdges() {
     const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -128,10 +178,12 @@ export function createGraph(root, {
   function rebuild() {
     nodeLayer.innerHTML = '';
     svg.innerHTML = '';
+    svgDd.innerHTML = '';
     nodeEls.clear();
     edgeEls.clear();
-    nodes.forEach(mountNode);
-    edges.forEach(mountEdge);
+    nodes.forEach((n) => mountNode(n));
+    edges.forEach((e) => mountEdge(e));
+    doodles.forEach(mountDoodle);
     requestAnimationFrame(refreshEdges);
   }
 
@@ -147,6 +199,20 @@ export function createGraph(root, {
   let drag = null; // {mode:'pan'|'node'|'link', ...}
   vp.addEventListener('pointerdown', (e) => {
     if (e.button === 2) return;
+    // 涂鸦模式优先：画笔起笔 / 橡皮擦除
+    if (tool === 'pen') {
+      const p = screenToWorld(e.clientX, e.clientY);
+      const dd = { id: 'd' + Math.random().toString(36).slice(2, 10), color: toolOpts.color, width: toolOpts.width, points: [[Math.round(p.x), Math.round(p.y)]] };
+      drag = { mode: 'doodle', dd, el: mountDoodle(dd), last: p };
+      vp.setPointerCapture?.(e.pointerId);
+      return e.preventDefault();
+    }
+    if (tool === 'eraser') {
+      drag = { mode: 'erase' };
+      eraseAt(e.clientX, e.clientY);
+      vp.setPointerCapture?.(e.pointerId);
+      return e.preventDefault();
+    }
     const portEl = e.target.closest?.('.flow-port.out');
     const nodeEl = e.target.closest?.('.ql-node');
     if (portEl) {
@@ -171,6 +237,17 @@ export function createGraph(root, {
 
   vp.addEventListener('pointermove', (e) => {
     if (!drag) return;
+    if (drag.mode === 'doodle') {
+      const p = screenToWorld(e.clientX, e.clientY);
+      const dx = p.x - drag.last.x, dy = p.y - drag.last.y;
+      if (dx * dx + dy * dy > (1.6 / zoom) ** 2) {
+        drag.dd.points.push([Math.round(p.x), Math.round(p.y)]);
+        drag.el.setAttribute('d', smoothPath(drag.dd.points));
+        drag.last = p;
+      }
+      return;
+    }
+    if (drag.mode === 'erase') return eraseAt(e.clientX, e.clientY);
     if (Math.abs(e.clientX - drag.sx) + Math.abs(e.clientY - drag.sy) > 4) drag.moved = true;
     if (drag.mode === 'pan') {
       panX = drag.px + (e.clientX - drag.sx);
@@ -195,6 +272,12 @@ export function createGraph(root, {
     vp.classList.remove('panning');
     const d = drag;
     drag = null;
+    if (d.mode === 'doodle') {
+      doodles.push(d.dd);
+      onChange?.();
+      return;
+    }
+    if (d.mode === 'erase') return;
     if (d.mode === 'link') {
       tempPath?.remove();
       tempPath = null;
@@ -204,7 +287,7 @@ export function createGraph(root, {
         if (to && canLink(d.from, to) && !edges.some((x) => x.from === d.from.id && x.to === to.id)) {
           const edge = { id: 'e' + Math.random().toString(36).slice(2, 10), from: d.from.id, to: to.id };
           edges.push(edge);
-          mountEdge(edge);
+          mountEdge(edge, true);
           refreshEdges();
           onChange?.();
         }
@@ -239,22 +322,37 @@ export function createGraph(root, {
 
   return {
     el: vp,
-    setData({ nodes: ns, edges: es, viewport }) {
+    setData({ nodes: ns, edges: es, doodles: ds, viewport }) {
       nodes = ns || [];
       edges = es || [];
+      doodles = ds || [];
       if (viewport) { zoom = viewport.zoom || 1; panX = viewport.x ?? 60; panY = viewport.y ?? 40; }
       rebuild();
       applyView();
       if (!viewport) requestAnimationFrame(() => fit());
     },
-    getData: () => ({ nodes, edges, viewport: { zoom, x: panX, y: panY } }),
+    getData: () => ({ nodes, edges, doodles, viewport: { zoom, x: panX, y: panY } }),
+    // 涂鸦笔
+    setTool(t, opts) {
+      tool = t;
+      if (opts) Object.assign(toolOpts, opts);
+      vp.classList.toggle('doodling', t === 'pen');
+      vp.classList.toggle('erasing', t === 'eraser');
+    },
+    getTool: () => tool,
+    getDoodles: () => doodles,
+    clearDoodles() {
+      doodles = [];
+      svgDd.innerHTML = '';
+      onChange?.();
+    },
     getNodes: () => nodes,
     getEdges: () => edges,
     getSelected: () => selected,
     findNode: (id) => nodes.find((n) => n.id === id),
     addNode(n) {
       nodes.push(n);
-      mountNode(n);
+      mountNode(n, true);
       select({ kind: 'node', id: n.id });
       onChange?.();
     },

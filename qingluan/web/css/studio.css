@@ -162,7 +162,7 @@ pre.code b { color: #7fd8c9; font-weight: 500; }
 .toast {
   pointer-events: auto; background: #1d2433; color: #fff; padding: 9px 18px; border-radius: 11px;
   font-size: 13.5px; box-shadow: var(--shadow); display: flex; gap: 8px; align-items: center;
-  animation: toastIn .22s cubic-bezier(.2, .9, .3, 1.2);
+  animation: toastIn .5s cubic-bezier(.34, 1.56, .64, 1);
 }
 .toast.err { background: #b33a31; }
 .toast.ok { background: #14724e; }
@@ -177,7 +177,7 @@ pre.code b { color: #7fd8c9; font-weight: 500; }
 .modal {
   background: var(--panel); border-radius: 18px; box-shadow: var(--shadow);
   width: min(560px, 100%); max-height: 86vh; overflow-y: auto; padding: 24px;
-  animation: popIn .2s cubic-bezier(.2, .9, .3, 1.15);
+  animation: popIn .42s cubic-bezier(.34, 1.56, .64, 1);
 }
 .modal.wide { width: min(760px, 100%); }
 .modal h3 { font-size: 17px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
@@ -429,5 +429,57 @@ svg.flow-edges path.temp { fill: none; stroke: #54c2b4; stroke-width: 2; stroke-
 .style-card.custom b { position: static; text-shadow: none; }
 .style-card.custom.on { border-style: solid; }
 
-.fadein { animation: fadeUp .26s ease; }
-@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } }
+/* ============ 非线性动画系统 ============ */
+:root {
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);   /* 回弹 */
+  --ease-expo: cubic-bezier(.16, 1, .3, 1);          /* 急出缓收 */
+}
+.fadein { animation: fadeUp .55s var(--ease-expo); }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } }
+.stagger > * { animation: riseIn .6s var(--ease-spring) both; animation-delay: calc(var(--i, 0) * var(--stagger-step, 45ms)); }
+@keyframes riseIn { from { opacity: 0; transform: translateY(18px) scale(.96); } }
+.btn { transition: transform .25s var(--ease-spring), border-color .18s ease, background .18s ease, box-shadow .25s ease, opacity .18s ease; }
+.btn:active { transform: scale(.95); }
+.chip { transition: transform .3s var(--ease-spring), border-color .18s ease, background .18s ease, color .18s ease; }
+.chip.on { transform: scale(1.05); }
+.proj-card { transition: transform .5s var(--ease-spring), box-shadow .3s ease; }
+.asset-card, .style-card { transition: transform .45s var(--ease-spring), box-shadow .3s ease; }
+.tilt3d { will-change: transform; transition: transform .55s var(--ease-spring), box-shadow .3s ease; }
+.nav-item { transition: transform .3s var(--ease-spring), background .18s ease, color .18s ease; }
+.nav-item:active { transform: scale(.96); }
+
+/* 画布节点 / 连线入场 */
+.ql-node.pop { animation: nodePop .55s var(--ease-spring); }
+@keyframes nodePop { from { opacity: 0; transform: scale(.62); } }
+svg.flow-edges path.edge.draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: edgeDraw .8s var(--ease-expo) forwards; }
+@keyframes edgeDraw { to { stroke-dashoffset: 0; } }
+
+/* 手绘涂鸦点缀 */
+.dd { display: inline-block; pointer-events: none; line-height: 0; }
+.dd-path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: ddDraw 1.1s var(--ease-expo) forwards; }
+@keyframes ddDraw { to { stroke-dashoffset: 0; } }
+
+/* Hero 3D 流体背景 */
+.hero { isolation: isolate; }
+.hero .fluid-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; display: block; }
+.hero > :not(.fluid-bg) { position: relative; z-index: 2; }
+
+/* 画布涂鸦笔 */
+.flow-vp.doodling { cursor: crosshair; }
+.flow-vp.erasing { cursor: cell; }
+svg.flow-edges path.dd-stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.doodlebar {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 28;
+  display: flex; gap: 7px; align-items: center; padding: 7px 10px; border-radius: 13px;
+  background: rgba(22, 30, 44, .96); border: 1px solid rgba(255, 255, 255, .12);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .4); animation: popIn .4s var(--ease-spring);
+}
+.doodlebar .sw { width: 21px; height: 21px; border-radius: 50%; cursor: pointer; border: 2px solid rgba(255, 255, 255, .18); transition: transform .3s var(--ease-spring), border-color .15s; }
+.doodlebar .sw.on { border-color: #fff; transform: scale(1.22); }
+.doodlebar .sep { width: 1px; height: 18px; background: rgba(255, 255, 255, .14); margin: 0 2px; }
+.doodlebar .btn { background: rgba(255, 255, 255, .07); border-color: rgba(255, 255, 255, .15); color: #e8eef6; }
+.doodlebar .btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; transition-duration: .01ms !important; }
+}

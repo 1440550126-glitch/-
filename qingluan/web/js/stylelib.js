@@ -1,6 +1,6 @@
 // 风格库选择器（项目页 / 画布页共用）
 import { GET } from './api.js';
-import { h, icon, modal } from './ui.js';
+import { h, icon, modal, stagger } from './ui.js';
 
 let cache = null;
 export async function loadStyles() {
@@ -75,6 +75,7 @@ export async function openStylePicker({ current = '', onPick }) {
         current === s.name ? h('span', { class: 'sel-mark', html: icon('check', 15) }) : null,
         h('b', {}, s.name)));
     }
+    stagger(grid, 18);
   }
 
   renderGrid();

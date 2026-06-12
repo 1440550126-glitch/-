@@ -1,6 +1,6 @@
 // 资产库：素材 / 角色 / 画布
 import { GET, POST, PATCH, DEL, uploadFile } from '../api.js';
-import { h, icon, toast, modal, confirmDlg, copyText, fmtTime, mediaEl, isVideoUrl } from '../ui.js';
+import { h, icon, toast, modal, confirmDlg, copyText, fmtTime, mediaEl, isVideoUrl, stagger } from '../ui.js';
 import { nav } from '../main.js';
 
 const SOURCE_CN = { upload: '上传', ark: '方舟', local: '本地' };
@@ -85,12 +85,14 @@ export async function renderAssets(page, params = {}) {
             h('div', { class: 'row' }, h('span', { class: 'pill' }, `${c.node_count} 节点`),
               h('span', { class: 'grow' }), h('span', {}, fmtTime(c.updated_at))))));
       }
+      stagger(grid, 35);
       return;
     }
     const list = await GET(`/api/assets?tab=${tab}&q=${encodeURIComponent(keyword)}`);
     grid.innerHTML = '';
     if (!list.length) return grid.append(emptyBox(keyword ? '没有匹配的资产' : '空空如也，点右上角「新增」上传或 AI 生成'));
     for (const a of list) grid.append(assetCard(a));
+    stagger(grid, 28);
   }
 
   function emptyBox(text) {

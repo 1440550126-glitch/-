@@ -68,7 +68,7 @@ export async function renderCanvas(page, params) {
     savedHint.textContent = '保存中…';
     try {
       const data = graph.getData();
-      await PATCH(`/api/canvases/${canvas.id}`, { nodes: data.nodes, edges: data.edges, viewport: data.viewport, name: nameIn.value.trim() || canvas.name });
+      await PATCH(`/api/canvases/${canvas.id}`, { nodes: data.nodes, edges: data.edges, doodles: data.doodles, viewport: data.viewport, name: nameIn.value.trim() || canvas.name });
       savedHint.textContent = '已保存';
     } catch (e) { savedHint.textContent = '保存失败'; toast(e.message, 'err'); }
   };
@@ -153,6 +153,53 @@ export async function renderCanvas(page, params) {
     markDirty();
   }
 
+  // ---------- 涂鸦笔（手绘批注，随画布保存） ----------
+  const DD_COLORS = ['#54c2b4', '#ff7a5c', '#ffd166', '#f4f7fb'];
+  const DD_WIDTHS = [['细', 2.5], ['中', 4.5], ['粗', 8]];
+  const dd = { open: false, color: DD_COLORS[0], width: 4.5, tool: 'pen' };
+  const doodleBar = h('div', { class: 'doodlebar', style: { display: 'none' } });
+  let ddHinted = false;
+
+  function applyTool() {
+    graph.setTool(dd.open ? dd.tool : null, { color: dd.color, width: dd.width });
+  }
+  function renderDoodleBar() {
+    doodleBar.innerHTML = '';
+    doodleBar.append(
+      ...DD_COLORS.map((c) => h('span', {
+        class: `sw ${dd.color === c && dd.tool === 'pen' ? 'on' : ''}`, style: { background: c }, title: '画笔颜色',
+        onclick: () => { dd.color = c; dd.tool = 'pen'; renderDoodleBar(); applyTool(); }
+      })),
+      h('span', { class: 'sep' }),
+      ...DD_WIDTHS.map(([label, w]) => h('button', {
+        class: `btn xs ${dd.width === w ? 'on' : ''}`,
+        onclick: () => { dd.width = w; dd.tool = 'pen'; renderDoodleBar(); applyTool(); }
+      }, label)),
+      h('span', { class: 'sep' }),
+      h('button', {
+        class: `btn xs ${dd.tool === 'eraser' ? 'on' : ''}`, title: '橡皮：点/划掉笔迹',
+        onclick: () => { dd.tool = dd.tool === 'eraser' ? 'pen' : 'eraser'; renderDoodleBar(); applyTool(); }
+      }, '橡皮'),
+      h('button', {
+        class: 'btn xs', onclick: async () => {
+          if (!graph.getDoodles().length) return;
+          if (!await confirmDlg('清空画布上的全部涂鸦？')) return;
+          graph.clearDoodles();
+        }
+      }, '清空'),
+      h('button', { class: 'btn xs', onclick: () => toggleDoodle(false) }, `${'完成'} (Esc)`));
+  }
+  function toggleDoodle(open) {
+    dd.open = open;
+    doodleBar.style.display = open ? '' : 'none';
+    if (open) renderDoodleBar();
+    applyTool();
+    ddBtn.classList.toggle('accent', open);
+    if (open && !ddHinted) { ddHinted = true; toast('涂鸦模式：直接在画布上画，颜色/粗细在上方切换，D 键随时进出'); }
+  }
+  const ddBtn = h('button', { class: 'btn sm', title: '涂鸦笔 (D)：在画布上手绘批注', onclick: () => toggleDoodle(!dd.open) });
+  ddBtn.innerHTML = `${icon('pencil', 15)} 涂鸦`;
+
   const batchBtn = h('button', { class: 'btn accent', onclick: () => {
     batchBtn.disabled = true;
     scheduleSave.flush();
@@ -165,6 +212,7 @@ export async function renderCanvas(page, params) {
     nameIn, savedHint,
     h('span', { class: 'grow' }),
     h('button', { class: 'btn sm', onclick: addNodeMenu, html: `${icon('plus', 15)} 节点` }),
+    ddBtn,
     h('button', { class: 'btn sm', onclick: autoLayout, html: `${icon('layout', 15)} 整理` }),
     project ? (() => {
       const b = h('button', {
@@ -294,6 +342,8 @@ export async function renderCanvas(page, params) {
   // ---------- 快捷键 ----------
   const onKey = async (e) => {
     if (e.target.closest('input, textarea, select')) return;
+    if (e.key === 'd' || e.key === 'D') return toggleDoodle(!dd.open);
+    if (e.key === 'Escape' && dd.open) return toggleDoodle(false);
     if (e.key === 'Delete' || e.key === 'Backspace') {
       const s = graph.getSelected();
       if (!s) return;
@@ -309,10 +359,10 @@ export async function renderCanvas(page, params) {
   document.addEventListener('keydown', onKey);
 
   shell.append(top, main);
-  main.append(zoombar, inspectorBox);
+  main.append(zoombar, inspectorBox, doodleBar);
   page.append(shell);
 
-  graph.setData({ nodes: canvas.nodes, edges: canvas.edges, viewport: canvas.viewport });
+  graph.setData({ nodes: canvas.nodes, edges: canvas.edges, doodles: canvas.doodles || [], viewport: canvas.viewport });
   if ((canvas.nodes || []).some((n) => n.data?.task_status === 'running')) syncMedia();
 
   return () => {

@@ -70,6 +70,49 @@ export const iconEl = (name, size) => h('span', { style: { display: 'inline-flex
 
 export const LOGO_SVG = `<svg viewBox="0 0 100 100" width="34" height="34"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0e8c86"/><stop offset="1" stop-color="#54c2b4"/></linearGradient></defs><rect width="100" height="100" rx="24" fill="url(#lg)"/><path d="M22 62 Q40 30 64 34 Q80 37 84 24 Q83 44 70 50 Q84 52 88 46 Q83 62 66 60 Q52 59 44 66 Q38 71 38 80 L33 70 Q24 70 18 76 Q19 66 22 62 Z" fill="white"/><circle cx="66" cy="40" r="2.6" fill="#0e8c86"/></svg>`;
 
+// ---- 手绘涂鸦点缀（路径 draw-in，非线性缓动） ----
+const DOODLES = {
+  underline: { w: 120, h: 14, d: 'M3 9 C 28 3, 52 13, 76 7 S 112 5, 117 8' },
+  arrow: { w: 56, h: 44, d: 'M4 5 C 16 25, 31 36, 49 37 M41 29 L 50 37 L 40 42' },
+  circle: { w: 132, h: 52, d: 'M70 7 C 28 4, 9 15, 10 27 C 11 41, 47 48, 85 45 C 117 42, 127 30, 119 18 C 111 9, 86 5, 64 8' },
+  star: { w: 26, h: 26, d: 'M13 2 L 15.5 9.5 L 24 10 L 17.5 15 L 19.5 23 L 13 18.5 L 6.5 23 L 8.5 15 L 2 10 L 10.5 9.5 Z' },
+  spark: { w: 34, h: 34, d: 'M17 3 V 11 M17 23 V 31 M3 17 H 11 M23 17 H 31 M8 8 L 13 13 M21 21 L 26 26 M26 8 L 21 13 M13 21 L 8 26' },
+  squiggle: { w: 84, h: 18, d: 'M3 12 C 12 2, 20 16, 29 8 S 46 14, 55 7 S 74 13, 81 6' }
+};
+export function doodle(name, { color = '#e2543e', size = 0, delay = 200, width = 2.6, rotate = 0, style = {} } = {}) {
+  const d = DOODLES[name];
+  if (!d) return h('span');
+  const w = size || d.w;
+  const hh = Math.round(size ? size * d.h / d.w : d.h);
+  return h('span', {
+    class: 'dd', style: { transform: rotate ? `rotate(${rotate}deg)` : '', ...style },
+    html: `<svg width="${w}" height="${hh}" viewBox="0 0 ${d.w} ${d.h}" fill="none" aria-hidden="true">
+      <path d="${d.d}" pathLength="1" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" class="dd-path" style="animation-delay:${delay}ms"/></svg>`
+  });
+}
+
+/** 列表错峰入场（非线性弹性） */
+export function stagger(container, step = 45) {
+  [...container.children].forEach((el, i) => el.style.setProperty('--i', i));
+  container.style.setProperty('--stagger-step', step + 'ms');
+  container.classList.remove('stagger');
+  void container.offsetWidth;
+  container.classList.add('stagger');
+}
+
+/** 3D 卡片倾斜（指针跟随，弹性回位） */
+export function tilt3d(el, max = 5) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  el.classList.add('tilt3d');
+  el.addEventListener('pointermove', (e) => {
+    const r = el.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width - 0.5;
+    const y = (e.clientY - r.top) / r.height - 0.5;
+    el.style.transform = `perspective(720px) rotateX(${(-y * max).toFixed(2)}deg) rotateY(${(x * max).toFixed(2)}deg) translateY(-3px)`;
+  });
+  el.addEventListener('pointerleave', () => { el.style.transform = ''; });
+}
+
 // ---- Toast ----
 function toastBox() {
   let box = document.querySelector('#overlays .toasts');

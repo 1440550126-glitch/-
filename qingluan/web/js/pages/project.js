@@ -1,6 +1,6 @@
 // 项目工作台：剧本编辑 / AI 生成 / 分镜表 / 角色场景卡 / Agent
 import { GET, POST, PATCH, pollUntilDone } from '../api.js';
-import { h, icon, toast, debounce, mediaEl, modal, STATUS_CN, isVideoUrl } from '../ui.js';
+import { h, icon, toast, debounce, mediaEl, modal, STATUS_CN, isVideoUrl, stagger } from '../ui.js';
 import { nav, refreshSidebarProjects } from '../main.js';
 import { runBatchGenerate } from '../batch.js';
 import { createAgentChat } from '../agentchat.js';
@@ -170,6 +170,7 @@ export async function renderProject(page, params) {
             h('span', { class: `pill ${withVideo === shots.length && shots.length ? 'green' : ''}` }, `视频 ${withVideo}/${shots.length}`))),
         genBtn2));
     }
+    stagger(list, 50);
     const ideaIn2 = h('input', { class: 'input', placeholder: '本集创意（可空，AI 自动升级剧情）', style: { flex: 1 } });
     const addBtn = h('button', { class: 'btn accent', onclick: async () => {
       addBtn.disabled = true;
@@ -271,6 +272,7 @@ export async function renderProject(page, params) {
           h('b', {}, it.name, it.role ? h('span', { class: 'pill teal' }, it.role) : kind === 'prop' ? h('span', { class: 'pill' }, '道具') : null),
           h('p', { title: it.image_prompt }, it.desc || it.image_prompt))));
     }
+    stagger(grid, 35);
     body.append(grid);
   }
 

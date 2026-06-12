@@ -1,8 +1,9 @@
 // 首页：问候 + 三种创作入口 + 项目网格
 import { GET, POST, DEL, bootstrap, pollUntilDone } from '../api.js';
-import { h, icon, toast, confirmDlg, fmtTime, STATUS_CN, mediaEl, isVideoUrl } from '../ui.js';
+import { h, icon, toast, confirmDlg, fmtTime, STATUS_CN, mediaEl, isVideoUrl, doodle, stagger, tilt3d } from '../ui.js';
 import { nav } from '../main.js';
 import { loadStyles } from '../stylelib.js';
+import { initFluid } from '../fx/fluid.js';
 
 const GENRES = ['都市逆袭', '赘婿战神', '甜宠虐恋', '悬疑反转', '古装宫斗', '废土科幻'];
 const RATIOS = ['16:9', '9:16', '1:1', '4:3', '21:9'];
@@ -92,19 +93,29 @@ export async function renderHome(page) {
     sync();
     return h('div', {},
       h('div', { class: 'quickbox' }, ta,
-        h('div', { class: 'quick-controls' }, modeChips, h('span', { class: 'grow' }), modelSel, ratioQ, durSel, resSel, startBtn)),
+        h('div', { class: 'quick-controls' }, modeChips, h('span', { class: 'grow' }), modelSel, ratioQ, durSel, resSel,
+          doodle('arrow', { color: 'var(--accent2)', size: 30, delay: 700, rotate: -64, style: { margin: '0 0 8px 2px' } }),
+          startBtn)),
       result);
   }
 
+  const fluidCanvas = h('canvas', { class: 'fluid-bg', 'aria-hidden': 'true' });
   const hero = h('div', { class: 'hero fadein' },
-    h('h2', { html: `Hi ${boot.user_name}，和 <em>青鸾</em> 一起创作专属短剧` }),
+    fluidCanvas,
+    h('h2', {}, `Hi ${boot.user_name}，和 `,
+      h('em', { style: { position: 'relative', display: 'inline-block' } }, '青鸾',
+        doodle('circle', { color: 'rgba(226,94,62,.85)', size: 92, delay: 500, width: 3, style: { position: 'absolute', left: '-14px', top: '-9px' } })),
+      ' 一起创作专属短剧'),
     h('p', {}, '一句话成片 · 剧本 → 分镜 → 画布 → 成片全流程 · 任何 Agent 都能替你动手'),
     quickBox(),
     h('div', { class: 'hero-pills', style: { marginTop: '14px' } },
       h('span', { class: 'pill' }, boot.ark.enabled ? `火山方舟 · ${boot.ark.model_video}` : '本地引擎模式 · 配置方舟 Key 解锁真实生成'),
       h('span', { class: 'pill' }, 'MCP / OpenAPI 全开放'),
       h('span', { class: 'pill' }, `今日成本 ¥${boot.stats.cost_today_yuan}`)),
-    h('div', { class: 'bird', style: { top: '18%', transform: 'none' }, html: `<svg viewBox="0 0 100 100" width="110" height="110"><path d="M22 62 Q40 30 64 34 Q80 37 84 24 Q83 44 70 50 Q84 52 88 46 Q83 62 66 60 Q52 59 44 66 Q38 71 38 80 L33 70 Q24 70 18 76 Q19 66 22 62 Z" fill="rgba(255,255,255,.13)"/></svg>` }));
+    doodle('star', { color: 'rgba(255,209,102,.9)', size: 22, delay: 900, rotate: -14, style: { position: 'absolute', right: '178px', top: '30px' } }),
+    doodle('spark', { color: 'rgba(127,216,201,.85)', size: 30, delay: 1100, style: { position: 'absolute', right: '46px', bottom: '34px' } }),
+    doodle('squiggle', { color: 'rgba(255,255,255,.4)', size: 72, delay: 1300, rotate: 8, style: { position: 'absolute', left: '36px', bottom: '26px' } }),
+    h('div', { class: 'bird', style: { top: '14%', transform: 'none' }, html: `<svg viewBox="0 0 100 100" width="110" height="110"><path d="M22 62 Q40 30 64 34 Q80 37 84 24 Q83 44 70 50 Q84 52 88 46 Q83 62 66 60 Q52 59 44 66 Q38 71 38 80 L33 70 Q24 70 18 76 Q19 66 22 62 Z" fill="rgba(255,255,255,.16)"/></svg>` }));
 
   const entryBody = h('div', { class: 'entry-body' });
   const tabs = h('div', { class: 'tabs' },
@@ -236,10 +247,16 @@ export async function renderHome(page) {
     grid.innerHTML = '';
     if (!projects.length) {
       grid.append(h('div', { class: 'card empty', style: { gridColumn: '1/-1' } },
+        doodle('star', { color: 'var(--gold)', size: 24, delay: 300, rotate: 12 }),
         h('div', { html: icon('film', 40) }), h('p', {}, '还没有项目，用上面的入口开始你的第一部短剧')));
       return;
     }
-    for (const p of projects) grid.append(projCard(p));
+    for (const p of projects) {
+      const card = projCard(p);
+      tilt3d(card);
+      grid.append(card);
+    }
+    stagger(grid);
   }
 
   function projCard(p) {
@@ -272,5 +289,7 @@ export async function renderHome(page) {
     h('div', { class: 'wrap' },
       h('div', { class: 'sec-head' }, h('h3', {}, '我的项目'), h('small', {}, '点击卡片进入工作台')),
       grid));
+  const fluid = initFluid(fluidCanvas);
   await loadProjects();
+  return () => fluid.destroy();
 }

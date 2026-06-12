@@ -15,6 +15,9 @@ export const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL;');
 db.exec(fs.readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf8'));
 
+// 轻量迁移：老库补新列（IF NOT EXISTS 建表不会更新已有表）
+try { db.exec(`ALTER TABLE canvases ADD COLUMN doodles TEXT NOT NULL DEFAULT '[]'`); } catch { /* 列已存在 */ }
+
 const cache = new Map();
 function stmt(sql) {
   let s = cache.get(sql);

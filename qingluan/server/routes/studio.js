@@ -148,9 +148,10 @@ GET('/api/canvases/:id', async ({ params }) => {
 
 PATCH('/api/canvases/:id', async ({ params, body }) => {
   const c = getCanvas(params.id);
-  q.run('UPDATE canvases SET nodes = ?, edges = ?, viewport = ?, name = ?, ratio = ?, updated_at = ? WHERE id = ?',
+  q.run('UPDATE canvases SET nodes = ?, edges = ?, doodles = ?, viewport = ?, name = ?, ratio = ?, updated_at = ? WHERE id = ?',
     JSON.stringify(Array.isArray(body.nodes) ? body.nodes : c.nodes),
     JSON.stringify(Array.isArray(body.edges) ? body.edges : c.edges),
+    JSON.stringify(Array.isArray(body.doodles) ? body.doodles : c.doodles),
     JSON.stringify(body.viewport ?? c.viewport ?? null),
     String(body.name ?? c.name).slice(0, 50), body.ratio || c.ratio, now(), params.id);
   return { saved: true, at: now() };

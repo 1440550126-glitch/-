@@ -73,6 +73,20 @@ try {
   const cv2 = (await api('GET', `/api/canvases/${cv.id}`)).data;
   ok(cv2.nodes.find((n) => n.id === shotNode.id).x === 999, '画布数据持久化');
 
+  console.log('— 涂鸦批注 —');
+  const p0 = (await api('POST', '/api/projects', { title: '涂鸦测试' })).data;
+  await api('POST', '/api/ai/script', { project_id: p0.id, num_scenes: 3 });
+  const pr0 = (await api('POST', '/api/ai/parse', { project_id: p0.id })).data;
+  const ddData = [{ id: 'd1', color: '#ff7a5c', width: 4.5, points: [[100, 100], [140, 90], [180, 130]] }];
+  const ddSave = await api('PATCH', `/api/canvases/${pr0.canvas_id}`, { doodles: ddData });
+  ok(ddSave.ok, '保存涂鸦笔迹');
+  const cvDd = (await api('GET', `/api/canvases/${pr0.canvas_id}`)).data;
+  ok(cvDd.doodles?.length === 1 && cvDd.doodles[0].points.length === 3, '涂鸦随画布持久化');
+  await api('POST', '/api/ai/parse', { project_id: p0.id });
+  const cvDd2 = (await api('GET', `/api/canvases/${pr0.canvas_id}`)).data;
+  ok(cvDd2.doodles?.length === 1, '重新解析剧本后涂鸦保留');
+  await api('DELETE', `/api/projects/${p0.id}`);
+
   console.log('— 图像与视频（本地引擎） —');
   const img = (await api('POST', '/api/ai/image', { prompt: '雨夜便利店空镜', name: '便利店', kind: 'scene', project_id: p.id, node_id: cv.nodes.find((n) => n.type === 'scene').id })).data;
   ok(img.url.startsWith('/uploads/') && img.provider === 'local', '本地出图并落盘');

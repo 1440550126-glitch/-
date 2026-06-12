@@ -288,7 +288,7 @@ export function ensureCanvas(project, sb) {
 export function getCanvas(id, { required = true } = {}) {
   const c = q.get('SELECT * FROM canvases WHERE id = ?', id);
   if (!c && required) throw notFound('画布不存在');
-  return c ? { ...c, nodes: jparse(c.nodes, []), edges: jparse(c.edges, []), viewport: jparse(c.viewport, null) } : null;
+  return c ? { ...c, nodes: jparse(c.nodes, []), edges: jparse(c.edges, []), doodles: jparse(c.doodles, []), viewport: jparse(c.viewport, null) } : null;
 }
 
 export function patchCanvasNode(canvasId, nodeId, patch) {

@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS canvases (
   ratio      TEXT NOT NULL DEFAULT '16:9',
   nodes      TEXT NOT NULL DEFAULT '[]',
   edges      TEXT NOT NULL DEFAULT '[]',
+  doodles    TEXT NOT NULL DEFAULT '[]',    -- 涂鸦笔手绘批注
   viewport   TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
