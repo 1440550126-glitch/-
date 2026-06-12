@@ -58,10 +58,58 @@ export async function renderCanvas(page, params) {
 
   const graph = createGraph(main, {
     renderNode: nodeContent,
-    onChange: () => scheduleSave(),
+    onChange: () => { pushHistory(); scheduleSave(); },
     onSelect: (sel) => renderInspector(sel),
     onView: (z) => { pct.textContent = Math.round(z * 100) + '%'; }
   });
+
+  // ---------- 撤销 / 重做（结构快照：节点+连线+涂鸦） ----------
+  const history = [];
+  let histIdx = -1;
+  let restoring = false;
+  const snapshot = () => {
+    const d = graph.getData();
+    return JSON.stringify({ nodes: d.nodes, edges: d.edges, doodles: d.doodles });
+  };
+  function pushHistory() {
+    if (restoring) return;
+    clearTimeout(pushHistory._t);
+    pushHistory._t = setTimeout(() => {
+      const snap = snapshot();
+      if (history[histIdx] === snap) return;
+      history.splice(histIdx + 1);
+      history.push(snap);
+      if (history.length > 60) history.shift();
+      histIdx = history.length - 1;
+      syncHistBtns();
+    }, 350);
+  }
+  function restore(snap) {
+    restoring = true;
+    const d = JSON.parse(snap);
+    graph.setData({ ...d, viewport: graph.getData().viewport });
+    restoring = false;
+    renderInspector(null);
+    scheduleSave();
+  }
+  function undo() {
+    if (histIdx <= 0) return;
+    histIdx--;
+    restore(history[histIdx]);
+    syncHistBtns();
+  }
+  function redo() {
+    if (histIdx >= history.length - 1) return;
+    histIdx++;
+    restore(history[histIdx]);
+    syncHistBtns();
+  }
+  function syncHistBtns() {
+    undoBtn.disabled = histIdx <= 0;
+    redoBtn.disabled = histIdx >= history.length - 1;
+  }
+  const undoBtn = h('button', { class: 'btn sm', title: '撤销 (⌘Z)', html: icon('undo', 15), onclick: undo, disabled: true });
+  const redoBtn = h('button', { class: 'btn sm', title: '重做 (⌘⇧Z)', html: icon('redo', 15), onclick: redo, disabled: true });
 
   // ---------- 保存 ----------
   const doSave = async () => {
@@ -73,7 +121,7 @@ export async function renderCanvas(page, params) {
     } catch (e) { savedHint.textContent = '保存失败'; toast(e.message, 'err'); }
   };
   const scheduleSave = debounce(doSave, 800);
-  const markDirty = () => { savedHint.textContent = '未保存'; scheduleSave(); };
+  const markDirty = () => { savedHint.textContent = '未保存'; pushHistory(); scheduleSave(); };
 
   // ---------- 服务器媒体状态合并（生成结果回写画布时同步到本地） ----------
   async function syncMedia() {
@@ -211,6 +259,7 @@ export async function renderCanvas(page, params) {
     h('button', { class: 'btn sm', html: icon('back'), title: '返回', onclick: async () => { scheduleSave.flush(); nav(projectId ? `/project/${projectId}` : '/assets/canvas'); } }),
     nameIn, savedHint,
     h('span', { class: 'grow' }),
+    undoBtn, redoBtn,
     h('button', { class: 'btn sm', onclick: addNodeMenu, html: `${icon('plus', 15)} 节点` }),
     ddBtn,
     h('button', { class: 'btn sm', onclick: autoLayout, html: `${icon('layout', 15)} 整理` }),
@@ -243,6 +292,26 @@ export async function renderCanvas(page, params) {
     sel = s;
     inspectorBox.innerHTML = '';
     if (!s) return;
+    if (s.kind === 'multi') {
+      const ids = s.ids;
+      const alignBtn = (label, fn) => h('button', { class: 'btn sm', onclick: () => graph.nudgeNodes(ids, fn) }, label);
+      const sel = () => ids.map((id) => graph.findNode(id)).filter(Boolean);
+      inspectorBox.append(h('div', { class: 'inspector' },
+        h('h4', { html: `${icon('layers', 15)} 已选 ${ids.length} 个节点` }),
+        h('p', { style: { fontSize: '12px', color: 'rgba(223,230,240,.55)', marginBottom: '10px' } },
+          '拖动任一选中节点可整组移动；Shift+点击增减选择。'),
+        h('div', { class: 'row2' },
+          alignBtn('左对齐', (() => { const x = Math.min(...sel().map((n) => n.x)); return (n) => { n.x = x; }; })()),
+          alignBtn('顶对齐', (() => { const y = Math.min(...sel().map((n) => n.y)); return (n) => { n.y = y; }; })())),
+        h('div', { class: 'row2', style: { marginTop: '8px' } },
+          alignBtn('竖向等距', (() => { const list = sel().sort((a, b) => a.y - b.y); const y0 = list[0]?.y || 0; let i = 0; const idx = new Map(list.map((n) => [n.id, i++])); return (n) => { n.y = y0 + idx.get(n.id) * 360; }; })()),
+          alignBtn('横向等距', (() => { const list = sel().sort((a, b) => a.x - b.x); const x0 = list[0]?.x || 0; let i = 0; const idx = new Map(list.map((n) => [n.id, i++])); return (n) => { n.x = x0 + idx.get(n.id) * 320; }; })())),
+        h('button', { class: 'btn danger', style: { marginTop: '14px', width: '100%' }, onclick: async () => {
+          if (!await confirmDlg(`删除选中的 ${ids.length} 个节点？关联连线一并删除。`)) return;
+          graph.removeSelected();
+        } }, `删除 ${ids.length} 个节点`)));
+      return;
+    }
     if (s.kind === 'edge') {
       inspectorBox.append(h('div', { class: 'inspector' },
         h('h4', { html: `${icon('link', 15)} 关联` }),
@@ -342,9 +411,22 @@ export async function renderCanvas(page, params) {
   // ---------- 快捷键 ----------
   const onKey = async (e) => {
     if (e.target.closest('input, textarea, select')) return;
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      return e.shiftKey ? redo() : undo();
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'y') { e.preventDefault(); return redo(); }
     if (e.key === 'd' || e.key === 'D') return toggleDoodle(!dd.open);
-    if (e.key === 'Escape' && dd.open) return toggleDoodle(false);
+    if (e.key === 'Escape') {
+      if (dd.open) return toggleDoodle(false);
+      return graph.clearSelection();
+    }
     if (e.key === 'Delete' || e.key === 'Backspace') {
+      const ids = graph.getMulti();
+      if (ids.length) {
+        if (!await confirmDlg(`删除选中的 ${ids.length} 个节点？关联连线一并删除。`)) return;
+        return graph.removeSelected();
+      }
       const s = graph.getSelected();
       if (!s) return;
       if (s.kind === 'node') {
@@ -363,6 +445,7 @@ export async function renderCanvas(page, params) {
   page.append(shell);
 
   graph.setData({ nodes: canvas.nodes, edges: canvas.edges, doodles: canvas.doodles || [], viewport: canvas.viewport });
+  pushHistory();           // 初始快照（撤销的回退底座）
   if ((canvas.nodes || []).some((n) => n.data?.task_status === 'running')) syncMedia();
 
   return () => {

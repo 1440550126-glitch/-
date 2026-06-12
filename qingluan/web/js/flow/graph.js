@@ -20,6 +20,7 @@ export function createGraph(root, {
   const toolOpts = { color: '#54c2b4', width: 3.5 };
   let zoom = 1, panX = 60, panY = 40;
   let selected = null;          // {kind, id}
+  let multi = new Set();        // 框选多选的节点 id
 
   const vp = h('div', { class: 'flow-vp' });
   const world = h('div', { class: 'flow-world' });
@@ -190,9 +191,21 @@ export function createGraph(root, {
   // ---------- 选择 ----------
   function select(sel) {
     selected = sel;
+    if (multi.size) { multi.clear(); refreshMsel(); }
     for (const [id, el] of nodeEls) el.classList.toggle('sel', sel?.kind === 'node' && sel.id === id);
     refreshEdges();
     onSelect?.(sel);
+  }
+  function refreshMsel() {
+    for (const [id, el] of nodeEls) el.classList.toggle('msel', multi.has(id));
+  }
+  function setMulti(ids) {
+    selected = null;
+    for (const [, el] of nodeEls) el.classList.remove('sel');
+    multi = new Set(ids);
+    refreshMsel();
+    refreshEdges();
+    onSelect?.(multi.size ? { kind: 'multi', ids: [...multi] } : null);
   }
 
   // ---------- 交互 ----------
@@ -224,9 +237,27 @@ export function createGraph(root, {
     } else if (nodeEl) {
       if (e.target.closest('button, input, textarea, select, video, a')) return; // 让交互控件正常工作
       const n = nodes.find((x) => x.id === nodeEl.dataset.id);
+      if (e.shiftKey) {
+        // Shift+点节点：加入/移出多选
+        multi.has(n.id) ? multi.delete(n.id) : multi.add(n.id);
+        setMulti([...multi]);
+        return e.preventDefault();
+      }
       const p = screenToWorld(e.clientX, e.clientY);
-      drag = { mode: 'node', n, dx: p.x - n.x, dy: p.y - n.y, sx: e.clientX, sy: e.clientY, moved: false };
-      nodeEl.style.zIndex = 10;
+      if (multi.has(n.id)) {
+        // 成组拖动
+        drag = {
+          mode: 'group', px: p.x, py: p.y, sx: e.clientX, sy: e.clientY, moved: false,
+          starts: [...multi].map((id) => { const m = nodes.find((x) => x.id === id); return { n: m, x0: m.x, y0: m.y }; })
+        };
+      } else {
+        drag = { mode: 'node', n, dx: p.x - n.x, dy: p.y - n.y, sx: e.clientX, sy: e.clientY, moved: false };
+        nodeEl.style.zIndex = 10;
+      }
+    } else if (e.shiftKey) {
+      // Shift+拖背景：框选
+      drag = { mode: 'marquee', sx: e.clientX, sy: e.clientY, box: h('div', { class: 'flow-marquee' }) };
+      vp.append(drag.box);
     } else {
       drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, px: panX, py: panY, moved: false };
       vp.classList.add('panning');
@@ -248,7 +279,28 @@ export function createGraph(root, {
       return;
     }
     if (drag.mode === 'erase') return eraseAt(e.clientX, e.clientY);
+    if (drag.mode === 'marquee') {
+      const r = vp.getBoundingClientRect();
+      const x = Math.min(drag.sx, e.clientX) - r.left, y = Math.min(drag.sy, e.clientY) - r.top;
+      Object.assign(drag.box.style, {
+        left: x + 'px', top: y + 'px',
+        width: Math.abs(e.clientX - drag.sx) + 'px', height: Math.abs(e.clientY - drag.sy) + 'px'
+      });
+      return;
+    }
     if (Math.abs(e.clientX - drag.sx) + Math.abs(e.clientY - drag.sy) > 4) drag.moved = true;
+    if (drag.mode === 'group') {
+      const p = screenToWorld(e.clientX, e.clientY);
+      const dx = p.x - drag.px, dy = p.y - drag.py;
+      for (const s of drag.starts) {
+        s.n.x = Math.round(s.x0 + dx);
+        s.n.y = Math.round(s.y0 + dy);
+        const el = nodeEls.get(s.n.id);
+        if (el) { el.style.left = s.n.x + 'px'; el.style.top = s.n.y + 'px'; }
+      }
+      refreshEdges();
+      return;
+    }
     if (drag.mode === 'pan') {
       panX = drag.px + (e.clientX - drag.sx);
       panY = drag.py + (e.clientY - drag.sy);
@@ -278,6 +330,22 @@ export function createGraph(root, {
       return;
     }
     if (d.mode === 'erase') return;
+    if (d.mode === 'marquee') {
+      const a = screenToWorld(Math.min(d.sx, e.clientX), Math.min(d.sy, e.clientY));
+      const b = screenToWorld(Math.max(d.sx, e.clientX), Math.max(d.sy, e.clientY));
+      d.box.remove();
+      const hits = nodes.filter((n) => {
+        const el = nodeEls.get(n.id);
+        const w = el?.offsetWidth || 200, hh = el?.offsetHeight || 150;
+        return n.x < b.x && n.x + w > a.x && n.y < b.y && n.y + hh > a.y;
+      }).map((n) => n.id);
+      setMulti(hits);
+      return;
+    }
+    if (d.mode === 'group') {
+      if (d.moved) onChange?.();
+      return;
+    }
     if (d.mode === 'link') {
       tempPath?.remove();
       tempPath = null;
@@ -363,6 +431,15 @@ export function createGraph(root, {
       if (rerender) refreshNode(id);
     },
     removeSelected() {
+      if (multi.size) {
+        const ids = multi;
+        nodes = nodes.filter((n) => !ids.has(n.id));
+        edges = edges.filter((e) => !ids.has(e.from) && !ids.has(e.to));
+        rebuild();
+        setMulti([]);
+        onChange?.();
+        return true;
+      }
       if (!selected) return false;
       if (selected.kind === 'node') {
         const id = selected.id;
@@ -376,6 +453,20 @@ export function createGraph(root, {
       select(null);
       onChange?.();
       return true;
+    },
+    getMulti: () => [...multi],
+    clearSelection: () => select(null),
+    /** 批量调整节点（对齐/分布等）：fn(node) 就地修改 x/y */
+    nudgeNodes(ids, fn) {
+      for (const id of ids) {
+        const n = nodes.find((x) => x.id === id);
+        if (!n) continue;
+        fn(n);
+        const el = nodeEls.get(id);
+        if (el) { el.style.left = n.x + 'px'; el.style.top = n.y + 'px'; }
+      }
+      refreshEdges();
+      onChange?.();
     },
     refreshNode, refreshEdges, fit,
     zoomBy: (f) => setZoom(zoom * f),

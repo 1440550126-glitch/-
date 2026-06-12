@@ -61,7 +61,9 @@ const ICONS = {
   dots: P('M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z|M5 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z|M19 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z'),
   external: P('M14 4h6v6|M20 4 11 13|M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5'),
   download: P('M12 4v12|m6.5 10.5 5.5 5.5 5.5-5.5|M4 20h16'),
-  loader: P('M12 3a9 9 0 1 0 9 9')
+  loader: P('M12 3a9 9 0 1 0 9 9'),
+  undo: P('M8 5 4 9l4 4|M4 9h10.5a5.5 5.5 0 0 1 0 11H11'),
+  redo: P('M16 5l4 4-4 4|M20 9H9.5a5.5 5.5 0 0 0 0 11H13')
 };
 export function icon(name, size = 17) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${name === 'loader' ? ' class="spin"' : ''}>${ICONS[name] || ''}</svg>`;

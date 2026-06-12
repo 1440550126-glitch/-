@@ -102,6 +102,12 @@ try {
   const cv3 = (await api('GET', `/api/canvases/${cv.id}`)).data;
   ok(cv3.nodes.find((n) => n.id === shotNode.id).data.video === done.result.url, '视频回写画布节点');
 
+  console.log('— 成片导出 —');
+  const exp = await api('POST', `/api/projects/${p.id}/export`, {});
+  ok(exp.status === 400 && /ffmpeg|MP4/.test(exp.error || ''), '导出端点给出可执行的引导（无 ffmpeg / 缺 MP4 时不误报成功）');
+  const expNoSb = await api('POST', `/api/projects/not-exist/export`, {});
+  ok(expNoSb.status === 404, '导出不存在项目报 404');
+
   console.log('— 资产库 —');
   const assets = (await api('GET', '/api/assets')).data;
   ok(assets.length >= 2, `资产自动入库 ×${assets.length}`);

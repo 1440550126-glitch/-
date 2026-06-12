@@ -6,7 +6,13 @@ import { q, getSetting, setSetting, UPLOAD_DIR, DB_PATH } from '../lib/db.js';
 import { uid, now, jparse, micro2yuan, token32 } from '../lib/util.js';
 import { arkEnabled, cfg, arkChat, DEFAULTS, videoModelOptions } from '../lib/ark.js';
 import { createProject, getProject, projectOut, touchProject, getCanvas } from '../lib/pipeline.js';
+import { exportEpisode } from '../lib/export.js';
 import { STYLES, STYLE_CATS } from '../lib/styles.js';
+
+// 成片导出（拼接分镜 MP4，需本机有 ffmpeg）
+POST('/api/projects/:id/export', async ({ params, body }) => {
+  return await exportEpisode({ projectId: params.id, episode: body.episode || '' });
+});
 
 // ---------- 风格库 ----------
 GET('/api/styles', async () => ({ cats: STYLE_CATS, styles: STYLES }));

@@ -5,6 +5,7 @@ import { nav, refreshSidebarProjects } from '../main.js';
 import { runBatchGenerate } from '../batch.js';
 import { createAgentChat } from '../agentchat.js';
 import { openStylePicker, shortStyle } from '../stylelib.js';
+import { openScreeningRoom } from '../player.js';
 
 const RATIOS = ['16:9', '9:16', '1:1', '4:3', '21:9'];
 
@@ -52,6 +53,51 @@ export async function renderProject(page, params) {
   parseBtn.innerHTML = `${icon('layers')} 解析分镜`;
   const canvasBtn = h('button', { class: 'btn', onclick: () => project.canvas_id ? nav(`/canvas/${project.canvas_id}`) : toast('先解析剧本生成画布', 'err') });
   canvasBtn.innerHTML = `${icon('layout')} 打开画布`;
+  // ---------- 放映室 / 导出 ----------
+  function buildGroups() {
+    const sb = project.storyboard;
+    if (!sb) return null;
+    const byKey = nodeByKey();
+    const toShots = (shots) => shots.map((s) => {
+      const n = byKey.get(s.key);
+      return { order: s.order, name: `镜头 ${s.order}`, url: n?.data.video || n?.data.image || '', poster: n?.data.image || '', dialogue: s.dialogue, action: s.action, duration: s.duration };
+    });
+    const groups = [];
+    if ((sb.episodes?.length || 0) > 1) {
+      for (const ep of sb.episodes) groups.push({ key: ep.key, label: `第${ep.order}集·${ep.title}`, shots: toShots(sb.shots.filter((x) => (x.episode || 'e1') === ep.key)) });
+      groups.unshift({ key: 'all', label: '全片连播', shots: toShots(sb.shots) });
+    } else {
+      groups.push({ key: 'all', label: '全片连播', shots: toShots(sb.shots) });
+    }
+    return groups;
+  }
+  function openRoom(startGroup = '') {
+    const groups = buildGroups();
+    if (!groups) return toast('先解析分镜', 'err');
+    openScreeningRoom({ title: project.title, projectId: project.id, groups, startGroup });
+  }
+  const playBtn2 = h('button', { class: 'btn', title: '按分镜顺序连播预览成片效果', onclick: () => openRoom() });
+  playBtn2.innerHTML = `${icon('play', 15)} 连播预览`;
+
+  function download(name, text, mime = 'text/plain') {
+    const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: `${mime};charset=utf-8` })), download: name });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+  function storyboardMarkdown() {
+    const sb = project.storyboard;
+    const sceneName = (k) => sb.scenes.find((s) => s.key === k)?.name || '';
+    const lines = [`# ${project.title} · 分镜表`, ''];
+    for (const ep of (sb.episodes || [{ key: 'e1', order: 1, title: '第一集' }])) {
+      const shots = sb.shots.filter((s) => (s.episode || 'e1') === ep.key);
+      if (!shots.length) continue;
+      lines.push(`## 第${ep.order}集 · ${ep.title}`, '', '| # | 景别 | 场景 | 画面 | 台词 | 时长 |', '|---|---|---|---|---|---|');
+      for (const s of shots) lines.push(`| ${s.order} | ${s.shot_type} | ${sceneName(s.scene)} | ${s.action.replace(/\|/g, '/')} | ${s.dialogue.replace(/\|/g, '/')} | ${s.duration}s |`);
+      lines.push('');
+    }
+    return lines.join('\n');
+  }
+
   const batchBtn = h('button', { class: 'btn primary', onclick: () => {
     if (!project.canvas_id) return toast('先解析剧本生成画布', 'err');
     batchBtn.disabled = true;
@@ -102,7 +148,11 @@ export async function renderProject(page, params) {
   genBtn.innerHTML = `${icon('spark')} AI 写剧本`;
 
   const leftCard = h('div', { class: 'card' },
-    h('div', { class: 'panel-head' }, h('b', {}, '剧本'), h('span', { class: 'grow' }), saveHint),
+    h('div', { class: 'panel-head' }, h('b', {}, '剧本'), h('span', { class: 'grow' }), saveHint,
+      h('button', { class: 'btn xs ghost', title: '下载剧本 .txt', html: icon('download', 14), onclick: () => {
+        if (!scriptArea.value.trim()) return toast('剧本是空的', 'err');
+        download(`${project.title}-剧本.txt`, scriptArea.value);
+      } })),
     h('div', { style: { padding: '14px 18px' } }, scriptArea),
     h('div', { style: { display: 'flex', gap: '8px', padding: '12px 18px', borderTop: '1px solid var(--line)' } }, ideaIn, genreSel, genBtn));
 
@@ -123,7 +173,8 @@ export async function renderProject(page, params) {
         rTab('episodes', '分集', sb?.episodes?.length || null),
         rTab('shots', '分镜', sb?.shots?.length), rTab('cast', '角色', sb?.characters?.length),
         rTab('scenes', '场景/道具', (sb?.scenes?.length || 0) + (sb?.props?.length || 0)), rTab('agent', 'Agent')),
-      h('span', { class: 'grow' })));
+      h('span', { class: 'grow' }),
+      sb ? h('button', { class: 'btn xs ghost', title: '导出分镜表 Markdown', html: icon('download', 14), onclick: () => download(`${project.title}-分镜表.md`, storyboardMarkdown(), 'text/markdown') }) : null));
     const body = h('div', { style: { minHeight: '420px', display: 'flex', flexDirection: 'column' } });
     rightCard.append(body);
 
@@ -159,6 +210,7 @@ export async function renderProject(page, params) {
         runBatchGenerate(project.canvas_id, { episode: ep.key, onDone: async () => { genBtn2.disabled = false; await reload(true); } });
       } });
       genBtn2.innerHTML = `${icon('wand', 14)} 本集一键生成`;
+      const playEpBtn = h('button', { class: 'btn sm ghost', title: '连播预览本集', html: icon('play', 15), onclick: () => openRoom(ep.key) });
       list.append(h('div', { class: 'card', style: { padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '14px' } },
         h('div', { style: { flex: 1, minWidth: 0 } },
           h('b', { style: { fontSize: '14px' } }, `第${ep.order}集 · ${ep.title}`,
@@ -168,7 +220,7 @@ export async function renderProject(page, params) {
             h('span', { class: 'pill' }, `分镜 ${shots.length}`),
             h('span', { class: `pill ${withImage === shots.length && shots.length ? 'teal' : ''}` }, `首帧 ${withImage}/${shots.length}`),
             h('span', { class: `pill ${withVideo === shots.length && shots.length ? 'green' : ''}` }, `视频 ${withVideo}/${shots.length}`))),
-        genBtn2));
+        playEpBtn, genBtn2));
     }
     stagger(list, 50);
     const ideaIn2 = h('input', { class: 'input', placeholder: '本集创意（可空，AI 自动升级剧情）', style: { flex: 1 } });
@@ -301,7 +353,7 @@ export async function renderProject(page, params) {
     h('div', { class: 'topbar line' },
       h('button', { class: 'btn ghost sm', html: icon('back'), onclick: () => nav('/home') }),
       titleInput, statusPill, h('span', { class: 'grow' }),
-      ratioSel, styleBtn, parseBtn, canvasBtn, batchBtn),
+      ratioSel, styleBtn, parseBtn, canvasBtn, playBtn2, batchBtn),
     h('div', { class: 'wrap', style: { maxWidth: '1440px', marginTop: '16px' } },
       h('div', { class: 'work-grid' }, leftCard, rightCard)));
   renderRight();
