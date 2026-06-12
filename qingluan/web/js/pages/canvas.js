@@ -43,7 +43,10 @@ export async function renderCanvas(page, params) {
         <div class="n-foot">${d.camera ? `<span class="tagx">${escHtml(d.camera)}</span>` : ''}</div>`;
       return wrap;
     }
-    wrap.innerHTML = `${head}${media(img || `<div class="gen-hint">${icon(TYPE_ICON[n.type], 20)}<span>未生成</span></div>`)}
+    const varStrip = n.type === 'character' && d.variants?.length
+      ? `<div class="n-variants">${d.variants.slice(0, 6).map((v) => `<img src="${escHtml(v.url)}" title="${escHtml(v.emotion)}" draggable="false">`).join('')}</div>`
+      : '';
+    wrap.innerHTML = `${head}${media(img || `<div class="gen-hint">${icon(TYPE_ICON[n.type], 20)}<span>未生成</span></div>`)}${varStrip}
       <div class="n-foot"><span class="tagx">${TYPE_CN[n.type]}</span>${d.desc ? `<span title="${escHtml(d.desc)}">${escHtml(String(d.desc).slice(0, 16))}…</span>` : ''}</div>`;
     return wrap;
   }
@@ -132,8 +135,9 @@ export async function renderCanvas(page, params) {
         const remote = byId.get(n.id);
         if (!remote) continue;
         const r = remote.data || {};
-        if (r.image !== n.data.image || r.video !== n.data.video || r.task_status !== n.data.task_status) {
-          graph.updateNodeData(n.id, { image: r.image, video: r.video, task_id: r.task_id, task_status: r.task_status });
+        const varsChanged = JSON.stringify(r.variants || []) !== JSON.stringify(n.data.variants || []);
+        if (r.image !== n.data.image || r.video !== n.data.video || r.task_status !== n.data.task_status || varsChanged) {
+          graph.updateNodeData(n.id, { image: r.image, video: r.video, task_id: r.task_id, task_status: r.task_status, ...(varsChanged ? { variants: r.variants || [] } : {}) });
           if (sel?.kind === 'node' && sel.id === n.id) renderInspector(sel);
         }
       }
@@ -353,6 +357,43 @@ export async function renderCanvas(page, params) {
       if (n.type === 'character') fld('身份', bind(h('input', { class: 'input', value: d.role || '' }), 'role'));
       fld('描述', bind(h('textarea', { class: 'textarea', rows: 3, value: d.desc || '' }), 'desc', { rerender: false }));
       fld('形象提示词', bind(h('textarea', { class: 'textarea', rows: 3, value: d.prompt || '' }), 'prompt', { rerender: false }));
+    }
+
+    // 角色表情集（对标小云雀角色多情绪变体）
+    if (n.type === 'character') {
+      const exBox = h('div', { style: { marginTop: '4px' } });
+      exBox.append(h('label', { class: 'fld' }, `表情集${d.variants?.length ? `（${d.variants.length}）` : ''}`));
+      if (d.variants?.length) {
+        exBox.append(h('div', { class: 'var-grid' }, d.variants.map((v) =>
+          h('div', { class: 'var-item', title: `${v.emotion} · 点击设为主形象`, onclick: () => {
+            graph.updateNodeData(n.id, { image: v.url });
+            markDirty();
+            renderInspector(sel);
+            toast(`主形象已切换为「${v.emotion}」`, 'ok');
+          } }, h('img', { src: v.url }), h('span', {}, v.emotion)))));
+      }
+      if (projectId) {
+        const exBtn = h('button', { class: 'btn', style: { width: '100%', marginTop: '8px' }, onclick: async () => {
+          exBtn.disabled = true;
+          exBtn.innerHTML = `${icon('loader')} 生成表情集…`;
+          scheduleSave.flush();
+          try {
+            await POST('/api/ai/expressions', { project_id: projectId, node_id: n.id });
+            await syncMedia();
+            renderInspector(sel);
+            toast('表情集已生成（6 种情绪），已入资产库', 'ok');
+          } catch (e2) {
+            toast(e2.message, 'err');
+            exBtn.disabled = false;
+            exBtn.innerHTML = `${icon('spark', 15)} 生成表情集`;
+          }
+        } });
+        exBtn.innerHTML = `${icon('spark', 15)} ${d.variants?.length ? '重新生成表情集' : '生成表情集（6 种情绪）'}`;
+        exBox.append(exBtn);
+      } else {
+        exBox.append(h('p', { style: { fontSize: '12px', color: 'rgba(223,230,240,.5)' } }, '表情集需要画布关联项目（从剧本解析创建）'));
+      }
+      box.append(exBox);
     }
 
     // 媒体与生成

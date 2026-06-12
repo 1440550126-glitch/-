@@ -496,6 +496,15 @@ svg.flow-edges path.dd-stroke { fill: none; stroke-linecap: round; stroke-linejo
 .sr-controls { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 18px 18px; }
 .sr-counter { font: 12.5px var(--mono); color: rgba(233, 239, 246, .6); margin-left: 6px; }
 
+/* ============ 角色表情集 ============ */
+.ql-node .n-variants { display: flex; gap: 4px; padding: 6px 10px 0; }
+.ql-node .n-variants img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1.5px solid rgba(255, 255, 255, .28); }
+.inspector .var-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
+.inspector .var-item { cursor: pointer; text-align: center; border-radius: 10px; overflow: hidden; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1); transition: transform .3s var(--ease-spring), border-color .15s; }
+.inspector .var-item:hover { transform: translateY(-2px); border-color: #54c2b4; }
+.inspector .var-item img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.inspector .var-item span { font-size: 11px; color: rgba(223, 230, 240, .75); display: block; padding: 3px 0 5px; }
+
 /* ============ 画布多选 ============ */
 .flow-marquee { position: absolute; border: 1.5px dashed #54c2b4; background: rgba(84, 194, 180, .12); border-radius: 4px; z-index: 30; pointer-events: none; }
 .ql-node.msel { border-color: #ffd166; box-shadow: 0 0 0 3px rgba(255, 209, 102, .22), 0 8px 26px rgba(0, 0, 0, .4); }

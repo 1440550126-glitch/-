@@ -3,7 +3,7 @@ import { GET, POST, bad } from '../lib/httpx.js';
 import { q } from '../lib/db.js';
 import { jparse } from '../lib/util.js';
 import { arkEnabled, arkChat } from '../lib/ark.js';
-import { generateScript, parseScript, addEpisode, generateImage, createVideoTask, pollTask, getProject } from '../lib/pipeline.js';
+import { generateScript, parseScript, addEpisode, generateImage, generateExpressions, createVideoTask, pollTask, getProject } from '../lib/pipeline.js';
 import { toolSchemas, runTool } from '../lib/tools.js';
 
 POST('/api/ai/script', async ({ body }) => {
@@ -32,6 +32,12 @@ POST('/api/ai/image', async ({ body }) => {
     prompt: body.prompt, name: body.name, kind: body.kind || 'scene', ratio: body.ratio,
     projectId: body.project_id, nodeId: body.node_id, refImages: body.ref_images || [], tab: body.tab
   });
+});
+
+// 角色表情集（多情绪定妆照）
+POST('/api/ai/expressions', async ({ body }) => {
+  if (!body.project_id || !body.node_id) throw bad('缺少 project_id / node_id');
+  return await generateExpressions({ projectId: body.project_id, nodeId: body.node_id, emotions: body.emotions || [] });
 });
 
 POST('/api/ai/video', async ({ body }) => {

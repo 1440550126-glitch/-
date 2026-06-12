@@ -318,15 +318,48 @@ function sceneArt(rnd, w, h, hue) {
   <polygon points="${m1}" fill="rgba(8,12,24,0.55)"/>
   <polygon points="${m2}" fill="rgba(4,6,14,0.78)"/>`;
 }
-function characterArt(rnd, w, h, hue) {
+// 表情集：本地角色画像的五官随情绪变化（对应方舟模式的表情提示词）
+export const EMO_STYLE = {
+  '冷酷': { hue: 192, eyes: 'line', mouth: 'flat' },
+  '愤怒': { hue: 6, eyes: 'angry', mouth: 'zig' },
+  '狂喜': { hue: 322, eyes: 'star', mouth: 'big' },
+  '悲伤': { hue: 216, eyes: 'down', mouth: 'frown' },
+  '微笑': { hue: 146, eyes: 'dot', mouth: 'smile' },
+  '惊恐': { hue: 268, eyes: 'wide', mouth: 'o' },
+  '魅惑': { hue: 300, eyes: 'wink', mouth: 'smirk' },
+  '羞涩': { hue: 350, eyes: 'dot', mouth: 'small' }
+};
+function face(cx, cy, w, h, hue, emo) {
+  const s = EMO_STYLE[emo] || { eyes: 'dot', mouth: 'smile' };
+  const ex = w * 0.052, ey = cy - h * 0.125, er = 4.5;
+  const C = `hsl(${hue},85%,75%)`;
+  let eyes = '';
+  if (s.eyes === 'line') eyes = `<path d="M ${cx - ex - 5} ${ey} h 10 M ${cx + ex - 5} ${ey} h 10" stroke="${C}" stroke-width="3" stroke-linecap="round"/>`;
+  else if (s.eyes === 'angry') eyes = `<path d="M ${cx - ex - 6} ${ey - 4} l 12 6 M ${cx + ex + 6} ${ey - 4} l -12 6" stroke="${C}" stroke-width="3.4" stroke-linecap="round"/>`;
+  else if (s.eyes === 'star') eyes = `<text x="${cx - ex}" y="${ey + 5}" font-size="14" text-anchor="middle" fill="${C}">✦</text><text x="${cx + ex}" y="${ey + 5}" font-size="14" text-anchor="middle" fill="${C}">✦</text>`;
+  else if (s.eyes === 'down') eyes = `<path d="M ${cx - ex - 5} ${ey + 2} q 5 -6 10 0 M ${cx + ex - 5} ${ey + 2} q 5 -6 10 0" stroke="${C}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  else if (s.eyes === 'wide') eyes = `<circle cx="${cx - ex}" cy="${ey}" r="6.5" fill="none" stroke="${C}" stroke-width="2.6"/><circle cx="${cx + ex}" cy="${ey}" r="6.5" fill="none" stroke="${C}" stroke-width="2.6"/>`;
+  else if (s.eyes === 'wink') eyes = `<circle cx="${cx - ex}" cy="${ey}" r="${er}" fill="${C}"/><path d="M ${cx + ex - 5} ${ey} h 10" stroke="${C}" stroke-width="3" stroke-linecap="round"/>`;
+  else eyes = `<circle cx="${cx - ex}" cy="${ey}" r="${er}" fill="${C}"/><circle cx="${cx + ex}" cy="${ey}" r="${er}" fill="${C}"/>`;
+  const my = cy - h * 0.085, mw = w * 0.04;
+  let mouth = '';
+  if (s.mouth === 'flat') mouth = `<path d="M ${cx - mw} ${my} h ${mw * 2}" stroke="${C}" stroke-width="3" stroke-linecap="round"/>`;
+  else if (s.mouth === 'zig') mouth = `<path d="M ${cx - mw} ${my} l ${mw * 0.7} -4 l ${mw * 0.7} 8 l ${mw * 0.7} -4" stroke="${C}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  else if (s.mouth === 'big') mouth = `<path d="M ${cx - mw * 1.4} ${my - 3} q ${mw * 1.4} ${mw * 2.4} ${mw * 2.8} 0 z" fill="${C}"/>`;
+  else if (s.mouth === 'frown') mouth = `<path d="M ${cx - mw} ${my + 4} q ${mw} -10 ${mw * 2} 0" stroke="${C}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  else if (s.mouth === 'o') mouth = `<ellipse cx="${cx}" cy="${my + 2}" rx="${mw * 0.8}" ry="${mw * 1.1}" fill="none" stroke="${C}" stroke-width="3"/>`;
+  else if (s.mouth === 'smirk') mouth = `<path d="M ${cx - mw} ${my} q ${mw * 1.2} 6 ${mw * 2} -3" stroke="${C}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  else if (s.mouth === 'small') mouth = `<path d="M ${cx - mw * 0.5} ${my} q ${mw * 0.5} 4 ${mw} 0" stroke="${C}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  else mouth = `<path d="M ${cx - mw} ${my} Q ${cx} ${my + 7} ${cx + mw} ${my}" stroke="${C}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  return eyes + mouth;
+}
+function characterArt(rnd, w, h, hue, emotion = '') {
   const cx = w / 2, cy = h * 0.42;
   return `
   <circle cx="${cx}" cy="${cy - h * 0.115}" r="${h * 0.1}" fill="rgba(10,14,26,0.92)" stroke="hsl(${hue},70%,68%)" stroke-width="3"/>
   <path d="M ${cx - w * 0.26} ${h * 0.78} Q ${cx} ${cy + h * 0.04} ${cx + w * 0.26} ${h * 0.78} L ${cx + w * 0.3} ${h} L ${cx - w * 0.3} ${h} Z"
         fill="rgba(10,14,26,0.92)" stroke="hsl(${hue},70%,68%)" stroke-width="3"/>
-  <circle cx="${cx - w * 0.052}" cy="${cy - h * 0.125}" r="4.5" fill="hsl(${hue},85%,75%)"/>
-  <circle cx="${cx + w * 0.052}" cy="${cy - h * 0.125}" r="4.5" fill="hsl(${hue},85%,75%)"/>
-  <path d="M ${cx - w * 0.04} ${cy - h * 0.085} Q ${cx} ${cy - h * 0.07} ${cx + w * 0.04} ${cy - h * 0.085}" stroke="hsl(${hue},85%,75%)" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  ${face(cx, cy, w, h, hue, emotion)}`;
 }
 function propArt(rnd, w, h, hue) {
   const cx = w / 2, cy = h * 0.5;
@@ -337,18 +370,18 @@ function propArt(rnd, w, h, hue) {
   <circle cx="${cx}" cy="${cy - h * 0.04}" r="${h * 0.2}" fill="none" stroke="hsl(${hue},80%,70%)" stroke-width="2" stroke-dasharray="6 10" opacity="0.7"/>`;
 }
 
-/** 本地生成一张 SVG 图（kind: character|scene|prop|frame），返回 SVG 字符串 */
-export function localImageSVG({ prompt = '', name = '', kind = 'scene', ratio = '16:9', order = 0 }) {
+/** 本地生成一张 SVG 图（kind: character|scene|prop|frame；emotion 仅角色表情集用），返回 SVG 字符串 */
+export function localImageSVG({ prompt = '', name = '', kind = 'scene', ratio = '16:9', order = 0, emotion = '' }) {
   const seed = hashCode(kind + name + prompt);
   const rnd = seededRandom(seed);
   const pal = PALETTES[seed % PALETTES.length];
-  const hue = pal[1];
+  const hue = kind === 'character' && EMO_STYLE[emotion] ? EMO_STYLE[emotion].hue : pal[1];
   const dim = kind === 'character' ? { w: 768, h: 960 } : ratioSize(ratio, 1280);
   const { w, h } = dim;
   const id = (seed % 9973).toString(36);
 
   let art = '';
-  if (kind === 'character') art = characterArt(rnd, w, h, hue);
+  if (kind === 'character') art = characterArt(rnd, w, h, hue, emotion);
   else if (kind === 'prop') art = propArt(rnd, w, h, hue);
   else art = sceneArt(rnd, w, h, hue);
 

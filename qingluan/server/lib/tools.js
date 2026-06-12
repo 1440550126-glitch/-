@@ -6,7 +6,7 @@ import { jparse, micro2yuan, now } from './util.js';
 import { arkEnabled, cfg } from './ark.js';
 import {
   createProject, getProject, projectOut, touchProject, generateScript, parseScript, addEpisode,
-  getCanvas, patchCanvasNode, generateImage, createVideoTask, pollTask, addAsset
+  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset
 } from './pipeline.js';
 import { STYLES, STYLE_CATS } from './styles.js';
 import { bad } from './httpx.js';
@@ -188,6 +188,21 @@ export const TOOLS = [
     async execute(a) {
       const r = await generateImage({ prompt: a.prompt, name: a.name, kind: a.kind || 'scene', ratio: a.ratio, projectId: a.project_id, nodeId: a.node_id, refImages: a.ref_images || [] });
       return { url: r.url, provider: r.provider, asset_id: r.asset.id, task_id: r.taskId };
+    }
+  },
+  {
+    name: 'generate_expressions',
+    description: '为角色节点生成表情集：同一角色多种情绪定妆照（自动以基础形象为参考保持一致性），写入节点 variants 并入资产库。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        project_id: str('项目 id'), node_id: str('角色节点 id（或角色 key 如 c1）'),
+        emotions: { type: 'array', items: { type: 'string' }, description: '情绪列表（可选），默认 冷酷/愤怒/狂喜/悲伤/微笑/惊恐' }
+      },
+      required: ['project_id', 'node_id']
+    },
+    async execute({ project_id, node_id, emotions }) {
+      return await generateExpressions({ projectId: project_id, nodeId: node_id, emotions: emotions || [] });
     }
   },
   {

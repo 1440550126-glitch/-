@@ -102,6 +102,16 @@ try {
   const cv3 = (await api('GET', `/api/canvases/${cv.id}`)).data;
   ok(cv3.nodes.find((n) => n.id === shotNode.id).data.video === done.result.url, '视频回写画布节点');
 
+  console.log('— 角色表情集 —');
+  const cvE = (await api('GET', `/api/canvases/${cv.id}`)).data;
+  const charE = cvE.nodes.find((n) => n.type === 'character');
+  const expr = (await api('POST', '/api/ai/expressions', { project_id: p.id, node_id: charE.id })).data;
+  ok(expr.variants.length === 6 && expr.variants.every((v) => v.url.startsWith('/uploads/')), `生成 6 情绪定妆照`);
+  const cvE2 = (await api('GET', `/api/canvases/${cv.id}`)).data;
+  ok((cvE2.nodes.find((n) => n.id === charE.id)?.data.variants || []).length === 6, '表情集写入角色节点');
+  ok((await api('GET', '/api/assets?tab=character')).data.some((a) => a.name.includes('·愤怒')), '表情入角色资产库');
+  ok((await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools.some((t) => t.name === 'generate_expressions'), 'Agent 开放 generate_expressions 工具');
+
   console.log('— 成片导出 —');
   const exp = await api('POST', `/api/projects/${p.id}/export`, {});
   ok(exp.status === 400 && /ffmpeg|MP4/.test(exp.error || ''), '导出端点给出可执行的引导（无 ffmpeg / 缺 MP4 时不误报成功）');

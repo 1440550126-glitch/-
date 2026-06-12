@@ -312,7 +312,7 @@ export function addAsset({ tab = 'material', kind = 'image', name, url, poster =
 }
 
 // ---------- 图像生成（同步） ----------
-export async function generateImage({ prompt, name = '', kind = 'scene', ratio = '', projectId = '', nodeId = '', refImages = [], tab = '' }) {
+export async function generateImage({ prompt, name = '', kind = 'scene', ratio = '', projectId = '', nodeId = '', refImages = [], tab = '', emotion = '' }) {
   if (!prompt?.trim()) throw bad('缺少图片提示词 prompt');
   const project = projectId ? getProject(projectId, { required: false }) : null;
   prompt = applyStyle(prompt.trim(), project?.style);
@@ -346,12 +346,12 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
       url = r.url;
       provider = 'ark';
     } else {
-      url = saveSVG(localImageSVG({ prompt, name, kind, ratio, order: 0 }));
+      url = saveSVG(localImageSVG({ prompt, name, kind, ratio, order: 0, emotion }));
     }
   } catch (e) {
     // 方舟失败 → 本地兜底，但记录原始错误
     console.warn('[pipeline] 方舟图片失败，落本地：', e.message);
-    url = saveSVG(localImageSVG({ prompt, name, kind, ratio }));
+    url = saveSVG(localImageSVG({ prompt, name, kind, ratio, emotion }));
     q.run('UPDATE tasks SET error = ? WHERE id = ?', `ark: ${e.message}（已用本地兜底）`, taskId);
   }
 
@@ -367,6 +367,37 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
     if (!project.cover) touchProject(project.id, { cover: url });
   }
   return { taskId, url, provider, asset };
+}
+
+// ---------- 角色表情集（同一角色多情绪定妆照，基础形象作参考保持一致性） ----------
+export const EMOTIONS = ['冷酷', '愤怒', '狂喜', '悲伤', '微笑', '惊恐'];
+
+export async function generateExpressions({ projectId, nodeId, emotions = [] }) {
+  const project = getProject(projectId);
+  if (!project.canvas_id) throw bad('项目还没有画布，先解析剧本');
+  const c = getCanvas(project.canvas_id);
+  const node = c.nodes.find((n) => n.id === nodeId || n.data?.key === nodeId);
+  if (!node) throw bad('节点不存在');
+  if (node.type !== 'character') throw bad('表情集只能为角色节点生成');
+  const list = (emotions.length ? emotions : EMOTIONS).slice(0, 8);
+  // 已有非占位主形象时作为参考图（方舟模式保证同一角色五官一致）
+  const refs = node.data.image && !/\.svg$/i.test(node.data.image) ? [node.data.image] : [];
+  const variants = [...(node.data.variants || [])];
+  const out = [];
+  for (const emo of list) {
+    const r = await generateImage({
+      prompt: `${node.data.prompt || node.data.desc || node.data.name}，表情：${emo}，同一角色、同一造型与五官，仅表情变化，角色表情参考图，纯色背景`,
+      name: `${node.data.name}·${emo}`, kind: 'character', projectId,
+      refImages: refs, tab: 'character', emotion: emo
+    });
+    const v = { emotion: emo, url: r.url, asset_id: r.asset.id };
+    const i = variants.findIndex((x) => x.emotion === emo);
+    if (i >= 0) variants[i] = v; else variants.push(v);
+    out.push(v);
+  }
+  patchCanvasNode(project.canvas_id, node.id, { variants });
+  if (!node.data.image && out.length) patchCanvasNode(project.canvas_id, node.id, { image: out[0].url });
+  return { node_id: node.id, name: node.data.name, variants: out, total: variants.length };
 }
 
 // ---------- 视频生成（异步任务） ----------

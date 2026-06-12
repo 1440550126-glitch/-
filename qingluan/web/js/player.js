@@ -18,6 +18,31 @@ export function openScreeningRoom({ title, projectId = '', groups, startGroup = 
   const counter = h('span', { class: 'sr-counter' });
   const playBtn = h('button', { class: 'btn sm', onclick: () => toggle() });
 
+  // 台词朗读（浏览器语音合成，零依赖配音预览）
+  let speakOn = false;
+  const canSpeak = 'speechSynthesis' in window;
+  const voiceBtn = h('button', {
+    class: 'btn sm', title: canSpeak ? '台词朗读（系统语音配音预览）' : '当前浏览器不支持语音合成', disabled: !canSpeak,
+    onclick: () => {
+      speakOn = !speakOn;
+      voiceBtn.style.background = speakOn ? 'var(--accent)' : '';
+      speechSynthesis.cancel();
+      if (speakOn) speakLine();
+    }
+  }, '🔊 朗读');
+  function speakLine() {
+    if (!speakOn || !canSpeak) return;
+    speechSynthesis.cancel();
+    const s = group.shots[idx];
+    if (!s?.dialogue) return;
+    const u = new SpeechSynthesisUtterance(s.dialogue);
+    u.lang = 'zh-CN';
+    u.rate = 1.05;
+    const zh = speechSynthesis.getVoices().find((v) => /zh|Chinese/i.test(v.lang));
+    if (zh) u.voice = zh;
+    speechSynthesis.speak(u);
+  }
+
   const groupSel = h('select', { class: 'select', style: { width: 'auto' }, onchange: (e) => {
     group = groups.find((g) => g.key === e.target.value) || groups[0];
     idx = 0;
@@ -41,6 +66,7 @@ export function openScreeningRoom({ title, projectId = '', groups, startGroup = 
   const room = h('div', { class: 'screen-room' },
     h('div', { class: 'sr-top' },
       h('b', {}, `放映室 · ${title}`), groupSel, h('span', { class: 'grow' }),
+      voiceBtn,
       projectId ? exportBtn : null,
       h('button', { class: 'btn sm', html: icon('x', 15), title: '关闭 (Esc)', onclick: () => close() })),
     stage, sub,
@@ -72,6 +98,7 @@ export function openScreeningRoom({ title, projectId = '', groups, startGroup = 
     clearTimer();
     stage.innerHTML = '';
     const s = group.shots[idx];
+    speakLine();
     counter.textContent = `SHOT ${String(s.order).padStart(2, '0')} · ${idx + 1}/${group.shots.length}`;
     sub.innerHTML = '';
     if (s.dialogue) sub.append(h('span', { class: 'sr-line' }, `「${s.dialogue}」`));
@@ -103,6 +130,7 @@ export function openScreeningRoom({ title, projectId = '', groups, startGroup = 
   };
   function close() {
     clearTimer();
+    if (canSpeak) speechSynthesis.cancel();
     document.removeEventListener('keydown', onKey);
     room.remove();
   }
