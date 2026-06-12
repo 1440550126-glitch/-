@@ -1,0 +1,9 @@
+{
+  "name": "juling-miniprogram",
+  "version": "1.0.0",
+  "private": true,
+  "description": "句灵：让文案活过来 微信小程序 MVP",
+  "scripts": {
+    "validate": "node scripts/validate.js"
+  }
+}
