@@ -3,7 +3,7 @@
 import { q, getSetting } from './db.js';
 import { uid, now, jparse, clamp } from './util.js';
 import { arkEnabled, arkChat, arkImage, arkVideoCreate, arkVideoGet, cfg } from './ark.js';
-import { localScript, localParse, localImageSVG, localVideoSVG, saveSVG, localNextEpisode } from './local.js';
+import { localScript, localParse, localImageSVG, localVideoSVG, saveSVG, localNextEpisode, localViralAnalysis } from './local.js';
 import { resolveStylePrompt } from './styles.js';
 import { bad, notFound } from './httpx.js';
 
@@ -84,6 +84,51 @@ export async function generateScript({ projectId = '', idea = '', genre = '', nu
     ...(newTitle && (project.title === '未命名短剧' || !projectId) ? { title: newTitle.slice(0, 50) } : {})
   });
   return { project: q.get('SELECT * FROM projects WHERE id = ?', project.id), script, byLLM };
+}
+
+// ---------- 爆款复刻：解析参考文案的爆点结构 → 套用到新主题 ----------
+const REMAKE_SYSTEM = `你是短剧爆款结构分析师兼编剧。先解析参考文案/剧本的爆点结构，再把同样的结构套用到新主题上创作剧本。只输出 JSON：
+{"analysis":{"hook":"开场钩子手法","structure":"节奏结构描述","emotion":"情绪曲线","selling_points":["可复用爆点1","2","3"]},
+ "title":"新剧名",
+ "script":"完整剧本（严格遵循格式：第一行《剧名》；【人物】块每行 名字（身份）：人设；每场以 第 N 场 ｜ 场景：xx ｜ 日/夜 ｜ 内/外 开头；动作行用（…）单独成行；台词行用 名字：台词；结尾 [钩子] …）"}`;
+
+export async function remakeViral({ reference, topic, projectId = '', genre = '', numScenes = 4 }) {
+  if (!reference?.trim()) throw bad('缺少参考爆款文案 reference');
+  if (!topic?.trim()) throw bad('缺少你的主题 topic');
+  let analysis = null;
+  let script = '';
+  let title = '';
+  let byLLM = false;
+  if (arkEnabled()) {
+    try {
+      const r = await arkChat({
+        feature: 'remake', system: REMAKE_SYSTEM, json: true, temperature: 0.85, maxTokens: 5000,
+        prompt: `参考爆款文案/剧本：\n${reference.slice(0, 6000)}\n\n请解析其爆点结构，并用同样的结构为新主题创作${genre ? `「${genre}」类型` : ''}短剧剧本（${clamp(numScenes, 2, 8)} 场）。新主题：${topic.slice(0, 500)}`
+      });
+      const j = jparse(r.text.replace(/```(json)?/g, ''), {});
+      if (j.script) {
+        analysis = j.analysis || null;
+        script = String(j.script);
+        title = String(j.title || '');
+        byLLM = true;
+      }
+    } catch (e) {
+      console.warn('[pipeline] 方舟爆款复刻失败，落本地引擎：', e.message);
+    }
+  }
+  if (!script) {
+    analysis = localViralAnalysis(reference);
+    script = localScript({ idea: `${topic}（复刻爆款结构：${analysis.hook}，${analysis.structure}）`, genre, numScenes });
+    title = (script.match(/《(.+?)》/) || [])[1] || '';
+  }
+  const project = projectId ? getProject(projectId) : createProject({ title: title || '爆款复刻', idea: topic, genre });
+  touchProject(project.id, {
+    script: script.slice(0, 60_000),
+    idea: topic.slice(0, 2000),
+    status: 'draft',
+    ...(title && (project.title === '未命名短剧' || !projectId) ? { title: title.slice(0, 50) } : {})
+  });
+  return { project: projectOut(q.get('SELECT * FROM projects WHERE id = ?', project.id)), analysis, script, byLLM };
 }
 
 // ---------- 剧本解析 → 分镜 ----------
@@ -403,20 +448,20 @@ export async function generateExpressions({ projectId, nodeId, emotions = [] }) 
 // ---------- 视频生成（异步任务） ----------
 const LOCAL_VIDEO_MS = () => (process.env.QINGLUAN_FAST_LOCAL ? 50 : 4000);
 
-export async function createVideoTask({ prompt, imageUrl = '', duration = 5, ratio = '', projectId = '', nodeId = '', name = '', order = 0, model = '', resolution = '' }) {
+export async function createVideoTask({ prompt, imageUrl = '', lastImageUrl = '', duration = 5, ratio = '', projectId = '', nodeId = '', name = '', order = 0, model = '', resolution = '' }) {
   if (!prompt?.trim()) throw bad('缺少视频提示词 prompt');
   const project = projectId ? getProject(projectId, { required: false }) : null;
   prompt = applyStyle(prompt.trim(), project?.style);
   ratio = ratio || project?.ratio || '16:9';
   duration = clamp(duration, 2, 12);
   const taskId = uid('t');
-  const params = { ratio, duration, imageUrl, name, order, model: model || '', resolution: resolution || '' };
+  const params = { ratio, duration, imageUrl, lastImageUrl: lastImageUrl || '', name, order, model: model || '', resolution: resolution || '' };
 
   let provider = 'local';
   let remoteId = '';
   if (arkEnabled()) {
     try {
-      const r = await arkVideoCreate({ prompt, imageUrl, ratio, duration, model, resolution });
+      const r = await arkVideoCreate({ prompt, imageUrl, lastImageUrl, ratio, duration, model, resolution });
       provider = 'ark';
       remoteId = r.remoteId;
       model = r.model;

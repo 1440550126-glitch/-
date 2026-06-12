@@ -4,6 +4,7 @@ import { h, icon, toast, confirmDlg, fmtTime, STATUS_CN, mediaEl, isVideoUrl, do
 import { nav } from '../main.js';
 import { loadStyles } from '../stylelib.js';
 import { initFluid } from '../fx/fluid.js';
+import { openAssetPicker } from '../assetpick.js';
 
 const GENRES = ['都市逆袭', '赘婿战神', '甜宠虐恋', '悬疑反转', '古装宫斗', '废土科幻'];
 const RATIOS = ['16:9', '9:16', '1:1', '4:3', '21:9'];
@@ -30,6 +31,24 @@ export async function renderHome(page) {
     const ratioQ = h('select', { class: 'select' }, ['16:9', '9:16', '1:1'].map((r) => h('option', { value: r }, r)));
     const durSel = h('select', { class: 'select' }, [3, 5, 8, 10].map((n) => h('option', { value: n, selected: n === 5 }, `${n} 秒`)));
     const resSel = h('select', { class: 'select', title: '分辨率' }, [['', '分辨率·自动'], ['480p', '480P'], ['720p', '720P'], ['1080p', '1080P']].map(([v, l]) => h('option', { value: v }, l)));
+    // 一镜到底：首帧 + 尾帧（可选，Seedance 首尾帧自然过渡）
+    let frameA = null;
+    let frameB = null;
+    const mkFrameBtn = (label, get, set) => {
+      const b = h('button', {
+        class: 'btn sm', title: `${label}图（可选）${label === '尾帧' ? '：配合首帧实现「一镜到底」自然过渡' : '：让画面更稳定'}`,
+        onclick: () => openAssetPicker({ title: `选择${label}图`, onPick: (a) => { set(a); render(); } })
+      });
+      const render = () => {
+        b.innerHTML = get()
+          ? `<img src="${get().url}" style="width:18px;height:18px;border-radius:4px;object-fit:cover"> ${label}✓`
+          : `${label}图`;
+      };
+      render();
+      return b;
+    };
+    const frameBtnA = mkFrameBtn('首帧', () => frameA, (v) => { frameA = v; });
+    const frameBtnB = mkFrameBtn('尾帧', () => frameB, (v) => { frameB = v; });
     const startBtn = h('button', { class: 'btn accent', onclick: () => start() });
     startBtn.innerHTML = `${icon('spark')} 立即开始`;
     const result = h('div');
@@ -38,6 +57,8 @@ export async function renderHome(page) {
       modelSel.style.display = mode === 'short' ? '' : 'none';
       durSel.style.display = mode === 'short' ? '' : 'none';
       resSel.style.display = mode === 'short' ? '' : 'none';
+      frameBtnA.style.display = mode === 'short' ? '' : 'none';
+      frameBtnB.style.display = mode === 'short' ? '' : 'none';
       ta.placeholder = mode === 'drama'
         ? '输入你构想的故事：设定、主角、剧情脉络、结局…将生成剧本并创建项目'
         : mode === 'image'
@@ -66,7 +87,8 @@ export async function renderHome(page) {
         }
         const r = await POST('/api/ai/video', {
           prompt: text, name: text.slice(0, 16), ratio: ratioQ.value, duration: Number(durSel.value),
-          model: modelSel.value, resolution: resSel.value
+          model: modelSel.value, resolution: resSel.value,
+          image_url: frameA?.url || '', last_image_url: frameB?.url || ''
         });
         showPending(`${boot.ark.enabled ? '方舟 Seedance 生成中（约 1-3 分钟）' : '本地引擎生成中（数秒）'}…`);
         const t = await pollUntilDone(r.taskId);
@@ -93,7 +115,7 @@ export async function renderHome(page) {
     sync();
     return h('div', {},
       h('div', { class: 'quickbox' }, ta,
-        h('div', { class: 'quick-controls' }, modeChips, h('span', { class: 'grow' }), modelSel, ratioQ, durSel, resSel,
+        h('div', { class: 'quick-controls' }, modeChips, h('span', { class: 'grow' }), frameBtnA, frameBtnB, modelSel, ratioQ, durSel, resSel,
           doodle('arrow', { color: 'var(--accent2)', size: 30, delay: 700, rotate: -64, style: { margin: '0 0 8px 2px' } }),
           startBtn)),
       result);
@@ -119,7 +141,8 @@ export async function renderHome(page) {
 
   const entryBody = h('div', { class: 'entry-body' });
   const tabs = h('div', { class: 'tabs' },
-    tabBtn('ai', 'spark', 'AI 生剧本'), tabBtn('paste', 'film', '粘贴 / 上传剧本'), tabBtn('canvas', 'layout', '自由画布'));
+    tabBtn('ai', 'spark', 'AI 生剧本'), tabBtn('remake', 'refresh', '爆款复刻'),
+    tabBtn('paste', 'film', '粘贴 / 上传剧本'), tabBtn('canvas', 'layout', '自由画布'));
 
   function tabBtn(key, ic, label) {
     return h('button', {
@@ -136,8 +159,38 @@ export async function renderHome(page) {
   function fillEntry() {
     entryBody.innerHTML = '';
     if (entryTab === 'ai') entryBody.append(aiEntry());
+    else if (entryTab === 'remake') entryBody.append(remakeEntry());
     else if (entryTab === 'paste') entryBody.append(pasteEntry());
     else entryBody.append(canvasEntry());
+  }
+
+  // 爆款复刻：参考文案结构 → 新主题剧本
+  function remakeEntry() {
+    const ref = h('textarea', { class: 'textarea', rows: 4, placeholder: '粘贴参考的爆款文案 / 短剧台本 / 视频口播稿…\nAI 会解析它的钩子手法、节奏结构和情绪曲线' });
+    const topic = h('input', { class: 'input', placeholder: '你的新主题，例如：宠物殡葬师的温情日常 / 我家的智能咖啡机', style: { marginTop: '10px' } });
+    const genres = genreChips();
+    const btn = h('button', {
+      class: 'btn accent', onclick: async () => {
+        if (!ref.value.trim()) return toast('先粘贴参考爆款文案', 'err');
+        if (!topic.value.trim()) return toast('填一下你的新主题', 'err');
+        btn.disabled = true;
+        btn.innerHTML = `${icon('loader')} 解析结构并创作中…`;
+        try {
+          const r = await POST('/api/ai/remake', { reference: ref.value.trim(), topic: topic.value.trim(), genre: genres.get() });
+          toast(`已复刻结构${r.analysis?.hook ? `「${r.analysis.hook}」` : ''}生成剧本${r.by_llm ? '' : '（本地引擎）'}`, 'ok');
+          nav(`/project/${r.project.id}`);
+        } catch (e) {
+          toast(e.message, 'err');
+          btn.disabled = false;
+          btn.innerHTML = `${icon('refresh')} 解析爆点结构并生成剧本`;
+        }
+      }
+    });
+    btn.innerHTML = `${icon('refresh')} 解析爆点结构并生成剧本`;
+    return h('div', {}, ref, topic, genres.row,
+      h('div', { class: 'entry-actions' },
+        h('span', { style: { fontSize: '12px', color: 'var(--ink3)' } }, '自动解析：钩子手法 · 节奏结构 · 情绪曲线 · 可复用爆点'),
+        h('span', { class: 'grow' }), btn));
   }
 
   function genreChips() {

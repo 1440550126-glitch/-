@@ -432,6 +432,28 @@ export function localVideoSVG({ prompt = '', name = '', ratio = '16:9', duration
   return svgWrap(w, h, inner);
 }
 
+/** 爆款结构本地分析（无 Key 兜底）：规则识别钩子手法与节奏 */
+export function localViralAnalysis(reference = '') {
+  const t = String(reference);
+  let hook = '冲突前置钩子';
+  if (/^[^。！？\n]{0,24}[?？]/.test(t.trim())) hook = '悬念提问钩子';
+  else if (/千万别|你绝对|你一定|99%的人/.test(t)) hook = '直击观众钩子';
+  else if (/没想到|竟然|结果|万万没/.test(t)) hook = '反转预告钩子';
+  else if (/\d+[条个秒天万倍]/.test(t)) hook = '数字冲击钩子';
+  const sentences = t.split(/[。！？!?\n]/).filter((s) => s.trim().length > 2);
+  const beats = Math.min(5, Math.max(3, Math.round(sentences.length / 3)));
+  return {
+    hook,
+    structure: `${beats} 段式：3 秒${hook.slice(0, 4)}开场 → 中段层层加码 → 结尾强钩子留人`,
+    emotion: '好奇 → 紧张/共情 → 爽点释放 → 意犹未尽',
+    selling_points: [
+      `开场即${hook.replace('钩子', '')}，前 3 秒不浪费`,
+      '每 10-15 秒一个小反转，信息密度拉满',
+      '结尾埋下一集悬念，引导追更'
+    ]
+  };
+}
+
 /** 把 SVG 落盘到 uploads，返回 /uploads/xxx.svg */
 export function saveSVG(svg) {
   const name = `${uid('loc')}.svg`;

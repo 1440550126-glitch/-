@@ -6,7 +6,7 @@ import { jparse, micro2yuan, now } from './util.js';
 import { arkEnabled, cfg } from './ark.js';
 import {
   createProject, getProject, projectOut, touchProject, generateScript, parseScript, addEpisode,
-  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset
+  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral
 } from './pipeline.js';
 import { STYLES, STYLE_CATS } from './styles.js';
 import { bad } from './httpx.js';
@@ -113,6 +113,22 @@ export const TOOLS = [
     }
   },
   {
+    name: 'remake_viral',
+    description: '爆款复刻：解析一段参考爆款文案/剧本的钩子与节奏结构，套用到新主题生成剧本（未传 project_id 自动建项目）。返回结构分析与项目 id。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        reference: str('参考爆款文案/剧本全文'), topic: str('你的新主题/产品/故事方向'),
+        genre: str('类型（可选）'), project_id: str('项目 id（可选，写入已有项目）'), num_scenes: num('场次 2-8，默认 4')
+      },
+      required: ['reference', 'topic']
+    },
+    async execute(a) {
+      const r = await remakeViral({ reference: a.reference, topic: a.topic, projectId: a.project_id || '', genre: a.genre || '', numScenes: a.num_scenes || 4 });
+      return { project_id: r.project.id, title: r.project.title, by_llm: r.byLLM, analysis: r.analysis, script_length: r.script.length };
+    }
+  },
+  {
     name: 'add_episode',
     description: '给项目续写新的一集（沿用已有人物与场景，追加到剧本结尾），并自动重新解析分镜与画布。',
     input_schema: {
@@ -213,6 +229,7 @@ export const TOOLS = [
       properties: {
         prompt: str('视频动态提示词（画面内容+运镜）'),
         image_url: str('首帧图地址（可选，强烈建议传，画面更稳定）'),
+        last_image_url: str('尾帧图地址（可选，配合首帧实现「一镜到底」自然过渡）'),
         duration: num('时长（秒）2-12，默认 5'), ratio: str('画幅', { enum: ['16:9', '9:16', '1:1', '4:3', '21:9'] }),
         model: str('视频模型 ID（可选，覆盖默认；可用 ID 见设置页模型列表）'),
         resolution: str('分辨率（可选）', { enum: ['480p', '720p', '1080p'] }),
@@ -221,7 +238,7 @@ export const TOOLS = [
       required: ['prompt']
     },
     async execute(a) {
-      return await createVideoTask({ prompt: a.prompt, imageUrl: a.image_url, duration: a.duration || 5, ratio: a.ratio, projectId: a.project_id, nodeId: a.node_id, name: a.name, model: a.model || '', resolution: a.resolution || '' });
+      return await createVideoTask({ prompt: a.prompt, imageUrl: a.image_url, lastImageUrl: a.last_image_url || '', duration: a.duration || 5, ratio: a.ratio, projectId: a.project_id, nodeId: a.node_id, name: a.name, model: a.model || '', resolution: a.resolution || '' });
     }
   },
   {

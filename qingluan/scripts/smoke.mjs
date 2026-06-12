@@ -102,6 +102,17 @@ try {
   const cv3 = (await api('GET', `/api/canvases/${cv.id}`)).data;
   ok(cv3.nodes.find((n) => n.id === shotNode.id).data.video === done.result.url, '视频回写画布节点');
 
+  console.log('— 爆款复刻 / 一镜到底 —');
+  const rk = (await api('POST', '/api/ai/remake', { reference: '你绝对想不到，这家店凌晨三点还在排队！老板说出原因后所有人沉默了……', topic: '宠物殡葬师的温情日常', genre: '甜宠虐恋' })).data;
+  ok(rk.project?.id && /第\s*1\s*场/.test(rk.script), '爆款复刻生成剧本并建项目');
+  ok(rk.analysis?.hook && rk.analysis?.selling_points?.length >= 3, `结构解析（${rk.analysis?.hook}）`);
+  await api('DELETE', `/api/projects/${rk.project.id}`);
+  const upX = (await api('POST', '/api/upload', { name: '一镜测试帧', data: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' })).data;
+  const v2 = (await api('POST', '/api/ai/video', { prompt: '镜头从首帧推到尾帧', image_url: upX.url, last_image_url: upX.url, duration: 3, name: '一镜到底' })).data;
+  const v2t = (await api('GET', `/api/ai/task/${v2.taskId}`)).data;
+  ok(v2t.params?.lastImageUrl === upX.url, '一镜到底尾帧参数入任务');
+  ok((await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools.some((t) => t.name === 'remake_viral'), 'Agent 开放 remake_viral 工具');
+
   console.log('— 角色表情集 —');
   const cvE = (await api('GET', `/api/canvases/${cv.id}`)).data;
   const charE = cvE.nodes.find((n) => n.type === 'character');

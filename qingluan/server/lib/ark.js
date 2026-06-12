@@ -198,7 +198,7 @@ export async function arkImage({ prompt, ratio = '16:9', refImages = [], feature
  * 视频生成（Seedance，异步任务）。文本命令行参数随模型版本见官方文档。
  * @returns {Promise<{remoteId:string, model:string}>}
  */
-export async function arkVideoCreate({ prompt, imageUrl = '', ratio = '16:9', duration = 5, model = '', resolution = '' }) {
+export async function arkVideoCreate({ prompt, imageUrl = '', lastImageUrl = '', ratio = '16:9', duration = 5, model = '', resolution = '' }) {
   const c = cfg();
   const useModel = model || c.modelVideo;
   let text = `${prompt} --ratio ${ratio} --duration ${Math.round(duration)} --watermark ${c.watermark ? 'true' : 'false'}`;
@@ -207,6 +207,9 @@ export async function arkVideoCreate({ prompt, imageUrl = '', ratio = '16:9', du
   const content = [{ type: 'text', text }];
   const ref = toArkImageUrl(imageUrl);
   if (ref) content.push({ type: 'image_url', image_url: { url: ref }, role: 'first_frame' });
+  // 一镜到底：首尾帧之间生成自然过渡（Seedance 首尾帧能力）
+  const ref2 = toArkImageUrl(lastImageUrl);
+  if (ref && ref2) content.push({ type: 'image_url', image_url: { url: ref2 }, role: 'last_frame' });
   const data = await arkFetch('/contents/generations/tasks', { model: useModel, content }, { timeoutMs: 60_000 });
   if (!data?.id) throw new Error('方舟没有返回任务 ID');
   return { remoteId: data.id, model: useModel };

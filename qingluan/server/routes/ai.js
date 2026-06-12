@@ -3,7 +3,7 @@ import { GET, POST, bad } from '../lib/httpx.js';
 import { q } from '../lib/db.js';
 import { jparse } from '../lib/util.js';
 import { arkEnabled, arkChat } from '../lib/ark.js';
-import { generateScript, parseScript, addEpisode, generateImage, generateExpressions, createVideoTask, pollTask, getProject } from '../lib/pipeline.js';
+import { generateScript, parseScript, addEpisode, generateImage, generateExpressions, createVideoTask, pollTask, getProject, remakeViral } from '../lib/pipeline.js';
 import { toolSchemas, runTool } from '../lib/tools.js';
 
 POST('/api/ai/script', async ({ body }) => {
@@ -34,6 +34,14 @@ POST('/api/ai/image', async ({ body }) => {
   });
 });
 
+// 爆款复刻：参考文案结构 → 新主题剧本
+POST('/api/ai/remake', async ({ body }) => {
+  return await remakeViral({
+    reference: body.reference, topic: body.topic, projectId: body.project_id || '',
+    genre: body.genre || '', numScenes: body.num_scenes || 4
+  });
+}, { maxBytes: 256 * 1024 });
+
 // 角色表情集（多情绪定妆照）
 POST('/api/ai/expressions', async ({ body }) => {
   if (!body.project_id || !body.node_id) throw bad('缺少 project_id / node_id');
@@ -42,7 +50,8 @@ POST('/api/ai/expressions', async ({ body }) => {
 
 POST('/api/ai/video', async ({ body }) => {
   return await createVideoTask({
-    prompt: body.prompt, imageUrl: body.image_url, duration: body.duration || 5, ratio: body.ratio,
+    prompt: body.prompt, imageUrl: body.image_url, lastImageUrl: body.last_image_url || '',
+    duration: body.duration || 5, ratio: body.ratio,
     projectId: body.project_id, nodeId: body.node_id, name: body.name, order: body.order,
     model: body.model || '', resolution: body.resolution || ''
   });
