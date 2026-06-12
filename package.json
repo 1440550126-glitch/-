@@ -2,7 +2,7 @@
   "name": "jvling",
   "version": "0.1.0",
   "private": true,
-  "description": "AI句灵：让文案活过来的年轻人社交圈（H5 App + 零依赖 Node 服务端 + 管理后台）",
+  "description": "AI句灵：让文案活过来的年轻人社交圈（H5 App + 零依赖 Node 服务端 + 管理后台）＋ 青鸾：AI 短剧创作工坊",
   "type": "module",
   "engines": {
     "node": ">=22.5.0"
@@ -11,6 +11,9 @@
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
     "smoke": "node --disable-warning=ExperimentalWarning scripts/smoke.mjs",
-    "check": "node scripts/check-syntax.mjs"
+    "check": "node scripts/check-syntax.mjs",
+    "studio": "node --disable-warning=ExperimentalWarning qingluan/server/index.js",
+    "studio:dev": "node --disable-warning=ExperimentalWarning --watch qingluan/server/index.js",
+    "studio:smoke": "node --disable-warning=ExperimentalWarning qingluan/scripts/smoke.mjs"
   }
 }
