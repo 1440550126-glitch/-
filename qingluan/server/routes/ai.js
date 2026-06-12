@@ -1,5 +1,5 @@
 // 青鸾 · AI 能力接口：剧本 / 解析 / 图像 / 视频 / 内置创作 Agent
-import { GET, POST, bad } from '../lib/httpx.js';
+import { GET, POST, bad, notFound } from '../lib/httpx.js';
 import { q } from '../lib/db.js';
 import { jparse } from '../lib/util.js';
 import { arkEnabled, arkChat } from '../lib/ark.js';
@@ -68,9 +68,30 @@ GET('/api/ai/task/:id', async ({ params }) => {
   return { id: t.id, kind: t.kind, status: t.status, provider: t.provider, prompt: t.prompt, result: t.result, params: t.params, error: t.error || '', created_at: t.created_at };
 });
 
-GET('/api/ai/tasks', async () => {
-  return q.all(`SELECT id, kind, status, provider, prompt, project_id, node_id, created_at FROM tasks ORDER BY created_at DESC LIMIT 50`)
-    .map((t) => ({ ...t, prompt: t.prompt.slice(0, 60) }));
+GET('/api/ai/tasks', async ({ query }) => {
+  const kind = query.get('kind') || '';
+  const status = query.get('status') || '';
+  let rows = q.all(`SELECT id, kind, status, provider, model, prompt, params, result, error, project_id, node_id, created_at FROM tasks ORDER BY created_at DESC LIMIT 120`);
+  if (kind) rows = rows.filter((t) => t.kind === kind);
+  if (status) rows = rows.filter((t) => status === 'active' ? ['queued', 'running'].includes(t.status) : t.status === status);
+  return rows.map((t) => ({
+    ...t, prompt: t.prompt.slice(0, 80),
+    params: jparse(t.params, {}), result: jparse(t.result, {}), error: (t.error || '').slice(0, 160)
+  }));
+});
+
+// 失败/卡住的视频任务重试（force 可对任意视频任务强制重出）
+POST('/api/ai/task/:id/retry', async ({ params, body }) => {
+  const t = q.get('SELECT * FROM tasks WHERE id = ?', params.id);
+  if (!t) throw notFound('任务不存在');
+  if (t.kind !== 'video') throw bad('只支持视频任务重试（图片是同步生成，直接重新生成即可）');
+  if (!['failed'].includes(t.status) && !body?.force) throw bad('任务未失败；如需强制重出请传 force: true');
+  const p = jparse(t.params, {});
+  return await createVideoTask({
+    prompt: t.prompt, imageUrl: p.imageUrl || '', lastImageUrl: p.lastImageUrl || '',
+    duration: p.duration || 5, ratio: p.ratio, projectId: t.project_id, nodeId: t.node_id,
+    name: p.name, order: p.order, model: p.model || '', resolution: p.resolution || ''
+  });
 });
 
 // ---------------- 内置创作 Agent ----------------

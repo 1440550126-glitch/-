@@ -28,11 +28,11 @@ export const TOOLS = [
       return {
         app: '青鸾 · AI 短剧创作工坊',
         provider: arkEnabled() ? `火山方舟（${cfg().modelChat} / ${cfg().modelImage} / ${cfg().modelVideo}）` : '本地规则引擎（未配置方舟 Key，结果为占位预览）',
-        projects: q.get('SELECT COUNT(*) c FROM projects')?.c || 0,
+        projects: q.get('SELECT COUNT(*) c FROM projects WHERE deleted_at = 0')?.c || 0,
         assets: q.get('SELECT COUNT(*) c FROM assets')?.c || 0,
         running_tasks: q.get(`SELECT COUNT(*) c FROM tasks WHERE status IN ('queued','running')`)?.c || 0,
         total_cost_yuan: micro2yuan(cost),
-        recent_projects: q.all('SELECT id, title, status, updated_at FROM projects ORDER BY updated_at DESC LIMIT 5')
+        recent_projects: q.all('SELECT id, title, status, updated_at FROM projects WHERE deleted_at = 0 ORDER BY updated_at DESC LIMIT 5')
       };
     }
   },
@@ -41,7 +41,7 @@ export const TOOLS = [
     description: '列出全部短剧项目（id、标题、状态、画布 id）。',
     input_schema: { type: 'object', properties: {} },
     execute() {
-      return q.all('SELECT id, title, genre, ratio, status, canvas_id, created_at, updated_at FROM projects ORDER BY updated_at DESC LIMIT 50');
+      return q.all('SELECT id, title, genre, ratio, status, canvas_id, created_at, updated_at FROM projects WHERE deleted_at = 0 ORDER BY updated_at DESC LIMIT 50');
     }
   },
   {

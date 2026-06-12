@@ -322,9 +322,9 @@ export async function renderHome(page) {
         h('button', {
           class: 'btn sm danger', onclick: async (e) => {
             e.stopPropagation();
-            if (!await confirmDlg(`删除项目《${p.title}》？画布会一并删除，已生成的资产会保留在资产库。`)) return;
+            if (!await confirmDlg(`把项目《${p.title}》移入回收站？随时可以恢复。`, { okLabel: '移入回收站' })) return;
             await DEL(`/api/projects/${p.id}`);
-            toast('已删除', 'ok');
+            toast('已移入回收站，可从「我的项目 → 回收站」恢复', 'ok');
             loadProjects();
           }
         }, '删除')));
@@ -340,8 +340,36 @@ export async function renderHome(page) {
   page.append(hero,
     h('div', { class: 'entry-card fadein' }, tabs, entryBody),
     h('div', { class: 'wrap' },
-      h('div', { class: 'sec-head' }, h('h3', {}, '我的项目'), h('small', {}, '点击卡片进入工作台')),
+      h('div', { class: 'sec-head' }, h('h3', {}, '我的项目'), h('small', {}, '点击卡片进入工作台'),
+        h('span', { class: 'grow' }),
+        h('button', { class: 'btn ghost sm', onclick: openTrash, html: `${icon('trash', 14)} 回收站` })),
       grid));
+
+  async function openTrash() {
+    const { modal } = await import('../ui.js');
+    const body = h('div');
+    const m = modal({ title: h('span', { html: `${icon('trash')} 回收站` }), wide: true, body, actions: [] });
+    async function render() {
+      const rows = await GET('/api/projects/trash');
+      body.innerHTML = '';
+      if (!rows.length) {
+        body.append(h('div', { class: 'empty' }, h('p', {}, '回收站是空的')));
+        return;
+      }
+      body.append(h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '50vh', overflowY: 'auto' } },
+        rows.map((p) => h('div', { style: { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '10px', background: 'var(--bg2)' } },
+          h('b', { style: { flex: 1, fontSize: '13.5px' } }, p.title),
+          h('span', { style: { fontSize: '12px', color: 'var(--ink3)' } }, `删除于 ${fmtTime(p.deleted_at)}`),
+          h('button', { class: 'btn sm accent', onclick: async () => { await POST(`/api/projects/${p.id}/restore`); toast('已恢复', 'ok'); render(); loadProjects(); } }, '恢复'),
+          h('button', { class: 'btn sm danger', onclick: async () => {
+            if (!await confirmDlg(`彻底删除《${p.title}》？画布一并删除，不可恢复（资产库文件保留）。`)) return;
+            await DEL(`/api/projects/${p.id}?purge=1`);
+            toast('已彻底删除', 'ok');
+            render();
+          } }, '彻底删除')))));
+    }
+    await render();
+  }
   const fluid = initFluid(fluidCanvas);
   await loadProjects();
   return () => fluid.destroy();

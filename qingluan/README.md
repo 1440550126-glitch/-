@@ -19,7 +19,7 @@ SMIL 动画占位视频），界面会明确标注「本地生成」。配置火
 
 ```bash
 npm run studio:dev      # 开发模式（文件变更自动重启）
-npm run studio:smoke    # 93 项全链路冒烟测试（API + Agent + MCP stdio/HTTP）
+npm run studio:smoke    # 100 项全链路冒烟测试（API + Agent + MCP stdio/HTTP）
 ```
 
 ## 和小云雀比，好在哪
@@ -43,6 +43,7 @@ npm run studio:smoke    # 93 项全链路冒烟测试（API + Agent + MCP stdio/
 | 数据 | 云端 | 本机 SQLite + 文件，想搬就搬 |
 | 水印 | 跟会员走 | 自己说了算（`watermark` 开关） |
 | 兜底 | 无 Key 不可用 | 本地引擎全流程可演示，断网/超额自动兜底 |
+| 可靠性 | — | **任务中心**（全局任务视图、失败视频一键重试/强制重出）、**项目回收站**（软删除/恢复/彻底删除），画布节点 ⌘C/⌘V 复制粘贴、从资产库直接选图 |
 
 ## 创作流程
 
@@ -66,7 +67,9 @@ npm run studio:smoke    # 93 项全链路冒烟测试（API + Agent + MCP stdio/
    （成组移动、对齐/等距分布、批量删除，Shift+点击增减选择），左下角**小地图**（节点缩略
    + 视口框，点击/拖拽快速导航大画布）。
    快捷键：滚轮缩放、`F` 适配全部、`D` 涂鸦、`Esc` 取消选择、`Delete` 删除选中、`⌘/Ctrl+S` 立即保存。
-4. **资产库**：素材 / 角色 / 画布三个 tab；上传本地图片视频、AI 生图、搜索、重命名、复制地址。
+4. **任务中心**：全部生成任务的全局视图（类型/状态筛选、实时刷新、参考图数量审计）；
+   失败的视频任务一键**重试**，任意视频任务可**强制重出**（沿用原参数与一致性上下文）。
+5. **资产库**：素材 / 角色 / 画布三个 tab；上传本地图片视频、AI 生图、搜索、重命名、复制地址。
    所有生成产物自动入库（方舟返回的 URL 有有效期，青鸾会自动下载落盘）。
 
 ## 火山方舟接入
@@ -168,7 +171,7 @@ qingluan/
 │  ├ js/flow/        手写节点图引擎（平移/缩放/拖拽/连线/选择/涂鸦层）
 │  └ js/fx/fluid.js  伪 3D 光照流体背景（WebGL fbm 高度场 + 法线光照，鼠标交互）
 ├ mcp/server.mjs     MCP stdio 服务器（零依赖 JSON-RPC）
-└ scripts/smoke.mjs  93 项冒烟测试
+└ scripts/smoke.mjs  100 项冒烟测试
 ```
 
 数据存仓库 `var/`（已 gitignore）：`qingluan.sqlite` + `qingluan-uploads/`。

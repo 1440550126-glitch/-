@@ -7,6 +7,7 @@ import { renderProject } from './pages/project.js';
 import { renderCanvas } from './pages/canvas.js';
 import { renderAgent } from './pages/agent.js';
 import { renderSettings } from './pages/settings.js';
+import { renderTasks } from './pages/tasks.js';
 
 const routes = [];
 let cleanup = null;
@@ -23,6 +24,7 @@ route('/assets', renderAssets, { nav: '/assets' });
 route('/assets/:tab', renderAssets, { nav: '/assets' });
 route('/project/:id', renderProject, { nav: '/home' });
 route('/canvas/:id', renderCanvas, { full: true });
+route('/tasks', renderTasks, { nav: '/tasks' });
 route('/agent', renderAgent, { nav: '/agent' });
 route('/settings', renderSettings, { nav: '/settings' });
 
@@ -68,6 +70,7 @@ async function renderSidebar() {
       h('div', {}, h('b', {}, '青鸾'), h('small', {}, 'AI 短剧创作工坊'))),
     item('创作首页', 'home', '/home'),
     item('资产库', 'folder', '/assets'),
+    item('任务中心', 'clock', '/tasks'),
     item('Agent 接入', 'robot', '/agent'),
     item('设置', 'settings', '/settings'),
     h('div', { class: 'side-sec' }, h('span', {}, '创作历史'), h('a', { href: '#/home' }, '全部')),

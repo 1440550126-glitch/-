@@ -68,7 +68,17 @@ GET('/api/stats', async () => ({
 
 // ---------- 项目 ----------
 GET('/api/projects', async () =>
-  q.all('SELECT id, title, genre, style, ratio, status, cover, canvas_id, created_at, updated_at FROM projects ORDER BY updated_at DESC LIMIT 100'));
+  q.all('SELECT id, title, genre, style, ratio, status, cover, canvas_id, created_at, updated_at FROM projects WHERE deleted_at = 0 ORDER BY updated_at DESC LIMIT 100'));
+
+// 回收站
+GET('/api/projects/trash', async () =>
+  q.all('SELECT id, title, genre, cover, deleted_at FROM projects WHERE deleted_at > 0 ORDER BY deleted_at DESC LIMIT 100'));
+
+POST('/api/projects/:id/restore', async ({ params }) => {
+  getProject(params.id);
+  q.run('UPDATE projects SET deleted_at = 0, updated_at = ? WHERE id = ?', now(), params.id);
+  return projectOut(getProject(params.id));
+});
 
 POST('/api/projects', async ({ body }) => projectOut(createProject(body || {})));
 
@@ -85,11 +95,15 @@ PATCH('/api/projects/:id', async ({ params, body }) => {
   return projectOut(getProject(params.id));
 }, { maxBytes: 512 * 1024 });
 
-DEL('/api/projects/:id', async ({ params }) => {
+DEL('/api/projects/:id', async ({ params, query }) => {
   const p = getProject(params.id);
-  if (p.canvas_id) q.run('DELETE FROM canvases WHERE id = ?', p.canvas_id);
-  q.run('DELETE FROM projects WHERE id = ?', params.id);
-  return { deleted: true };
+  if (query.get('purge') === '1') {
+    if (p.canvas_id) q.run('DELETE FROM canvases WHERE id = ?', p.canvas_id);
+    q.run('DELETE FROM projects WHERE id = ?', params.id);
+    return { deleted: true, purged: true };
+  }
+  q.run('UPDATE projects SET deleted_at = ?, updated_at = ? WHERE id = ?', now(), now(), params.id);
+  return { deleted: true, trashed: true };
 });
 
 // ---------- 资产 ----------

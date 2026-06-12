@@ -290,6 +290,26 @@ try {
   ok((await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools.filter((t) => ['run_workflow', 'get_workflow'].includes(t.name)).length === 2, 'Agent 开放工作流工具');
   await api('DELETE', `/api/projects/${p9.id}`);
 
+  console.log('— 回收站 / 任务重试 —');
+  const pT = (await api('POST', '/api/projects', { title: '回收站测试' })).data;
+  await api('DELETE', `/api/projects/${pT.id}`);
+  ok(!(await api('GET', '/api/projects')).data.some((x) => x.id === pT.id), '软删除后不在项目列表');
+  ok((await api('GET', '/api/projects/trash')).data.some((x) => x.id === pT.id), '出现在回收站');
+  const agentList = (await api('POST', '/api/agent/v1/tools/list_projects', {}, token)).data.result;
+  ok(!agentList.some((x) => x.id === pT.id), 'Agent list_projects 不含回收站项目');
+  await api('POST', `/api/projects/${pT.id}/restore`);
+  ok((await api('GET', '/api/projects')).data.some((x) => x.id === pT.id), '恢复后回到列表');
+  await api('DELETE', `/api/projects/${pT.id}?purge=1`);
+  ok(!(await api('GET', '/api/projects/trash')).data.some((x) => x.id === pT.id), '彻底删除后回收站不可见');
+  const retryBad = await api('POST', `/api/ai/task/${vid.taskId}/retry`, {});
+  ok(retryBad.status === 400 && /force/.test(retryBad.error || ''), '未失败任务拒绝普通重试');
+  const retried = (await api('POST', `/api/ai/task/${vid.taskId}/retry`, { force: true })).data;
+  const retriedDone = await until(async () => {
+    const t = (await api('GET', `/api/ai/task/${retried.taskId}`)).data;
+    return t.status === 'succeeded' ? t : null;
+  });
+  ok(retriedDone.result.url.startsWith('/uploads/'), '强制重出生成新任务并完成');
+
   console.log('— 设置 —');
   const set1 = await api('PATCH', '/api/settings', { ark_api_key: 'AKLTxxxx' });
   ok(set1.status === 400, '拦截 AccessKey 误填');

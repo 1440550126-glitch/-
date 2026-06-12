@@ -6,6 +6,7 @@ import { createGraph } from '../flow/graph.js';
 import { runBatchGenerate } from '../batch.js';
 import { openStylePicker, shortStyle } from '../stylelib.js';
 import { openConsistency } from '../consistency.js';
+import { openAssetPicker } from '../assetpick.js';
 
 const TYPE_CN = { character: '角色', scene: '场景', prop: '道具', shot: '分镜', note: '便签' };
 const TYPE_ICON = { character: 'user', scene: 'image', prop: 'box', shot: 'film', note: 'pencil' };
@@ -474,6 +475,15 @@ export async function renderCanvas(page, params) {
       } });
       genImgBtn.innerHTML = `${icon('image', 15)} ${d.image ? '重新出图' : n.type === 'shot' ? '生成首帧' : '生成图片'}`;
       acts.append(genImgBtn);
+      acts.append(h('button', { class: 'btn', onclick: () => openAssetPicker({
+        title: `从资产库选择${TYPE_CN[n.type]}图`,
+        onPick: (a) => {
+          graph.updateNodeData(n.id, { image: a ? a.url : '' });
+          markDirty();
+          renderInspector(sel);
+          toast(a ? '图片已设置' : '图片已清除', 'ok');
+        }
+      }), html: `${icon('folder', 15)} 从资产库选图` }));
       if (n.type === 'shot') {
         const genVidBtn = h('button', { class: 'btn accent', onclick: async () => {
           const prompt = d.video_prompt || d.action;
@@ -523,8 +533,39 @@ export async function renderCanvas(page, params) {
   }
 
   // ---------- 快捷键 ----------
+  // ⌘C/⌘V：复制粘贴节点（支持多选；分镜自动重排序号、清空任务态）
+  let nodeClipboard = [];
+  const copySelection = () => {
+    const ids = graph.getMulti();
+    const single = graph.getSelected();
+    const picked = ids.length ? ids : (single?.kind === 'node' ? [single.id] : []);
+    nodeClipboard = picked.map((id) => graph.findNode(id)).filter(Boolean).map((n) => JSON.parse(JSON.stringify(n)));
+    if (nodeClipboard.length) toast(`已复制 ${nodeClipboard.length} 个节点（⌘V 粘贴）`);
+  };
+  const pasteClipboard = () => {
+    if (!nodeClipboard.length) return;
+    let order = Math.max(0, ...graph.getNodes().filter((n) => n.type === 'shot').map((n) => n.data.order || 0));
+    for (const src of nodeClipboard) {
+      const clone = JSON.parse(JSON.stringify(src));
+      clone.id = 'n' + Math.random().toString(36).slice(2, 11);
+      clone.x += 46;
+      clone.y += 46;
+      clone.data.key = '';                       // 与 storyboard 解绑，重新解析不会覆盖
+      clone.data.task_id = '';
+      clone.data.task_status = '';
+      if (clone.type === 'shot') {
+        clone.data.order = ++order;
+        clone.data.name = `镜头 ${clone.data.order}`;
+      }
+      graph.addNode(clone);
+    }
+    toast(`已粘贴 ${nodeClipboard.length} 个节点`, 'ok');
+  };
+
   const onKey = async (e) => {
     if (e.target.closest('input, textarea, select')) return;
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'c' || e.key === 'C')) return copySelection();
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'v' || e.key === 'V')) return pasteClipboard();
     if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
       e.preventDefault();
       return e.shiftKey ? redo() : undo();

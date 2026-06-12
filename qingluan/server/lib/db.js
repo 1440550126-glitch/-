@@ -18,6 +18,7 @@ db.exec(fs.readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf8'));
 // 轻量迁移：老库补新列（IF NOT EXISTS 建表不会更新已有表）
 try { db.exec(`ALTER TABLE canvases ADD COLUMN doodles TEXT NOT NULL DEFAULT '[]'`); } catch { /* 列已存在 */ }
 try { db.exec(`ALTER TABLE projects ADD COLUMN seed INTEGER NOT NULL DEFAULT 0`); } catch { /* 列已存在 */ }
+try { db.exec(`ALTER TABLE projects ADD COLUMN deleted_at INTEGER NOT NULL DEFAULT 0`); } catch { /* 列已存在 */ }
 
 const cache = new Map();
 function stmt(sql) {
