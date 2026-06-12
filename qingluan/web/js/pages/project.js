@@ -11,7 +11,7 @@ const RATIOS = ['16:9', '9:16', '1:1', '4:3', '21:9'];
 export async function renderProject(page, params) {
   let project = await GET(`/api/projects/${params.id}`);
   let canvas = project.canvas_id ? await GET(`/api/canvases/${project.canvas_id}`).catch(() => null) : null;
-  let rightTab = project.storyboard ? 'shots' : 'agent';
+  let rightTab = project.storyboard ? ((project.storyboard.episodes?.length || 0) > 1 ? 'episodes' : 'shots') : 'agent';
 
   const nodeByKey = () => {
     const map = new Map();
@@ -116,9 +116,11 @@ export async function renderProject(page, params) {
 
   function renderRight() {
     const sb = project.storyboard;
+    const multiEp = (sb?.episodes?.length || 0) > 1;
     rightCard.innerHTML = '';
     rightCard.append(h('div', { class: 'panel-head' },
       h('div', { class: 'tabs' },
+        rTab('episodes', '分集', sb?.episodes?.length || null),
         rTab('shots', '分镜', sb?.shots?.length), rTab('cast', '角色', sb?.characters?.length),
         rTab('scenes', '场景/道具', (sb?.scenes?.length || 0) + (sb?.props?.length || 0)), rTab('agent', 'Agent')),
       h('span', { class: 'grow' })));
@@ -136,14 +138,59 @@ export async function renderProject(page, params) {
         h('button', { class: 'btn accent', onclick: doParse }, '解析分镜')));
       return;
     }
-    if (rightTab === 'shots') return renderShots(body, sb);
+    if (rightTab === 'episodes') return renderEpisodes(body, sb);
+    if (rightTab === 'shots') return renderShots(body, sb, multiEp);
     if (rightTab === 'cast') return renderCards(body, sb.characters, 'character');
     renderCards(body, [...sb.scenes.map((s) => ({ ...s, _kind: 'scene' })), ...sb.props.map((p) => ({ ...p, _kind: 'prop' }))], 'scene');
   }
 
-  function renderShots(body, sb) {
+  // ---------- 分集（对标小云雀「分集视频」） ----------
+  function renderEpisodes(body, sb) {
+    const byKey = nodeByKey();
+    const list = h('div', { style: { padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '12px' } });
+    for (const ep of sb.episodes) {
+      const shots = sb.shots.filter((s) => (s.episode || 'e1') === ep.key);
+      const nodes = shots.map((s) => byKey.get(s.key)).filter(Boolean);
+      const withImage = nodes.filter((n) => n.data.image).length;
+      const withVideo = nodes.filter((n) => n.data.video).length;
+      const running = nodes.some((n) => n.data.task_status === 'running');
+      const genBtn2 = h('button', { class: 'btn sm', disabled: !project.canvas_id, onclick: () => {
+        genBtn2.disabled = true;
+        runBatchGenerate(project.canvas_id, { episode: ep.key, onDone: async () => { genBtn2.disabled = false; await reload(true); } });
+      } });
+      genBtn2.innerHTML = `${icon('wand', 14)} 本集一键生成`;
+      list.append(h('div', { class: 'card', style: { padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '14px' } },
+        h('div', { style: { flex: 1, minWidth: 0 } },
+          h('b', { style: { fontSize: '14px' } }, `第${ep.order}集 · ${ep.title}`,
+            running ? h('span', { class: 'pill orange pulse', style: { marginLeft: '8px' } }, '生成中') : null),
+          ep.summary ? h('p', { style: { fontSize: '12.5px', color: 'var(--ink3)', margin: '3px 0 0' } }, ep.summary) : null,
+          h('div', { style: { display: 'flex', gap: '6px', marginTop: '7px', flexWrap: 'wrap' } },
+            h('span', { class: 'pill' }, `分镜 ${shots.length}`),
+            h('span', { class: `pill ${withImage === shots.length && shots.length ? 'teal' : ''}` }, `首帧 ${withImage}/${shots.length}`),
+            h('span', { class: `pill ${withVideo === shots.length && shots.length ? 'green' : ''}` }, `视频 ${withVideo}/${shots.length}`))),
+        genBtn2));
+    }
+    const ideaIn2 = h('input', { class: 'input', placeholder: '本集创意（可空，AI 自动升级剧情）', style: { flex: 1 } });
+    const addBtn = h('button', { class: 'btn accent', onclick: async () => {
+      addBtn.disabled = true;
+      addBtn.innerHTML = `${icon('loader')} 续写中…`;
+      try {
+        const r = await POST('/api/ai/episode', { project_id: project.id, idea: ideaIn2.value.trim() });
+        toast(`第 ${r.episode_order} 集已续写并重新解析${r.by_llm ? '' : '（本地引擎）'}`, 'ok');
+        await reload();
+      } catch (e) { toast(e.message, 'err'); }
+      addBtn.disabled = false;
+      addBtn.innerHTML = `${icon('plus', 15)} 新增一集`;
+    } });
+    addBtn.innerHTML = `${icon('plus', 15)} 新增一集`;
+    list.append(h('div', { style: { display: 'flex', gap: '8px', marginTop: '2px' } }, ideaIn2, addBtn));
+    body.append(list);
+  }
+
+  function renderShots(body, sb, multiEp = false) {
     const byKey = nodeByKey();
     const sceneName = (key) => sb.scenes.find((s) => s.key === key)?.name || '';
+    const epOrder = (key) => sb.episodes?.find((e) => e.key === key)?.order || 1;
     for (const shot of sb.shots) {
       const node = byKey.get(shot.key);
       const img = node?.data.image || '';
@@ -160,7 +207,8 @@ export async function renderProject(page, params) {
       body.append(h('div', { class: 'shot-row' },
         h('span', { class: 'no' }, String(shot.order).padStart(2, '0')),
         h('div', { class: 'desc' },
-          h('b', {}, `${shot.shot_type} · ${sceneName(shot.scene)} · ${shot.duration}s`),
+          h('b', {}, multiEp ? h('span', { class: 'pill teal', style: { marginRight: '6px' } }, `第${epOrder(shot.episode || 'e1')}集`) : null,
+            `${shot.shot_type} · ${sceneName(shot.scene)} · ${shot.duration}s`),
           h('span', {}, shot.action),
           shot.dialogue ? h('div', { class: 'dlg' }, `「${shot.dialogue}」`) : null),
         mediaBtns));

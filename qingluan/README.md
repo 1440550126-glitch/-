@@ -19,7 +19,7 @@ SMIL 动画占位视频），界面会明确标注「本地生成」。配置火
 
 ```bash
 npm run studio:dev      # 开发模式（文件变更自动重启）
-npm run studio:smoke    # 50 项全链路冒烟测试（API + Agent + MCP stdio/HTTP）
+npm run studio:smoke    # 57 项全链路冒烟测试（API + Agent + MCP stdio/HTTP）
 ```
 
 ## 和小云雀比，好在哪
@@ -27,6 +27,7 @@ npm run studio:smoke    # 50 项全链路冒烟测试（API + Agent + MCP stdio/
 | | 小云雀（剪映） | 青鸾 |
 |---|---|---|
 | 创作流程 | 剧本 → 资产 → 画布 → 成片 | 一样齐全（AI 生剧本 / 粘贴剧本 / 自由画布） |
+| 分集视频 | 按集管理分镜与生成 | 同款分集面板（每集分镜/首帧/视频完成度、本集一键生成、AI 续写新一集），Agent 侧有 add_episode 工具 |
 | 风格库 | 预设风格分类选择 | 同款风格库（电影感/真人/2D/3D ×30 预设 + 自定义提示词），**风格自动注入所有生图/生视频提示词** |
 | Agent 接入 | 会员专属 Skill（`npx @pippit-dev/cli`，闭源） | **MCP + OpenAPI + 内置 Agent 三通道，全开放免费** |
 | 模型 | 平台内置，不可换 | 方舟全家桶**模型 ID 随便换**（Seedance 2.0 出了改个 ID 就用） |
@@ -37,9 +38,11 @@ npm run studio:smoke    # 50 项全链路冒烟测试（API + Agent + MCP stdio/
 
 ## 创作流程
 
-1. **首页**：三个入口——「AI 生剧本」（一句话创意 + 类型 chips）、「粘贴 / 上传剧本」、「自由画布」。
-2. **项目工作台**（`/#/project/:id`）：左侧剧本编辑（自动保存）+ AI 重写；右侧分镜表 / 角色卡 /
-   场景道具卡 / 项目内 Agent 对话。点「解析分镜」自动拆出角色、场景、道具、镜头，并搭好节点画布。
+1. **首页**：三个入口——「AI 生剧本」（故事构想 + 类型 + 集数 + 风格库 + 画幅）、「粘贴 / 上传剧本」、「自由画布」。
+2. **项目工作台**（`/#/project/:id`）：左侧剧本编辑（自动保存）+ AI 重写；右侧分集面板（每集
+   分镜/首帧/视频完成度、本集一键生成、「新增一集」AI 续写）/ 分镜表 / 角色卡 / 场景道具卡 /
+   项目内 Agent 对话。点「解析分镜」自动拆出分集、角色、场景、道具、镜头，并搭好节点画布。
+   剧本里写「第 N 集」即可分集（AI 多集生成会自动带标记），角色与场景跨集复用。
 3. **节点画布**（`/#/canvas/:id`）：小云雀式深色无限画布——平移缩放、节点拖拽、端口连线
    （角色/场景/道具 → 分镜）、属性面板改提示词/台词/时长、逐节点生成图与视频、「一键生成」批量出全部素材。
    快捷键：滚轮缩放、`F` 适配全部、`Delete` 删除选中、`⌘/Ctrl+S` 立即保存。
@@ -63,8 +66,8 @@ npm run studio:smoke    # 50 项全链路冒烟测试（API + Agent + MCP stdio/
 
 ## 把青鸾接给 Agent（三种方式）
 
-工作台「Agent 接入」页有可复制的现成命令与 Token。18 个开放工具覆盖全部能力：
-`studio_overview / create_project / update_project / generate_script / write_script / parse_script /
+工作台「Agent 接入」页有可复制的现成命令与 Token。19 个开放工具覆盖全部能力：
+`studio_overview / create_project / update_project / generate_script / add_episode / write_script / parse_script /
 list_styles / get_canvas / update_node / generate_image / generate_video / generate_storyboard_media /
 get_task / list_assets / import_asset / list_projects / get_project / get_usage_stats`。
 
@@ -141,7 +144,7 @@ qingluan/
 ├ web/               原生 ES Modules 前端（零构建）
 │  └ js/flow/        手写节点图引擎（平移/缩放/拖拽/连线/选择）
 ├ mcp/server.mjs     MCP stdio 服务器（零依赖 JSON-RPC）
-└ scripts/smoke.mjs  50 项冒烟测试
+└ scripts/smoke.mjs  57 项冒烟测试
 ```
 
 数据存仓库 `var/`（已 gitignore）：`qingluan.sqlite` + `qingluan-uploads/`。

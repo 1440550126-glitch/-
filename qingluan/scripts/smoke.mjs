@@ -132,6 +132,23 @@ try {
   const ls = (await api('POST', '/api/agent/v1/tools/list_styles', { cat: 'd3' }, token)).data;
   ok(ls.result.styles.length >= 5 && ls.result.styles.every((s) => s.cat === 'd3'), 'list_styles 按分类过滤');
 
+  console.log('— 分集（多集短剧） —');
+  const p2 = (await api('POST', '/api/projects', { title: '分集剧', genre: '都市逆袭' })).data;
+  const ms = (await api('POST', '/api/ai/script', { project_id: p2.id, num_episodes: 2, num_scenes: 3 })).data;
+  ok(/第\s*2\s*集/.test(ms.script), '生成 2 集剧本（含分集标记）');
+  const mp = (await api('POST', '/api/ai/parse', { project_id: p2.id })).data;
+  ok(mp.storyboard.episodes.length === 2, `解析出 ${mp.storyboard.episodes.length} 集`);
+  ok(mp.storyboard.shots.some((s) => s.episode === 'e2'), '分镜归属到第 2 集');
+  const sceneNames = mp.storyboard.scenes.map((s) => s.name);
+  ok(new Set(sceneNames).size === sceneNames.length, '跨集场景按名去重');
+  const epAdd = (await api('POST', '/api/agent/v1/tools/add_episode', { project_id: p2.id, idea: '幕后大boss现身' }, token)).data;
+  ok(epAdd.result.episode_order === 3 && epAdd.result.episodes.length === 3, 'add_episode 续写第 3 集并重解析');
+  ok(epAdd.result.new_episode_shots >= 2, `第 3 集新增分镜 ×${epAdd.result.new_episode_shots}`);
+  const epImgs = (await api('POST', '/api/agent/v1/tools/generate_storyboard_media', { project_id: p2.id, target: 'images', episode: 'e2', limit: 20 }, token)).data;
+  const cvEp = (await api('GET', `/api/canvases/${(await api('GET', `/api/projects/${p2.id}`)).data.canvas_id}`)).data;
+  const otherEpShotWithImage = cvEp.nodes.filter((n) => n.type === 'shot' && (n.data.episode || 'e1') !== 'e2' && n.data.image).length;
+  ok(epImgs.result.generated >= 1 && otherEpShotWithImage === 0, '按集批量出图只处理该集分镜');
+
   console.log('— MCP over HTTP（远程助理通道） —');
   const mh = async (msg) => {
     const res = await fetch(BASE + '/api/agent/v1/mcp', {

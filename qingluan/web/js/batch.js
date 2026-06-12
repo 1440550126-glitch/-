@@ -4,10 +4,10 @@ import { h, toast } from './ui.js';
 
 /**
  * @param {string} canvasId
- * @param {{onNode?:(nodeId:string)=>void, includeVideos?:boolean}} opts
- * 返回 {cancel}
+ * @param {{onNode?:(nodeId:string)=>void, includeVideos?:boolean, episode?:string}} opts
+ * episode：只处理该集的分镜节点（角色/场景/道具出图不受限）。返回 {cancel}
  */
-export function runBatchGenerate(canvasId, { onNode, includeVideos = true, onDone } = {}) {
+export function runBatchGenerate(canvasId, { onNode, includeVideos = true, episode = '', onDone } = {}) {
   let cancelled = false;
   const bar = h('div', { class: 'batchbar' });
   const label = h('div', { class: 'row' });
@@ -25,7 +25,8 @@ export function runBatchGenerate(canvasId, { onNode, includeVideos = true, onDon
     try {
       const canvas = await GET(`/api/canvases/${canvasId}`);
       const projectId = canvas.project_id || '';
-      const nodes = canvas.nodes;
+      const inEpisode = (n) => !episode || n.type !== 'shot' || (n.data.episode || 'e1') === episode;
+      const nodes = canvas.nodes.filter(inEpisode);
       const needImage = nodes.filter((n) => !n.data.image && n.type !== 'note' && (n.data.image_prompt || n.data.prompt));
       const shotsForVideo = includeVideos ? nodes.filter((n) => n.type === 'shot' && !n.data.video) : [];
       const total = needImage.length + shotsForVideo.length;

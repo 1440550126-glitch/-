@@ -36,7 +36,7 @@ export async function renderCanvas(page, params) {
         ? (isVideoUrl(d.video) ? `<video src="${escHtml(d.video)}" controls preload="metadata" ${d.image ? `poster="${escHtml(d.image)}"` : ''}></video>` : `<img src="${escHtml(d.video)}" draggable="false">`)
         : img || `<div class="gen-hint">${icon('image', 20)}<span>未生成首帧</span></div>`;
       wrap.innerHTML = `
-        <div class="n-head">${icon('film', 13)}<b>SHOT ${String(d.order || '?').padStart(2, '0')}</b><span class="tagx">${d.duration || 5}s</span>${d.shot_type ? `<span class="tagx">${escHtml(d.shot_type)}</span>` : ''}</div>
+        <div class="n-head">${icon('film', 13)}<b>SHOT ${String(d.order || '?').padStart(2, '0')}</b>${d.ep ? `<span class="tagx" style="color:#7fd8c9">E${d.ep}</span>` : ''}<span class="tagx">${d.duration || 5}s</span>${d.shot_type ? `<span class="tagx">${escHtml(d.shot_type)}</span>` : ''}</div>
         ${media(inner)}${status}
         <div class="n-act">${escHtml(d.action || '')}</div>
         ${d.dialogue ? `<div class="n-dlg">「${escHtml(d.dialogue)}」</div>` : ''}

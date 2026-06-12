@@ -3,15 +3,22 @@ import { GET, POST, bad } from '../lib/httpx.js';
 import { q } from '../lib/db.js';
 import { jparse } from '../lib/util.js';
 import { arkEnabled, arkChat } from '../lib/ark.js';
-import { generateScript, parseScript, generateImage, createVideoTask, pollTask, getProject } from '../lib/pipeline.js';
+import { generateScript, parseScript, addEpisode, generateImage, createVideoTask, pollTask, getProject } from '../lib/pipeline.js';
 import { toolSchemas, runTool } from '../lib/tools.js';
 
 POST('/api/ai/script', async ({ body }) => {
   const r = await generateScript({
     projectId: body.project_id, idea: body.idea, genre: body.genre,
-    numScenes: body.num_scenes || 4, style: body.style, title: body.title
+    numScenes: body.num_scenes || 4, numEpisodes: body.num_episodes || 1, style: body.style, title: body.title
   });
   return { project: { ...r.project, storyboard: jparse(r.project.storyboard, null) }, script: r.script, by_llm: r.byLLM };
+});
+
+// 续写一集（追加到剧本结尾并自动重新解析）
+POST('/api/ai/episode', async ({ body }) => {
+  if (!body.project_id) throw bad('缺少 project_id');
+  const r = await addEpisode({ projectId: body.project_id, idea: body.idea || '' });
+  return { episode_order: r.episodeOrder, project: r.project, storyboard: r.storyboard, by_llm: r.byLLM };
 });
 
 POST('/api/ai/parse', async ({ body }) => {

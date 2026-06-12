@@ -3,7 +3,7 @@
 import { q, getSetting } from './db.js';
 import { uid, now, jparse, clamp } from './util.js';
 import { arkEnabled, arkChat, arkImage, arkVideoCreate, arkVideoGet, cfg } from './ark.js';
-import { localScript, localParse, localImageSVG, localVideoSVG, saveSVG } from './local.js';
+import { localScript, localParse, localImageSVG, localVideoSVG, saveSVG, localNextEpisode } from './local.js';
 import { resolveStylePrompt } from './styles.js';
 import { bad, notFound } from './httpx.js';
 
@@ -44,11 +44,12 @@ const SCRIPT_SYSTEM = `你是资深短剧编剧，擅长强钩子、快节奏、
 1. 第一行《剧名》；
 2. 【人物】块：每行"名字（身份）：人设描述"；
 3. 【关键道具】块（如有）；
-4. 每场以"第 N 场 ｜ 场景：场景名 ｜ 日/夜 ｜ 内/外"开头；
-5. 动作行用中文圆括号（…）单独成行；台词行用"名字：台词"；
-6. 结尾用"[钩子] …"留下悬念。只输出剧本本体，不要解释。`;
+4. 多集时每集以"第 N 集 ｜ 集标题"单独成行开头（单集可省略）；
+5. 每场以"第 N 场 ｜ 场景：场景名 ｜ 日/夜 ｜ 内/外"开头；
+6. 动作行用中文圆括号（…）单独成行；台词行用"名字：台词"；
+7. 每集结尾用"[钩子] …"留下悬念。只输出剧本本体，不要解释。`;
 
-export async function generateScript({ projectId = '', idea = '', genre = '', numScenes = 4, style = '', title = '' }) {
+export async function generateScript({ projectId = '', idea = '', genre = '', numScenes = 4, numEpisodes = 1, style = '', title = '' }) {
   let project = projectId ? getProject(projectId) : createProject({ title, idea, genre, style });
   idea = idea || project.idea || project.title;
   genre = genre || project.genre;
@@ -58,12 +59,13 @@ export async function generateScript({ projectId = '', idea = '', genre = '', nu
   let byLLM = false;
   if (arkEnabled()) {
     try {
+      const eps = clamp(numEpisodes, 1, 6);
       const r = await arkChat({
         feature: 'script',
         system: SCRIPT_SYSTEM,
-        prompt: `请创作一部${genre ? `「${genre}」类型的` : ''}短剧剧本，共 ${clamp(numScenes, 2, 8)} 场，每场 3-6 个动作/台词节拍。${style ? `整体影像风格：${resolveStylePrompt(style)}。` : ''}\n核心创意：${idea || '自由发挥一个反转强烈的故事'}`,
+        prompt: `请创作一部${genre ? `「${genre}」类型的` : ''}短剧剧本，${eps > 1 ? `共 ${eps} 集，每集 ${clamp(numScenes, 2, 8)} 场，集与集之间用强钩子衔接` : `共 ${clamp(numScenes, 2, 8)} 场`}，每场 3-6 个动作/台词节拍。${style ? `整体影像风格：${resolveStylePrompt(style)}。` : ''}\n核心创意：${idea || '自由发挥一个反转强烈的故事'}`,
         temperature: 0.9,
-        maxTokens: 3000
+        maxTokens: eps > 1 ? 6000 : 3000
       });
       script = r.text.trim();
       byLLM = true;
@@ -71,7 +73,7 @@ export async function generateScript({ projectId = '', idea = '', genre = '', nu
       console.warn('[pipeline] 方舟剧本生成失败，落本地引擎：', e.message);
     }
   }
-  if (!script) script = localScript({ idea, genre, numScenes, title: title || (projectId ? project.title : '') });
+  if (!script) script = localScript({ idea, genre, numScenes, numEpisodes, title: title || (projectId ? project.title : '') });
 
   const newTitle = (script.match(/《(.+?)》/) || [])[1];
   touchProject(project.id, {
@@ -87,20 +89,29 @@ export async function generateScript({ projectId = '', idea = '', genre = '', nu
 // ---------- 剧本解析 → 分镜 ----------
 const PARSE_SYSTEM = `你是短剧导演兼分镜师。把剧本解析为可拍摄的结构化 JSON，只输出 JSON。schema：
 {"title":"剧名","logline":"一句话故事","style":"画面风格描述",
+ "episodes":[{"key":"e1","title":"集标题","summary":"本集一句话梗概"}],
  "characters":[{"key":"c1","name":"","role":"主角/反派/配角","desc":"外貌+性格","image_prompt":"用于文生图的人物肖像提示词"}],
  "scenes":[{"key":"s1","name":"","desc":"","image_prompt":"场景空镜提示词"}],
  "props":[{"key":"p1","name":"","desc":"","image_prompt":"道具特写提示词"}],
- "shots":[{"key":"sh1","order":1,"scene":"s1","characters":["c1"],"shot_type":"远景/全景/中景/近景/特写","camera":"运镜","action":"画面内发生的事","dialogue":"台词(可空)","duration":5,"image_prompt":"该镜头首帧画面的文生图提示词","video_prompt":"该镜头的图生视频动态提示词(动作+运镜)"}]}
-要求：分镜 6-14 个；image_prompt/video_prompt 用中文、具体、含风格词；characters/scenes/props 的 key 被 shots 正确引用。`;
+ "shots":[{"key":"sh1","order":1,"episode":"e1","scene":"s1","characters":["c1"],"shot_type":"远景/全景/中景/近景/特写","camera":"运镜","action":"画面内发生的事","dialogue":"台词(可空)","duration":5,"image_prompt":"该镜头首帧画面的文生图提示词","video_prompt":"该镜头的图生视频动态提示词(动作+运镜)"}]}
+要求：剧本含「第 N 集」标记时按集划分 episodes（否则只有 e1），shots 按集顺序排列且 episode 正确引用；每集分镜 4-10 个；
+角色/场景跨集复用同一 key（不要每集重复建）；image_prompt/video_prompt 用中文、具体、含风格词。`;
 
 function normalizeStoryboard(sb) {
   const out = {
     title: String(sb.title || '未命名短剧').slice(0, 50),
     logline: String(sb.logline || '').slice(0, 200),
     style: String(sb.style || '').slice(0, 100),
-    characters: [], scenes: [], props: [], shots: []
+    episodes: [], characters: [], scenes: [], props: [], shots: []
   };
   const remap = {};
+  const epRemap = {};
+  (Array.isArray(sb.episodes) ? sb.episodes : []).slice(0, 12).forEach((e, i) => {
+    const key = `e${i + 1}`;
+    epRemap[e.key || key] = key;
+    out.episodes.push({ key, order: i + 1, title: String(e.title || `第 ${i + 1} 集`).slice(0, 30), summary: String(e.summary || '').slice(0, 120) });
+  });
+  if (!out.episodes.length) out.episodes.push({ key: 'e1', order: 1, title: '第一集', summary: '' });
   (Array.isArray(sb.characters) ? sb.characters : []).slice(0, 8).forEach((c, i) => {
     const key = `c${i + 1}`;
     remap[c.key || key] = key;
@@ -118,9 +129,14 @@ function normalizeStoryboard(sb) {
   });
   if (!out.characters.length) out.characters.push({ key: 'c1', name: '主角', role: '主角', desc: '', image_prompt: '电影感人物肖像' });
   if (!out.scenes.length) out.scenes.push({ key: 's1', name: '主场景', desc: '', image_prompt: '电影感场景空镜' });
-  (Array.isArray(sb.shots) ? sb.shots : []).slice(0, 20).forEach((sh, i) => {
+  const epOrder = new Map(out.episodes.map((e) => [e.key, e.order]));
+  const rawShots = (Array.isArray(sb.shots) ? sb.shots : []).slice(0, 48)
+    .map((sh, idx) => ({ sh, idx, ep: epOrder.get(epRemap[sh.episode] || 'e1') || 1 }))
+    .sort((a, b) => a.ep - b.ep || a.idx - b.idx);   // 按集分组，集内保持原顺序
+  rawShots.forEach(({ sh }, i) => {
     out.shots.push({
       key: `sh${i + 1}`, order: i + 1,
+      episode: epRemap[sh.episode] || 'e1',
       scene: remap[sh.scene] || 's1',
       characters: (Array.isArray(sh.characters) ? sh.characters : []).map((k) => remap[k]).filter(Boolean),
       shot_type: String(sh.shot_type || '中景').slice(0, 8), camera: String(sh.camera || '固定机位').slice(0, 20),
@@ -163,6 +179,37 @@ export async function parseScript({ projectId }) {
   return { project: projectOut(q.get('SELECT * FROM projects WHERE id = ?', project.id)), storyboard: sb, byLLM, canvasId };
 }
 
+// ---------- 续写一集 ----------
+export async function addEpisode({ projectId, idea = '' }) {
+  const project = getProject(projectId);
+  if (!project.script?.trim()) throw bad('项目还没有剧本，先写剧本或用 AI 生成');
+  const sb = jparse(project.storyboard, null);
+  const marks = [...project.script.matchAll(/^第\s*\d+\s*集/gm)];
+  const nextOrder = Math.max(marks.length, sb?.episodes?.length || 1) + 1;
+
+  let chunk = '';
+  if (arkEnabled()) {
+    try {
+      const cast = (sb?.characters || []).map((c) => `${c.name}（${c.role}）`).join('、');
+      const r = await arkChat({
+        feature: 'episode', system: SCRIPT_SYSTEM, temperature: 0.9, maxTokens: 2500,
+        prompt: `以下是短剧《${project.title}》已有剧本的结尾部分：\n${project.script.slice(-4000)}\n\n` +
+          `请续写「第 ${nextOrder} 集」（以"第 ${nextOrder} 集 ｜ 集标题"开头，3-5 场，结尾留强钩子）。` +
+          `沿用已有人物${cast ? `：${cast}` : ''}，不要新建【人物】块。${idea ? `本集创意：${idea}` : '剧情自然升级。'}`
+      });
+      chunk = r.text.trim();
+      if (!/^第\s*\d+\s*集/m.test(chunk)) chunk = `第 ${nextOrder} 集 ｜ 风云再起\n` + chunk;
+    } catch (e) {
+      console.warn('[pipeline] 方舟续集失败，落本地引擎：', e.message);
+    }
+  }
+  if (!chunk) chunk = localNextEpisode({ storyboard: sb, order: nextOrder, idea, genre: project.genre });
+
+  touchProject(project.id, { script: (project.script.trimEnd() + '\n\n' + chunk).slice(0, 60_000) });
+  const parsed = await parseScript({ projectId });
+  return { episodeOrder: nextOrder, ...parsed };
+}
+
 // ---------- 画布 ----------
 // 分镜多列网格布局参数（前端「整理」按钮与此保持一致）
 export const LAYOUT = { left: 60, leftW: 270, midGap: 80, midW: 240, rightGap: 90, shotW: 310, shotPerCol: 5, leftPerCol: 6, midPerCol: 4 };
@@ -200,6 +247,8 @@ export function buildGraph(sb, ratio = '16:9') {
       id, type: 'shot', x: rightX + Math.floor(i / L.shotPerCol) * L.shotW, y: 60 + (i % L.shotPerCol) * 350,
       data: {
         key: sh.key, order: sh.order, name: `镜头 ${sh.order}`, scene: sh.scene,
+        episode: sh.episode || 'e1',
+        ep: (sb.episodes?.length || 1) > 1 ? Number(String(sh.episode || 'e1').slice(1)) || 1 : 0,
         shot_type: sh.shot_type, camera: sh.camera, action: sh.action, dialogue: sh.dialogue,
         duration: sh.duration, image_prompt: sh.image_prompt, video_prompt: sh.video_prompt,
         image: '', video: '', task_id: '', task_status: ''

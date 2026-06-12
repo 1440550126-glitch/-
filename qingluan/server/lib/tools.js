@@ -5,7 +5,7 @@ import { q, getSetting } from './db.js';
 import { jparse, micro2yuan, now } from './util.js';
 import { arkEnabled, cfg } from './ark.js';
 import {
-  createProject, getProject, projectOut, touchProject, generateScript, parseScript,
+  createProject, getProject, projectOut, touchProject, generateScript, parseScript, addEpisode,
   getCanvas, patchCanvasNode, generateImage, createVideoTask, pollTask, addAsset
 } from './pipeline.js';
 import { STYLES, STYLE_CATS } from './styles.js';
@@ -102,14 +102,32 @@ export const TOOLS = [
   },
   {
     name: 'generate_script',
-    description: 'AI 生成短剧剧本并存入项目（未传 project_id 时自动新建项目）。返回剧本全文。',
+    description: 'AI 生成短剧剧本并存入项目（未传 project_id 时自动新建项目）。支持多集（num_episodes）。返回剧本全文。',
     input_schema: {
       type: 'object',
-      properties: { project_id: str('项目 id（可选）'), idea: str('核心创意'), genre: str('类型'), style: str('画面风格'), num_scenes: num('场次数量 2-8，默认 4'), title: str('剧名（可选）') }
+      properties: { project_id: str('项目 id（可选）'), idea: str('核心创意'), genre: str('类型'), style: str('画面风格'), num_scenes: num('每集场次数量 2-8，默认 4'), num_episodes: num('集数 1-6，默认 1'), title: str('剧名（可选）') }
     },
     async execute(a) {
-      const r = await generateScript({ projectId: a.project_id, idea: a.idea, genre: a.genre, style: a.style, numScenes: a.num_scenes || 4, title: a.title });
+      const r = await generateScript({ projectId: a.project_id, idea: a.idea, genre: a.genre, style: a.style, numScenes: a.num_scenes || 4, numEpisodes: a.num_episodes || 1, title: a.title });
       return { project_id: r.project.id, title: r.project.title, by_llm: r.byLLM, script: r.script };
+    }
+  },
+  {
+    name: 'add_episode',
+    description: '给项目续写新的一集（沿用已有人物与场景，追加到剧本结尾），并自动重新解析分镜与画布。',
+    input_schema: {
+      type: 'object',
+      properties: { project_id: str('项目 id'), idea: str('本集创意/剧情方向（可选）') },
+      required: ['project_id']
+    },
+    async execute({ project_id, idea }) {
+      const r = await addEpisode({ projectId: project_id, idea: idea || '' });
+      return {
+        episode_order: r.episodeOrder, by_llm: r.byLLM,
+        episodes: r.storyboard.episodes,
+        total_shots: r.storyboard.shots.length,
+        new_episode_shots: r.storyboard.shots.filter((s) => s.episode === `e${r.episodeOrder}`).length
+      };
     }
   },
   {
@@ -120,6 +138,7 @@ export const TOOLS = [
       const r = await parseScript({ projectId: project_id });
       return {
         project_id, canvas_id: r.canvasId, by_llm: r.byLLM,
+        episodes: r.storyboard.episodes,
         characters: r.storyboard.characters.map((c) => ({ key: c.key, name: c.name, role: c.role })),
         scenes: r.storyboard.scenes.map((s) => ({ key: s.key, name: s.name })),
         props: r.storyboard.props.map((p) => ({ key: p.key, name: p.name })),
@@ -235,16 +254,17 @@ export const TOOLS = [
   },
   {
     name: 'generate_storyboard_media',
-    description: '按分镜批量生成：target=images 为所有缺图的角色/场景/道具/分镜生成图片（同步）；target=videos 为所有有首帧图的分镜创建视频任务（异步，返回 task_ids）。',
+    description: '按分镜批量生成：target=images 为所有缺图的角色/场景/道具/分镜生成图片（同步）；target=videos 为所有有首帧图的分镜创建视频任务（异步，返回 task_ids）。可用 episode 只处理某一集（如 "e2"）。',
     input_schema: {
       type: 'object',
-      properties: { project_id: str('项目 id'), target: str('生成目标', { enum: ['images', 'videos'] }), limit: num('本次最多处理数量，默认 8') },
+      properties: { project_id: str('项目 id'), target: str('生成目标', { enum: ['images', 'videos'] }), episode: str('只处理该集的分镜，如 e1/e2（可选，角色场景图不受限）'), limit: num('本次最多处理数量，默认 8') },
       required: ['project_id', 'target']
     },
-    async execute({ project_id, target, limit = 8 }) {
+    async execute({ project_id, target, episode = '', limit = 8 }) {
       const p = getProject(project_id);
       if (!p.canvas_id) throw bad('项目还没有画布，先调用 parse_script');
       const c = getCanvas(p.canvas_id);
+      if (episode) c.nodes = c.nodes.filter((n) => n.type !== 'shot' || (n.data.episode || 'e1') === episode);
       const done = [];
       if (target === 'images') {
         const todo = c.nodes.filter((n) => !n.data.image && (n.data.prompt || n.data.image_prompt)).slice(0, limit);
