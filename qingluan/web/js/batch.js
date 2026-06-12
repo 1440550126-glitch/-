@@ -33,24 +33,27 @@ export function runBatchGenerate(canvasId, { onNode, includeVideos = true, episo
       if (!total) { toast('没有需要生成的内容（都已生成过）'); bar.remove(); onDone?.(); return; }
       let done = 0;
 
-      // 阶段 1：出图（角色/场景/道具优先，分镜首帧随后），并发 2
-      const queue = [...needImage].sort((a, b) => (a.type === 'shot') - (b.type === 'shot'));
-      const workers = Array.from({ length: 2 }, async () => {
-        while (queue.length && !cancelled) {
-          const n = queue.shift();
-          setProgress(done, total, `出图：${n.data.name || n.type}（${done + 1}/${total}）`);
-          try {
-            await POST('/api/ai/image', {
-              prompt: n.data.image_prompt || n.data.prompt, name: n.data.name,
-              kind: n.type === 'shot' ? 'frame' : n.type, project_id: projectId, node_id: n.id
-            });
-            onNode?.(n.id);
-          } catch (e) { toast(`${n.data.name || '节点'} 出图失败：${e.message}`, 'err'); }
-          done++;
-          setProgress(done, total, '出图中…');
-        }
-      });
-      await Promise.all(workers);
+      // 阶段 1：严格两段出图——角色/场景/道具定妆照【全部完成】后才生成分镜首帧，
+      // 保证每个首帧都能引用到定妆参考图（画面一致性）
+      const runQueue = async (queue, label) => {
+        await Promise.all(Array.from({ length: 2 }, async () => {
+          while (queue.length && !cancelled) {
+            const n = queue.shift();
+            setProgress(done, total, `${label}：${n.data.name || n.type}（${done + 1}/${total}）`);
+            try {
+              await POST('/api/ai/image', {
+                prompt: n.data.image_prompt || n.data.prompt, name: n.data.name,
+                kind: n.type === 'shot' ? 'frame' : n.type, project_id: projectId, node_id: n.id
+              });
+              onNode?.(n.id);
+            } catch (e) { toast(`${n.data.name || '节点'} 出图失败：${e.message}`, 'err'); }
+            done++;
+          }
+        }));
+      };
+      await runQueue(needImage.filter((n) => n.type !== 'shot'), '定妆照');
+      if (cancelled) { bar.remove(); toast('已取消'); onDone?.(); return; }
+      await runQueue(needImage.filter((n) => n.type === 'shot'), '分镜首帧');
       if (cancelled) { bar.remove(); toast('已取消'); onDone?.(); return; }
 
       // 阶段 2：分镜视频（任务创建后并行轮询）

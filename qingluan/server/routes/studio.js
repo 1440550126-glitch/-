@@ -5,7 +5,10 @@ import { GET, POST, PATCH, DEL, bad, notFound } from '../lib/httpx.js';
 import { q, getSetting, setSetting, UPLOAD_DIR, DB_PATH } from '../lib/db.js';
 import { uid, now, jparse, micro2yuan, token32 } from '../lib/util.js';
 import { arkEnabled, cfg, arkChat, DEFAULTS, videoModelOptions } from '../lib/ark.js';
-import { createProject, getProject, projectOut, touchProject, getCanvas } from '../lib/pipeline.js';
+import { createProject, getProject, projectOut, touchProject, getCanvas, checkConsistency } from '../lib/pipeline.js';
+
+// 画面一致性体检
+GET('/api/projects/:id/consistency', async ({ params }) => checkConsistency(params.id));
 import { exportEpisode } from '../lib/export.js';
 import { ttsCfg, ttsEnabled } from '../lib/tts.js';
 import { STYLES, STYLE_CATS } from '../lib/styles.js';

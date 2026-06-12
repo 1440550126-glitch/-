@@ -65,7 +65,7 @@ POST('/api/ai/video', async ({ body }) => {
 
 GET('/api/ai/task/:id', async ({ params }) => {
   const t = await pollTask(params.id);
-  return { id: t.id, kind: t.kind, status: t.status, provider: t.provider, result: t.result, params: t.params, error: t.error || '', created_at: t.created_at };
+  return { id: t.id, kind: t.kind, status: t.status, provider: t.provider, prompt: t.prompt, result: t.result, params: t.params, error: t.error || '', created_at: t.created_at };
 });
 
 GET('/api/ai/tasks', async () => {

@@ -6,6 +6,7 @@ import { runBatchGenerate } from '../batch.js';
 import { createAgentChat } from '../agentchat.js';
 import { openStylePicker, shortStyle } from '../stylelib.js';
 import { openScreeningRoom } from '../player.js';
+import { openConsistency } from '../consistency.js';
 
 const RATIOS = ['16:9', '9:16', '1:1', '4:3', '21:9'];
 
@@ -78,6 +79,11 @@ export async function renderProject(page, params) {
   }
   const playBtn2 = h('button', { class: 'btn', title: '按分镜顺序连播预览成片效果', onclick: () => openRoom() });
   playBtn2.innerHTML = `${icon('play', 15)} 连播预览`;
+  const checkBtn = h('button', { class: 'btn', title: '画面一致性体检：批量生成前先扫一遍风险', onclick: () => {
+    if (!project.canvas_id) return toast('先解析剧本生成画布', 'err');
+    openConsistency({ projectId: project.id, canvasId: project.canvas_id, onFixed: () => reload(true) });
+  } });
+  checkBtn.innerHTML = `${icon('check', 15)} 体检`;
 
   function download(name, text, mime = 'text/plain') {
     const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: `${mime};charset=utf-8` })), download: name });
@@ -362,7 +368,7 @@ export async function renderProject(page, params) {
     h('div', { class: 'topbar line' },
       h('button', { class: 'btn ghost sm', html: icon('back'), onclick: () => nav('/home') }),
       titleInput, statusPill, h('span', { class: 'grow' }),
-      ratioSel, styleBtn, parseBtn, canvasBtn, playBtn2, batchBtn),
+      ratioSel, styleBtn, parseBtn, canvasBtn, checkBtn, playBtn2, batchBtn),
     h('div', { class: 'wrap', style: { maxWidth: '1440px', marginTop: '16px' } },
       h('div', { class: 'work-grid' }, leftCard, rightCard)));
   renderRight();

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS projects (
   storyboard TEXT NOT NULL DEFAULT '',     -- JSON：角色/场景/道具/分镜
   canvas_id  TEXT NOT NULL DEFAULT '',
   cover      TEXT NOT NULL DEFAULT '',
+  seed       INTEGER NOT NULL DEFAULT 0,   -- 画面一致性：项目级生成种子（Seedream seed）
   status     TEXT NOT NULL DEFAULT 'draft', -- draft|parsed|generating|done
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL

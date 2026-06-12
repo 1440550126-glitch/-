@@ -123,6 +123,22 @@ try {
   ok((await api('GET', '/api/assets?tab=character')).data.some((a) => a.name.includes('·愤怒')), '表情入角色资产库');
   ok((await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools.some((t) => t.name === 'generate_expressions'), 'Agent 开放 generate_expressions 工具');
 
+  console.log('— 画面一致性 —');
+  ok((await api('GET', `/api/projects/${p.id}`)).data.seed > 0, '项目自动持有一致性种子');
+  const con1 = (await api('GET', `/api/projects/${p.id}/consistency`)).data;
+  ok(con1.score <= 100 && Array.isArray(con1.issues) && con1.stats?.shots_framed, `体检报告（评分 ${con1.score}，问题 ${con1.issues.length} 项）`);
+  // 给角色挂非 SVG 定妆照后，关联分镜首帧应记录 种子 + 参考图 + 锁定词
+  const upC = (await api('POST', '/api/upload', { name: '定妆照', data: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' })).data;
+  const cvCon = (await api('GET', `/api/canvases/${cv.id}`)).data;
+  const conChar = cvCon.nodes.find((n) => n.type === 'character');
+  const conShot = cvCon.nodes.find((n) => n.type === 'shot' && cvCon.edges.some((e) => e.from === conChar.id && e.to === n.id));
+  await api('POST', '/api/agent/v1/tools/update_node', { project_id: p.id, node_id: conChar.id, patch: { image: upC.url } }, boot.agent_token);
+  const conFrame = (await api('POST', '/api/ai/image', { prompt: '两人对峙特写', kind: 'frame', project_id: p.id, node_id: conShot.id })).data;
+  const conTask = (await api('GET', `/api/ai/task/${conFrame.taskId}`)).data;
+  ok(conTask.params?.seed > 0 && conTask.params?.ref_images >= 1, '首帧带种子 + 角色参考图');
+  ok(/保持人物五官|出场人物/.test(conTask.prompt || ''), '锁定词自动注入首帧提示词');
+  ok((await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools.some((t) => t.name === 'check_consistency'), 'Agent 开放 check_consistency 工具');
+
   console.log('— 配音（TTS） —');
   const dub = await api('POST', '/api/ai/dub', { project_id: p.id });
   ok(dub.status === 400 && /语音|TTS|AppID/i.test(dub.error || ''), '未配置 TTS 时给出可执行引导');

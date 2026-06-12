@@ -6,7 +6,7 @@ import { jparse, micro2yuan, now } from './util.js';
 import { arkEnabled, cfg } from './ark.js';
 import {
   createProject, getProject, projectOut, touchProject, generateScript, parseScript, addEpisode,
-  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral, generateDubbing
+  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral, generateDubbing, checkConsistency
 } from './pipeline.js';
 import { STYLES, STYLE_CATS } from './styles.js';
 import { bad } from './httpx.js';
@@ -64,7 +64,7 @@ export const TOOLS = [
     description: '修改项目属性：标题/类型/画面风格/画幅/创意。风格建议先用 list_styles 查可选项（也可直接传自定义风格提示词）。改风格后新生成的图/视频自动套用。',
     input_schema: {
       type: 'object',
-      properties: { project_id: str('项目 id'), title: str('标题'), genre: str('类型'), style: str('风格名（见 list_styles）或自定义风格提示词'), ratio: str('画幅', { enum: ['16:9', '9:16', '1:1', '4:3', '21:9'] }), idea: str('核心创意') },
+      properties: { project_id: str('项目 id'), title: str('标题'), genre: str('类型'), style: str('风格名（见 list_styles）或自定义风格提示词'), ratio: str('画幅', { enum: ['16:9', '9:16', '1:1', '4:3', '21:9'] }), idea: str('核心创意'), seed: num('一致性种子（同项目出图共用，改它会整体换画面基调）') },
       required: ['project_id']
     },
     execute({ project_id, ...rest }) {
@@ -73,6 +73,7 @@ export const TOOLS = [
       for (const k of ['title', 'genre', 'style', 'ratio', 'idea']) {
         if (rest[k] !== undefined) fields[k] = String(rest[k]).slice(0, k === 'idea' ? 2000 : 300);
       }
+      if (rest.seed !== undefined) fields.seed = Math.max(0, Math.floor(Number(rest.seed) || 0));
       if (!Object.keys(fields).length) throw bad('没有可更新字段');
       touchProject(project_id, fields);
       return projectOut(getProject(project_id));
@@ -297,6 +298,12 @@ export const TOOLS = [
       const node = patchCanvasNode(p.canvas_id, node_id, clean);
       return { id: node.id, type: node.type, ...node.data };
     }
+  },
+  {
+    name: 'check_consistency',
+    description: '画面一致性体检：扫描风格缺失、角色/场景缺定妆照、分镜未连线、提示词漏人名等会导致画面漂移的问题，返回评分（0-100）、统计与修复建议。批量生成前建议先调用并修复 err 级问题。',
+    input_schema: { type: 'object', properties: { project_id: str('项目 id') }, required: ['project_id'] },
+    execute({ project_id }) { return checkConsistency(project_id); }
   },
   {
     name: 'generate_storyboard_media',

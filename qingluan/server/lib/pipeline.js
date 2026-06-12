@@ -30,10 +30,11 @@ export function touchProject(id, fields = {}) {
 }
 export function createProject({ title = '', idea = '', genre = '', style = '', ratio = '16:9' } = {}) {
   const id = uid('p');
+  const seed = 1 + Math.floor(Math.random() * 2_147_483_000);   // 项目级一致性种子
   q.run(
-    'INSERT INTO projects (id, title, idea, genre, style, ratio, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)',
+    'INSERT INTO projects (id, title, idea, genre, style, ratio, seed, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
     id, String(title || '未命名短剧').slice(0, 50), String(idea).slice(0, 2000), String(genre).slice(0, 20),
-    String(style).slice(0, 300), ratio, now(), now()
+    String(style).slice(0, 300), ratio, seed, now(), now()
   );
   return q.get('SELECT * FROM projects WHERE id = ?', id);
 }
@@ -363,31 +364,43 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
   prompt = applyStyle(prompt.trim(), project?.style);
   ratio = ratio || project?.ratio || '16:9';
 
-  // 主体一致性：分镜首帧未显式传参考图时，自动把画布上连线的角色/场景定妆图作为参考
+  // 画面一致性：分镜首帧自动 ①引用连线的角色/场景定妆图（角色优先） ②注入文本锁定词
   let refs = (refImages || []).filter(Boolean);
-  if (!refs.length && kind === 'frame' && nodeId && project?.canvas_id) {
+  if (kind === 'frame' && nodeId && project?.canvas_id) {
     try {
       const c = getCanvas(project.canvas_id, { required: false });
       if (c) {
-        refs = c.edges.filter((e) => e.to === nodeId)
+        const incoming = c.edges.filter((e) => e.to === nodeId)
           .map((e) => c.nodes.find((n) => n.id === e.from))
-          .filter((n) => n && (n.type === 'character' || n.type === 'scene') && n.data.image && !/\.svg$/i.test(n.data.image))
-          .map((n) => n.data.image)
-          .slice(0, 3);
+          .filter(Boolean);
+        const chars = incoming.filter((n) => n.type === 'character');
+        const scenes = incoming.filter((n) => n.type === 'scene');
+        if (!refs.length) {
+          refs = [...chars, ...scenes]                                   // 角色参考优先于场景
+            .filter((n) => n.data.image && !/\.svg$/i.test(n.data.image))
+            .map((n) => n.data.image)
+            .slice(0, 3);
+        }
+        const lockChars = chars.slice(0, 3).map((n) => `${n.data.name}（${String(n.data.desc || n.data.prompt || '').slice(0, 50)}）`).filter(Boolean);
+        const lockScene = scenes[0] ? `${scenes[0].data.name}（${String(scenes[0].data.desc || '').slice(0, 40)}）` : '';
+        if (lockChars.length || lockScene) {
+          prompt += `。出场人物：${lockChars.join('、') || '同前'}${lockScene ? `；场景：${lockScene}` : ''}。严格保持人物五官、发型、服装与场景陈设和参考图/前后镜头完全一致`;
+        }
       }
     } catch { /* 画布可能已删除 */ }
   }
+  const seed = project?.seed || 0;
 
   const taskId = uid('t');
   q.run('INSERT INTO tasks (id, kind, status, provider, prompt, params, project_id, node_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
     taskId, 'image', 'running', arkEnabled() ? 'ark' : 'local', prompt.slice(0, 500),
-    JSON.stringify({ kind, ratio, name, ref_images: refs.length }), projectId, nodeId, now(), now());
+    JSON.stringify({ kind, ratio, name, ref_images: refs.length, seed }), projectId, nodeId, now(), now());
 
   let url = '';
   let provider = 'local';
   try {
     if (arkEnabled()) {
-      const r = await arkImage({ prompt, ratio: kind === 'character' ? '3:4' : ratio, refImages: refs, feature: `image:${kind}` });
+      const r = await arkImage({ prompt, ratio: kind === 'character' ? '3:4' : ratio, refImages: refs, seed, feature: `image:${kind}` });
       url = r.url;
       provider = 'ark';
     } else {
@@ -443,6 +456,70 @@ export async function generateExpressions({ projectId, nodeId, emotions = [] }) 
   patchCanvasNode(project.canvas_id, node.id, { variants });
   if (!node.data.image && out.length) patchCanvasNode(project.canvas_id, node.id, { image: out[0].url });
   return { node_id: node.id, name: node.data.name, variants: out, total: variants.length };
+}
+
+// ---------- 画面一致性体检：扫描可能导致画面漂移的问题，给出评分与修复建议 ----------
+export function checkConsistency(projectId) {
+  const project = getProject(projectId);
+  const sb = jparse(project.storyboard, null);
+  if (!sb) throw bad('项目还没有分镜，先解析剧本');
+  const c = project.canvas_id ? getCanvas(project.canvas_id, { required: false }) : null;
+  if (!c) throw bad('项目还没有画布');
+  const byKey = new Map(c.nodes.filter((n) => n.data?.key).map((n) => [n.data.key, n]));
+
+  const issues = [];
+  let score = 100;
+  const push = (level, text, fix = '') => {
+    issues.push({ level, text, fix });
+    score -= level === 'err' ? 10 : 4;
+  };
+
+  if (!project.style) push('warn', '未设置画面风格：不同镜头容易风格漂移', '顶栏「风格」选择预设或自定义，会自动注入所有生成');
+
+  let charsReady = 0;
+  for (const ch of sb.characters) {
+    const img = byKey.get(ch.key)?.data.image || '';
+    if (!img) push('err', `角色「${ch.name}」没有定妆照：相关分镜首帧缺少人物参考图`, '生成角色形象（或点下方一键补齐）');
+    else if (/\.svg$/i.test(img)) push('warn', `角色「${ch.name}」是本地占位图：接入方舟后重新生成才能作为一致性参考`, '');
+    else charsReady++;
+  }
+  let scenesReady = 0;
+  for (const sc of sb.scenes) {
+    const img = byKey.get(sc.key)?.data.image || '';
+    if (!img) push('err', `场景「${sc.name}」没有场景图：该场景下的分镜画面容易跑偏`, '生成场景图（或一键补齐）');
+    else if (!/\.svg$/i.test(img)) scenesReady++;
+  }
+
+  // 分镜级问题按类别聚合，避免刷屏
+  const noCharLink = [];
+  const noSceneLink = [];
+  const promptMissName = [];
+  for (const sh of sb.shots) {
+    const n = byKey.get(sh.key);
+    if (!n) continue;
+    const incoming = c.edges.filter((e) => e.to === n.id).map((e) => c.nodes.find((x) => x.id === e.from)).filter(Boolean);
+    if (sh.characters?.length && !incoming.some((x) => x.type === 'character')) noCharLink.push(sh.order);
+    if (!incoming.some((x) => x.type === 'scene')) noSceneLink.push(sh.order);
+    const names = (sh.characters || []).map((k) => sb.characters.find((cc) => cc.key === k)?.name).filter(Boolean);
+    if (names.length && !names.some((nm) => (sh.image_prompt || '').includes(nm))) promptMissName.push(sh.order);
+  }
+  const fmtOrders = (a) => a.slice(0, 8).join('、') + (a.length > 8 ? ` 等 ${a.length} 个` : '');
+  if (noCharLink.length) push('err', `镜头 ${fmtOrders(noCharLink)} 没有连接角色节点：首帧不会自动带人物参考`, '画布上从角色节点拖线到分镜');
+  if (noSceneLink.length) push('warn', `镜头 ${fmtOrders(noSceneLink)} 没有连接场景节点`, '画布上从场景节点拖线到分镜');
+  if (promptMissName.length) push('warn', `镜头 ${fmtOrders(promptMissName)} 的首帧提示词没有提到出场角色名`, '已自动注入锁定词兜底；建议在提示词中写明人物');
+
+  const framed = sb.shots.filter((s) => byKey.get(s.key)?.data.image).length;
+  return {
+    score: Math.max(0, score),
+    seed: project.seed || 0,
+    stats: {
+      characters_ready: `${charsReady}/${sb.characters.length}`,
+      scenes_ready: `${scenesReady}/${sb.scenes.length}`,
+      shots_framed: `${framed}/${sb.shots.length}`,
+      style: project.style || '（未设置）'
+    },
+    issues: issues.slice(0, 40)
+  };
 }
 
 // ---------- 配音：带台词的分镜逐镜合成语音（火山 TTS），写回节点 audio ----------

@@ -5,6 +5,7 @@ import { nav } from '../main.js';
 import { createGraph } from '../flow/graph.js';
 import { runBatchGenerate } from '../batch.js';
 import { openStylePicker, shortStyle } from '../stylelib.js';
+import { openConsistency } from '../consistency.js';
 
 const TYPE_CN = { character: '角色', scene: '场景', prop: '道具', shot: '分镜', note: '便签' };
 const TYPE_ICON = { character: 'user', scene: 'image', prop: 'box', shot: 'film', note: 'pencil' };
@@ -328,6 +329,7 @@ export async function renderCanvas(page, params) {
       b.innerHTML = `${icon('wand', 15)} ${shortStyle(project.style)}`;
       return b;
     })() : null,
+    projectId ? h('button', { class: 'btn sm', title: '画面一致性体检', onclick: () => openConsistency({ projectId, canvasId: canvas.id, onFixed: () => syncMedia() }), html: `${icon('check', 15)} 体检` }) : null,
     projectId ? h('button', { class: 'btn sm', onclick: () => nav(`/project/${projectId}`), html: `${icon('film', 15)} 剧本` }) : null,
     batchBtn);
 

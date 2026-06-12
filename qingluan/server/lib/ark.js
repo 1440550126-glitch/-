@@ -165,7 +165,7 @@ export async function downloadToUploads(remoteUrl, ext) {
  * 图片生成（Seedream）。返回本地 /uploads/ 地址。
  * refImages：参考图（角色一致性 / 图生图），支持本地 uploads 路径或 http(s)/data URL。
  */
-export async function arkImage({ prompt, ratio = '16:9', refImages = [], feature = 'image' }) {
+export async function arkImage({ prompt, ratio = '16:9', refImages = [], seed = 0, feature = 'image' }) {
   const c = cfg();
   const { w, h } = ratioSize(ratio, 2048);
   const refs = refImages.map(toArkImageUrl).filter(Boolean);
@@ -175,6 +175,7 @@ export async function arkImage({ prompt, ratio = '16:9', refImages = [], feature
     size: `${w}x${h}`,
     response_format: 'b64_json',
     watermark: c.watermark,
+    ...(seed > 0 ? { seed } : {}),     // 项目级种子：同项目画面更稳定、重生成可复现
     ...(refs.length ? { image: refs.length === 1 ? refs[0] : refs } : {})
   }, { timeoutMs: 120_000 });
 

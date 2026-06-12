@@ -19,7 +19,7 @@ SMIL 动画占位视频），界面会明确标注「本地生成」。配置火
 
 ```bash
 npm run studio:dev      # 开发模式（文件变更自动重启）
-npm run studio:smoke    # 78 项全链路冒烟测试（API + Agent + MCP stdio/HTTP）
+npm run studio:smoke    # 83 项全链路冒烟测试（API + Agent + MCP stdio/HTTP）
 ```
 
 ## 和小云雀比，好在哪
@@ -30,7 +30,7 @@ npm run studio:smoke    # 78 项全链路冒烟测试（API + Agent + MCP stdio/
 | 一句话成片 | 沉浸式短片 | 同款万能创作框：短片 / 图片 / 短剧项目三模式，**按次可选模型与分辨率**（480P/720P/1080P） |
 | 一镜到底 | 多图自然转场 | 创作框选**首帧 + 尾帧**，Seedance 首尾帧生成自然过渡（API/Agent 同步开放 last_image_url） |
 | 爆款复刻 | 解析爆点套用 | 同款：贴参考文案 → 解析**钩子手法/节奏结构/情绪曲线/可复用爆点** → 套用到你的主题生成剧本（remake_viral 工具开放给 Agent） |
-| 主体一致性 | 主体库引用 | 分镜首帧**自动引用**画布上连线的角色/场景定妆图作为 Seedream 参考图，零操作 |
+| 主体一致性 | 主体库引用 | **一致性引擎**：首帧自动引用连线角色/场景定妆图（角色优先）+ 自动注入人物/场景**锁定词** + **项目级种子**（重生成可复现）+ 批量严格两阶段（定妆照全完成才出首帧）+ **一致性体检**（评分/问题清单/一键补齐，Agent 有 check_consistency 工具） |
 | 角色表情集 | 画布角色多表情变体 | 一键生成 6 情绪定妆照（基础形象作参考保持五官一致），节点表情条 + 点选切换主形象，本地引擎也会画出不同表情 |
 | 体验 | — | 全站非线性弹性动画（错峰入场/回弹缓动）、首页 **3D 光照流体背景**（WebGL，随鼠标流动）、手绘涂鸦点缀；画布自带**涂鸦笔**手绘批注（4 色 3 粗细 + 橡皮，随画布保存） |
 | 分集视频 | 按集管理分镜与生成 | 同款分集面板（每集分镜/首帧/视频完成度、本集一键生成、AI 续写新一集），Agent 侧有 add_episode 工具 |
@@ -57,7 +57,8 @@ npm run studio:smoke    # 78 项全链路冒烟测试（API + Agent + MCP stdio/
    剧本里写「第 N 集」即可分集（AI 多集生成会自动带标记），角色与场景跨集复用。
 3. **节点画布**（`/#/canvas/:id`）：小云雀式深色无限画布——平移缩放、节点拖拽、端口连线
    （角色/场景/道具 → 分镜）、属性面板改提示词/台词/时长、逐节点生成图与视频、「一键生成」批量出全部素材。
-   生成分镜首帧时自动把连线的角色/场景定妆图传给 Seedream 当参考图（主体一致性）。
+   生成分镜首帧时自动把连线的角色/场景定妆图传给 Seedream 当参考图，并注入人物/场景锁定词与
+   项目级种子；顶栏「体检」一键扫描一致性风险（缺定妆照/缺连线/提示词漏人名）并补齐缺失画面。
    「涂鸦」按钮（或 `D` 键）进入手绘批注：4 色画笔、3 档粗细、橡皮、清空，笔迹随画布保存、
    重新解析剧本也不丢，适合圈重点、画修改意见。
    编辑器进阶：**撤销/重做**（⌘Z / ⌘⇧Z，含节点/连线/涂鸦），**Shift+拖拽框选多选**
@@ -84,10 +85,10 @@ npm run studio:smoke    # 78 项全链路冒烟测试（API + Agent + MCP stdio/
 
 ## 把青鸾接给 Agent（三种方式）
 
-工作台「Agent 接入」页有可复制的现成命令与 Token。22 个开放工具覆盖全部能力：
+工作台「Agent 接入」页有可复制的现成命令与 Token。23 个开放工具覆盖全部能力：
 `studio_overview / create_project / update_project / generate_script / remake_viral / add_episode / write_script / parse_script /
 list_styles / get_canvas / update_node / generate_image / generate_expressions / generate_video / generate_storyboard_media /
-generate_dubbing / get_task / list_assets / import_asset / list_projects / get_project / get_usage_stats`。
+generate_dubbing / check_consistency / get_task / list_assets / import_asset / list_projects / get_project / get_usage_stats`。
 
 ### ① MCP（推荐，零依赖 stdio 服务器）
 
@@ -165,7 +166,7 @@ qingluan/
 │  ├ js/flow/        手写节点图引擎（平移/缩放/拖拽/连线/选择/涂鸦层）
 │  └ js/fx/fluid.js  伪 3D 光照流体背景（WebGL fbm 高度场 + 法线光照，鼠标交互）
 ├ mcp/server.mjs     MCP stdio 服务器（零依赖 JSON-RPC）
-└ scripts/smoke.mjs  78 项冒烟测试
+└ scripts/smoke.mjs  83 项冒烟测试
 ```
 
 数据存仓库 `var/`（已 gitignore）：`qingluan.sqlite` + `qingluan-uploads/`。
