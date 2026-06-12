@@ -254,10 +254,14 @@ export function localParse(script = '', { style = '', maxShots = 14 } = {}) {
       const speakKeys = b.speakers.map((n) => charKeyByName.get(n)).filter(Boolean);
       const who = b.speakers[0] || characters[0].name;
       const shotType = b.type === 'dialogue' ? pick(['近景', '特写'], rnd) : pick(SHOT_TYPES, rnd);
+      const emoGuess = /怒|吼|摔|瞪/.test(b.text) ? '愤怒'
+        : /哭|泪|哽咽/.test(b.text) ? '悲伤'
+          : /笑|喜|兴奋/.test(b.text) ? '微笑'
+            : /惊|骤缩|愣|？！/.test(b.text) ? '惊恐' : '';
       shots.push({
         key: `sh${i}`, order: i, scene: sceneKey, episode: s.episode || 'e1',
         characters: speakKeys.length ? speakKeys : [characters[0].key],
-        shot_type: shotType, camera: pick(CAMERAS, rnd),
+        shot_type: shotType, camera: pick(CAMERAS, rnd), emotion: emoGuess,
         action: b.type === 'action' ? b.text.slice(0, 80) : `${who}说话，情绪随台词起伏`,
         dialogue: b.type === 'dialogue' ? b.text.slice(0, 60) : '',
         duration: 4 + Math.round(rnd() * 3),

@@ -19,18 +19,18 @@ SMIL 动画占位视频），界面会明确标注「本地生成」。配置火
 
 ```bash
 npm run studio:dev      # 开发模式（文件变更自动重启）
-npm run studio:smoke    # 83 项全链路冒烟测试（API + Agent + MCP stdio/HTTP）
+npm run studio:smoke    # 93 项全链路冒烟测试（API + Agent + MCP stdio/HTTP）
 ```
 
 ## 和小云雀比，好在哪
 
 | | 小云雀（剪映） | 青鸾 |
 |---|---|---|
-| 创作流程 | 剧本 → 资产 → 画布 → 成片 | 一样齐全（AI 生剧本 / 粘贴剧本 / 自由画布） |
+| 创作流程 | 剧本 → 资产 → 画布 → 成片 | 一样齐全（AI 生剧本 / 粘贴剧本 / 自由画布），另有**全流程工作流**：一键托管 剧本→解析→体检→出图→出片→配音→导出，实时步骤进度、可取消、未配置步骤自动跳过（Agent 有 run_workflow/get_workflow 工具） |
 | 一句话成片 | 沉浸式短片 | 同款万能创作框：短片 / 图片 / 短剧项目三模式，**按次可选模型与分辨率**（480P/720P/1080P） |
 | 一镜到底 | 多图自然转场 | 创作框选**首帧 + 尾帧**，Seedance 首尾帧生成自然过渡（API/Agent 同步开放 last_image_url） |
 | 爆款复刻 | 解析爆点套用 | 同款：贴参考文案 → 解析**钩子手法/节奏结构/情绪曲线/可复用爆点** → 套用到你的主题生成剧本（remake_viral 工具开放给 Agent） |
-| 主体一致性 | 主体库引用 | **一致性引擎**：首帧自动引用连线角色/场景定妆图（角色优先）+ 自动注入人物/场景**锁定词** + **项目级种子**（重生成可复现）+ 批量严格两阶段（定妆照全完成才出首帧）+ **一致性体检**（评分/问题清单/一键补齐，Agent 有 check_consistency 工具） |
+| 主体一致性 | 主体库引用 | **一致性引擎**：首帧自动引用连线角色/场景定妆图（角色优先）+ 人物/场景**锁定词** + **项目级种子** + 批量严格两阶段 + **一致性体检**（评分/一键补齐）+ **跨镜参考链**（同场景上一镜首帧自动入参考，画面无缝衔接）+ **分镜情绪联动表情集**（镜头设情绪即用对应表情定妆照作参考） |
 | 角色表情集 | 画布角色多表情变体 | 一键生成 6 情绪定妆照（基础形象作参考保持五官一致），节点表情条 + 点选切换主形象，本地引擎也会画出不同表情 |
 | 体验 | — | 全站非线性弹性动画（错峰入场/回弹缓动）、首页 **3D 光照流体背景**（WebGL，随鼠标流动）、手绘涂鸦点缀；画布自带**涂鸦笔**手绘批注（4 色 3 粗细 + 橡皮，随画布保存） |
 | 分集视频 | 按集管理分镜与生成 | 同款分集面板（每集分镜/首帧/视频完成度、本集一键生成、AI 续写新一集），Agent 侧有 add_episode 工具 |
@@ -50,7 +50,8 @@ npm run studio:smoke    # 83 项全链路冒烟测试（API + Agent + MCP stdio/
    视频模型、画幅、时长、分辨率，短片模式还可从资产库选**首帧/尾帧**（一镜到底过渡）；
    下方四个入口：「AI 生剧本（集数/风格库）」「**爆款复刻**（贴参考文案解析结构套用新主题）」
    「粘贴剧本」「自由画布」。
-2. **项目工作台**（`/#/project/:id`）：顶栏「连播预览」进**放映室**（按分镜顺序播放、台词字幕、
+2. **项目工作台**（`/#/project/:id`）：顶栏「**全流程**」一键托管从剧本到成片（实时步骤进度，
+   完成直达放映室）；「连播预览」进**放映室**（按分镜顺序播放、台词字幕、配音同步、
    分集切换、导出 MP4）；左侧剧本编辑（自动保存 + .txt 下载）+ AI 重写；右侧分集面板（每集
    分镜/首帧/视频完成度、本集一键生成、「新增一集」AI 续写）/ 分镜表 / 角色卡 / 场景道具卡 /
    项目内 Agent 对话。点「解析分镜」自动拆出分集、角色、场景、道具、镜头，并搭好节点画布。
@@ -85,10 +86,10 @@ npm run studio:smoke    # 83 项全链路冒烟测试（API + Agent + MCP stdio/
 
 ## 把青鸾接给 Agent（三种方式）
 
-工作台「Agent 接入」页有可复制的现成命令与 Token。23 个开放工具覆盖全部能力：
+工作台「Agent 接入」页有可复制的现成命令与 Token。25 个开放工具覆盖全部能力：
 `studio_overview / create_project / update_project / generate_script / remake_viral / add_episode / write_script / parse_script /
 list_styles / get_canvas / update_node / generate_image / generate_expressions / generate_video / generate_storyboard_media /
-generate_dubbing / check_consistency / get_task / list_assets / import_asset / list_projects / get_project / get_usage_stats`。
+generate_dubbing / check_consistency / run_workflow / get_workflow / get_task / list_assets / import_asset / list_projects / get_project / get_usage_stats`。
 
 ### ① MCP（推荐，零依赖 stdio 服务器）
 
@@ -159,6 +160,7 @@ qingluan/
 │  ├ lib/pipeline.js 创作流水线（剧本→分镜→画布→图像→视频，方舟失败自动兜底）
 │  ├ lib/tools.js    Agent 工具注册表（MCP / HTTP / 内置 Agent 三方共用）
 │  ├ lib/styles.js   风格库（30 预设 ×4 分类，注入生图/生视频提示词）
+│  ├ lib/workflow.js 全流程工作流引擎（7 步托管，进度/取消/自动跳过）
 │  ├ lib/export.js   成片导出（ffmpeg 运行时检测，concat 拼接分镜 MP4）
 │  ├ lib/tts.js      火山语音合成（配音，AppID/Token 配置即用）
 │  └ routes/         REST：工作台 / AI / Agent API（Bearer Token + CORS）
@@ -166,7 +168,7 @@ qingluan/
 │  ├ js/flow/        手写节点图引擎（平移/缩放/拖拽/连线/选择/涂鸦层）
 │  └ js/fx/fluid.js  伪 3D 光照流体背景（WebGL fbm 高度场 + 法线光照，鼠标交互）
 ├ mcp/server.mjs     MCP stdio 服务器（零依赖 JSON-RPC）
-└ scripts/smoke.mjs  83 项冒烟测试
+└ scripts/smoke.mjs  93 项冒烟测试
 ```
 
 数据存仓库 `var/`（已 gitignore）：`qingluan.sqlite` + `qingluan-uploads/`。

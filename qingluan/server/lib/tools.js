@@ -292,7 +292,7 @@ export const TOOLS = [
     execute({ project_id, node_id, patch }) {
       const p = getProject(project_id);
       if (!p.canvas_id) throw bad('项目还没有画布');
-      const allowed = ['name', 'desc', 'prompt', 'role', 'action', 'dialogue', 'duration', 'shot_type', 'camera', 'image_prompt', 'video_prompt', 'image', 'video', 'x', 'y'];
+      const allowed = ['name', 'desc', 'prompt', 'role', 'action', 'dialogue', 'duration', 'shot_type', 'camera', 'emotion', 'image_prompt', 'video_prompt', 'image', 'video', 'x', 'y'];
       const clean = Object.fromEntries(Object.entries(patch || {}).filter(([k]) => allowed.includes(k)));
       if (!Object.keys(clean).length) throw bad(`没有可修改字段，允许：${allowed.join('/')}`);
       const node = patchCanvasNode(p.canvas_id, node_id, clean);
@@ -339,6 +339,35 @@ export const TOOLS = [
         done.push({ node_id: n.id, name: n.data.name, task_id: r.taskId });
       }
       return { created_tasks: done.length, items: done, hint: '用 get_task 轮询 task_id 直到 succeeded' };
+    }
+  },
+  {
+    name: 'run_workflow',
+    description: '一键托管全流程工作流：剧本→解析→一致性体检→定妆照与首帧→分镜视频→配音→导出（TTS/ffmpeg 未配置的步骤自动跳过）。异步执行，返回 workflow_id，用 get_workflow 轮询进度。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        project_id: str('项目 id'),
+        episode: str('只跑某一集，如 e2（可选）'),
+        steps: { type: 'array', items: { type: 'string', enum: ['script', 'parse', 'check', 'images', 'videos', 'dub', 'export'] }, description: '自定义步骤子集（可选，默认全流程）' }
+      },
+      required: ['project_id']
+    },
+    async execute({ project_id, episode, steps }) {
+      const { startWorkflow } = await import('./workflow.js');
+      const w = startWorkflow({ projectId: project_id, episode: episode || '', steps: steps || null });
+      return { workflow_id: w.id, status: w.status, steps: w.steps.map((s) => s.label) };
+    }
+  },
+  {
+    name: 'get_workflow',
+    description: '查询工作流进度：各步骤状态（pending/running/done/skipped/failed）与详情；status 为 succeeded/failed/cancelled 时结束。',
+    input_schema: { type: 'object', properties: { workflow_id: str('工作流 id'), cancel: { type: 'boolean', description: '传 true 取消该工作流' } }, required: ['workflow_id'] },
+    async execute({ workflow_id, cancel }) {
+      const { getWorkflow, cancelWorkflow } = await import('./workflow.js');
+      if (cancel) cancelWorkflow(workflow_id);
+      const w = getWorkflow(workflow_id);
+      return { id: w.id, status: w.status, error: w.error || undefined, steps: w.steps };
     }
   },
   {

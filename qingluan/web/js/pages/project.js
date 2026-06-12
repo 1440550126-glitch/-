@@ -85,6 +85,53 @@ export async function renderProject(page, params) {
   } });
   checkBtn.innerHTML = `${icon('check', 15)} 体检`;
 
+  // ---------- 全流程工作流（一键托管） ----------
+  const WF_ICON = { pending: '◌', running: '', done: '✓', skipped: '↷', failed: '✗' };
+  const WF_COLOR = { done: 'var(--ok)', skipped: 'var(--ink3)', failed: 'var(--err)', running: 'var(--accent)' };
+  function openWorkflow(wfId) {
+    const body = h('div');
+    let timer = null;
+    const { close } = modal({
+      title: h('span', { html: `${icon('wand')} 全流程托管` }), wide: true, body, actions: [],
+      onClose: () => clearInterval(timer)
+    });
+    async function tick() {
+      let w;
+      try { w = await GET(`/api/workflows/${wfId}`); } catch { return; }
+      body.innerHTML = '';
+      body.append(h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
+        w.steps.map((s) => h('div', { style: { display: 'flex', gap: '10px', alignItems: 'center', padding: '10px 12px', borderRadius: '10px', background: s.status === 'failed' ? 'var(--accent2-soft)' : 'var(--bg2)' } },
+          s.status === 'running' ? h('div', { class: 'spinner', style: { width: '15px', height: '15px', flex: 'none' } })
+            : h('b', { style: { width: '16px', textAlign: 'center', color: WF_COLOR[s.status] || 'var(--ink3)', flex: 'none' } }, WF_ICON[s.status] || '◌'),
+          h('b', { style: { width: '110px', flex: 'none', fontSize: '13.5px' } }, s.label),
+          h('span', { style: { fontSize: '12.5px', color: 'var(--ink2)', flex: 1 } }, s.detail || ''),
+          s.ms ? h('span', { style: { fontSize: '11px', color: 'var(--ink3)' } }, `${(s.ms / 1000).toFixed(1)}s`) : null))));
+      const terminal = w.status !== 'running';
+      body.append(h('div', { class: 'm-actions' },
+        terminal
+          ? h('span', { class: `pill ${w.status === 'succeeded' ? 'green' : w.status === 'failed' ? 'red' : ''}`, style: { marginRight: 'auto' } },
+            w.status === 'succeeded' ? '全流程完成 ✓' : w.status === 'failed' ? `失败：${w.error}` : '已取消')
+          : h('button', { class: 'btn sm danger', style: { marginRight: 'auto' }, onclick: async () => { await POST(`/api/workflows/${wfId}/cancel`); } }, '取消'),
+        terminal && w.status === 'succeeded' ? h('button', { class: 'btn accent', onclick: () => { close(); openRoom(); } }, '进放映室看成片') : null,
+        h('button', { class: 'btn', onclick: () => close() }, '关闭')));
+      if (terminal) {
+        clearInterval(timer);
+        await reload(true);
+      }
+    }
+    tick();
+    timer = setInterval(tick, 1500);
+  }
+  const wfBtn = h('button', { class: 'btn accent', title: '一键托管：剧本→解析→体检→出图→出片→配音→导出', onclick: async () => {
+    wfBtn.disabled = true;
+    try {
+      const w = await POST('/api/workflows', { project_id: project.id });
+      openWorkflow(w.id);
+    } catch (e) { toast(e.message, 'err'); }
+    wfBtn.disabled = false;
+  } });
+  wfBtn.innerHTML = `${icon('spark', 15)} 全流程`;
+
   function download(name, text, mime = 'text/plain') {
     const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: `${mime};charset=utf-8` })), download: name });
     a.click();
@@ -368,7 +415,7 @@ export async function renderProject(page, params) {
     h('div', { class: 'topbar line' },
       h('button', { class: 'btn ghost sm', html: icon('back'), onclick: () => nav('/home') }),
       titleInput, statusPill, h('span', { class: 'grow' }),
-      ratioSel, styleBtn, parseBtn, canvasBtn, checkBtn, playBtn2, batchBtn),
+      ratioSel, styleBtn, parseBtn, canvasBtn, checkBtn, playBtn2, wfBtn, batchBtn),
     h('div', { class: 'wrap', style: { maxWidth: '1440px', marginTop: '16px' } },
       h('div', { class: 'work-grid' }, leftCard, rightCard)));
   renderRight();

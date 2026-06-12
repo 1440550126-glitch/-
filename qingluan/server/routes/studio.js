@@ -9,8 +9,18 @@ import { createProject, getProject, projectOut, touchProject, getCanvas, checkCo
 
 // 画面一致性体检
 GET('/api/projects/:id/consistency', async ({ params }) => checkConsistency(params.id));
+
+// 工作流：一键托管全流程
+POST('/api/workflows', async ({ body }) => {
+  if (!body.project_id) throw bad('缺少 project_id');
+  return startWorkflow({ projectId: body.project_id, episode: body.episode || '', steps: body.steps || null });
+});
+GET('/api/workflows/:id', async ({ params }) => getWorkflow(params.id));
+POST('/api/workflows/:id/cancel', async ({ params }) => cancelWorkflow(params.id));
+GET('/api/workflows', async ({ query }) => listWorkflows(query.get('project_id') || ''));
 import { exportEpisode } from '../lib/export.js';
 import { ttsCfg, ttsEnabled } from '../lib/tts.js';
+import { startWorkflow, getWorkflow, cancelWorkflow, listWorkflows } from '../lib/workflow.js';
 import { STYLES, STYLE_CATS } from '../lib/styles.js';
 
 // 成片导出（拼接分镜 MP4，需本机有 ffmpeg）

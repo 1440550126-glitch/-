@@ -89,4 +89,16 @@ CREATE TABLE IF NOT EXISTS agent_logs (
   created_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS workflows (
+  id         TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  episode    TEXT NOT NULL DEFAULT '',      -- 只跑某一集（可空=全片）
+  status     TEXT NOT NULL DEFAULT 'running', -- running|succeeded|failed|cancelled
+  steps      TEXT NOT NULL DEFAULT '[]',    -- [{name,label,status,detail,ms}]
+  cancel     INTEGER NOT NULL DEFAULT 0,
+  error      TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);

@@ -398,7 +398,11 @@ export async function renderCanvas(page, params) {
       row.append(bind(h('select', { class: 'select' }, ['远景', '全景', '中景', '近景', '特写'].map((v) => h('option', { value: v, selected: v === d.shot_type }, v))), 'shot_type'));
       row.append(bind(h('input', { class: 'input', type: 'number', min: 2, max: 12, value: d.duration || 5, title: '时长(秒)' }), 'duration', { num: true }));
       fld('景别 / 时长(秒)', row);
-      fld('运镜', bind(h('input', { class: 'input', value: d.camera || '' }), 'camera'));
+      const row2 = h('div', { class: 'row2' });
+      row2.append(bind(h('input', { class: 'input', value: d.camera || '', placeholder: '运镜' }), 'camera'));
+      row2.append(bind(h('select', { class: 'select', title: '角色情绪：有表情集时自动用对应表情定妆照作参考' },
+        ['', '冷酷', '愤怒', '狂喜', '悲伤', '微笑', '惊恐', '魅惑', '羞涩'].map((v) => h('option', { value: v, selected: v === (d.emotion || '') }, v || '情绪·无'))), 'emotion'));
+      fld('运镜 / 情绪', row2);
       fld('首帧提示词', bind(h('textarea', { class: 'textarea', rows: 3, value: d.image_prompt || '' }), 'image_prompt', { rerender: false }));
       fld('视频提示词', bind(h('textarea', { class: 'textarea', rows: 3, value: d.video_prompt || '' }), 'video_prompt', { rerender: false }));
     } else {

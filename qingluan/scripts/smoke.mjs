@@ -138,6 +138,21 @@ try {
   ok(conTask.params?.seed > 0 && conTask.params?.ref_images >= 1, '首帧带种子 + 角色参考图');
   ok(/保持人物五官|出场人物/.test(conTask.prompt || ''), '锁定词自动注入首帧提示词');
   ok((await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools.some((t) => t.name === 'check_consistency'), 'Agent 开放 check_consistency 工具');
+  // 情绪联动 + 跨镜参考链：同场景相邻两镜，前镜挂 PNG 首帧、后镜设情绪
+  const pair = (() => {
+    const shots = cvCon.nodes.filter((n) => n.type === 'shot').sort((a, b) => a.data.order - b.data.order);
+    for (let i = 1; i < shots.length; i++) {
+      if (shots[i].data.scene === shots[i - 1].data.scene && shots[i].data.order === shots[i - 1].data.order + 1) return [shots[i - 1], shots[i]];
+    }
+    return null;
+  })();
+  ok(!!pair, '存在同场景相邻分镜对');
+  await api('POST', '/api/agent/v1/tools/update_node', { project_id: p.id, node_id: pair[0].id, patch: { image: upC.url } }, boot.agent_token);
+  await api('POST', '/api/agent/v1/tools/update_node', { project_id: p.id, node_id: pair[1].id, patch: { emotion: '愤怒' } }, boot.agent_token);
+  const chainFrame = (await api('POST', '/api/ai/image', { prompt: '冲突升级', kind: 'frame', project_id: p.id, node_id: pair[1].id })).data;
+  const chainTask = (await api('GET', `/api/ai/task/${chainFrame.taskId}`)).data;
+  ok(chainTask.params?.chain_ref === true, '跨镜参考链：上一镜首帧已入参考');
+  ok(chainTask.params?.emotion === '愤怒' && /情绪：愤怒/.test(chainTask.prompt || ''), '分镜情绪注入锁定词');
 
   console.log('— 配音（TTS） —');
   const dub = await api('POST', '/api/ai/dub', { project_id: p.id });
@@ -255,6 +270,25 @@ try {
   ok(hCall.body?.result?.content?.[0]?.text?.includes('冒烟剧'), 'HTTP MCP tools/call');
   const hNoAuth = await fetch(BASE + '/api/agent/v1/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'ping' }) });
   ok(hNoAuth.status === 401, 'HTTP MCP 无 Token 拒绝');
+
+  console.log('— 全流程工作流 —');
+  const p9 = (await api('POST', '/api/projects', { title: '工作流剧', genre: '都市逆袭', idea: '保安逆袭成集团总裁' })).data;
+  const wf = (await api('POST', '/api/workflows', { project_id: p9.id })).data;
+  ok(wf.id && wf.status === 'running' && wf.steps.length === 7, '工作流启动（7 步）');
+  const wfDone = await until(async () => {
+    const w = (await api('GET', `/api/workflows/${wf.id}`)).data;
+    return w.status !== 'running' ? w : null;
+  }, 90_000);
+  ok(wfDone.status === 'succeeded', `工作流完成（${wfDone.status}）`);
+  const stepMap = Object.fromEntries(wfDone.steps.map((s) => [s.name, s]));
+  ok(stepMap.script.status === 'done' && stepMap.parse.status === 'done' && stepMap.images.status === 'done', '剧本/解析/出图步骤完成');
+  ok(stepMap.videos.status === 'done' && /完成 \d+\/\d+/.test(stepMap.videos.detail), `视频步骤：${stepMap.videos.detail}`);
+  ok(stepMap.dub.status === 'skipped' && stepMap.export.status === 'skipped', 'TTS/ffmpeg 未配置步骤自动跳过');
+  const p9done = (await api('GET', `/api/projects/${p9.id}`)).data;
+  const cv9 = (await api('GET', `/api/canvases/${p9done.canvas_id}`)).data;
+  ok(cv9.nodes.filter((n) => n.type === 'shot').every((n) => n.data.video), '全部分镜已出片');
+  ok((await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools.filter((t) => ['run_workflow', 'get_workflow'].includes(t.name)).length === 2, 'Agent 开放工作流工具');
+  await api('DELETE', `/api/projects/${p9.id}`);
 
   console.log('— 设置 —');
   const set1 = await api('PATCH', '/api/settings', { ark_api_key: 'AKLTxxxx' });
