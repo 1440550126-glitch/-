@@ -30,10 +30,23 @@ export function openScreeningRoom({ title, projectId = '', groups, startGroup = 
       if (speakOn) speakLine();
     }
   }, '🔊 朗读');
+  // 配音文件优先（火山 TTS 生成的 mp3 随分镜同步播放），浏览器朗读作兜底
+  let curAudio = null;
+  function stopAudio() {
+    if (curAudio) { curAudio.pause(); curAudio = null; }
+  }
+  function playDub(s) {
+    stopAudio();
+    if (!s?.audio) return false;
+    curAudio = new Audio(s.audio);
+    curAudio.play().catch(() => { /* 自动播放被拦截时忽略 */ });
+    return true;
+  }
   function speakLine() {
-    if (!speakOn || !canSpeak) return;
+    if (!canSpeak) return;
     speechSynthesis.cancel();
     const s = group.shots[idx];
+    if (s?.audio || !speakOn) return;   // 有配音文件则不用浏览器朗读
     if (!s?.dialogue) return;
     const u = new SpeechSynthesisUtterance(s.dialogue);
     u.lang = 'zh-CN';
@@ -98,6 +111,7 @@ export function openScreeningRoom({ title, projectId = '', groups, startGroup = 
     clearTimer();
     stage.innerHTML = '';
     const s = group.shots[idx];
+    playDub(s);
     speakLine();
     counter.textContent = `SHOT ${String(s.order).padStart(2, '0')} · ${idx + 1}/${group.shots.length}`;
     sub.innerHTML = '';
@@ -130,6 +144,7 @@ export function openScreeningRoom({ title, projectId = '', groups, startGroup = 
   };
   function close() {
     clearTimer();
+    stopAudio();
     if (canSpeak) speechSynthesis.cancel();
     document.removeEventListener('keydown', onKey);
     room.remove();

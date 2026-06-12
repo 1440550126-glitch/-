@@ -123,6 +123,14 @@ try {
   ok((await api('GET', '/api/assets?tab=character')).data.some((a) => a.name.includes('·愤怒')), '表情入角色资产库');
   ok((await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools.some((t) => t.name === 'generate_expressions'), 'Agent 开放 generate_expressions 工具');
 
+  console.log('— 配音（TTS） —');
+  const dub = await api('POST', '/api/ai/dub', { project_id: p.id });
+  ok(dub.status === 400 && /语音|TTS|AppID/i.test(dub.error || ''), '未配置 TTS 时给出可执行引导');
+  await api('PATCH', '/api/settings', { tts_appid: 'test-appid', tts_voice: 'BV002_streaming' });
+  const setTts = (await api('GET', '/api/settings')).data;
+  ok(setTts.tts_appid === 'test-appid' && setTts.tts_voice === 'BV002_streaming' && setTts.tts_enabled === false, 'TTS 设置保存（无 Token 仍为未启用）');
+  ok((await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools.some((t) => t.name === 'generate_dubbing'), 'Agent 开放 generate_dubbing 工具');
+
   console.log('— 成片导出 —');
   const exp = await api('POST', `/api/projects/${p.id}/export`, {});
   ok(exp.status === 400 && /ffmpeg|MP4/.test(exp.error || ''), '导出端点给出可执行的引导（无 ffmpeg / 缺 MP4 时不误报成功）');

@@ -101,7 +101,9 @@ export async function renderAssets(page, params = {}) {
 
   function assetCard(a) {
     const thumb = h('div', { class: 'asset-thumb', onclick: () => previewAsset(a) },
-      a.url ? mediaEl(a.url, { controls: false }) : h('span', { html: icon('image', 26) }));
+      a.kind === 'audio'
+        ? h('span', { style: { fontSize: '26px' } }, '🔊')
+        : a.url ? mediaEl(a.url, { controls: false }) : h('span', { html: icon('image', 26) }));
     return h('div', { class: `card asset-card ${a.tab === 'character' ? 'portrait' : ''}` }, thumb,
       h('div', { class: 'asset-acts' },
         h('button', { class: 'iconbtn', title: '重命名', html: icon('pencil', 14), onclick: () => renameAsset(a) }),
@@ -113,7 +115,7 @@ export async function renderAssets(page, params = {}) {
         } })),
       h('div', { class: 'asset-meta' },
         h('b', { title: a.prompt || a.name }, a.name),
-        a.kind === 'video' ? h('span', { class: 'pill orange' }, '视频') : null,
+        a.kind === 'video' ? h('span', { class: 'pill orange' }, '视频') : a.kind === 'audio' ? h('span', { class: 'pill gold' }, '音频') : null,
         h('span', { class: `pill ${a.source === 'ark' ? 'teal' : ''}` }, SOURCE_CN[a.source] || a.source)));
   }
 
@@ -122,8 +124,10 @@ export async function renderAssets(page, params = {}) {
       wide: true,
       title: a.name,
       body: h('div', {},
-        h('div', { style: { borderRadius: '12px', overflow: 'hidden', background: '#10161f', display: 'flex', justifyContent: 'center' } },
-          (() => { const el = mediaEl(a.url); el.style.maxHeight = '60vh'; el.style.width = 'auto'; el.style.maxWidth = '100%'; if (isVideoUrl(a.url)) el.autoplay = true; return el; })()),
+        h('div', { style: { borderRadius: '12px', overflow: 'hidden', background: '#10161f', display: 'flex', justifyContent: 'center', padding: a.kind === 'audio' ? '24px' : '0' } },
+          a.kind === 'audio'
+            ? h('audio', { src: a.url, controls: true, autoplay: true })
+            : (() => { const el = mediaEl(a.url); el.style.maxHeight = '60vh'; el.style.width = 'auto'; el.style.maxWidth = '100%'; if (isVideoUrl(a.url)) el.autoplay = true; return el; })()),
         a.prompt ? h('p', { style: { marginTop: '10px', fontSize: '13px', color: 'var(--ink2)' } }, `提示词：${a.prompt}`) : null),
       actions: [{ label: '复制地址', onClick: () => { copyText(location.origin + a.url); return false; } }, { label: '关闭', kind: 'primary' }]
     });

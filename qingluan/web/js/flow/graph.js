@@ -42,7 +42,7 @@ export function createGraph(root, {
   // ---------- 视图 ----------
   function applyView() {
     world.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
-    onView?.(zoom);
+    onView?.(zoom, panX, panY);
   }
   function screenToWorld(cx, cy) {
     const r = vp.getBoundingClientRect();
@@ -471,6 +471,17 @@ export function createGraph(root, {
     refreshNode, refreshEdges, fit,
     zoomBy: (f) => setZoom(zoom * f),
     getZoom: () => zoom,
+    /** 小地图导航：把世界坐标 (wx, wy) 移到视口中心 */
+    panTo(wx, wy) {
+      const r = vp.getBoundingClientRect();
+      panX = r.width / 2 - wx * zoom;
+      panY = r.height / 2 - wy * zoom;
+      applyView();
+    },
+    getViewRect() {
+      const r = vp.getBoundingClientRect();
+      return { x: -panX / zoom, y: -panY / zoom, w: r.width / zoom, h: r.height / zoom };
+    },
     centerWorld: () => screenToWorld(vp.getBoundingClientRect().left + vp.clientWidth / 2, vp.getBoundingClientRect().top + vp.clientHeight / 2),
     destroy: () => { edgeClickGuard.disconnect(); vp.remove(); }
   };

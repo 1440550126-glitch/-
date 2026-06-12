@@ -7,6 +7,7 @@ import { uid, now, jparse, micro2yuan, token32 } from '../lib/util.js';
 import { arkEnabled, cfg, arkChat, DEFAULTS, videoModelOptions } from '../lib/ark.js';
 import { createProject, getProject, projectOut, touchProject, getCanvas } from '../lib/pipeline.js';
 import { exportEpisode } from '../lib/export.js';
+import { ttsCfg, ttsEnabled } from '../lib/tts.js';
 import { STYLES, STYLE_CATS } from '../lib/styles.js';
 
 // 成片导出（拼接分镜 MP4，需本机有 ffmpeg）
@@ -111,7 +112,7 @@ DEL('/api/assets/:id', async ({ params }) => {
 });
 
 // 上传（JSON + dataURL，落盘到 var/qingluan-uploads）
-const EXT_BY_MIME = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg', 'video/mp4': 'mp4', 'video/webm': 'webm' };
+const EXT_BY_MIME = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg', 'video/mp4': 'mp4', 'video/webm': 'webm', 'audio/mpeg': 'mp3', 'audio/wav': 'wav' };
 POST('/api/upload', async ({ body }) => {
   const { name = '上传素材', data, tab = 'material' } = body;
   const m = /^data:([\w/+.-]+);base64,(.+)$/s.exec(data || '');
@@ -122,7 +123,7 @@ POST('/api/upload', async ({ body }) => {
   if (buf.length > 25 * 1024 * 1024) throw bad('文件超过 25MB');
   const fname = `${uid('up')}.${ext}`;
   fs.writeFileSync(path.join(UPLOAD_DIR, fname), buf);
-  const kind = m[1].startsWith('video') ? 'video' : 'image';
+  const kind = m[1].startsWith('video') ? 'video' : m[1].startsWith('audio') ? 'audio' : 'image';
   const id = uid('a');
   q.run('INSERT INTO assets (id, tab, kind, name, url, source, created_at) VALUES (?,?,?,?,?,?,?)',
     id, tab === 'character' ? 'character' : 'material', kind, String(name).slice(0, 50), `/uploads/${fname}`, 'upload', now());
@@ -170,7 +171,7 @@ DEL('/api/canvases/:id', async ({ params }) => {
 });
 
 // ---------- 设置 ----------
-const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_video', 'model_video_options', 'video_extra_args', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio'];
+const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_video', 'model_video_options', 'video_extra_args', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint'];
 
 GET('/api/settings', async () => {
   const c = cfg();
@@ -184,11 +185,19 @@ GET('/api/settings', async () => {
     price_chat_in: c.priceChatIn, price_chat_out: c.priceChatOut, price_image: c.priceImage, price_video_sec: c.priceVideoSec,
     user_name: getSetting('user_name', '创作者'),
     default_ratio: getSetting('default_ratio', '16:9'),
+    tts_enabled: ttsEnabled(),
+    tts_appid: ttsCfg().appid,
+    tts_token_masked: ttsCfg().token ? `${ttsCfg().token.slice(0, 4)}****` : '',
+    tts_voice: ttsCfg().voice,
     defaults: DEFAULTS, db_path: DB_PATH, upload_dir: UPLOAD_DIR
   };
 });
 
 PATCH('/api/settings', async ({ body }) => {
+  if (body.tts_token !== undefined) {
+    const t = String(body.tts_token).trim();
+    setSetting('tts_token', t === 'clear' ? '' : t);
+  }
   if (body.ark_api_key !== undefined) {
     const k = String(body.ark_api_key).trim();
     if (k && /^AKLT/i.test(k)) throw bad('AKLT 开头的是火山引擎 AccessKey，不能直接当方舟 API Key；请到方舟控制台「API Key 管理」创建（UUID 形态）');
@@ -205,6 +214,12 @@ POST('/api/settings/test', async () => {
   const t0 = now();
   const r = await arkChat({ feature: 'settings-test', prompt: '回复两个字：在线', maxTokens: 16, temperature: 0, timeoutMs: 20_000 });
   return { ok: true, latency_ms: now() - t0, model: r.model, reply: r.text.slice(0, 40) };
+});
+
+POST('/api/settings/tts-test', async () => {
+  const { synthesize } = await import('../lib/tts.js');
+  const url = await synthesize('青鸾在此，配音已就绪。');
+  return { ok: true, url };
 });
 
 POST('/api/settings/agent-token/rotate', async () => {

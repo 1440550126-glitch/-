@@ -71,6 +71,45 @@ export async function renderSettings(page) {
     fld('水印', wmSel),
     h('div', { style: { display: 'flex', gap: '10px', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap' } }, saveBtn, testBtn, testOut));
 
+  // 语音合成（配音）
+  const ttsAppid = h('input', { class: 'input', value: s.tts_appid || '', placeholder: '语音技术 AppID' });
+  const ttsToken = h('input', { class: 'input', type: 'password', autocomplete: 'off', placeholder: s.tts_token_masked ? `已配置 ${s.tts_token_masked}（输入新值覆盖，输入 clear 清除）` : 'Access Token' });
+  const ttsVoice = h('input', { class: 'input', value: s.tts_voice || '', placeholder: 'BV001_streaming' });
+  const ttsOut = h('span', { style: { fontSize: '12.5px', color: 'var(--ink2)' } });
+  const ttsTestBtn = h('button', { class: 'btn', onclick: async () => {
+    ttsTestBtn.disabled = true;
+    ttsOut.textContent = '合成中…';
+    try {
+      const r = await POST('/api/settings/tts-test');
+      ttsOut.innerHTML = '';
+      ttsOut.append('✓ 合成成功 ', h('audio', { src: r.url, controls: true, autoplay: true, style: { height: '28px', verticalAlign: 'middle' } }));
+    } catch (e) { ttsOut.textContent = '✗ ' + e.message; ttsOut.style.color = 'var(--err)'; }
+    ttsTestBtn.disabled = false;
+  } });
+  ttsTestBtn.innerHTML = `${icon('refresh', 15)} 试听`;
+  const ttsCard = h('div', { class: 'card pad' },
+    h('h3', { style: { fontSize: '15px', marginBottom: '4px' } }, '语音合成（配音）',
+      h('span', { class: `pill ${s.tts_enabled ? 'teal' : ''}`, style: { marginLeft: '8px' } }, s.tts_enabled ? '已配置' : '未配置')),
+    h('p', { style: { fontSize: '12.5px', color: 'var(--ink3)', marginBottom: '10px' } },
+      '火山引擎控制台 → 语音技术 → 语音合成，开通后获取 AppID 与 Access Token（与方舟 Key 不同体系）。配置后：分集面板/分镜可一键配音，放映室自动同步播放；不配置也可用浏览器朗读。'),
+    fld('AppID', ttsAppid),
+    fld('Access Token', ttsToken),
+    fld('音色 voice_type', ttsVoice, '如 BV001_streaming（通用女声）/ BV002_streaming（通用男声），以控制台音色列表为准'),
+    h('div', { style: { display: 'flex', gap: '10px', alignItems: 'center', marginTop: '14px', flexWrap: 'wrap' } },
+      h('button', { class: 'btn primary', onclick: async (e) => {
+        const b = e.currentTarget;
+        b.disabled = true;
+        try {
+          const body = { tts_appid: ttsAppid.value.trim(), tts_voice: ttsVoice.value.trim() || 'BV001_streaming' };
+          if (ttsToken.value.trim()) body.tts_token = ttsToken.value.trim();
+          await PATCH('/api/settings', body);
+          toast('语音合成设置已保存', 'ok');
+          ttsToken.value = '';
+        } catch (err) { toast(err.message, 'err'); }
+        b.disabled = false;
+      } }, '保存配音设置'),
+      ttsTestBtn, ttsOut));
+
   const priceCard = h('div', { class: 'card pad' },
     h('h3', { style: { fontSize: '15px', marginBottom: '4px' } }, '成本估算单价'),
     h('p', { style: { fontSize: '12.5px', color: 'var(--ink3)', marginBottom: '10px' } }, '仅用于本地成本看板展示，请按方舟控制台实际定价调整（单位：元）。'),
@@ -100,6 +139,6 @@ export async function renderSettings(page) {
       h('span', { class: `pill ${s.ark_api_key_masked ? 'teal' : ''}` }, s.ark_api_key_masked ? '方舟已配置' : '本地引擎模式')),
     h('div', { class: 'wrap', style: { marginTop: '16px' } },
       h('div', { class: 'set-grid' },
-        h('div', { style: { display: 'flex', flexDirection: 'column', gap: '16px' } }, arkCard),
+        h('div', { style: { display: 'flex', flexDirection: 'column', gap: '16px' } }, arkCard, ttsCard),
         h('div', { style: { display: 'flex', flexDirection: 'column', gap: '16px' } }, priceCard, prefCard, statCard))));
 }

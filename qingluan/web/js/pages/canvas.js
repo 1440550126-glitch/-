@@ -40,7 +40,7 @@ export async function renderCanvas(page, params) {
         ${media(inner)}${status}
         <div class="n-act">${escHtml(d.action || '')}</div>
         ${d.dialogue ? `<div class="n-dlg">「${escHtml(d.dialogue)}」</div>` : ''}
-        <div class="n-foot">${d.camera ? `<span class="tagx">${escHtml(d.camera)}</span>` : ''}</div>`;
+        <div class="n-foot">${d.camera ? `<span class="tagx">${escHtml(d.camera)}</span>` : ''}${d.audio ? '<span class="tagx" title="已配音">🔊</span>' : ''}</div>`;
       return wrap;
     }
     const varStrip = n.type === 'character' && d.variants?.length
@@ -59,11 +59,58 @@ export async function renderCanvas(page, params) {
   const main = h('div', { class: 'cv-main' });
   const inspectorBox = h('div');
 
+  let miniReady = false;   // graph 构造期间 onView 先于小地图就绪触发
   const graph = createGraph(main, {
     renderNode: nodeContent,
-    onChange: () => { pushHistory(); scheduleSave(); },
+    onChange: () => { pushHistory(); scheduleSave(); if (miniReady) drawMini(); },
     onSelect: (sel) => renderInspector(sel),
-    onView: (z) => { pct.textContent = Math.round(z * 100) + '%'; }
+    onView: (z) => { pct.textContent = Math.round(z * 100) + '%'; if (miniReady) drawMini(); }
+  });
+
+  // ---------- 小地图（节点缩略 + 视口框，点击/拖拽导航） ----------
+  const NODE_SIZE = { character: [178, 270], scene: [212, 190], prop: [212, 190], shot: [264, 310], note: [200, 110] };
+  const NODE_COLOR = { character: '#54c2b4', scene: '#8a9bc0', prop: '#c9a44d', shot: '#e08a6e', note: '#bdb27a' };
+  const mini = h('canvas', { class: 'cv-minimap', width: 188, height: 124 });
+  let miniMap = null;     // {sx, sy, ox, oy} 世界→小地图换算
+  function drawMini() {
+    const ctx = mini.getContext('2d');
+    const W = mini.width, H = mini.height;
+    ctx.clearRect(0, 0, W, H);
+    const nodes = graph.getNodes();
+    if (!nodes.length) { miniMap = null; return; }
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    const view = graph.getViewRect();
+    for (const n of nodes) {
+      const [w, hh] = NODE_SIZE[n.type] || [200, 160];
+      x1 = Math.min(x1, n.x, view.x); y1 = Math.min(y1, n.y, view.y);
+      x2 = Math.max(x2, n.x + w, view.x + view.w); y2 = Math.max(y2, n.y + hh, view.y + view.h);
+    }
+    const pad = 8;
+    const s = Math.min((W - pad * 2) / (x2 - x1), (H - pad * 2) / (y2 - y1));
+    const ox = pad - x1 * s, oy = pad - y1 * s;
+    miniMap = { s, ox, oy };
+    for (const n of nodes) {
+      const [w, hh] = NODE_SIZE[n.type] || [200, 160];
+      ctx.fillStyle = NODE_COLOR[n.type] || '#999';
+      ctx.globalAlpha = 0.85;
+      ctx.fillRect(n.x * s + ox, n.y * s + oy, Math.max(2, w * s), Math.max(2, hh * s));
+    }
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,.85)';
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(view.x * s + ox, view.y * s + oy, view.w * s, view.h * s);
+  }
+  const miniNav = (e) => {
+    if (!miniMap) return;
+    const r = mini.getBoundingClientRect();
+    graph.panTo((e.clientX - r.left) / miniMap.s - miniMap.ox / miniMap.s, (e.clientY - r.top) / miniMap.s - miniMap.oy / miniMap.s);
+  };
+  mini.addEventListener('pointerdown', (e) => {
+    miniNav(e);
+    const move = (ev) => miniNav(ev);
+    const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); };
+    addEventListener('pointermove', move);
+    addEventListener('pointerup', up);
   });
 
   // ---------- 撤销 / 重做（结构快照：节点+连线+涂鸦） ----------
@@ -136,8 +183,8 @@ export async function renderCanvas(page, params) {
         if (!remote) continue;
         const r = remote.data || {};
         const varsChanged = JSON.stringify(r.variants || []) !== JSON.stringify(n.data.variants || []);
-        if (r.image !== n.data.image || r.video !== n.data.video || r.task_status !== n.data.task_status || varsChanged) {
-          graph.updateNodeData(n.id, { image: r.image, video: r.video, task_id: r.task_id, task_status: r.task_status, ...(varsChanged ? { variants: r.variants || [] } : {}) });
+        if (r.image !== n.data.image || r.video !== n.data.video || r.audio !== n.data.audio || r.task_status !== n.data.task_status || varsChanged) {
+          graph.updateNodeData(n.id, { image: r.image, video: r.video, audio: r.audio, task_id: r.task_id, task_status: r.task_status, ...(varsChanged ? { variants: r.variants || [] } : {}) });
           if (sel?.kind === 'node' && sel.id === n.id) renderInspector(sel);
         }
       }
@@ -402,6 +449,7 @@ export async function renderCanvas(page, params) {
       const m = d.video || d.image;
       if (m) prev.append(isVideoUrl(m) ? h('video', { src: m, controls: true, poster: d.image || undefined }) : h('img', { src: m }));
       box.append(prev);
+      if (d.audio) box.append(h('audio', { src: d.audio, controls: true, style: { width: '100%', marginTop: '8px', height: '32px' } }));
       const acts = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' } });
       const genImgBtn = h('button', { class: 'btn accent', onclick: async () => {
         const prompt = n.type === 'shot' ? d.image_prompt : d.prompt;
@@ -437,6 +485,25 @@ export async function renderCanvas(page, params) {
         } });
         genVidBtn.innerHTML = `${icon('video', 15)} ${d.video ? '重新出片' : '生成视频'}`;
         acts.append(genVidBtn);
+        if (d.dialogue?.trim()) {
+          const dubBtn2 = h('button', { class: 'btn', onclick: async () => {
+            dubBtn2.disabled = true;
+            dubBtn2.innerHTML = `${icon('loader')} 配音中…`;
+            scheduleSave.flush();
+            try {
+              await POST('/api/ai/dub', { project_id: projectId, node_id: n.id });
+              await syncMedia();
+              renderInspector(sel);
+              toast('配音完成，放映室自动同步播放', 'ok');
+            } catch (e2) {
+              toast(e2.message, 'err');
+              dubBtn2.disabled = false;
+              dubBtn2.innerHTML = `🔊 ${d.audio ? '重新配音' : '生成配音'}`;
+            }
+          } });
+          dubBtn2.innerHTML = `🔊 ${d.audio ? '重新配音' : '生成配音'}`;
+          acts.append(dubBtn2);
+        }
       }
       acts.append(h('button', { class: 'btn danger', onclick: async () => {
         if (!await confirmDlg(`删除${TYPE_CN[n.type]}「${d.name || ''}」？关联连线一并删除。`)) return;
@@ -482,11 +549,13 @@ export async function renderCanvas(page, params) {
   document.addEventListener('keydown', onKey);
 
   shell.append(top, main);
-  main.append(zoombar, inspectorBox, doodleBar);
+  main.append(zoombar, mini, inspectorBox, doodleBar);
   page.append(shell);
 
   graph.setData({ nodes: canvas.nodes, edges: canvas.edges, doodles: canvas.doodles || [], viewport: canvas.viewport });
   pushHistory();           // 初始快照（撤销的回退底座）
+  miniReady = true;
+  requestAnimationFrame(drawMini);
   if ((canvas.nodes || []).some((n) => n.data?.task_status === 'running')) syncMedia();
 
   return () => {

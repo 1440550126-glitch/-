@@ -445,6 +445,27 @@ export async function generateExpressions({ projectId, nodeId, emotions = [] }) 
   return { node_id: node.id, name: node.data.name, variants: out, total: variants.length };
 }
 
+// ---------- 配音：带台词的分镜逐镜合成语音（火山 TTS），写回节点 audio ----------
+export async function generateDubbing({ projectId, episode = '', nodeId = '' }) {
+  const { synthesize } = await import('./tts.js');
+  const project = getProject(projectId);
+  if (!project.canvas_id) throw bad('项目还没有画布，先解析剧本');
+  const c = getCanvas(project.canvas_id);
+  let shots = c.nodes.filter((n) => n.type === 'shot' && n.data.dialogue?.trim());
+  if (nodeId) shots = shots.filter((n) => n.id === nodeId || n.data.key === nodeId);
+  else if (episode) shots = shots.filter((n) => (n.data.episode || 'e1') === episode);
+  if (!shots.length) throw bad(nodeId ? '该分镜没有台词' : '没有带台词的分镜');
+
+  const done = [];
+  for (const n of shots.slice(0, 30)) {
+    const url = await synthesize(n.data.dialogue);
+    patchCanvasNode(project.canvas_id, n.id, { audio: url });
+    addAsset({ tab: 'material', kind: 'audio', name: `配音·镜头${n.data.order}`, url, prompt: n.data.dialogue, source: 'volc-tts', projectId });
+    done.push({ node_id: n.id, order: n.data.order, url });
+  }
+  return { dubbed: done.length, items: done };
+}
+
 // ---------- 视频生成（异步任务） ----------
 const LOCAL_VIDEO_MS = () => (process.env.QINGLUAN_FAST_LOCAL ? 50 : 4000);
 

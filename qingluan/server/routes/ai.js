@@ -3,7 +3,7 @@ import { GET, POST, bad } from '../lib/httpx.js';
 import { q } from '../lib/db.js';
 import { jparse } from '../lib/util.js';
 import { arkEnabled, arkChat } from '../lib/ark.js';
-import { generateScript, parseScript, addEpisode, generateImage, generateExpressions, createVideoTask, pollTask, getProject, remakeViral } from '../lib/pipeline.js';
+import { generateScript, parseScript, addEpisode, generateImage, generateExpressions, createVideoTask, pollTask, getProject, remakeViral, generateDubbing } from '../lib/pipeline.js';
 import { toolSchemas, runTool } from '../lib/tools.js';
 
 POST('/api/ai/script', async ({ body }) => {
@@ -41,6 +41,12 @@ POST('/api/ai/remake', async ({ body }) => {
     genre: body.genre || '', numScenes: body.num_scenes || 4
   });
 }, { maxBytes: 256 * 1024 });
+
+// 配音：台词 → 语音（火山 TTS，未配置时报错引导）
+POST('/api/ai/dub', async ({ body }) => {
+  if (!body.project_id) throw bad('缺少 project_id');
+  return await generateDubbing({ projectId: body.project_id, episode: body.episode || '', nodeId: body.node_id || '' });
+});
 
 // 角色表情集（多情绪定妆照）
 POST('/api/ai/expressions', async ({ body }) => {

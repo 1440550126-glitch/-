@@ -60,7 +60,7 @@ export async function renderProject(page, params) {
     const byKey = nodeByKey();
     const toShots = (shots) => shots.map((s) => {
       const n = byKey.get(s.key);
-      return { order: s.order, name: `镜头 ${s.order}`, url: n?.data.video || n?.data.image || '', poster: n?.data.image || '', dialogue: s.dialogue, action: s.action, duration: s.duration };
+      return { order: s.order, name: `镜头 ${s.order}`, url: n?.data.video || n?.data.image || '', poster: n?.data.image || '', audio: n?.data.audio || '', dialogue: s.dialogue, action: s.action, duration: s.duration };
     });
     const groups = [];
     if ((sb.episodes?.length || 0) > 1) {
@@ -211,6 +211,15 @@ export async function renderProject(page, params) {
       } });
       genBtn2.innerHTML = `${icon('wand', 14)} 本集一键生成`;
       const playEpBtn = h('button', { class: 'btn sm ghost', title: '连播预览本集', html: icon('play', 15), onclick: () => openRoom(ep.key) });
+      const dubBtn = h('button', { class: 'btn sm ghost', title: '本集配音（台词→语音，需配置火山 TTS）', html: '🔊', onclick: async () => {
+        dubBtn.disabled = true;
+        try {
+          const r = await POST('/api/ai/dub', { project_id: project.id, episode: ep.key });
+          toast(`本集配音完成 ×${r.dubbed}，放映室自动同步播放`, 'ok');
+          await reload(true);
+        } catch (e) { toast(e.message, 'err'); }
+        dubBtn.disabled = false;
+      } });
       list.append(h('div', { class: 'card', style: { padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '14px' } },
         h('div', { style: { flex: 1, minWidth: 0 } },
           h('b', { style: { fontSize: '14px' } }, `第${ep.order}集 · ${ep.title}`,
@@ -220,7 +229,7 @@ export async function renderProject(page, params) {
             h('span', { class: 'pill' }, `分镜 ${shots.length}`),
             h('span', { class: `pill ${withImage === shots.length && shots.length ? 'teal' : ''}` }, `首帧 ${withImage}/${shots.length}`),
             h('span', { class: `pill ${withVideo === shots.length && shots.length ? 'green' : ''}` }, `视频 ${withVideo}/${shots.length}`))),
-        playEpBtn, genBtn2));
+        dubBtn, playEpBtn, genBtn2));
     }
     stagger(list, 50);
     const ideaIn2 = h('input', { class: 'input', placeholder: '本集创意（可空，AI 自动升级剧情）', style: { flex: 1 } });

@@ -12,7 +12,7 @@
 
 ```bash
 npm run studio          # http://localhost:4399   （文档见 qingluan/README.md）
-npm run studio:smoke    # 75 项冒烟测试（API + Agent + MCP stdio/HTTP）
+npm run studio:smoke    # 78 项冒烟测试（API + Agent + MCP stdio/HTTP）
 ```
 
 ## 一键运行（零依赖）

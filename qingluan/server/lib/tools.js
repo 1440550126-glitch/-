@@ -6,7 +6,7 @@ import { jparse, micro2yuan, now } from './util.js';
 import { arkEnabled, cfg } from './ark.js';
 import {
   createProject, getProject, projectOut, touchProject, generateScript, parseScript, addEpisode,
-  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral
+  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral, generateDubbing
 } from './pipeline.js';
 import { STYLES, STYLE_CATS } from './styles.js';
 import { bad } from './httpx.js';
@@ -239,6 +239,18 @@ export const TOOLS = [
     },
     async execute(a) {
       return await createVideoTask({ prompt: a.prompt, imageUrl: a.image_url, lastImageUrl: a.last_image_url || '', duration: a.duration || 5, ratio: a.ratio, projectId: a.project_id, nodeId: a.node_id, name: a.name, model: a.model || '', resolution: a.resolution || '' });
+    }
+  },
+  {
+    name: 'generate_dubbing',
+    description: '配音：把带台词的分镜逐镜合成为语音（火山 TTS，需在设置页配置语音合成凭证），写回分镜节点并入资产库；放映室自动同步播放。可按集（episode）或单个分镜（node_id）。',
+    input_schema: {
+      type: 'object',
+      properties: { project_id: str('项目 id'), episode: str('只配该集，如 e1（可选）'), node_id: str('只配该分镜（可选）') },
+      required: ['project_id']
+    },
+    async execute({ project_id, episode, node_id }) {
+      return await generateDubbing({ projectId: project_id, episode: episode || '', nodeId: node_id || '' });
     }
   },
   {

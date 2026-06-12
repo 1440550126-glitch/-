@@ -19,7 +19,7 @@ SMIL 动画占位视频），界面会明确标注「本地生成」。配置火
 
 ```bash
 npm run studio:dev      # 开发模式（文件变更自动重启）
-npm run studio:smoke    # 75 项全链路冒烟测试（API + Agent + MCP stdio/HTTP）
+npm run studio:smoke    # 78 项全链路冒烟测试（API + Agent + MCP stdio/HTTP）
 ```
 
 ## 和小云雀比，好在哪
@@ -35,6 +35,7 @@ npm run studio:smoke    # 75 项全链路冒烟测试（API + Agent + MCP stdio/
 | 体验 | — | 全站非线性弹性动画（错峰入场/回弹缓动）、首页 **3D 光照流体背景**（WebGL，随鼠标流动）、手绘涂鸦点缀；画布自带**涂鸦笔**手绘批注（4 色 3 粗细 + 橡皮，随画布保存） |
 | 分集视频 | 按集管理分镜与生成 | 同款分集面板（每集分镜/首帧/视频完成度、本集一键生成、AI 续写新一集），Agent 侧有 add_episode 工具 |
 | 成片 | 云端合成 | **放映室**按分镜连播预览（台词字幕 + 系统语音**台词朗读**，零依赖）；本机有 ffmpeg 时一键拼接导出 MP4；剧本 .txt / 分镜表 .md 一键下载 |
+| 配音 | 平台内置 | 接**火山语音合成**（设置页填 AppID/Token 即用）：分集/分镜一键配音，mp3 写回节点并入资产库，放映室自动同步播放；未配置时浏览器朗读兜底 |
 | 风格库 | 预设风格分类选择 | 同款风格库（电影感/真人/2D/3D ×30 预设 + 自定义提示词），**风格自动注入所有生图/生视频提示词** |
 | Agent 接入 | 会员专属 Skill（`npx @pippit-dev/cli`，闭源） | **MCP + OpenAPI + 内置 Agent 三通道，全开放免费** |
 | 模型 | 平台内置，不可换 | 方舟全家桶**模型 ID 随便换**；创作框模型列表在设置页维护，加一行 `Seedance 2.0\|<模型ID>` 即上架 |
@@ -60,7 +61,8 @@ npm run studio:smoke    # 75 项全链路冒烟测试（API + Agent + MCP stdio/
    「涂鸦」按钮（或 `D` 键）进入手绘批注：4 色画笔、3 档粗细、橡皮、清空，笔迹随画布保存、
    重新解析剧本也不丢，适合圈重点、画修改意见。
    编辑器进阶：**撤销/重做**（⌘Z / ⌘⇧Z，含节点/连线/涂鸦），**Shift+拖拽框选多选**
-   （成组移动、对齐/等距分布、批量删除，Shift+点击增减选择）。
+   （成组移动、对齐/等距分布、批量删除，Shift+点击增减选择），左下角**小地图**（节点缩略
+   + 视口框，点击/拖拽快速导航大画布）。
    快捷键：滚轮缩放、`F` 适配全部、`D` 涂鸦、`Esc` 取消选择、`Delete` 删除选中、`⌘/Ctrl+S` 立即保存。
 4. **资产库**：素材 / 角色 / 画布三个 tab；上传本地图片视频、AI 生图、搜索、重命名、复制地址。
    所有生成产物自动入库（方舟返回的 URL 有有效期，青鸾会自动下载落盘）。
@@ -82,10 +84,10 @@ npm run studio:smoke    # 75 项全链路冒烟测试（API + Agent + MCP stdio/
 
 ## 把青鸾接给 Agent（三种方式）
 
-工作台「Agent 接入」页有可复制的现成命令与 Token。21 个开放工具覆盖全部能力：
+工作台「Agent 接入」页有可复制的现成命令与 Token。22 个开放工具覆盖全部能力：
 `studio_overview / create_project / update_project / generate_script / remake_viral / add_episode / write_script / parse_script /
 list_styles / get_canvas / update_node / generate_image / generate_expressions / generate_video / generate_storyboard_media /
-get_task / list_assets / import_asset / list_projects / get_project / get_usage_stats`。
+generate_dubbing / get_task / list_assets / import_asset / list_projects / get_project / get_usage_stats`。
 
 ### ① MCP（推荐，零依赖 stdio 服务器）
 
@@ -157,12 +159,13 @@ qingluan/
 │  ├ lib/tools.js    Agent 工具注册表（MCP / HTTP / 内置 Agent 三方共用）
 │  ├ lib/styles.js   风格库（30 预设 ×4 分类，注入生图/生视频提示词）
 │  ├ lib/export.js   成片导出（ffmpeg 运行时检测，concat 拼接分镜 MP4）
+│  ├ lib/tts.js      火山语音合成（配音，AppID/Token 配置即用）
 │  └ routes/         REST：工作台 / AI / Agent API（Bearer Token + CORS）
 ├ web/               原生 ES Modules 前端（零构建）
 │  ├ js/flow/        手写节点图引擎（平移/缩放/拖拽/连线/选择/涂鸦层）
 │  └ js/fx/fluid.js  伪 3D 光照流体背景（WebGL fbm 高度场 + 法线光照，鼠标交互）
 ├ mcp/server.mjs     MCP stdio 服务器（零依赖 JSON-RPC）
-└ scripts/smoke.mjs  75 项冒烟测试
+└ scripts/smoke.mjs  78 项冒烟测试
 ```
 
 数据存仓库 `var/`（已 gitignore）：`qingluan.sqlite` + `qingluan-uploads/`。
