@@ -4,6 +4,7 @@ import { h, icon, toast, debounce, mediaEl, modal, STATUS_CN, isVideoUrl } from 
 import { nav, refreshSidebarProjects } from '../main.js';
 import { runBatchGenerate } from '../batch.js';
 import { createAgentChat } from '../agentchat.js';
+import { openStylePicker, shortStyle } from '../stylelib.js';
 
 const RATIOS = ['16:9', '9:16', '1:1', '4:3', '21:9'];
 
@@ -33,6 +34,19 @@ export async function renderProject(page, params) {
   const ratioSel = h('select', { class: 'select', style: { width: '96px' },
     onchange: async (e) => { project = await PATCH(`/api/projects/${project.id}`, { ratio: e.target.value }); toast('画幅已更新', 'ok'); } },
     RATIOS.map((r) => h('option', { value: r, selected: r === project.ratio }, r)));
+
+  const styleBtn = h('button', {
+    class: 'btn', title: project.style ? `当前风格：${project.style}` : '选择画面风格（影响生图/生视频）',
+    onclick: () => openStylePicker({
+      current: project.style, onPick: async (style) => {
+        project = await PATCH(`/api/projects/${project.id}`, { style });
+        styleBtn.innerHTML = `${icon('wand', 15)} ${shortStyle(project.style)}`;
+        styleBtn.title = project.style ? `当前风格：${project.style}` : '选择画面风格';
+        toast(style ? `风格已设为「${shortStyle(style)}」，新生成的图与视频自动套用` : '已恢复默认风格', 'ok');
+      }
+    })
+  });
+  styleBtn.innerHTML = `${icon('wand', 15)} ${shortStyle(project.style)}`;
 
   const parseBtn = h('button', { class: 'btn accent', onclick: doParse });
   parseBtn.innerHTML = `${icon('layers')} 解析分镜`;
@@ -237,7 +251,7 @@ export async function renderProject(page, params) {
     h('div', { class: 'topbar line' },
       h('button', { class: 'btn ghost sm', html: icon('back'), onclick: () => nav('/home') }),
       titleInput, statusPill, h('span', { class: 'grow' }),
-      ratioSel, parseBtn, canvasBtn, batchBtn),
+      ratioSel, styleBtn, parseBtn, canvasBtn, batchBtn),
     h('div', { class: 'wrap', style: { maxWidth: '1440px', marginTop: '16px' } },
       h('div', { class: 'work-grid' }, leftCard, rightCard)));
   renderRight();

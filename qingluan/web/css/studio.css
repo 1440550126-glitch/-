@@ -403,5 +403,20 @@ svg.flow-edges path.temp { fill: none; stroke: #54c2b4; stroke-width: 2; stroke-
 .stat-table td, .stat-table th { padding: 6px 10px; border-bottom: 1px dashed var(--line); text-align: left; }
 .stat-table th { color: var(--ink3); font-weight: 600; }
 
+/* ============ 风格库 ============ */
+.style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.style-card {
+  position: relative; border-radius: 12px; aspect-ratio: 16/10; cursor: pointer; overflow: hidden;
+  border: 2px solid transparent; color: #fff; transition: transform .14s, box-shadow .14s; user-select: none;
+}
+.style-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.style-card.on { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(14, 140, 134, .2); }
+.style-card b { position: absolute; left: 10px; bottom: 8px; right: 8px; font-size: 13px; text-shadow: 0 1px 5px rgba(0, 0, 0, .55); }
+.style-card .cat { position: absolute; top: 7px; right: 7px; font-size: 10.5px; background: rgba(0, 0, 0, .35); padding: 1px 8px; border-radius: 99px; }
+.style-card .sel-mark { position: absolute; top: 7px; left: 7px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; }
+.style-card.custom { background: var(--bg2); color: var(--ink2); border: 1.5px dashed var(--line2); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 6px; }
+.style-card.custom b { position: static; text-shadow: none; }
+.style-card.custom.on { border-style: solid; }
+
 .fadein { animation: fadeUp .26s ease; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } }

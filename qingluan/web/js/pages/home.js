@@ -2,6 +2,7 @@
 import { GET, POST, DEL, bootstrap } from '../api.js';
 import { h, icon, toast, confirmDlg, fmtTime, STATUS_CN } from '../ui.js';
 import { nav } from '../main.js';
+import { loadStyles } from '../stylelib.js';
 
 const GENRES = ['都市逆袭', '赘婿战神', '甜宠虐恋', '悬疑反转', '古装宫斗', '废土科幻'];
 const RATIOS = ['16:9', '9:16', '1:1', '4:3', '21:9'];
@@ -64,12 +65,18 @@ export async function renderHome(page) {
     const genres = genreChips();
     const scenes = h('select', { class: 'select', style: { width: '110px' } }, [3, 4, 5, 6].map((n) => h('option', { value: n, selected: n === 4 }, `${n} 场`)));
     const ratio = ratioSelect();
+    const styleSel = h('select', { class: 'select', style: { width: '170px' }, title: '画面风格（生图/生视频自动套用）' }, h('option', { value: '' }, '默认风格'));
+    loadStyles().then(({ cats, styles }) => {
+      for (const c of cats) {
+        styleSel.append(h('optgroup', { label: c.name }, styles.filter((s) => s.cat === c.id).map((s) => h('option', { value: s.name }, s.name))));
+      }
+    }).catch(() => { /* 风格库可选 */ });
     const btn = h('button', {
       class: 'btn accent', onclick: async () => {
         btn.disabled = true;
         btn.innerHTML = `${icon('loader')} 正在生成剧本…`;
         try {
-          const r = await POST('/api/ai/script', { idea: idea.value.trim(), genre: genres.get(), num_scenes: Number(scenes.value) });
+          const r = await POST('/api/ai/script', { idea: idea.value.trim(), genre: genres.get(), num_scenes: Number(scenes.value), style: styleSel.value });
           toast(r.by_llm ? '方舟剧本已生成' : '本地引擎剧本已生成（配置方舟 Key 可解锁大模型创作）', 'ok');
           nav(`/project/${r.project.id}`);
         } catch (e) { toast(e.message, 'err'); btn.disabled = false; btn.innerHTML = `${icon('spark')} 生成剧本并创建项目`; }
@@ -77,7 +84,7 @@ export async function renderHome(page) {
     });
     btn.innerHTML = `${icon('spark')} 生成剧本并创建项目`;
     return h('div', {}, idea, genres.row,
-      h('div', { class: 'entry-actions' }, scenes, ratio, h('span', { class: 'grow' }), btn));
+      h('div', { class: 'entry-actions' }, scenes, ratio, styleSel, h('span', { class: 'grow' }), btn));
   }
 
   function pasteEntry() {

@@ -4,6 +4,7 @@ import { h, icon, toast, debounce, confirmDlg, escHtml, modal, isVideoUrl } from
 import { nav } from '../main.js';
 import { createGraph } from '../flow/graph.js';
 import { runBatchGenerate } from '../batch.js';
+import { openStylePicker, shortStyle } from '../stylelib.js';
 
 const TYPE_CN = { character: '角色', scene: '场景', prop: '道具', shot: '分镜', note: '便签' };
 const TYPE_ICON = { character: 'user', scene: 'image', prop: 'box', shot: 'film', note: 'pencil' };
@@ -11,6 +12,7 @@ const TYPE_ICON = { character: 'user', scene: 'image', prop: 'box', shot: 'film'
 export async function renderCanvas(page, params) {
   let canvas = await GET(`/api/canvases/${params.id}`);
   const projectId = canvas.project_id || '';
+  let project = projectId ? await GET(`/api/projects/${projectId}`).catch(() => null) : null;
 
   // ---------- 节点模板 ----------
   function media(html, ratioClass = '') {
@@ -164,6 +166,20 @@ export async function renderCanvas(page, params) {
     h('span', { class: 'grow' }),
     h('button', { class: 'btn sm', onclick: addNodeMenu, html: `${icon('plus', 15)} 节点` }),
     h('button', { class: 'btn sm', onclick: autoLayout, html: `${icon('layout', 15)} 整理` }),
+    project ? (() => {
+      const b = h('button', {
+        class: 'btn sm', title: project.style ? `当前风格：${project.style}` : '选择画面风格',
+        onclick: () => openStylePicker({
+          current: project.style, onPick: async (style) => {
+            project = await PATCH(`/api/projects/${projectId}`, { style });
+            b.innerHTML = `${icon('wand', 15)} ${shortStyle(project.style)}`;
+            toast(style ? `风格已设为「${shortStyle(style)}」` : '已恢复默认风格', 'ok');
+          }
+        })
+      });
+      b.innerHTML = `${icon('wand', 15)} ${shortStyle(project.style)}`;
+      return b;
+    })() : null,
     projectId ? h('button', { class: 'btn sm', onclick: () => nav(`/project/${projectId}`), html: `${icon('film', 15)} 剧本` }) : null,
     batchBtn);
 

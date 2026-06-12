@@ -4,7 +4,16 @@ import { q, getSetting } from './db.js';
 import { uid, now, jparse, clamp } from './util.js';
 import { arkEnabled, arkChat, arkImage, arkVideoCreate, arkVideoGet, cfg } from './ark.js';
 import { localScript, localParse, localImageSVG, localVideoSVG, saveSVG } from './local.js';
+import { resolveStylePrompt } from './styles.js';
 import { bad, notFound } from './httpx.js';
+
+/** 项目风格注入：prompt 未包含该风格时自动前置（风格名自动展开成完整提示词） */
+function applyStyle(prompt, style) {
+  const sp = resolveStylePrompt(style);
+  if (!sp) return prompt;
+  if (prompt.includes(sp.slice(0, 12))) return prompt;
+  return `${sp}，${prompt}`;
+}
 
 // ---------- 项目 ----------
 export function getProject(id, { required = true } = {}) {
@@ -24,7 +33,7 @@ export function createProject({ title = '', idea = '', genre = '', style = '', r
   q.run(
     'INSERT INTO projects (id, title, idea, genre, style, ratio, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)',
     id, String(title || '未命名短剧').slice(0, 50), String(idea).slice(0, 2000), String(genre).slice(0, 20),
-    String(style).slice(0, 50), ratio, now(), now()
+    String(style).slice(0, 300), ratio, now(), now()
   );
   return q.get('SELECT * FROM projects WHERE id = ?', id);
 }
@@ -52,7 +61,7 @@ export async function generateScript({ projectId = '', idea = '', genre = '', nu
       const r = await arkChat({
         feature: 'script',
         system: SCRIPT_SYSTEM,
-        prompt: `请创作一部${genre ? `「${genre}」类型的` : ''}短剧剧本，共 ${clamp(numScenes, 2, 8)} 场，每场 3-6 个动作/台词节拍。${style ? `整体影像风格：${style}。` : ''}\n核心创意：${idea || '自由发挥一个反转强烈的故事'}`,
+        prompt: `请创作一部${genre ? `「${genre}」类型的` : ''}短剧剧本，共 ${clamp(numScenes, 2, 8)} 场，每场 3-6 个动作/台词节拍。${style ? `整体影像风格：${resolveStylePrompt(style)}。` : ''}\n核心创意：${idea || '自由发挥一个反转强烈的故事'}`,
         temperature: 0.9,
         maxTokens: 3000
       });
@@ -69,6 +78,7 @@ export async function generateScript({ projectId = '', idea = '', genre = '', nu
     script,
     idea: idea.slice(0, 2000),
     genre,
+    ...(style ? { style: String(style).slice(0, 300) } : {}),
     ...(newTitle && (project.title === '未命名短剧' || !projectId) ? { title: newTitle.slice(0, 50) } : {})
   });
   return { project: q.get('SELECT * FROM projects WHERE id = ?', project.id), script, byLLM };
@@ -133,7 +143,7 @@ export async function parseScript({ projectId }) {
     try {
       const r = await arkChat({
         feature: 'parse', system: PARSE_SYSTEM, json: true, temperature: 0.4, maxTokens: 6000,
-        prompt: `剧本如下，请解析：\n${project.script.slice(0, 12000)}${project.style ? `\n（项目预设风格：${project.style}）` : ''}`
+        prompt: `剧本如下，请解析：\n${project.script.slice(0, 12000)}${project.style ? `\n（项目预设风格：${resolveStylePrompt(project.style)}，所有 image_prompt/video_prompt 必须体现该风格）` : ''}`
       });
       sb = normalizeStoryboard(jparse(r.text.replace(/^```(json)?|```$/gm, ''), {}));
       byLLM = true;
@@ -141,14 +151,14 @@ export async function parseScript({ projectId }) {
       console.warn('[pipeline] 方舟解析失败，落本地引擎：', e.message);
     }
   }
-  if (!sb) sb = normalizeStoryboard(localParse(project.script, { style: project.style }));
+  if (!sb) sb = normalizeStoryboard(localParse(project.script, { style: resolveStylePrompt(project.style) }));
 
   // 同步画布（已有画布则整体重建结构，保留画布 id）
   const canvasId = ensureCanvas(project, sb);
   touchProject(project.id, {
     storyboard: JSON.stringify(sb), status: 'parsed', canvas_id: canvasId,
     ...(project.title === '未命名短剧' && sb.title ? { title: sb.title } : {}),
-    ...(sb.style && !project.style ? { style: sb.style.slice(0, 50) } : {})
+    ...(sb.style && !project.style ? { style: sb.style.slice(0, 300) } : {})
   });
   return { project: projectOut(q.get('SELECT * FROM projects WHERE id = ?', project.id)), storyboard: sb, byLLM, canvasId };
 }
@@ -256,6 +266,7 @@ export function addAsset({ tab = 'material', kind = 'image', name, url, poster =
 export async function generateImage({ prompt, name = '', kind = 'scene', ratio = '', projectId = '', nodeId = '', refImages = [], tab = '' }) {
   if (!prompt?.trim()) throw bad('缺少图片提示词 prompt');
   const project = projectId ? getProject(projectId, { required: false }) : null;
+  prompt = applyStyle(prompt.trim(), project?.style);
   ratio = ratio || project?.ratio || '16:9';
   const taskId = uid('t');
   q.run('INSERT INTO tasks (id, kind, status, provider, prompt, params, project_id, node_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
@@ -299,6 +310,7 @@ const LOCAL_VIDEO_MS = () => (process.env.QINGLUAN_FAST_LOCAL ? 50 : 4000);
 export async function createVideoTask({ prompt, imageUrl = '', duration = 5, ratio = '', projectId = '', nodeId = '', name = '', order = 0 }) {
   if (!prompt?.trim()) throw bad('缺少视频提示词 prompt');
   const project = projectId ? getProject(projectId, { required: false }) : null;
+  prompt = applyStyle(prompt.trim(), project?.style);
   ratio = ratio || project?.ratio || '16:9';
   duration = clamp(duration, 2, 12);
   const taskId = uid('t');

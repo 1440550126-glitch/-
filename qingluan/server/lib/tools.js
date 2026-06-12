@@ -8,6 +8,7 @@ import {
   createProject, getProject, projectOut, touchProject, generateScript, parseScript,
   getCanvas, patchCanvasNode, generateImage, createVideoTask, pollTask, addAsset
 } from './pipeline.js';
+import { STYLES, STYLE_CATS } from './styles.js';
 import { bad } from './httpx.js';
 
 const str = (desc, extra = {}) => ({ type: 'string', description: desc, ...extra });
@@ -57,6 +58,36 @@ export const TOOLS = [
     description: '查看项目详情：剧本全文、结构化分镜（storyboard）、画布 id。',
     input_schema: { type: 'object', properties: { project_id: str('项目 id') }, required: ['project_id'] },
     execute({ project_id }) { return projectOut(getProject(project_id)); }
+  },
+  {
+    name: 'update_project',
+    description: '修改项目属性：标题/类型/画面风格/画幅/创意。风格建议先用 list_styles 查可选项（也可直接传自定义风格提示词）。改风格后新生成的图/视频自动套用。',
+    input_schema: {
+      type: 'object',
+      properties: { project_id: str('项目 id'), title: str('标题'), genre: str('类型'), style: str('风格名（见 list_styles）或自定义风格提示词'), ratio: str('画幅', { enum: ['16:9', '9:16', '1:1', '4:3', '21:9'] }), idea: str('核心创意') },
+      required: ['project_id']
+    },
+    execute({ project_id, ...rest }) {
+      getProject(project_id);
+      const fields = {};
+      for (const k of ['title', 'genre', 'style', 'ratio', 'idea']) {
+        if (rest[k] !== undefined) fields[k] = String(rest[k]).slice(0, k === 'idea' ? 2000 : 300);
+      }
+      if (!Object.keys(fields).length) throw bad('没有可更新字段');
+      touchProject(project_id, fields);
+      return projectOut(getProject(project_id));
+    }
+  },
+  {
+    name: 'list_styles',
+    description: '查看风格库：可用的画面风格预设（电影感/真人/2D/3D），返回风格名与提示词。用 update_project 把风格名设到项目上。',
+    input_schema: { type: 'object', properties: { cat: str('分类', { enum: ['film', 'real', 'd2', 'd3'] }) } },
+    execute({ cat } = {}) {
+      return {
+        cats: STYLE_CATS,
+        styles: STYLES.filter((s) => !cat || s.cat === cat).map((s) => ({ name: s.name, cat: s.cat, prompt: s.prompt }))
+      };
+    }
   },
   {
     name: 'write_script',

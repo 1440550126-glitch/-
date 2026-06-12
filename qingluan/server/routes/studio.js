@@ -6,6 +6,10 @@ import { q, getSetting, setSetting, UPLOAD_DIR, DB_PATH } from '../lib/db.js';
 import { uid, now, jparse, micro2yuan, token32 } from '../lib/util.js';
 import { arkEnabled, cfg, arkChat, DEFAULTS } from '../lib/ark.js';
 import { createProject, getProject, projectOut, touchProject, getCanvas } from '../lib/pipeline.js';
+import { STYLES, STYLE_CATS } from '../lib/styles.js';
+
+// ---------- 风格库 ----------
+GET('/api/styles', async () => ({ cats: STYLE_CATS, styles: STYLES }));
 
 // ---------- 启动信息 ----------
 GET('/api/bootstrap', async () => {

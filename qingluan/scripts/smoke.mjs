@@ -121,6 +121,37 @@ try {
   const logs = (await api('GET', '/api/agent/v1/logs', undefined, token)).data;
   ok(logs.logs.length >= 4, `Agent 调用日志 ×${logs.logs.length}`);
 
+  console.log('— 风格库 —');
+  const stylesData = (await api('GET', '/api/styles')).data;
+  ok(stylesData.styles.length >= 24 && stylesData.cats.length === 4, `风格库 ×${stylesData.styles.length}（4 类）`);
+  const updP = (await api('POST', '/api/agent/v1/tools/update_project', { project_id: p.id, style: '美式复古好莱坞' }, token)).data;
+  ok(updP.result.style === '美式复古好莱坞', 'update_project 设置风格');
+  const styledImg = (await api('POST', '/api/ai/image', { prompt: '街角夜景空镜', name: '风格测试', kind: 'scene', project_id: p.id })).data;
+  const styledTask = (await api('GET', `/api/ai/task/${styledImg.taskId}`)).data;
+  ok((await api('GET', '/api/assets')).data.some((a) => a.name === '风格测试' && a.prompt.includes('好莱坞')), '风格自动注入生图提示词');
+  const ls = (await api('POST', '/api/agent/v1/tools/list_styles', { cat: 'd3' }, token)).data;
+  ok(ls.result.styles.length >= 5 && ls.result.styles.every((s) => s.cat === 'd3'), 'list_styles 按分类过滤');
+
+  console.log('— MCP over HTTP（远程助理通道） —');
+  const mh = async (msg) => {
+    const res = await fetch(BASE + '/api/agent/v1/mcp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(msg)
+    });
+    return { status: res.status, body: res.status === 202 ? null : await res.json() };
+  };
+  const hInit = await mh({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } });
+  ok(hInit.body?.result?.serverInfo?.name === 'qingluan-studio', 'HTTP MCP initialize');
+  const hNote = await mh({ jsonrpc: '2.0', method: 'notifications/initialized' });
+  ok(hNote.status === 202, 'HTTP MCP 通知返回 202');
+  const hTools = await mh({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
+  ok(hTools.body?.result?.tools?.length >= 16, `HTTP MCP tools/list ×${hTools.body?.result?.tools?.length}`);
+  const hCall = await mh({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'list_projects', arguments: {} } });
+  ok(hCall.body?.result?.content?.[0]?.text?.includes('冒烟剧'), 'HTTP MCP tools/call');
+  const hNoAuth = await fetch(BASE + '/api/agent/v1/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'ping' }) });
+  ok(hNoAuth.status === 401, 'HTTP MCP 无 Token 拒绝');
+
   console.log('— 设置 —');
   const set1 = await api('PATCH', '/api/settings', { ark_api_key: 'AKLTxxxx' });
   ok(set1.status === 400, '拦截 AccessKey 误填');

@@ -25,6 +25,14 @@ export async function renderAgent(page) {
   -H "Authorization: Bearer ${token}" \\
   -H "Content-Type: application/json" \\
   -d '{"idea":"外卖小哥捡到一张黑卡","genre":"都市逆袭"}'`;
+  const mcpHttp = `{
+  "mcpServers": {
+    "qingluan": {
+      "url": "${base}/api/agent/v1/mcp",
+      "headers": { "Authorization": "Bearer ${token}" }
+    }
+  }
+}`;
 
   function codeBlock(text, tip) {
     const pre = h('pre', { class: 'code' }, text);
@@ -94,8 +102,11 @@ export async function renderAgent(page) {
         card(`${icon('terminal')} ① MCP 接入 <span class="pill teal">推荐</span>`,
           h('p', { style: { fontSize: '12.5px', color: 'var(--ink2)', marginBottom: '8px' } }, 'Claude Code 一条命令接入（先启动青鸾服务）：'),
           codeBlock(mcpCmd, 'MCP 命令已复制'),
-          h('p', { style: { fontSize: '12.5px', color: 'var(--ink2)', margin: '10px 0 8px' } }, 'Cursor / Cherry Studio 等通用 MCP 客户端用 JSON 配置：'),
-          codeBlock(mcpJson, 'JSON 配置已复制')),
+          h('p', { style: { fontSize: '12.5px', color: 'var(--ink2)', margin: '10px 0 8px' } }, 'Cursor / Cherry Studio 等本地 MCP 客户端（stdio）：'),
+          codeBlock(mcpJson, 'JSON 配置已复制'),
+          h('p', { style: { fontSize: '12.5px', color: 'var(--ink2)', margin: '10px 0 8px' } },
+            '远程/云端个人助理（OpenClaw、Hermes Agent 等）用 ', h('b', {}, 'HTTP 版 MCP'), '，填 URL 即可，无需本地进程：'),
+          codeBlock(mcpHttp, 'HTTP MCP 配置已复制')),
         card(`${icon('link')} ② HTTP API 接入`,
           h('p', { style: { fontSize: '12.5px', color: 'var(--ink2)', marginBottom: '8px' } },
             '任意语言/框架直接调用 REST 工具端点，OpenAPI 描述可被 Agent 框架自动加载：'),
