@@ -11,6 +11,7 @@ import { publish, publishTo } from '../lib/hub.js';
 import { now, pick, shuffle, roomCode } from '../lib/util.js';
 import { gateContent } from '../lib/moderation.js';
 import { bad, denied, notFound } from '../lib/httpx.js';
+import { awardSeasonPoints } from '../lib/season.js';
 
 const rooms = new Map();
 const engines = new Map();
@@ -242,6 +243,12 @@ export function endGame(room, winner, revealRows, finale) {
   room.winner = winner;
   room.turnSeat = null;
   room.reveal = revealRows;
+  // 赛季通行证：参与完整对局的真人发放「凶夜印记」（收益落在多人游戏里）
+  for (const p of room.players) {
+    if (!p.isBot && p.userId > 0) {
+      try { awardSeasonPoints(p.userId); } catch (e) { console.warn('[season]', e.message); }
+    }
+  }
   if (finale) hostSay(room, finale);
   broadcast(room);
   persist(room);

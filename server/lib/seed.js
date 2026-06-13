@@ -60,7 +60,12 @@ const SKINS = [
   // 桌游房间主题
   { id: 'rt_cafe', name: '深夜咖啡馆', type: 'room_theme', rarity: 'rare', price: 690, blurb: '游戏房弥漫咖啡香气', payload: { bg: ['#3a2f2a', '#574437'], emoji: '☕', accent: '#d9a05b' } },
   { id: 'rt_garden', name: '夏日庭院', type: 'room_theme', rarity: 'fine', price: 1500, blurb: '蝉鸣与绿荫里的推理局', payload: { bg: ['#23402f', '#39594a'], emoji: '🌿', accent: '#8fd9a8' } },
-  { id: 'rt_bookshop', name: '旧书店谜屋', type: 'room_theme', rarity: 'epic', price: 3000, blurb: '在泛黄书页间寻找卧底', payload: { bg: ['#3b3147', '#544468'], emoji: '📚', accent: '#c9aef5' } }
+  { id: 'rt_bookshop', name: '旧书店谜屋', type: 'room_theme', rarity: 'epic', price: 3000, blurb: '在泛黄书页间寻找卧底', payload: { bg: ['#3b3147', '#544468'], emoji: '📚', accent: '#c9aef5' } },
+  // 凶夜·初雪赛季限定（也可单买，但通行证是集齐全套最划算的方式）
+  { id: 'cf_frost', name: '初雪结晶', type: 'card_frame', rarity: 'epic', price: 2600, blurb: '边框凝着一层细碎的霜花', payload: { gradient: ['#bcd6ff', '#e7f1ff'], deco: 'stars', glow: 'rgba(150,200,255,.45)' } },
+  { id: 'bb_whisper', name: '夜语', type: 'bubble', rarity: 'fine', price: 990, blurb: '说出口的话像雾里的低语', payload: { bg: ['#2a2740', '#3c3656'], text: '#d7d2f0' } },
+  { id: 'af_phantom', name: '幽影环', type: 'avatar_frame', rarity: 'epic', price: 3200, blurb: '一圈若隐若现的幽蓝光晕', payload: { ring: ['#7b8cff', '#9a6fd6'], deco: 'aurora' } },
+  { id: 'rt_manor', name: '迷雾庄园', type: 'room_theme', rarity: 'legend', price: 7200, blurb: '凶夜赛季终极奖励：雾锁回廊的诡谲庄园', payload: { bg: ['#1a1722', '#2e2738'], emoji: '🕯', accent: '#b06fd6' } }
 ];
 
 // ---- 开场示例内容（全部 AI 标识，让冷启动第一屏就有氛围） ----

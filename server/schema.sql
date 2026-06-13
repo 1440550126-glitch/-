@@ -162,6 +162,17 @@ CREATE TABLE IF NOT EXISTS credit_logs (
   created_at INTEGER NOT NULL
 );
 
+-- 赛季通行证：玩多人对局攒印记升级，解锁纯外观奖励（claimed 为已领取的 "track:level" 列表）
+CREATE TABLE IF NOT EXISTS user_season (
+  user_id    INTEGER NOT NULL,
+  season_id  TEXT NOT NULL,
+  points     INTEGER NOT NULL DEFAULT 0,
+  premium    INTEGER NOT NULL DEFAULT 0,
+  claimed    TEXT NOT NULL DEFAULT '[]',
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, season_id)
+);
+
 CREATE TABLE IF NOT EXISTS skins (
   id        TEXT PRIMARY KEY,           -- slug
   name      TEXT NOT NULL,

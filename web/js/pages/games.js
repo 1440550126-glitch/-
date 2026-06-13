@@ -23,7 +23,13 @@ export async function renderGames(page) {
   );
 
   const featured = h('div', {});
-  page.append(featured, h('div', { style: { display: 'flex', gap: '10px', marginBottom: '14px' } },
+  page.append(
+    h('div', { class: 'glass topic-banner', style: { background: 'linear-gradient(120deg, rgba(176,111,214,.18), rgba(120,140,255,.16)), var(--glass)' }, onclick: () => nav('/season') },
+      h('div', { class: 'tb-title' }, '🎟 凶夜赛季通行证', h('span', { class: 'badge-rarity r-epic' }, '新')),
+      h('div', { class: 'tb-desc' }, '玩对局攒印记升级，解锁纯外观奖励 · 终极「迷雾庄园」主题'),
+      h('button', { class: 'btn mini tb-go' }, '查看')
+    ),
+    featured, h('div', { style: { display: 'flex', gap: '10px', marginBottom: '14px' } },
     ['📖 剧本杀', '🗝 密室逃脱', '🐢 海龟汤'].map((name) =>
       h('div', { class: 'glass', style: { flex: 1, textAlign: 'center', padding: '13px 4px', fontSize: '12px', color: 'var(--ink-3)' } },
         h('div', { style: { fontSize: '20px', marginBottom: '3px', filter: 'grayscale(.6)', opacity: 0.7 } }, name.split(' ')[0]),

@@ -407,6 +407,27 @@ try {
   ok('随机灵异事件已触发', horrorStream.events.some((e) => e.event === 'msg' && (e.data.content || '').includes('灵异事件')));
   horrorStream.close();
 
+  console.log('\n== 赛季通行证（收益在多人游戏里 · 纯外观） ==');
+  const sea1 = await api('GET', '/api/season', { token: hg.token });
+  ok('玩完对局获得赛季印记', sea1.ok && sea1.data.progress.points > 0, JSON.stringify(sea1.data?.progress));
+  ok('达到至少 1 级', sea1.data.progress.level >= 1);
+  const claimFree = await api('POST', '/api/season/claim', { token: hg.token, body: { level: 1, track: 'free' } });
+  ok('领取免费档 L1 外观奖励', claimFree.ok && !!claimFree.data.skin);
+  const claimPremLocked = await api('POST', '/api/season/claim', { token: hg.token, body: { level: 1, track: 'premium' } });
+  ok('未解锁高级档→拒绝领高级奖励', !claimPremLocked.ok && claimPremLocked.need_premium === true);
+  const sOrder = await api('POST', '/api/shop/orders', { token: hg.token, body: { kind: 'season' } });
+  ok('创建高级通行证订单（¥14.9）', sOrder.ok && sOrder.data.order.amount_fen === 1490);
+  const sPay = await api('POST', `/api/shop/orders/${sOrder.data.order.id}/pay`, { token: hg.token });
+  ok('沙盒支付解锁高级档', sPay.ok);
+  const sea2 = await api('GET', '/api/season', { token: hg.token });
+  ok('高级通行证已解锁', sea2.data.progress.premium === true);
+  const claimPrem = await api('POST', '/api/season/claim', { token: hg.token, body: { level: 1, track: 'premium' } });
+  ok('领取高级档 L1 凶夜限定外观', claimPrem.ok && !!claimPrem.data.skin);
+  const claimDup = await api('POST', '/api/season/claim', { token: hg.token, body: { level: 1, track: 'free' } });
+  ok('重复领取被拒', !claimDup.ok);
+  const myskins = await api('GET', '/api/me/skins', { token: hg.token });
+  ok('奖励皮肤已发放进背包', myskins.data.items.some((s) => s.id === claimFree.data.skin.id) && myskins.data.items.some((s) => s.id === claimPrem.data.skin.id));
+
   console.log('\n== 狼人杀（4 真人 + AI 补位完整对局） ==');
   const wfCreate = await api('POST', '/api/rooms', { token: u1.token, body: { name: '狼人杀测试局', game_type: 'werewolf', max_players: 8, allow_bots: true } });
   ok('创建狼人杀房间', wfCreate.ok, JSON.stringify(wfCreate));

@@ -200,6 +200,29 @@ a { color: var(--brand); text-decoration: none; }
 .taste-banner .tb-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
 .taste-tag { font-size: 11px; padding: 3px 11px; border-radius: 999px; background: var(--brand-grad); color: #fff; font-weight: 500; }
 
+/* ---- 赛季通行证 ---- */
+.sp-hero { padding: 16px; }
+.sp-lv { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #fff; background: var(--brand-grad); line-height: 1.1; text-align: center; flex-shrink: 0; }
+.sp-bar { height: 9px; border-radius: 99px; background: rgba(141, 122, 230, 0.16); overflow: hidden; margin-top: 12px; }
+.sp-bar-fill { height: 100%; border-radius: 99px; background: var(--brand-grad); transition: width 0.5s var(--ease); }
+.sp-track-head { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--ink-2); padding: 4px 6px 8px; }
+.sp-row { display: flex; align-items: stretch; gap: 8px; margin-bottom: 9px; opacity: 0.55; transition: opacity 0.3s; }
+.sp-row.reached { opacity: 1; }
+.sp-lv-cell { width: 38px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 12px; }
+.sp-lv-num { font-size: 15px; font-weight: 800; color: var(--brand); }
+.sp-lv-pt { font-size: 9px; color: var(--ink-3); }
+.sp-cell { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 14px; background: var(--glass); border: 1px solid var(--glass-border); position: relative; }
+.sp-cell.empty { justify-content: center; color: var(--ink-3); opacity: 0.5; }
+.sp-cell.ready { border-color: rgba(98, 217, 181, 0.5); box-shadow: 0 0 0 2px rgba(98, 217, 181, 0.12); }
+.sp-cell.claimed { opacity: 0.7; }
+.sp-cell .sp-ic { font-size: 18px; flex-shrink: 0; }
+.sp-cell .sp-info { flex: 1; min-width: 0; }
+.sp-cell .sp-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-cell .sp-name + .badge-rarity { margin-top: 3px; }
+.sp-claim { padding: 5px 12px; font-size: 11px; flex-shrink: 0; }
+.sp-tag { font-size: 10px; color: var(--ink-3); flex-shrink: 0; }
+.sp-tag.done { color: var(--mint); font-weight: 700; }
+
 /* ---- 话题横幅 ---- */
 .topic-banner {
   position: relative; overflow: hidden; padding: 15px 16px; margin-bottom: 14px;

@@ -17,6 +17,7 @@ import { renderMember } from './pages/member.js';
 import { renderSettings, renderBlocks, renderAbout } from './pages/settings.js';
 import { renderNotify } from './pages/notify.js';
 import { renderChat } from './pages/chat.js';
+import { renderSeason } from './pages/season.js';
 import { sse } from './api.js';
 
 const fluid = initFluid(document.getElementById('fluid-bg'));
@@ -58,6 +59,7 @@ route('/blocks', renderBlocks, { hideNav: true });
 route('/about/:doc', renderAbout, { hideNav: true });
 route('/notify', renderNotify, { hideNav: true });
 route('/chat', renderChat, { hideNav: true });
+route('/season', renderSeason, { hideNav: true });
 
 (async () => {
   buildNav();

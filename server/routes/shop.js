@@ -4,6 +4,7 @@ import { now, uid, jparse } from '../lib/util.js';
 import { MEMBER_PLANS, MEMBER_BENEFITS, CREDIT_PACKS } from '../lib/catalog.js';
 import { isMember } from '../lib/auth.js';
 import { meView } from './auth.js';
+import { SEASON, grantPremium, premiumOwned } from '../lib/season.js';
 
 // 商城目录：皮肤 + 会员 + 高级额度（全部纯外观/纯功能解锁，不卖任何对局优势）
 GET('/api/shop/catalog', async (ctx) => {
@@ -22,7 +23,8 @@ GET('/api/shop/catalog', async (ctx) => {
 });
 
 POST('/api/shop/orders', async (ctx) => {
-  const { kind, item_id } = ctx.body;
+  const { kind } = ctx.body;
+  let item_id = ctx.body.item_id;
   if (jparse(ctx.user.settings, {}).teen_mode) {
     throw denied('青少年模式下无法购买。健康上网，快乐成长 💚');
   }
@@ -42,6 +44,9 @@ POST('/api/shop/orders', async (ctx) => {
     const pack = CREDIT_PACKS.find((p) => p.id === item_id);
     if (!pack) throw bad('额度包不存在');
     title = pack.name; amount = pack.price_fen;
+  } else if (kind === 'season') {
+    if (premiumOwned(ctx.user.id)) throw bad('你已经解锁本赛季高级通行证啦');
+    title = `${SEASON.name} · 高级通行证`; amount = SEASON.premiumPriceFen; item_id = SEASON.id;
   } else {
     throw bad('订单类型无效');
   }
@@ -76,6 +81,8 @@ POST('/api/shop/orders/:id/pay', async (ctx) => {
       q.run('UPDATE users SET credits = credits + ? WHERE id = ?', pack.credits, ctx.user.id);
       q.run('INSERT INTO credit_logs (user_id, delta, reason, ref, created_at) VALUES (?,?,?,?,?)',
         ctx.user.id, pack.credits, `购买${pack.name}`, order.id, now());
+    } else if (order.kind === 'season') {
+      grantPremium(ctx.user.id);   // 解锁高级通行证（纯外观奖励轨道）
     }
   });
   const fresh = q.get('SELECT * FROM users WHERE id = ?', ctx.user.id);
