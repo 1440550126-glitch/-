@@ -28,7 +28,8 @@ export const QUOTA = {
   PREMIUM_CREDIT_COST: 10,     // 高级风格每次消耗额度
   MEMBER_PREMIUM_COST: 8,      // 会员折扣价
   POST_PER_DAY: 30,            // 每日发帖上限（防刷）
-  COMMENT_PER_DAY: 200
+  COMMENT_PER_DAY: 200,
+  AI_CHAT_PER_DAY: 60          // AI 治愈陪聊每日消息上限（防刷，也保护成本）
 };
 
 // 预置可爱头像（客户端用渐变 + 表情渲染，无外部资源）

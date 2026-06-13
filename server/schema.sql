@@ -224,6 +224,17 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );
 
+-- AI 治愈陪聊：1 对 1 倾听对话历史（self-harm 内容标记 care，不回喂作普通上下文）
+CREATE TABLE IF NOT EXISTS ai_chat_messages (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL,
+  role       TEXT NOT NULL,               -- user | assistant
+  content    TEXT NOT NULL,
+  care       INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ai_chat ON ai_chat_messages(user_id, id);
+
 CREATE TABLE IF NOT EXISTS notifications (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id    INTEGER NOT NULL,            -- 接收者

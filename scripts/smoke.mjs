@@ -328,6 +328,22 @@ try {
   const unread2 = await api('GET', '/api/me/unread', { token: u1.token });
   ok('一键已读', unread2.data.unread === 0);
 
+  console.log('\n== AI 治愈陪聊 ==');
+  const cu = (await api('POST', '/api/auth/guest', { body: {} })).data;
+  const chat1 = await api('POST', '/api/ai/chat', { token: cu.token, body: { content: '最近压力好大，晚上总是睡不着，好焦虑。' } });
+  ok('陪聊回复（无 Key 走本地共情兜底）', chat1.ok && chat1.data.reply.content.length > 0 && chat1.data.by_llm === false, JSON.stringify(chat1.data));
+  ok('陪聊回复带「AI 生成」标识', chat1.data.ai_label === 'AI 生成');
+  const chat2 = await api('POST', '/api/ai/chat', { token: cu.token, body: { content: '谢谢你愿意听我说。' } });
+  ok('多轮对话', chat2.ok && chat2.data.reply.content.length > 0);
+  const careChat = await api('POST', '/api/ai/chat', { token: cu.token, body: { content: '我不想活了' } });
+  ok('自伤内容→确定性关怀响应 + 援助热线', careChat.ok && careChat.data.care === true && careChat.data.reply.content.includes('12356'), JSON.stringify(careChat.data));
+  const chist = await api('GET', '/api/ai/chat', { token: cu.token });
+  ok('对话历史 + 开场白', chist.ok && chist.data.messages.length >= 6 && !!chist.data.greeting);
+  ok('关怀消息被标记 care', chist.data.messages.filter((m) => m.care).length >= 2);
+  const ccleared = await api('POST', '/api/ai/chat/clear', { token: cu.token });
+  const chist2 = await api('GET', '/api/ai/chat', { token: cu.token });
+  ok('清空对话', ccleared.ok && chist2.data.messages.length === 0);
+
   console.log('\n== 狼人杀（4 真人 + AI 补位完整对局） ==');
   const wfCreate = await api('POST', '/api/rooms', { token: u1.token, body: { name: '狼人杀测试局', game_type: 'werewolf', max_players: 8, allow_bots: true } });
   ok('创建狼人杀房间', wfCreate.ok, JSON.stringify(wfCreate));
