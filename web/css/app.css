@@ -324,6 +324,15 @@ textarea.input { resize: none; line-height: 1.7; }
 .style-chips .chip.active { background: var(--brand-grad); color: #fff; }
 .anim-close { position: absolute; z-index: 3; right: 14px; top: calc(10px + env(safe-area-inset-top, 0px)); width: 38px; height: 38px; border-radius: 50%; background: rgba(255, 255, 255, 0.12); color: #fff; font-size: 17px; display: grid; place-items: center; }
 
+/* 提交即动效层 */
+.anim-overlay.submit { background: #0c0a16; }
+.anim-overlay.submit .anim-caption { letter-spacing: 1px; font-size: 13px; color: rgba(255, 255, 255, 0.55); animation: captionPulse 2.4s ease-in-out infinite; }
+@keyframes captionPulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 0.9; } }
+.anim-skip { z-index: 3; padding: 7px 15px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); color: rgba(255, 255, 255, 0.85); font-size: 12.5px; font-weight: 600; backdrop-filter: blur(8px); transition: transform 0.25s var(--spring); }
+.anim-skip:active { transform: scale(0.92); }
+.anim-overlay.fade-out { animation: fadeOut 0.36s ease both; }
+@keyframes fadeOut { to { opacity: 0; } }
+
 /* ---- 吉祥物 ---- */
 .mascot { display: inline-block; animation: mascotFloat 3.6s ease-in-out infinite; }
 @keyframes mascotFloat { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-9px) rotate(2deg); } }

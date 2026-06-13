@@ -5,6 +5,58 @@ import { store, skinPayload } from '../store.js';
 import { playManifest } from './engine.js';
 import { nav } from '../router.js';
 
+// ---- 提交即动效：发帖那一刻，文字立刻"活过来"飞出（纯客户端，零延迟、不耗配额） ----
+const PATTERN_PARTICLE = { wind: 'windline', rain: 'raindrop', snow: 'snowflake', petal: 'petal', star: 'star', firefly: 'firefly', spark: 'spark', shard: 'shard', cloud: 'bubble' };
+const PATTERN_AMBIENT = { rain: 'rain', wind: 'wind', star: 'night', firefly: 'night' };
+
+// 从预览卡合成一份精简 manifest（情绪/调色板已在卡里，引擎补齐运动签名）
+function synthFromCard(card = {}) {
+  const dark = (card.bg && card.bg[0] && /^#[0-2]/.test(card.bg[0])) || false;
+  return {
+    v: 3, style: 'ink', seed: card.seed || Math.floor(Math.random() * 1e9),
+    emotion: { key: card.emotion },
+    palette: {
+      bg: dark ? card.bg : ['#13101f', '#211b38'],     // 提交动效统一走深色舞台，辉光更"高级"
+      ink: card.ink || '#ece9f7', accent: card.accent || '#9d8cff', glow: card.accent || '#7c6cff'
+    },
+    particles: [{ kind: PATTERN_PARTICLE[card.pattern] || 'star', density: 0.5 }],
+    soundscape: { ambient: PATTERN_AMBIENT[card.pattern] || 'none', volume: 0.45 },
+    behavior: { loop: false },
+    timeline: [{ t: 0, action: 'glow', sound: 'chime' }, { t: 0.55, action: 'assemble', sound: 'swoosh' }, { t: 1.0, action: 'wake' }],
+    text: { mode: 'particle_assemble', thickness: 1 }
+  };
+}
+
+export function playSubmitAnim(content, card) {
+  return new Promise((resolve) => {
+    const overlays = document.getElementById('overlays');
+    const cvs = h('canvas');
+    const skip = h('button', { class: 'anim-skip' }, '跳过 ›');
+    const overlay = h('div', { class: 'anim-overlay submit' },
+      cvs,
+      h('div', { class: 'anim-top' }, aiBadge('内容由 AI 辅助生成'), h('div', { style: { flex: 1 } }), skip),
+      h('div', { class: 'anim-bottom' }, h('div', { class: 'anim-caption' }, '✨ 你的句子正在活过来'))
+    );
+    overlays.append(overlay);
+
+    let engine = null, done = false;
+    const finish = () => {
+      if (done) return; done = true;
+      engine?.stop();
+      overlay.classList.add('fade-out');
+      setTimeout(() => { overlay.remove(); resolve(); }, 360);
+    };
+    skip.addEventListener('click', finish);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target === cvs) finish(); });
+
+    // 等一帧让画布拿到尺寸
+    requestAnimationFrame(() => {
+      engine = playManifest(cvs, synthFromCard(card), { text: content, submitMode: true, onDone: finish });
+    });
+    setTimeout(finish, 6000); // 兜底，绝不卡住发帖流程
+  });
+}
+
 export async function openAnimPlayer(post) {
   let styles;
   try { styles = await GET('/api/ai/styles'); } catch (e) { toast(e.message, 'warn'); return; }

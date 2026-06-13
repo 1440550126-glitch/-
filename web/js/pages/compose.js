@@ -1,8 +1,9 @@
-// 发布页：写文案 → 实时 AI 预览卡 → 发布
+// 发布页：写文案 → 实时 AI 预览卡 → 发布（提交即动效：文字当场活过来飞出）
 import { POST } from '../api.js';
 import { h, toast, previewCardEl } from '../ui.js';
 import { store } from '../store.js';
 import { nav } from '../router.js';
+import { playSubmitAnim } from '../anim/player.js';
 
 export function renderCompose(page) {
   const topic = store.topic && location.hash.includes('topic=') ? store.topic : null;
@@ -44,9 +45,12 @@ export function renderCompose(page) {
       publishBtn.disabled = true;
       try {
         const r = await POST('/api/posts', { content, topic_id: topic?.id });
-        if (r.care) toast(r.notice, 'care');
-        else if (r.notice) toast(r.notice);
-        else toast('发布成功！长按卡片可以让它活过来 ✨');
+        // 自伤关怀内容：温柔提示，绝不做庆祝动效
+        if (r.care) { toast(r.notice, 'care'); nav('/feed'); return; }
+        // 提交即动效：用刚生成的预览卡，让这句话当场活过来飞出
+        await playSubmitAnim(content, r.post?.card);
+        if (r.notice) toast(r.notice);
+        else toast('已活过来 ✨ 长按卡片可再次回放');
         nav('/feed');
       } catch (e) {
         toast(e.message, 'warn');
