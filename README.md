@@ -4,14 +4,14 @@
 
 > 产品定位、功能取舍、风险判断见 [docs/PRODUCT.md](docs/PRODUCT.md)（建议先读）。
 
-## 🐦 新成员：青鸾 · AI 短剧创作工坊
+## 🐦 新成员：灵境AI · 短剧创作工坊
 
-仓库里还住着第二个产品——**[青鸾](qingluan/README.md)**：开放版「小云雀」（剪映 AI 短剧平台）。
+仓库里还住着第二个产品——**[灵境AI](lingjing/README.md)**：开放版「小云雀」（剪映 AI 短剧平台）。
 剧本 → 分镜 → 节点画布 → 图像 → 视频全流程，火山方舟（豆包 / Seedream / Seedance）驱动，
 全部能力以 **MCP + OpenAPI** 开放给任意 Agent；不配 Key 也能用本地引擎跑通全流程。
 
 ```bash
-npm run studio          # http://localhost:4399   （文档见 qingluan/README.md）
+npm run studio          # http://localhost:4399   （文档见 lingjing/README.md）
 npm run studio:smoke    # 103 项冒烟测试（API + Agent + MCP stdio/HTTP）
 ```
 
