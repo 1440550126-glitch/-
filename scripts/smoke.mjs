@@ -428,6 +428,13 @@ try {
   const myskins = await api('GET', '/api/me/skins', { token: hg.token });
   ok('奖励皮肤已发放进背包', myskins.data.items.some((s) => s.id === claimFree.data.skin.id) && myskins.data.items.some((s) => s.id === claimPrem.data.skin.id));
 
+  console.log('\n== 无限放大（语义无限缩放探索） ==');
+  const z1 = await api('POST', '/api/zoom', { token: hg.token, body: { focus: '孤独' } });
+  ok('放大根帧（标题/焦点）', z1.ok && z1.data.frame.title === '孤独' && z1.data.frame.hotspots.length >= 2, JSON.stringify(z1.data?.frame));
+  ok('帧含旁白与画面基调', z1.data.frame.blurb.length > 0 && !!z1.data.frame.motif);
+  const z2 = await api('POST', '/api/zoom', { token: hg.token, body: { path: [z1.data.frame.title], focus: z1.data.frame.hotspots[0].label } });
+  ok('继续向内放大一层', z2.ok && z2.data.frame.depth === 1 && z2.data.frame.hotspots.length >= 2);
+
   console.log('\n== 狼人杀（4 真人 + AI 补位完整对局） ==');
   const wfCreate = await api('POST', '/api/rooms', { token: u1.token, body: { name: '狼人杀测试局', game_type: 'werewolf', max_players: 8, allow_bots: true } });
   ok('创建狼人杀房间', wfCreate.ok, JSON.stringify(wfCreate));

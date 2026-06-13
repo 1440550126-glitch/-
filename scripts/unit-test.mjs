@@ -2,6 +2,7 @@
 // 运行：npm test
 import { scoreAndRank } from '../server/lib/recsys.js';
 import { localReply, CARE_REPLY, HOTLINE, COMPANION_GREETING, COMPANION_SYSTEM } from '../server/lib/companion.js';
+import { localFrame, pickMotif } from '../server/lib/zoom.js';
 
 let pass = 0, fail = 0;
 const ok = (n, c, x = '') => { if (c) { pass++; console.log('  ✅', n); } else { fail++; console.log('  ❌', n, x); } };
@@ -56,6 +57,19 @@ console.log('\n== AI 陪聊 companion（纯函数 + 安全红线） ==');
   ok('关怀响应含援助热线 12356', CARE_REPLY.includes('12356') && HOTLINE.includes('12356'));
   ok('开场白非空', COMPANION_GREETING.length > 0);
   ok('系统提示含安全红线（自伤/热线/不诊断）', COMPANION_SYSTEM.includes('12356') && COMPANION_SYSTEM.includes('自伤') && COMPANION_SYSTEM.includes('诊断'));
+}
+
+console.log('\n== 无限放大 zoom（纯函数） ==');
+{
+  const f = localFrame([], '孤独');
+  ok('生成根帧：标题/旁白/焦点齐全', f.title === '孤独' && f.blurb.length > 0 && f.hotspots.length >= 2);
+  ok('每个焦点可继续放大（label+emoji）', f.hotspots.every((hsp) => hsp.label && hsp.emoji));
+  ok('情绪词→heart 基调', pickMotif('我好想你') === 'heart');
+  ok('城市词→city 基调', pickMotif('巴黎的街') === 'city');
+  ok('星空词→cosmos 基调', pickMotif('星空银河') === 'cosmos');
+  ok('深度随路径增长', localFrame(['一', '二'], '三').depth === 2);
+  ok('确定性（同输入同输出）', JSON.stringify(localFrame(['此刻'], '海')) === JSON.stringify(localFrame(['此刻'], '海')));
+  ok('motif 始终合法', ['city', 'nature', 'cosmos', 'heart', 'memory', 'abstract'].includes(localFrame([], 'zxcv随便').motif));
 }
 
 console.log(`\n========== 单测结果：${pass} 通过 / ${fail} 失败 ==========\n`);

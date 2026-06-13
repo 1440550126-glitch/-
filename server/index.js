@@ -18,6 +18,7 @@ import './routes/ai.js';
 import './routes/ai_chat.js';
 import './routes/shop.js';
 import './routes/season.js';
+import './routes/zoom.js';
 import './routes/rooms.js';
 import './routes/admin.js';
 

@@ -200,6 +200,41 @@ a { color: var(--brand); text-decoration: none; }
 .taste-banner .tb-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
 .taste-tag { font-size: 11px; padding: 3px 11px; border-radius: 999px; background: var(--brand-grad); color: #fff; font-weight: 500; }
 
+/* ---- 无限放大（语义无限缩放探索） ---- */
+.page.zoom-page { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.zoom-crumbs { font-size: 11px; color: var(--ink-3); white-space: nowrap; overflow-x: auto; scrollbar-width: none; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.zoom-crumbs::-webkit-scrollbar { display: none; }
+.zoom-crumbs .zc { cursor: pointer; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+.zoom-crumbs .zc.cur { color: var(--brand); font-weight: 700; }
+.zoom-crumbs .zc-sep { opacity: 0.5; }
+.zoom-stage { position: relative; flex: 1; margin: 6px 12px calc(12px + var(--safe-b)); border-radius: 24px; overflow: hidden; box-shadow: var(--shadow); }
+.zoom-frame {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 28px 22px; text-align: center; will-change: transform, opacity;
+  transition: transform 0.62s cubic-bezier(0.5, 0, 0.2, 1), opacity 0.42s ease;
+}
+.zoom-glyphs { position: absolute; inset: 0; pointer-events: none; }
+.zoom-glyphs span { position: absolute; }
+.zoom-depth { font-size: 11px; letter-spacing: 2px; opacity: 0.6; margin-bottom: 12px; text-transform: uppercase; }
+.zoom-title { font-size: 30px; font-weight: 800; letter-spacing: 1px; line-height: 1.2; text-shadow: 0 2px 24px rgba(0,0,0,.35); }
+.zoom-blurb { font-size: 14px; line-height: 1.7; opacity: 0.86; margin-top: 14px; max-width: 30ch; }
+.zoom-hint { font-size: 11px; opacity: 0.5; margin-top: 18px; }
+.zoom-hots { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 22px; max-width: 420px; }
+.zoom-hot {
+  display: inline-flex; align-items: center; gap: 6px; padding: 9px 15px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1); border: 1.5px solid rgba(255, 255, 255, 0.25); color: inherit;
+  font-size: 13px; font-weight: 600; backdrop-filter: blur(6px); transition: transform 0.3s var(--spring);
+}
+.zoom-hot:active { transform: scale(0.9); }
+.zoom-hot .zh-emoji { font-size: 16px; }
+.zoom-loader { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; color: var(--ink-2); font-size: 13px; background: linear-gradient(160deg, #1c1d2e, #2a2c48); color: #cfc9ee; }
+.zoom-intro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 30px; text-align: center; background: linear-gradient(160deg, #1c1d2e, #2a2c48); color: #eee9ff; }
+.zoom-intro-title { font-size: 24px; font-weight: 800; background: var(--brand-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.zoom-intro-sub { font-size: 13px; line-height: 1.8; opacity: 0.7; white-space: pre-line; max-width: 30ch; }
+.zoom-intro .input { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.2); color: #fff; }
+.zoom-seeds { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.zoom-seeds .chip { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.2); color: #d7d2f0; }
+
 /* ---- 赛季通行证 ---- */
 .sp-hero { padding: 16px; }
 .sp-lv { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #fff; background: var(--brand-grad); line-height: 1.1; text-align: center; flex-shrink: 0; }
