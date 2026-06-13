@@ -213,9 +213,12 @@ export async function renderHome(page) {
   function aiEntry() {
     const idea = h('textarea', { class: 'textarea', rows: 3, placeholder: '在此输入你构想的故事，可以包含：故事设定、主角特征、剧情脉络、最终结局…\n例如：外卖小哥送餐时捡到一张能透支一亿的黑卡，开启都市逆袭' });
     const genres = genreChips();
+    const format = h('select', { class: 'select', style: { width: '120px' }, title: '形态：电影=约90分钟六幕长片；短剧=多集' },
+      [['series', '短剧'], ['movie', '🎬 电影长片']].map(([v, l]) => h('option', { value: v }, l)));
     const episodes = h('select', { class: 'select', style: { width: '100px' }, title: '集数（多集自动用钩子衔接，可随时再续写）' }, [1, 2, 3].map((n) => h('option', { value: n, selected: n === 1 }, `${n} 集`)));
-    const scenes = h('select', { class: 'select', style: { width: '110px' } }, [3, 4, 5, 6].map((n) => h('option', { value: n, selected: n === 4 }, `${n} 场/集`)));
+    const scenes = h('select', { class: 'select', style: { width: '110px' } }, [3, 4, 5, 6].map((n) => h('option', { value: n, selected: n === 4 }, `${n} 场/段`)));
     const ratio = ratioSelect();
+    format.addEventListener('change', () => { const m = format.value === 'movie'; episodes.style.display = m ? 'none' : ''; episodes.disabled = m; });
     const styleSel = h('select', { class: 'select', style: { width: '170px' }, title: '画面风格（生图/生视频自动套用）' }, h('option', { value: '' }, '默认风格'));
     loadStyles().then(({ cats, styles }) => {
       for (const c of cats) {
@@ -227,15 +230,15 @@ export async function renderHome(page) {
         btn.disabled = true;
         btn.innerHTML = `${icon('loader')} 正在生成剧本…`;
         try {
-          const r = await POST('/api/ai/script', { idea: idea.value.trim(), genre: genres.get(), num_scenes: Number(scenes.value), num_episodes: Number(episodes.value), style: styleSel.value });
-          toast(r.by_llm ? '方舟剧本已生成' : '本地引擎剧本已生成（配置方舟 Key 可解锁大模型创作）', 'ok');
+          const r = await POST('/api/ai/script', { idea: idea.value.trim(), genre: genres.get(), format: format.value, num_scenes: Number(scenes.value), num_episodes: Number(episodes.value), style: styleSel.value });
+          toast(r.by_llm ? `方舟${format.value === 'movie' ? '电影剧本' : '剧本'}已生成` : '本地引擎剧本已生成（配置方舟 Key 可解锁大模型创作）', 'ok');
           nav(`/project/${r.project.id}`);
         } catch (e) { toast(e.message, 'err'); btn.disabled = false; btn.innerHTML = `${icon('spark')} 生成剧本并创建项目`; }
       }
     });
     btn.innerHTML = `${icon('spark')} 生成剧本并创建项目`;
     return h('div', {}, idea, genres.row,
-      h('div', { class: 'entry-actions' }, episodes, scenes, ratio, styleSel, h('span', { class: 'grow' }), btn));
+      h('div', { class: 'entry-actions' }, format, episodes, scenes, ratio, styleSel, h('span', { class: 'grow' }), btn));
   }
 
   function pasteEntry() {
