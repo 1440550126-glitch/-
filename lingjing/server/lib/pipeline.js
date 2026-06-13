@@ -15,7 +15,7 @@ export const localFallbackOn = () => getSetting('local_fallback', false) === tru
 const NEG_TAIL = '画面要求：构图完整、人物解剖结构正确、比例协调；避免：肢体残缺、身体被切断、上下半身错位或分离、只露头部、漂浮的身体部件、多余或缺失的手脚、面部扭曲、畸形。';
 function framingGuide(kind, shotType = '') {
   if (kind === 'character') {
-    return `，单人定妆照，正面或四分之三侧面，五官清晰对称、面部完整，标准半身像（头部到腰部，约占画面 70%），人物居中、姿态自然挺立，背景简洁虚化。${NEG_TAIL}`;
+    return `，单人定妆照，正面或四分之三侧面，五官清晰对称、面部完整、表情自然不诡异（避免恐怖谷），外貌特征鲜明、辨识度高（与其他角色明显区分、不撞脸），标准半身像（头部到腰部，约占画面 70%），人物居中、姿态自然挺立，背景简洁虚化。${NEG_TAIL}`;
   }
   if (kind === 'scene') {
     return `，场景空镜，无人物出现，环境陈设完整，层次分明，电影级布光与大气透视。`;
@@ -163,7 +163,7 @@ export async function remakeViral({ reference, topic, projectId = '', genre = ''
 const PARSE_SYSTEM = `你是资深电影分镜师。把剧本（或剧本的一幕/一集）解析为可拍摄的结构化 JSON，只输出 JSON、不要任何解释或 markdown。schema：
 {"title":"片名","logline":"一句话故事","style":"画面风格","unit":"幕或集",
  "episodes":[{"key":"e1","title":"本段标题","summary":"本段一句话梗概"}],
- "characters":[{"key":"c1","name":"准确人物名","role":"主角/反派/配角","gender":"男或女","desc":"年龄段+性别+外貌+服装+性格，尽量具体","image_prompt":"人物定妆照文生图提示词，必须含性别年龄外貌服装"}],
+ "characters":[{"key":"c1","name":"准确人物名","role":"主角/反派/配角","gender":"男或女","desc":"年龄段+性别+外貌+服装+性格，尽量具体","image_prompt":"人物定妆照文生图提示词，必须含性别年龄外貌服装，并给独特鲜明的外貌锚点（发型/脸型/标志物）确保与其他角色不撞脸"}],
  "scenes":[{"key":"s1","name":"场景名","desc":"环境/时间/氛围","image_prompt":"场景空镜提示词"}],
  "props":[{"key":"p1","name":"关键道具","desc":"","image_prompt":"道具特写提示词"}],
  "shots":[{"key":"sh1","order":1,"episode":"e1","scene":"s1","characters":["c1"],"shot_type":"远景/全景/中景/近景/特写","camera":"运镜","emotion":"主要角色情绪(可空：冷酷/愤怒/狂喜/悲伤/微笑/惊恐/魅惑/羞涩)","action":"画面内发生的事","dialogue":"台词(可空)","duration":4,"image_prompt":"该镜头首帧文生图提示词，写明出场人物名与场景","video_prompt":"图生视频动态提示词(动作+运镜)"}]}
@@ -650,7 +650,7 @@ export async function generateExpressions({ projectId, nodeId, emotions = [] }) 
   const out = [];
   for (const emo of list) {
     const r = await generateImage({
-      prompt: `${node.data.prompt || node.data.desc || node.data.name}，表情：${emo}，同一角色、同一造型与五官，仅表情变化，角色表情参考图，纯色背景`,
+      prompt: `${node.data.prompt || node.data.desc || node.data.name}，表情：${emo}，与参考图为同一个人（五官、发型、脸型、肤色、服装完全一致），仅表情变化，单人正脸表情定妆照，五官清晰对称、表情自然真实、不变形不诡异、避免恐怖谷，纯色背景`,
       name: `${node.data.name}·${emo}`, kind: 'character', projectId,
       refImages: refs, tab: 'character', emotion: emo
     });
