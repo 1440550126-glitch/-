@@ -10,6 +10,20 @@ import { createProject, getProject, projectOut, touchProject, getCanvas, checkCo
 // 画面一致性体检
 GET('/api/projects/:id/consistency', async ({ params }) => checkConsistency(params.id));
 
+// AIQC 质检
+GET('/api/projects/:id/qc', async ({ params, query }) => {
+  const { listQC, qcSummary } = await import('../lib/qc.js');
+  return { summary: qcSummary(params.id), records: listQC(params.id, { onlyOpen: query.get('open') === '1' }) };
+});
+POST('/api/projects/:id/qc/scan', async ({ params, body }) => {
+  const { qcNode } = await import('../lib/qc.js');
+  return await qcNode(params.id, body.node_id, { stage: body.stage || 'image' });
+});
+POST('/api/qc/:id/resolve', async ({ params }) => {
+  const { resolveQC } = await import('../lib/qc.js');
+  return resolveQC(params.id);
+});
+
 // 工作流：一键托管全流程
 POST('/api/workflows', async ({ body }) => {
   if (!body.project_id) throw bad('缺少 project_id');
@@ -204,7 +218,7 @@ DEL('/api/canvases/:id', async ({ params }) => {
 });
 
 // ---------- 设置 ----------
-const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_video', 'model_video_options', 'video_extra_args', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint', 'local_fallback', 'agent_temperature', 'agent_max_steps', 'agent_autorun', 'agent_thinking', 'agent_plan_first'];
+const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_video', 'model_video_options', 'video_extra_args', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint', 'local_fallback', 'agent_temperature', 'agent_max_steps', 'agent_autorun', 'agent_thinking', 'agent_plan_first', 'qc_enabled', 'qc_autofix', 'qc_min_score'];
 
 GET('/api/settings', async () => {
   const c = cfg();
@@ -223,6 +237,11 @@ GET('/api/settings', async () => {
     tts_token_masked: ttsCfg().token ? `${ttsCfg().token.slice(0, 4)}****` : '',
     tts_voice: ttsCfg().voice,
     local_fallback: getSetting('local_fallback', false) === true,
+    qc: {
+      enabled: getSetting('qc_enabled', true) !== false,
+      autofix: getSetting('qc_autofix', true) !== false,
+      min_score: Number(getSetting('qc_min_score', 75))
+    },
     agent: {
       temperature: Number(getSetting('agent_temperature', 0.5)),
       max_steps: Number(getSetting('agent_max_steps', 10)),

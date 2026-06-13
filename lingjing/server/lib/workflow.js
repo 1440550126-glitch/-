@@ -15,6 +15,7 @@ const STEP_DEFS = [
   { name: 'parse', label: '解析分镜' },
   { name: 'check', label: '一致性体检' },
   { name: 'images', label: '定妆照与首帧' },
+  { name: 'qc', label: 'AIQC 质检' },
   { name: 'videos', label: '分镜视频' },
   { name: 'dub', label: '配音' },
   { name: 'export', label: '成片导出' }
@@ -140,6 +141,23 @@ async function execStep(name, wf, cancelled) {
       }
       if (!done && failed) throw bad(`出图全部失败（${failed} 张）`);
       return `生成 ${done} 张${failed ? `（失败 ${failed}）` : ''}${base.length + frames.length === 0 ? '（无需生成）' : ''}`;
+    }
+    case 'qc': {
+      const { qcEnabled, qcNode } = await import('./qc.js');
+      if (!qcEnabled()) throw SKIP('AIQC 已关闭（设置页可开启）');
+      const c = getCanvas(project().canvas_id);
+      const framed = epShots(c).filter((n) => n.data.image);
+      if (!framed.length) return '无首帧可质检';
+      let pass = 0, fixed = 0, open = 0;
+      for (const n of framed.slice(0, 60)) {
+        if (cancelled()) break;
+        try {
+          const r = await qcNode(projectId, n.id, { stage: 'image' });
+          if (r.passed) pass++; else open++;
+          if (r.fixed) fixed++;
+        } catch (e) { console.warn('[workflow] QC 失败：', n.data.name, e.message); }
+      }
+      return `质检 ${framed.length} 帧：通过 ${pass}，自动修正 ${fixed}，待人工 ${open}（详见 QC 记录）`;
     }
     case 'videos': {
       const p = project();

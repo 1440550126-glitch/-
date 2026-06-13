@@ -295,7 +295,7 @@ try {
   console.log('— 全流程工作流 —');
   const p9 = (await api('POST', '/api/projects', { title: '工作流剧', genre: '都市逆袭', idea: '保安逆袭成集团总裁' })).data;
   const wf = (await api('POST', '/api/workflows', { project_id: p9.id })).data;
-  ok(wf.id && wf.status === 'running' && wf.steps.length === 7, '工作流启动（7 步）');
+  ok(wf.id && wf.status === 'running' && wf.steps.length === 8, '工作流启动（8 步含 AIQC）');
   const wfDone = await until(async () => {
     const w = (await api('GET', `/api/workflows/${wf.id}`)).data;
     return w.status !== 'running' ? w : null;
@@ -305,6 +305,9 @@ try {
   ok(stepMap.script.status === 'done' && stepMap.parse.status === 'done' && stepMap.images.status === 'done', '剧本/解析/出图步骤完成');
   ok(stepMap.videos.status === 'done' && /完成 \d+\/\d+/.test(stepMap.videos.detail), `视频步骤：${stepMap.videos.detail}`);
   ok(stepMap.dub.status === 'skipped' && stepMap.export.status === 'skipped', 'TTS/ffmpeg 未配置步骤自动跳过');
+  ok(stepMap.qc && stepMap.qc.status === 'done' && /质检/.test(stepMap.qc.detail), `AIQC 质检步骤执行（${stepMap.qc.detail}）`);
+  const qcRep = (await api('GET', `/api/projects/${p9.id}/qc`)).data;
+  ok(qcRep.summary && qcRep.records.length >= 1, `QC 记录生成（${qcRep.records.length} 条，均分 ${qcRep.summary.avg_score}）`);
   const p9done = (await api('GET', `/api/projects/${p9.id}`)).data;
   const cv9 = (await api('GET', `/api/canvases/${p9done.canvas_id}`)).data;
   ok(cv9.nodes.filter((n) => n.type === 'shot').every((n) => n.data.video), '全部分镜已出片');

@@ -101,4 +101,21 @@ CREATE TABLE IF NOT EXISTS workflows (
   updated_at INTEGER NOT NULL
 );
 
+-- AIQC 质检记录：每张图/每段视频生成前后的质量审查
+CREATE TABLE IF NOT EXISTS qc_records (
+  id         TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL DEFAULT '',
+  node_id    TEXT NOT NULL DEFAULT '',
+  stage      TEXT NOT NULL DEFAULT 'image',  -- parse|image|video
+  target     TEXT NOT NULL DEFAULT '',       -- 被检对象名（角色/镜头）
+  score      INTEGER NOT NULL DEFAULT 0,      -- 0-100
+  passed     INTEGER NOT NULL DEFAULT 1,
+  issues     TEXT NOT NULL DEFAULT '[]',      -- [{type,severity,detail,fix}]
+  action     TEXT NOT NULL DEFAULT '',        -- Agent 采取的修正动作
+  by_vision  INTEGER NOT NULL DEFAULT 0,      -- 是否视觉模型审查
+  resolved   INTEGER NOT NULL DEFAULT 0,      -- 开发者是否已处理
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_qc_proj ON qc_records(project_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);

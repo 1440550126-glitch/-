@@ -111,12 +111,22 @@ async function arkFetch(pathname, body, { timeoutMs = 30_000, method = 'POST' } 
  * 文本对话（支持 JSON 模式与 tools 函数调用）
  * @returns {Promise<{text:string, toolCalls:Array|null, usage:{promptTokens,completionTokens}, model:string}>}
  */
-export async function arkChat({ system = '', messages = null, prompt = '', json = false, tools = null, maxTokens = 4096, temperature = 0.8, timeoutMs = 90_000, feature = 'chat' }) {
+export async function arkChat({ system = '', messages = null, prompt = '', images = null, json = false, tools = null, maxTokens = 4096, temperature = 0.8, timeoutMs = 90_000, feature = 'chat' }) {
   const c = cfg();
   const msgs = messages ? [...messages] : [];
   if (!messages) {
     if (system) msgs.push({ role: 'system', content: system });
-    msgs.push({ role: 'user', content: prompt });
+    // 视觉输入：把图片作为多模态 content 附到用户消息（AIQC 让模型"看"图）
+    if (images?.length) {
+      const parts = [{ type: 'text', text: prompt }];
+      for (const u of images.slice(0, 4)) {
+        const url = toArkImageUrl(u);
+        if (url) parts.push({ type: 'image_url', image_url: { url } });
+      }
+      msgs.push({ role: 'user', content: parts });
+    } else {
+      msgs.push({ role: 'user', content: prompt });
+    }
   }
   const data = await arkFetch('/chat/completions', {
     model: c.modelChat,

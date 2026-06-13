@@ -253,7 +253,46 @@ function normalizeStoryboard(sb) {
     });
   });
   if (!out.shots.length) throw bad('解析结果里没有分镜');
+  out.bible = buildBible(out);
+  alignStoryboard(out);
   return out;
+}
+
+/** 故事总纲（防跑偏的全局提示词）：风格 + 角色锁定外貌，注入每次生成 */
+function buildBible(sb) {
+  const chars = sb.characters.map((c) => `${c.name}[${c.gender || '?'}/${c.role}：${String(c.desc || '').replace(/\s+/g, '').slice(0, 40)}]`).join('；');
+  return `【全片设定】${sb.style || '统一影像风格'}。【角色锁定】${chars}。全片保持各角色五官/发型/服装/年龄一致，不同角色外貌必须明显区分、不可撞脸。`;
+}
+
+/** 慢思考自动对齐：把每个分镜涉及人物的锁定外貌烤进 image_prompt，修正与角色设定不一致的描述 */
+function alignStoryboard(sb) {
+  const charByKey = new Map(sb.characters.map((c) => [c.key, c]));
+  const sceneByKey = new Map(sb.scenes.map((s) => [s.key, s]));
+  for (const sh of sb.shots) {
+    const names = [];
+    for (const ck of (sh.characters || [])) {
+      const c = charByKey.get(ck);
+      if (!c) continue;
+      const tag = `${c.name}（${c.gender || ''}，${String(c.desc || '').replace(/\s+/g, '').slice(0, 36)}）`;
+      // 提示词没写明该角色锁定特征 → 补上（防"分镜人物描述与角色形象不符"）
+      if (!sh.image_prompt.includes(c.name) || !hasAppearance(sh.image_prompt, c)) {
+        names.push(tag);
+      }
+    }
+    if (names.length) {
+      sh.image_prompt = `${sh.image_prompt}｜出场：${names.join('、')}`.slice(0, 400);
+    }
+    // 场景锁定
+    const sc = sceneByKey.get(sh.scene);
+    if (sc && sc.name && !sh.image_prompt.includes(sc.name)) {
+      sh.image_prompt = `${sh.image_prompt}｜场景：${sc.name}`.slice(0, 400);
+    }
+  }
+}
+function hasAppearance(prompt, c) {
+  // 简单判断提示词是否已含该角色的关键外貌词（性别或描述前几字）
+  const key = String(c.desc || '').replace(/[，,。.；;（）()]/g, '').slice(0, 6);
+  return key && prompt.includes(key);
 }
 
 /** 合并多段解析结果：角色/场景/道具按名字去重，分镜顺序拼接、段落映射到 episode */
@@ -542,8 +581,11 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
         const lockChars = chars.slice(0, 3).map((n) => `${n.data.name}（${String(n.data.desc || n.data.prompt || '').slice(0, 50)}）`).filter(Boolean);
         const lockScene = scenes[0] ? `${scenes[0].data.name}（${String(scenes[0].data.desc || '').slice(0, 40)}）` : '';
         if (lockChars.length || lockScene) {
-          prompt += `。出场人物：${lockChars.join('、') || '同前'}${shotEmotion ? `，情绪：${shotEmotion}` : ''}${lockScene ? `；场景：${lockScene}` : ''}。严格保持人物五官、发型、服装与场景陈设和参考图完全一致${chainRef ? '，并与上一镜画面无缝衔接' : ''}`;
+          prompt += `。出场人物：${lockChars.join('、') || '同前'}${shotEmotion ? `，情绪：${shotEmotion}` : ''}${lockScene ? `；场景：${lockScene}` : ''}。严格保持人物五官、发型、服装与场景陈设和参考图完全一致，不同角色不可撞脸${chainRef ? '，并与上一镜画面无缝衔接' : ''}`;
         }
+        // 注入故事总纲（防跑偏的全局设定）
+        const bible = jparse(project.storyboard, {})?.bible;
+        if (bible) prompt += `\n${bible}`;
       }
     } catch { /* 画布可能已删除 */ }
   }

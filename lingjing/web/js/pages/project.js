@@ -7,6 +7,7 @@ import { createAgentChat } from '../agentchat.js';
 import { openStylePicker, shortStyle } from '../stylelib.js';
 import { openScreeningRoom } from '../player.js';
 import { openConsistency } from '../consistency.js';
+import { openQC } from '../qc.js';
 
 const RATIOS = ['16:9', '9:16', '1:1', '4:3', '21:9'];
 
@@ -85,6 +86,11 @@ export async function renderProject(page, params) {
     openConsistency({ projectId: project.id, canvasId: project.canvas_id, onFixed: () => reload(true) });
   } });
   checkBtn.innerHTML = `${icon('check', 15)} 体检`;
+  const qcBtn = h('button', { class: 'btn', title: 'AIQC 质检报告：每帧画面的问题与修正记录', onclick: () => {
+    if (!project.canvas_id) return toast('先解析剧本生成画布', 'err');
+    openQC({ projectId: project.id, onFixed: () => reload(true) });
+  } });
+  qcBtn.innerHTML = `🔬 QC`;
 
   // ---------- 全流程工作流（一键托管） ----------
   const WF_ICON = { pending: '◌', running: '', done: '✓', skipped: '↷', failed: '✗' };
@@ -427,7 +433,7 @@ export async function renderProject(page, params) {
     h('div', { class: 'topbar line' },
       h('button', { class: 'btn ghost sm', html: icon('back'), onclick: () => nav('/home') }),
       titleInput, statusPill, h('span', { class: 'grow' }),
-      ratioSel, styleBtn, parseBtn, canvasBtn, checkBtn, playBtn2, wfBtn, batchBtn),
+      ratioSel, styleBtn, parseBtn, canvasBtn, checkBtn, qcBtn, playBtn2, wfBtn, batchBtn),
     h('div', { class: 'wrap', style: { maxWidth: '1440px', marginTop: '16px' } },
       h('div', { class: 'work-grid' }, leftCard, rightCard)));
   renderRight();
