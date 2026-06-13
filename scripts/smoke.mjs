@@ -378,7 +378,7 @@ try {
   ok('开始游戏（AI 补位到 5 人）', hStart.ok, JSON.stringify(hStart));
   await new Promise((r) => setTimeout(r, 400));
   const hSt0 = await api('GET', `/api/rooms/${horrorId}`, { token: hg.token });
-  ok('私发身份（凶手/通灵者/守夜人/幸存者）', ['killer', 'medium', 'guard', 'survivor'].includes(hSt0.data.room.my_role));
+  ok('私发身份（凶手/通灵者/守夜人/幸存者/小丑）', ['killer', 'medium', 'guard', 'survivor', 'jester'].includes(hSt0.data.room.my_role));
   let horrorDone = false;
   for (let guard = 0; guard < 600 && !horrorDone; guard++) {
     const cur = await api('GET', `/api/rooms/${horrorId}`, { token: hg.token });
@@ -402,7 +402,7 @@ try {
   ok('恐怖局完整跑完（分出胜负）', horrorDone);
   await new Promise((r) => setTimeout(r, 300));
   const hEndEv = horrorStream.events.filter((e) => e.event === 'state').pop();
-  ok('胜负结算（幸存者/凶手）', ['survivor', 'killer'].includes(hEndEv?.data?.winner), hEndEv?.data?.winner);
+  ok('胜负结算（幸存者/凶手/小丑）', ['survivor', 'killer', 'jester'].includes(hEndEv?.data?.winner), hEndEv?.data?.winner);
   ok('结算揭示全部身份', hEndEv?.data?.reveal?.length >= 5);
   ok('随机灵异事件已触发', horrorStream.events.some((e) => e.event === 'msg' && (e.data.content || '').includes('灵异事件')));
   horrorStream.close();

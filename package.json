@@ -12,6 +12,7 @@
     "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
     "smoke": "node --disable-warning=ExperimentalWarning scripts/smoke.mjs",
     "test": "node --disable-warning=ExperimentalWarning scripts/unit-test.mjs",
+    "test:horror": "node --disable-warning=ExperimentalWarning scripts/horror-test.mjs",
     "check": "node scripts/check-syntax.mjs"
   }
 }

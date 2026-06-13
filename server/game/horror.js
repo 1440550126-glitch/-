@@ -16,7 +16,8 @@ const ROLE_META = {
   killer: { name: '凶手', icon: '🔪', camp: 'killer', campLabel: '凶手阵营', campColor: '#c2532f', teammateLabel: '🔪 你的同伙', tip: '每夜猎杀一名幸存者。白天伪装无辜，别让大家投出你——也别被通灵者识破。' },
   medium: { name: '通灵者', icon: '🔮', camp: 'survivor', campLabel: '幸存者阵营', campColor: '#6b5cc8', teammateLabel: '', tip: '每夜感应一人的气息，但庄园偶尔会说谎——线索不一定可靠，用它带队却别全信。' },
   guard: { name: '守夜人', icon: '🛡', camp: 'survivor', campLabel: '幸存者阵营', campColor: '#2a9d76', teammateLabel: '', tip: '每夜守护一人，挡下凶手的猎杀（不能连续两夜守同一人）。猜对节奏是关键。' },
-  survivor: { name: '幸存者', icon: '🕯', camp: 'survivor', campLabel: '幸存者阵营', campColor: '#2a9d76', teammateLabel: '', tip: '你没有特殊能力，但你的观察与投票决定庄园的命运。撑到黎明！' }
+  survivor: { name: '幸存者', icon: '🕯', camp: 'survivor', campLabel: '幸存者阵营', campColor: '#2a9d76', teammateLabel: '', tip: '你没有特殊能力，但你的观察与投票决定庄园的命运。撑到黎明！' },
+  jester: { name: '小丑', icon: '🃏', camp: 'neutral', campLabel: '第三方 · 小丑', campColor: '#b06fd6', teammateLabel: '', tip: '你的胜利只有一种方式——设法在白天被大家投票放逐出庄园！装疯卖傻、引人怀疑，但千万别在夜里被杀。' }
 };
 
 const LINES = {
@@ -33,6 +34,7 @@ const LINES = {
   out: ['{name} 被众人逐入浓雾，TA 的身份是——{role}{icon}', '{name} 被推出了庄园大门，身份揭晓：{role}{icon}'],
   survivorWin: ['🌅 黎明的救援抵达，凶手再无藏身之处——幸存者们撑到了最后！', '警笛划破雾气，活下来的人们相拥而泣。这一夜，他们赢了。'],
   killerWin: ['🔪 庄园重归死寂，再没有人能阻止凶手……凶手胜利。', '最后一盏灯熄灭了。雾散时，只剩凶手的脚步声。'],
+  jesterWin: ['🃏 小丑达成了被放逐的夙愿，在疯笑中赢得了这场闹剧——所有人都成了陪衬！', '众人这才惊觉：他们亲手把胜利，送给了笑到最后的小丑。🃏'],
   botSpeak: ['昨晚我好像听见了脚步声，但不敢开门……', '我觉得 TA 的眼神不太对劲', '我整夜没睡，我是清白的！', '先别急着投票，再听听', '通灵者快出来带队啊', '我总觉得有人在撒谎', '这庄园太邪门了，我们得冷静', '我守着门一夜，什么也没发生']
 };
 
@@ -45,7 +47,11 @@ const EVENTS = [
   { key: 'doll', minRound: 1, effect: 'doll', lines: ['{who} 的枕边出现了一只浑身湿透的玩偶，整夜噩梦缠身。', '诅咒玩偶选中了 {who}，TA 脸色惨白，久久说不出话。'] },
   { key: 'whisper', minRound: 2, effect: 'whisper', lines: ['风里传来断续的低语，仿佛在指认什么……', '通灵的余韵未散，一丝声音钻进众人耳中——'] },
   { key: 'blackout', minRound: 2, effect: 'blackout', lines: ['全庄园骤然停电，浓雾涌入。明夜，通灵者将什么也感应不到。', '灯火尽灭，黑暗吞没一切——明晚的感应，怕是要落空了。'] },
-  { key: 'mirror', minRound: 3, effect: 'count', lines: ['古镜中浮现出扭曲的倒影，似乎在暗示着什么……', '镜面泛起血色涟漪，映出了庄园残存的恶意——'] }
+  { key: 'mirror', minRound: 3, effect: 'count', lines: ['古镜中浮现出扭曲的倒影，似乎在暗示着什么……', '镜面泛起血色涟漪，映出了庄园残存的恶意——'] },
+  { key: 'footsteps', minRound: 1, lines: ['楼上传来缓慢的脚步声，一步、一步，停在了某扇门后，再无声息。', '阁楼的地板咯吱作响，可循声上去时，那里空无一人。'] },
+  { key: 'portrait', minRound: 1, lines: ['墙上的老肖像画，眼睛仿佛一直跟着你们转动。', '有人发誓，画中人方才冲他眨了眨眼。'] },
+  { key: 'musicbox', minRound: 2, lines: ['一只八音盒无人触碰却自己响起，旋律走调而凄凉。', '幽幽的八音盒声从黑暗里飘来，惊得众人一身冷汗。'] },
+  { key: 'candle', minRound: 1, lines: ['所有蜡烛同时摇曳了一下，又齐齐恢复——像是有什么经过。', '烛火无风自动，墙上的影子比人多出了一个。'] }
 ];
 
 const fmt = (tpl, vars = {}) => tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
@@ -270,6 +276,8 @@ function settle(room, timedOut) {
   const out = core.tallyVotes(room);
   if (out) {
     out.alive = false;
+    // 小丑被放逐 → 第三方胜利（逼迫大家不敢乱投，制造张力）
+    if (out.role === 'jester') return finish(room, 'jester', `${out.nickname} 被推出了大门，却在众人面前咧嘴大笑——`);
     say(room, 'out', { name: out.nickname, role: ROLE_META[out.role].name, icon: ROLE_META[out.role].icon });
     if (checkWin(room)) return;
   } else {
@@ -293,7 +301,7 @@ function checkWin(room) {
 
 function finish(room, winner, extra = '') {
   if (extra) core.sysSay(room, extra);
-  say(room, winner === 'survivor' ? 'survivorWin' : 'killerWin');
+  say(room, winner === 'jester' ? 'jesterWin' : winner === 'survivor' ? 'survivorWin' : 'killerWin');
   const reveal = room.players.map((p) => ({
     seat: p.seat, nickname: p.nickname, role: p.role,
     word: `${ROLE_META[p.role].name}${ROLE_META[p.role].icon}`, is_bot: p.isBot
@@ -345,15 +353,19 @@ export const horrorEngine = {
     const n = room.players.length;
     const killerCount = n >= 9 ? 2 : 1;
     const seats = shuffle(room.players.map((p) => p.seat));
-    const killerSeats = new Set(seats.slice(0, killerCount));
-    const mediumSeat = seats[killerCount];
-    const guardSeat = seats[killerCount + 1];
-    for (const p of room.players) {
-      p.alive = true;
-      p.role = killerSeats.has(p.seat) ? 'killer' : p.seat === mediumSeat ? 'medium' : p.seat === guardSeat ? 'guard' : 'survivor';
-    }
-    room.g = { mediumLog: {}, maxRounds: 6, lastGuard: null, lastEvent: null, blackout: false };
-    core.hostSay(room, `本局：${killerCount} 凶手 · 1 通灵者 · 1 守夜人 · ${n - killerCount - 2} 幸存者。身份已私发。撑过 ${room.g.maxRounds} 夜即可等到救援——天黑请闭眼。`);
+    // 随机角色配置：凶手×N + 通灵者 + 守夜人 + （6 人起，约 55% 出现）小丑 + 其余幸存者 → 局局不同
+    const roleBySeat = new Map();
+    let i = 0;
+    for (let k = 0; k < killerCount; k++) roleBySeat.set(seats[i++], 'killer');
+    roleBySeat.set(seats[i++], 'medium');
+    roleBySeat.set(seats[i++], 'guard');
+    const hasJester = n >= 6 && i < seats.length && Math.random() < 0.55;
+    if (hasJester) roleBySeat.set(seats[i++], 'jester');
+    for (; i < seats.length; i++) roleBySeat.set(seats[i], 'survivor');
+    for (const p of room.players) { p.alive = true; p.role = roleBySeat.get(p.seat); }
+    room.g = { mediumLog: {}, maxRounds: 6, lastGuard: null, lastEvent: null, blackout: false, hasJester };
+    const survCount = n - killerCount - 2 - (hasJester ? 1 : 0);
+    core.hostSay(room, `本局：${killerCount} 凶手 · 1 通灵者 · 1 守夜人${hasJester ? ' · 1 小丑(第三方)' : ''} · ${survCount} 幸存者。身份已私发。撑过 ${room.g.maxRounds} 夜即可等到救援——天黑请闭眼。`);
     for (const p of room.players.filter((x) => !x.isBot)) {
       const meta = ROLE_META[p.role];
       core.tell(room, p.userId, 'role', {

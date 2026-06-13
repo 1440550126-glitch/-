@@ -134,7 +134,7 @@ export async function renderRoom(page, params) {
     }
     if (room.status === 'ended' && room.reveal) {
       const winText = isHorror
-        ? (room.winner === 'survivor' ? '🌅 幸存者撑到了黎明，胜利！' : '🔪 凶手笑到了最后……')
+        ? (room.winner === 'survivor' ? '🌅 幸存者撑到了黎明，胜利！' : room.winner === 'jester' ? '🃏 小丑被放逐，达成胜利！' : '🔪 凶手笑到了最后……')
         : isWolfGame
           ? (room.winner === 'good' ? '🎉 好人阵营胜利！' : '🐺 狼人阵营胜利！')
           : (room.winner === 'civilian' ? '🎉 平民阵营胜利！' : '🕶️ 卧底阵营胜利！');
