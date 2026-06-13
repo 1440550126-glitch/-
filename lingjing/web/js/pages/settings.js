@@ -62,6 +62,25 @@ export async function renderSettings(page) {
   } });
   testBtn.innerHTML = `${icon('refresh', 15)} 测试连接`;
 
+  // 一键诊断：分别真实调用 对话/图像/视频 三类模型，定位"视频走本地"的真因
+  const diagOut = h('div', { style: { fontSize: '12.5px', marginTop: '10px', display: 'none', flexDirection: 'column', gap: '4px' } });
+  const diagBtn = h('button', { class: 'btn', onclick: async () => {
+    diagBtn.disabled = true; diagOut.style.display = 'flex'; diagOut.innerHTML = '<span>正在逐个真实调用对话/图像/视频模型…（视频较慢，请稍候）</span>';
+    try {
+      const r = await POST('/api/settings/diagnose');
+      diagOut.innerHTML = '';
+      for (const [k, label] of [['chat', '对话/剧本'], ['image', '图像 Seedream'], ['video', '视频 Seedance']]) {
+        const d = r[k]; if (!d) continue;
+        diagOut.append(h('div', { style: { color: d.ok ? 'var(--ok)' : 'var(--err)' } },
+          `${d.ok ? '✓' : '✗'} ${label}（${d.model}）：${d.ok ? '可用 ' + d.ms + 'ms' : d.error}`));
+      }
+      if (!r.video?.ok) diagOut.append(h('div', { style: { color: 'var(--ink2)', marginTop: '4px' } },
+        '💡 视频失败多为：①模型 ID 写成了名称但你的账号需用「推理接入点 ep-xxxx」②该模型未在控制台开通 ③地域与接口地址不符。把上面的真实报错按提示改即可。'));
+    } catch (e) { diagOut.innerHTML = ''; diagOut.append(h('div', { style: { color: 'var(--err)' } }, '✗ ' + e.message)); }
+    diagBtn.disabled = false;
+  } });
+  diagBtn.innerHTML = `🔧 一键诊断三模型`;
+
   const arkCard = h('div', { class: 'card pad' },
     h('h3', { style: { fontSize: '15px', marginBottom: '4px' } }, '火山方舟接入'),
     h('p', { style: { fontSize: '12.5px', color: 'var(--ink3)', marginBottom: '10px' } },
@@ -81,7 +100,8 @@ export async function renderSettings(page) {
       fld('AIQC 质检', qcEnSel, '出片前用视觉模型审查画面'),
       fld('发现问题', qcFixSel, '自动按建议改提示词重生成'),
       fld('放行分数', qcScoreIn, '低于此分判为需修复')),
-    h('div', { style: { display: 'flex', gap: '10px', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap' } }, saveBtn, testBtn, testOut));
+    h('div', { style: { display: 'flex', gap: '10px', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap' } }, saveBtn, testBtn, diagBtn, testOut),
+    diagOut);
 
   // 语音合成（配音）
   const ttsAppid = h('input', { class: 'input', value: s.tts_appid || '', placeholder: '语音技术 AppID' });

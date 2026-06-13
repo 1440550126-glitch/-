@@ -276,6 +276,23 @@ POST('/api/settings/test', async () => {
   return { ok: true, latency_ms: now() - t0, model: r.model, reply: r.text.slice(0, 40) };
 });
 
+// 一键诊断三类模型是否真的可用（逐个真实调用，返回成败与真实错误，专治"视频走本地"）
+POST('/api/settings/diagnose', async () => {
+  if (!arkEnabled()) throw bad('还没有配置方舟 API Key');
+  const { arkImage, arkVideoCreate } = await import('../lib/ark.js');
+  const c = cfg();
+  const out = {};
+  const probe = async (key, model, fn) => {
+    const t0 = now();
+    try { const r = await fn(); out[key] = { ok: true, model, ms: now() - t0, detail: r }; }
+    catch (e) { out[key] = { ok: false, model, ms: now() - t0, error: e.message }; }
+  };
+  await probe('chat', c.modelChat, async () => { const r = await arkChat({ feature: 'diag', prompt: '回复:1', maxTokens: 8, timeoutMs: 20_000 }); return r.text.slice(0, 20); });
+  await probe('image', c.modelImage, async () => { const r = await arkImage({ prompt: '一只猫坐在窗边，写实', ratio: '1:1', feature: 'diag' }); return r.url; });
+  await probe('video', c.modelVideo, async () => { const r = await arkVideoCreate({ prompt: '一只猫眨眼', ratio: '16:9', duration: 5 }); return '任务已创建 ' + r.remoteId; });
+  return out;
+});
+
 POST('/api/settings/tts-test', async () => {
   const { synthesize } = await import('../lib/tts.js');
   const url = await synthesize('灵境AI在此，配音已就绪。');
