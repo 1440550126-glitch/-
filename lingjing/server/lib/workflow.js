@@ -31,8 +31,11 @@ export function listWorkflows(projectId) {
   return q.all('SELECT id, project_id, episode, status, created_at, updated_at FROM workflows WHERE project_id = ? ORDER BY created_at DESC LIMIT 10', projectId);
 }
 export function cancelWorkflow(id) {
-  getWorkflow(id);
+  const wf = getWorkflow(id);
   q.run('UPDATE workflows SET cancel = 1, updated_at = ? WHERE id = ?', now(), id);
+  // 同步结束该项目仍在 running 的本地视频任务，让画布/任务中心停止无限轮询
+  // （方舟远端任务已提交无法撤回，但本地不再轮询；前端会显示"已取消"）
+  q.run(`UPDATE tasks SET status = 'failed', error = '工作流已取消', updated_at = ? WHERE project_id = ? AND kind = 'video' AND status IN ('queued','running')`, now(), wf.project_id);
   return { cancelling: true };
 }
 

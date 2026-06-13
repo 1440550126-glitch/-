@@ -137,6 +137,7 @@ try {
   const conTask = (await api('GET', `/api/ai/task/${conFrame.taskId}`)).data;
   ok(conTask.params?.seed > 0 && conTask.params?.ref_images >= 1, '首帧带种子 + 角色参考图');
   ok(/保持人物五官|出场人物/.test(conTask.prompt || ''), '锁定词自动注入首帧提示词');
+  ok(/解剖|肢体残缺|人物完整|不被画框裁断|脚部在画面内|半身/.test(conTask.prompt || ''), '构图/解剖护栏注入首帧提示词（防上下身错位）');
   ok((await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools.some((t) => t.name === 'check_consistency'), 'Agent 开放 check_consistency 工具');
   // 情绪联动 + 跨镜参考链：同场景相邻两镜，前镜挂 PNG 首帧、后镜设情绪
   const pair = (() => {
@@ -308,6 +309,16 @@ try {
   const cv9 = (await api('GET', `/api/canvases/${p9done.canvas_id}`)).data;
   ok(cv9.nodes.filter((n) => n.type === 'shot').every((n) => n.data.video), '全部分镜已出片');
   ok((await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools.filter((t) => ['run_workflow', 'get_workflow'].includes(t.name)).length === 2, 'Agent 开放工作流工具');
+  // 取消工作流应同步结束该项目仍在进行的视频任务（修"停不下来"）
+  const p10 = (await api('POST', '/api/projects', { title: '取消测试' })).data;
+  await api('POST', '/api/ai/script', { project_id: p10.id, num_scenes: 3 });
+  await api('POST', '/api/ai/parse', { project_id: p10.id });
+  const wf2 = (await api('POST', '/api/workflows', { project_id: p10.id })).data;
+  await api('POST', `/api/workflows/${wf2.id}/cancel`);
+  const wf2s = (await api('GET', `/api/workflows/${wf2.id}`)).data;
+  ok(wf2s.cancel === 1 || wf2s.status === 'cancelled', '工作流可取消');
+  ok(!(await api('GET', '/api/ai/tasks?kind=video&status=active')).data.some((t) => t.project_id === p10.id), '取消后该项目无残留进行中视频任务');
+  await api('DELETE', `/api/projects/${p10.id}`);
   await api('DELETE', `/api/projects/${p9.id}`);
 
   console.log('— 回收站 / 任务重试 —');
