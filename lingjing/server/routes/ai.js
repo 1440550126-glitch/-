@@ -24,7 +24,7 @@ POST('/api/ai/episode', async ({ body }) => {
 POST('/api/ai/parse', async ({ body }) => {
   if (!body.project_id) throw bad('缺少 project_id');
   const r = await parseScript({ projectId: body.project_id });
-  return { project: r.project, storyboard: r.storyboard, canvas_id: r.canvasId, by_llm: r.byLLM };
+  return { project: r.project, storyboard: r.storyboard, canvas_id: r.canvasId, by_llm: r.byLLM, warn: r.warn || '' };
 });
 
 POST('/api/ai/image', async ({ body }) => {

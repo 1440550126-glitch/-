@@ -123,41 +123,145 @@ ${heroine}：（迎着风站定）那就让他来。我等着。
 const SHOT_TYPES = ['全景', '中景', '近景', '特写'];
 const CAMERAS = ['固定机位', '缓慢推近', '环绕运镜', '跟随移动', '拉远收尾'];
 
+// 非角色「说话人」黑名单（精确匹配）：技术/旁白/场景标签
+const NON_CHAR_LABELS = new Set([
+  '场景', '类型', '灵感', '风格', '旁白', '字幕', '注', '注释', '备注', '提示', '画外音', '内心', '内心独白', 'OS', 'VO', 'V.O', 'O.S',
+  '画面', '镜头', '特写', '全景', '近景', '中景', '远景', '空镜', '黑场', '插卡', '字幕卡', '片名', '标题', '音乐', '音效', '背景音',
+  '时间', '地点', '日', '夜', '内', '外', '蒙太奇', '闪回', '导演', '编剧', '出品', '声音', '解说', '介绍', '说明', '人物', '道具', '关键道具'
+]);
+// 含动作/技术动词的 token 不是人名（如：字幕浮现 / 在另一头喊 / 画上）
+const VERB_RE = /浮现|出现|响起|传来|喊|叫|喊道|说道|说|道|问|答|想|看|望|走|跑|打|拿|举|画|写|响|亮|灭|切|推|拉|摇|升|降|闪|爬|冲|抓|按|踢|踹|低语|怒吼|嘶吼|尖叫|低吼|咆哮|画上|上方|下方|远处|身后|另一头|另一边/;
+
+/** 判断一个台词说话人 token 是否像真实角色名 */
+function looksLikeName(tok) {
+  const t = String(tok).trim();
+  if (!t || t.length > 6 || t.length < 1) return false;
+  if (NON_CHAR_LABELS.has(t)) return false;
+  if (VERB_RE.test(t)) return false;
+  if (/[，。、！？!?.,；;…—\-（）()【】"'《》0-9a-zA-Z]/.test(t)) return false; // 含标点/数字/英文一般是描述
+  return true;
+}
+/** 从人设描述里推断性别 */
+export function guessGender(desc = '', name = '') {
+  const s = desc + name;
+  const female = /女主|女一|女二|女子|女人|女孩|女性|少女|姑娘|妈|母亲|母|姐|妹|婆|奶奶|外婆|阿姨|大妈|女医生|女兵|妻|寡|嫂|姨|娘|她/;
+  const male = /男主|男一|男二|男子|男人|男孩|男性|少年|大叔|老汉|爸|父亲|父|哥|弟|爷|爷爷|外公|叔|伯|丈夫|和尚|道士|男医生|男兵|他/;
+  const f = (s.match(female) || []).length;
+  const m = (s.match(male) || []).length;
+  if (f > m) return '女';
+  if (m > f) return '男';
+  return '';
+}
+function ageHint(desc = '') {
+  if (/老|年迈|苍老|花甲|古稀|白发|爷|奶|婆|大爷|老汉/.test(desc)) return '老年';
+  if (/少年|少女|小孩|儿童|小学|稚嫩|十[一二三四五六七八九]岁|孩子/.test(desc)) return '少年';
+  if (/中年|大叔|大妈|四十|五十/.test(desc)) return '中年';
+  return '青年';
+}
+
+/**
+ * 把长剧本切成有序段落（供 LLM 分段解析，避免一次性截断）。
+ * 优先按「第 N 幕/集」切；否则按场次分组成若干幕；短剧本返回单段。
+ * @returns {Array<{title:string, body:string, unit:'幕'|'集'}>}
+ */
+export function splitScriptSegments(script = '', { maxChars = 9000 } = {}) {
+  const text = String(script || '');
+  const head = (text.match(/^[\s\S]*?(?=^第\s*[一二三四五六七八九十\d]+\s*[幕集场]|^(?:INT|EXT)[.． ]|^场景[:：])/m) || [''])[0]; // 剧名/人物表/道具块
+  const unit = /^第\s*[一二三四五六七八九十\d]+\s*幕/m.test(text) ? '幕' : (/^第\s*\d+\s*集/m.test(text) ? '集' : '幕');
+
+  // 1) 显式分段标记
+  const segRe = unit === '集' ? /^第\s*\d+\s*集.*$/gm : /^第\s*[一二三四五六七八九十\d]+\s*幕.*$/gm;
+  let marks = [...text.matchAll(segRe)];
+  // 2) 无标记 → 用场次头分组
+  if (!marks.length) {
+    const heads = [...text.matchAll(/^第\s*\d+\s*场.*$|^(?:INT|EXT)[.． ].*$|^场景[:：].*$/gm)];
+    if (heads.length <= 1 || text.length <= maxChars) return [{ title: '全片', body: text, unit }];
+    const acts = Math.min(8, Math.max(3, Math.ceil(text.length / maxChars), Math.round(heads.length / 5)));
+    const per = Math.ceil(heads.length / acts);
+    const ACT_NAMES = ['序幕', '崩塌', '逃亡', '裂变', '困局', '反转', '决战', '终幕'];
+    const segs = [];
+    for (let a = 0; a < acts; a++) {
+      const start = a === 0 ? 0 : heads[a * per].index;
+      const end = (a + 1) * per < heads.length ? heads[(a + 1) * per].index : text.length;
+      segs.push({ title: ACT_NAMES[a] || `第 ${a + 1} 幕`, body: (a === 0 ? '' : head) + text.slice(start, end), unit });
+    }
+    return segs;
+  }
+  // 显式标记 → 每段带上剧名/人物表（让每段解析都知道人物全貌）
+  const segs = [];
+  const firstSceneIdx = text.search(/^第\s*\d+\s*场|^(?:INT|EXT)[.． ]|^场景[:：]/m);
+  if (firstSceneIdx >= 0 && firstSceneIdx < marks[0].index) {
+    segs.push({ title: `第一${unit}`, body: text.slice(0, marks[0].index), unit });
+  }
+  marks.forEach((m, i) => {
+    const end = i + 1 < marks.length ? marks[i + 1].index : text.length;
+    const t = (m[0].replace(/^第\s*[一二三四五六七八九十\d]+\s*[幕集]\s*[｜|:：]?\s*/, '') || '').trim().slice(0, 20);
+    segs.push({ title: t || `第 ${segs.length + 1} ${unit}`, body: head + text.slice(m.index, end), unit });
+  });
+  return segs;
+}
+
 export function localParse(script = '', { style = '', maxShots = 14 } = {}) {
   const text = String(script || '').trim();
   const rnd = seededRandom(hashCode(text.slice(0, 500)));
-  const title = (text.match(/《(.+?)》/) || [])[1] || text.split('\n')[0]?.slice(0, 20) || '未命名短剧';
+  const title = (text.match(/《(.+?)》/) || [])[1] || text.split('\n')[0]?.slice(0, 20) || '未命名作品';
   const styleHint = style || '电影质感，胶片色调，高对比布光';
 
-  // 人物：【人物】块 + 台词说话人
-  const charMap = new Map();
-  const block = text.match(/【人物】([\s\S]*?)(?=\n【|\n第\s*\d+\s*场|$)/);
+  // 人物：①【人物/角色】块（权威来源） ②台词说话人（严格过滤 + 出现次数门槛）
+  const charMeta = new Map();   // name -> {desc, gender, fromBlock, count}
+  const block = text.match(/【(?:人物|角色|主要人物|人物表)】([\s\S]*?)(?=\n【|\n第\s*[一二三四五六七八九十\d]+\s*[幕集场]|$)/);
   if (block) {
     for (const line of block[1].split('\n')) {
-      const m = line.match(/^\s*([^\s（(:：】]{1,12})(（[^）]*）)?[:：](.+)$/);
-      if (m) charMap.set(m[1], (m[2] || '').replace(/[（）]/g, '') + ' ' + m[3].trim());
+      const m = line.match(/^\s*[·•\-*]?\s*([^\s（(:：】]{1,8})\s*(（[^）]*）)?\s*[:：](.+)$/);
+      if (m && looksLikeName(m[1].replace(/（.*/, ''))) {
+        const nm = m[1].replace(/（.*/, '').trim();
+        const role = (m[2] || '').replace(/[（）]/g, '');
+        const d = (role ? role + '，' : '') + m[3].trim();
+        charMeta.set(nm, { desc: d, gender: guessGender(d, nm), fromBlock: true, count: 99 });
+      }
     }
   }
-  for (const m of text.matchAll(/^\s*([^\s（(:：【\][]{1,8})[:：](?!\/)/gm)) {
-    const name = m[1];
-    if (['场景', '类型', '灵感', '风格', '旁白', '字幕', '注', '画外音'].includes(name)) continue;
-    if (!charMap.has(name)) charMap.set(name, '剧中人物');
+  // 台词说话人：统计出现次数，非 block 角色需出现 ≥2 次才采纳（过滤偶发误判）
+  for (const m of text.matchAll(/^\s*([^\s（(:：【\][]{1,8})\s*[:：](?!\/)/gm)) {
+    const name = m[1].trim();
+    if (!looksLikeName(name)) continue;
+    if (charMeta.has(name)) { if (!charMeta.get(name).fromBlock) charMeta.get(name).count++; continue; }
+    charMeta.set(name, { desc: '', gender: '', fromBlock: false, count: 1 });
   }
-  if (!charMap.size) charMap.set('主角', '故事的核心人物');
+  // 过滤：保留 block 角色 + 出现≥2次的说话人
+  const charMap = new Map();
+  for (const [name, meta] of charMeta) {
+    if (meta.fromBlock || meta.count >= 2) charMap.set(name, meta);
+  }
+  if (!charMap.size) charMap.set('主角', { desc: '故事的核心人物', gender: '', fromBlock: true, count: 99 });
 
-  // 分集切分（「第 N 集」行；剧本无分集标记则视为单集）
-  const epMarks = [...text.matchAll(/^第\s*\d+\s*集.*$/gm)];
-  const episodes = [];
+  // 分段切分：支持「第 N 幕」(电影/话剧) 与「第 N 集」(短剧)；长剧本无标记时自动分幕
+  const unit = /^第\s*[一二三四五六七八九十\d]+\s*幕/m.test(text) ? '幕' : '集';
+  const segRe = unit === '幕' ? /^第\s*[一二三四五六七八九十\d]+\s*幕.*$/gm : /^第\s*\d+\s*集.*$/gm;
+  const epMarks = [...text.matchAll(segRe)];
+  let episodes = [];
   if (epMarks.length) {
-    // 首个集标记之前已出现场次 → 说明开头还有未标记的一集（剧名/人物块不算）
     const firstSceneIdx = text.search(/^第\s*\d+\s*场|^(?:INT|EXT)[.． ]|^场景[:：]/m);
-    if (firstSceneIdx >= 0 && firstSceneIdx < epMarks[0].index) episodes.push({ title: '第一集', summary: '', offset: 0 });
+    if (firstSceneIdx >= 0 && firstSceneIdx < epMarks[0].index) episodes.push({ title: `第一${unit}`, summary: '', offset: 0 });
     epMarks.forEach((m) => {
-      const t = (m[0].match(/^第\s*\d+\s*集\s*[｜|:：]?\s*(.*)$/)?.[1] || '').trim().slice(0, 20);
-      episodes.push({ title: t || `第 ${episodes.length + 1} 集`, summary: '', offset: m.index });
+      const t = (m[0].match(new RegExp(`^第\\s*[一二三四五六七八九十\\d]+\\s*${unit}\\s*[｜|:：]?\\s*(.*)$`))?.[1] || '').trim().slice(0, 20);
+      episodes.push({ title: t || `第 ${episodes.length + 1} ${unit}`, summary: '', offset: m.index });
     });
-  } else {
-    episodes.push({ title: '第一集', summary: '', offset: 0 });
+  }
+  // 无分段标记但剧本很长（电影/长片）→ 按场次自动分幕，便于分批生成与管理
+  if (!episodes.length) {
+    const sceneHeads = [...text.matchAll(/^第\s*\d+\s*场|^(?:INT|EXT)[.． ]|^场景[:：]/gm)];
+    if (text.length > 6000 && sceneHeads.length >= 6) {
+      const acts = Math.min(8, Math.max(3, Math.round(sceneHeads.length / 4)));
+      const per = Math.ceil(sceneHeads.length / acts);
+      const ACT_NAMES = ['序幕', '崩塌', '逃亡', '裂变', '困局', '反转', '决战', '终幕'];
+      for (let a = 0; a < acts; a++) {
+        const head = sceneHeads[a * per];
+        episodes.push({ title: ACT_NAMES[a] || `第 ${a + 1} 幕`, summary: '', offset: a === 0 ? 0 : head.index });
+      }
+    } else {
+      episodes.push({ title: unit === '幕' ? '第一幕' : '全片', summary: '', offset: 0 });
+    }
   }
   episodes.forEach((e, i) => { e.key = `e${i + 1}`; e.order = i + 1; });
   const epForOffset = (off) => {
@@ -187,7 +291,7 @@ export function localParse(script = '', { style = '', maxShots = 14 } = {}) {
 
   // 道具
   const props = [];
-  const propBlock = text.match(/【(?:关键)?道具】([\s\S]*?)(?=\n【|\n第\s*\d+\s*场|$)/);
+  const propBlock = text.match(/【(?:关键)?道具】([\s\S]*?)(?=\n【|\n第\s*[一二三四五六七八九十\d]+\s*[幕集场]|$)/);
   if (propBlock) {
     for (const line of propBlock[1].split('\n')) {
       const m = line.match(/^\s*([^\s:：]{1,14})[:：](.+)$/);
@@ -195,10 +299,20 @@ export function localParse(script = '', { style = '', maxShots = 14 } = {}) {
     }
   }
 
-  const characters = [...charMap.entries()].slice(0, 6).map(([name, desc], i) => ({
-    key: `c${i + 1}`, name, role: i === 0 ? '主角' : '角色', desc: desc.trim().slice(0, 80),
-    image_prompt: `${styleHint}，人物肖像，${name}，${desc.trim().slice(0, 60)}，半身正面，浅景深`
-  }));
+  const characters = [...charMap.entries()].slice(0, 12).map(([name, meta], i) => {
+    const d = (meta.desc || '剧中人物').trim();
+    const gender = meta.gender || guessGender(d, name);
+    // 优先用人设里的明确标签判定角色定位（避免"坏掉的收音机"误判反派）
+    const role = /女主|男主|主角|主人公|女一|男一/.test(d) ? '主角'
+      : /反派|大反派|反一|boss|首领|凶手|幕后|敌人|坏人/i.test(d) ? '反派'
+        : /配角|龙套|路人|群演/.test(d) ? '配角'
+          : i === 0 ? '主角' : '配角';
+    const gtag = gender === '男' ? '男性' : gender === '女' ? '女性' : '';
+    return {
+      key: `c${i + 1}`, name, role, gender, desc: d.slice(0, 120),
+      image_prompt: `${styleHint}，人物肖像，${gtag}${ageHint(d)}，${name}，${d.slice(0, 70)}，半身正面，浅景深，写实`
+    };
+  });
   const charKeyByName = new Map(characters.map((c) => [c.name, c.key]));
 
   // 场景按名字去重（多集会复用同名场景）
@@ -207,7 +321,7 @@ export function localParse(script = '', { style = '', maxShots = 14 } = {}) {
   const blockSceneKey = [];
   for (const s of sceneBlocks) {
     let key = sceneKeyByName.get(s.name);
-    if (!key && scenes.length < 10) {
+    if (!key && scenes.length < 20) {
       key = `s${scenes.length + 1}`;
       sceneKeyByName.set(s.name, key);
       scenes.push({
@@ -222,8 +336,10 @@ export function localParse(script = '', { style = '', maxShots = 14 } = {}) {
     image_prompt: `${styleHint}，道具特写，${p.name}，${p.desc.slice(0, 40)}，置于桌面，戏剧布光`
   }));
 
-  // 分镜：每场提取动作行（…）与台词行（多集时上限随集数放大）
-  const shotCap = Math.min(40, maxShots * Math.max(1, Math.min(episodes.length, 3)));
+  // 分镜上限随剧本体量放大：长片（90分钟≈数万字）可拆上百个分镜，而非固定 40
+  const byLength = Math.round(text.length / 220);            // 约每 220 字一个关键分镜
+  const byScenes = sceneBlocks.length * 5;                   // 每场最多 ~5 个分镜
+  const shotCap = clamp(Math.max(byLength, byScenes, maxShots), maxShots, 160);
   const shots = [];
   sceneBlocks.forEach((s, si) => {
     if (shots.length >= shotCap) return;
@@ -245,7 +361,9 @@ export function localParse(script = '', { style = '', maxShots = 14 } = {}) {
         beats.push({ type: 'action', text: line.slice(0, 60), speakers: [] });
       }
     }
-    const chosen = beats.length > 4 ? beats.filter((_, i) => i % Math.ceil(beats.length / 4) === 0).slice(0, 4) : beats;
+    // 每场最多取 6 个关键节拍（动作/台词均匀采样）
+    const perScene = 6;
+    const chosen = beats.length > perScene ? beats.filter((_, i) => i % Math.ceil(beats.length / perScene) === 0).slice(0, perScene) : beats;
     const sceneKey = blockSceneKey[si];
     const sceneName = scenes.find((x) => x.key === sceneKey)?.name || '主场景';
     chosen.forEach((b) => {
@@ -279,7 +397,7 @@ export function localParse(script = '', { style = '', maxShots = 14 } = {}) {
   }
 
   return {
-    title, logline: text.replace(/\s+/g, ' ').slice(0, 80), style: styleHint,
+    title, logline: text.replace(/\s+/g, ' ').slice(0, 80), style: styleHint, unit,
     episodes: episodes.map(({ offset, ...e }) => e),
     characters, scenes, props: propList, shots
   };

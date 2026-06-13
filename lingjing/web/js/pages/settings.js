@@ -13,6 +13,7 @@ export async function renderSettings(page) {
   const videoOptsIn = h('textarea', { class: 'textarea', rows: 4, value: s.model_video_options || '', placeholder: 'Seedance 1.0 Pro|doubao-seedance-1-0-pro-250528' });
   const extraIn = h('input', { class: 'input', value: s.video_extra_args || '', placeholder: '如 --camerafixed true' });
   const wmSel = h('select', { class: 'select' }, [['false', '不加水印'], ['true', '加 AI 水印']].map(([v, l]) => h('option', { value: v, selected: String(s.watermark) === v }, l)));
+  const fbSel = h('select', { class: 'select' }, [['false', '关闭（推荐：失败时报真实错误，便于排查）'], ['true', '开启（失败时用本地占位图/视频兜底）']].map(([v, l]) => h('option', { value: v, selected: String(!!s.local_fallback) === v }, l)));
   const nameIn = h('input', { class: 'input', value: s.user_name });
   const p1 = h('input', { class: 'input', type: 'number', step: '0.0001', value: s.price_chat_in });
   const p2 = h('input', { class: 'input', type: 'number', step: '0.0001', value: s.price_chat_out });
@@ -28,7 +29,7 @@ export async function renderSettings(page) {
       const body = {
         ark_base_url: baseIn.value.trim(), model_chat: chatIn.value.trim(), model_image: imageIn.value.trim(), model_video: videoIn.value.trim(),
         model_video_options: videoOptsIn.value.trim(), video_extra_args: extraIn.value.trim(),
-        watermark: wmSel.value === 'true', user_name: nameIn.value.trim() || '创作者',
+        watermark: wmSel.value === 'true', local_fallback: fbSel.value === 'true', user_name: nameIn.value.trim() || '创作者',
         price_chat_in: Number(p1.value), price_chat_out: Number(p2.value), price_image: Number(p3.value), price_video_sec: Number(p4.value)
       };
       const k = keyIn.value.trim();
@@ -69,6 +70,7 @@ export async function renderSettings(page) {
     fld('创作框可选视频模型（每行：显示名|模型ID）', videoOptsIn, '首页创作框与 Agent 可按次选用；加一行 Seedance 2.0|<模型ID> 即生效'),
     fld('视频任务附加参数', extraIn, '追加到 Seedance 文本命令末尾（按官方文档填，如 --camerafixed true）'),
     fld('水印', wmSel),
+    fld('生成失败时本地兜底', fbSel, '已接入方舟时建议关闭：失败会直接报真实原因（模型未开通/ID 错误/无额度），不再悄悄给本地占位'),
     h('div', { style: { display: 'flex', gap: '10px', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap' } }, saveBtn, testBtn, testOut));
 
   // 语音合成（配音）

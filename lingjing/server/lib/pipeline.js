@@ -3,9 +3,12 @@
 import { q, getSetting } from './db.js';
 import { uid, now, jparse, clamp } from './util.js';
 import { arkEnabled, arkChat, arkImage, arkVideoCreate, arkVideoGet, cfg } from './ark.js';
-import { localScript, localParse, localImageSVG, localVideoSVG, saveSVG, localNextEpisode, localViralAnalysis } from './local.js';
+import { localScript, localParse, localImageSVG, localVideoSVG, saveSVG, localNextEpisode, localViralAnalysis, guessGender, splitScriptSegments } from './local.js';
 import { resolveStylePrompt } from './styles.js';
 import { bad, notFound } from './httpx.js';
+
+// 已接入方舟时，生成失败是否静默落本地占位（默认否：诚实暴露真实错误，便于排查模型配置）
+export const localFallbackOn = () => getSetting('local_fallback', false) === true;
 
 /** 项目风格注入：prompt 未包含该风格时自动前置（风格名自动展开成完整提示词） */
 function applyStyle(prompt, style) {
@@ -133,21 +136,26 @@ export async function remakeViral({ reference, topic, projectId = '', genre = ''
 }
 
 // ---------- 剧本解析 → 分镜 ----------
-const PARSE_SYSTEM = `你是短剧导演兼分镜师。把剧本解析为可拍摄的结构化 JSON，只输出 JSON。schema：
-{"title":"剧名","logline":"一句话故事","style":"画面风格描述",
- "episodes":[{"key":"e1","title":"集标题","summary":"本集一句话梗概"}],
- "characters":[{"key":"c1","name":"","role":"主角/反派/配角","desc":"外貌+性格","image_prompt":"用于文生图的人物肖像提示词"}],
- "scenes":[{"key":"s1","name":"","desc":"","image_prompt":"场景空镜提示词"}],
- "props":[{"key":"p1","name":"","desc":"","image_prompt":"道具特写提示词"}],
- "shots":[{"key":"sh1","order":1,"episode":"e1","scene":"s1","characters":["c1"],"shot_type":"远景/全景/中景/近景/特写","camera":"运镜","emotion":"主要角色情绪(可空：冷酷/愤怒/狂喜/悲伤/微笑/惊恐/魅惑/羞涩)","action":"画面内发生的事","dialogue":"台词(可空)","duration":5,"image_prompt":"该镜头首帧画面的文生图提示词","video_prompt":"该镜头的图生视频动态提示词(动作+运镜)"}]}
-要求：剧本含「第 N 集」标记时按集划分 episodes（否则只有 e1），shots 按集顺序排列且 episode 正确引用；每集分镜 4-10 个；
-角色/场景跨集复用同一 key（不要每集重复建）；image_prompt/video_prompt 用中文、具体、含风格词。`;
+const PARSE_SYSTEM = `你是资深电影分镜师。把剧本（或剧本的一幕/一集）解析为可拍摄的结构化 JSON，只输出 JSON、不要任何解释或 markdown。schema：
+{"title":"片名","logline":"一句话故事","style":"画面风格","unit":"幕或集",
+ "episodes":[{"key":"e1","title":"本段标题","summary":"本段一句话梗概"}],
+ "characters":[{"key":"c1","name":"准确人物名","role":"主角/反派/配角","gender":"男或女","desc":"年龄段+性别+外貌+服装+性格，尽量具体","image_prompt":"人物定妆照文生图提示词，必须含性别年龄外貌服装"}],
+ "scenes":[{"key":"s1","name":"场景名","desc":"环境/时间/氛围","image_prompt":"场景空镜提示词"}],
+ "props":[{"key":"p1","name":"关键道具","desc":"","image_prompt":"道具特写提示词"}],
+ "shots":[{"key":"sh1","order":1,"episode":"e1","scene":"s1","characters":["c1"],"shot_type":"远景/全景/中景/近景/特写","camera":"运镜","emotion":"主要角色情绪(可空：冷酷/愤怒/狂喜/悲伤/微笑/惊恐/魅惑/羞涩)","action":"画面内发生的事","dialogue":"台词(可空)","duration":4,"image_prompt":"该镜头首帧文生图提示词，写明出场人物名与场景","video_prompt":"图生视频动态提示词(动作+运镜)"}]}
+铁律：
+1. 只把真正的剧中人物列为 character。绝不要把「字幕」「画外音」「旁白」「镜头」「特写」「字幕浮现」「在另一头喊」「画上」等技术/旁白/动作描述当成人物；
+2. 每个人物必须判断 gender（男/女）与年龄段，写进 desc 与 image_prompt；
+3. 场景尽量识别全（室内外/废墟/车内/避难所…），道具识别关键物件；
+4. 这是一部电影/长片的一个段落，请尽量细分镜：本段输出 12-30 个 shots，覆盖每个关键动作与台词；
+5. 同一人物/场景在本段内复用同一 key，不重复建。`;
 
 function normalizeStoryboard(sb) {
   const out = {
-    title: String(sb.title || '未命名短剧').slice(0, 50),
+    title: String(sb.title || '未命名作品').slice(0, 50),
     logline: String(sb.logline || '').slice(0, 200),
     style: String(sb.style || '').slice(0, 100),
+    unit: sb.unit === '幕' ? '幕' : '集',
     episodes: [], characters: [], scenes: [], props: [], shots: []
   };
   const remap = {};
@@ -155,30 +163,32 @@ function normalizeStoryboard(sb) {
   (Array.isArray(sb.episodes) ? sb.episodes : []).slice(0, 12).forEach((e, i) => {
     const key = `e${i + 1}`;
     epRemap[e.key || key] = key;
-    out.episodes.push({ key, order: i + 1, title: String(e.title || `第 ${i + 1} 集`).slice(0, 30), summary: String(e.summary || '').slice(0, 120) });
+    out.episodes.push({ key, order: i + 1, title: String(e.title || `第 ${i + 1} ${out.unit}`).slice(0, 30), summary: String(e.summary || '').slice(0, 120) });
   });
-  if (!out.episodes.length) out.episodes.push({ key: 'e1', order: 1, title: '第一集', summary: '' });
-  (Array.isArray(sb.characters) ? sb.characters : []).slice(0, 8).forEach((c, i) => {
+  if (!out.episodes.length) out.episodes.push({ key: 'e1', order: 1, title: `第一${out.unit}`, summary: '' });
+  (Array.isArray(sb.characters) ? sb.characters : []).slice(0, 14).forEach((c, i) => {
     const key = `c${i + 1}`;
     remap[c.key || key] = key;
-    out.characters.push({ key, name: String(c.name || `角色${i + 1}`).slice(0, 20), role: String(c.role || '角色').slice(0, 10), desc: String(c.desc || '').slice(0, 200), image_prompt: String(c.image_prompt || c.name || '').slice(0, 400) });
+    const desc = String(c.desc || '').slice(0, 200);
+    const gender = c.gender === '男' || c.gender === '女' ? c.gender : guessGender(desc, String(c.name || ''));
+    out.characters.push({ key, name: String(c.name || `角色${i + 1}`).slice(0, 20), role: String(c.role || '角色').slice(0, 10), gender, desc, image_prompt: String(c.image_prompt || c.name || '').slice(0, 400) });
   });
-  (Array.isArray(sb.scenes) ? sb.scenes : []).slice(0, 10).forEach((s, i) => {
+  (Array.isArray(sb.scenes) ? sb.scenes : []).slice(0, 22).forEach((s, i) => {
     const key = `s${i + 1}`;
     remap[s.key || key] = key;
     out.scenes.push({ key, name: String(s.name || `场景${i + 1}`).slice(0, 20), desc: String(s.desc || '').slice(0, 200), image_prompt: String(s.image_prompt || s.name || '').slice(0, 400) });
   });
-  (Array.isArray(sb.props) ? sb.props : []).slice(0, 6).forEach((p, i) => {
+  (Array.isArray(sb.props) ? sb.props : []).slice(0, 10).forEach((p, i) => {
     const key = `p${i + 1}`;
     remap[p.key || key] = key;
     out.props.push({ key, name: String(p.name || `道具${i + 1}`).slice(0, 20), desc: String(p.desc || '').slice(0, 200), image_prompt: String(p.image_prompt || p.name || '').slice(0, 400) });
   });
-  if (!out.characters.length) out.characters.push({ key: 'c1', name: '主角', role: '主角', desc: '', image_prompt: '电影感人物肖像' });
+  if (!out.characters.length) out.characters.push({ key: 'c1', name: '主角', role: '主角', gender: '', desc: '', image_prompt: '电影感人物肖像' });
   if (!out.scenes.length) out.scenes.push({ key: 's1', name: '主场景', desc: '', image_prompt: '电影感场景空镜' });
   const epOrder = new Map(out.episodes.map((e) => [e.key, e.order]));
-  const rawShots = (Array.isArray(sb.shots) ? sb.shots : []).slice(0, 48)
+  const rawShots = (Array.isArray(sb.shots) ? sb.shots : []).slice(0, 200)
     .map((sh, idx) => ({ sh, idx, ep: epOrder.get(epRemap[sh.episode] || 'e1') || 1 }))
-    .sort((a, b) => a.ep - b.ep || a.idx - b.idx);   // 按集分组，集内保持原顺序
+    .sort((a, b) => a.ep - b.ep || a.idx - b.idx);   // 按幕/集分组，段内保持原顺序
   rawShots.forEach(({ sh }, i) => {
     out.shots.push({
       key: `sh${i + 1}`, order: i + 1,
@@ -197,21 +207,92 @@ function normalizeStoryboard(sb) {
   return out;
 }
 
+/** 合并多段解析结果：角色/场景/道具按名字去重，分镜顺序拼接、段落映射到 episode */
+function mergeStoryboards(parts) {
+  const merged = { title: '', logline: '', style: '', unit: parts[0]?.unit || '幕', episodes: [], characters: [], scenes: [], props: [], shots: [] };
+  const charByName = new Map(), sceneByName = new Map(), propByName = new Map();
+  parts.forEach((sb, pi) => {
+    if (!merged.title && sb.title) merged.title = sb.title;
+    if (!merged.logline && sb.logline) merged.logline = sb.logline;
+    if (!merged.style && sb.style) merged.style = sb.style;
+    const epKey = `e${pi + 1}`;
+    merged.episodes.push({ key: epKey, order: pi + 1, title: sb.episodes?.[0]?.title || `第 ${pi + 1} ${merged.unit}`, summary: sb.episodes?.[0]?.summary || sb.logline || '' });
+    const localRemap = {};
+    for (const c of sb.characters) {
+      if (!charByName.has(c.name)) { const k = `c${charByName.size + 1}`; charByName.set(c.name, { ...c, key: k }); localRemap[c.key] = k; }
+      else localRemap[c.key] = charByName.get(c.name).key;
+    }
+    for (const s of sb.scenes) {
+      if (!sceneByName.has(s.name)) { const k = `s${sceneByName.size + 1}`; sceneByName.set(s.name, { ...s, key: k }); localRemap[s.key] = k; }
+      else localRemap[s.key] = sceneByName.get(s.name).key;
+    }
+    for (const p of sb.props) {
+      if (!propByName.has(p.name)) { const k = `p${propByName.size + 1}`; propByName.set(p.name, { ...p, key: k }); localRemap[p.key] = k; }
+      else localRemap[p.key] = propByName.get(p.name).key;
+    }
+    for (const sh of sb.shots) {
+      merged.shots.push({
+        ...sh, key: `sh${merged.shots.length + 1}`, order: merged.shots.length + 1, episode: epKey,
+        scene: localRemap[sh.scene] || 's1',
+        characters: (sh.characters || []).map((k) => localRemap[k]).filter(Boolean)
+      });
+    }
+  });
+  merged.characters = [...charByName.values()];
+  merged.scenes = [...sceneByName.values()];
+  merged.props = [...propByName.values()];
+  return normalizeStoryboard(merged);
+}
+
+const parseJSON = (txt) => jparse(String(txt).replace(/```(json)?/gi, '').replace(/```/g, '').trim(), null);
+
 export async function parseScript({ projectId }) {
   const project = getProject(projectId);
   if (!project.script?.trim()) throw bad('项目还没有剧本，先写剧本或用 AI 生成');
+  const styleNote = project.style ? `\n（项目预设风格：${resolveStylePrompt(project.style)}，所有 image_prompt/video_prompt 必须体现该风格）` : '';
   let sb = null;
   let byLLM = false;
+  let warn = '';
+
   if (arkEnabled()) {
+    // 长剧本（电影）分幕分段送 LLM，避免一次性截断导致解析失败/丢内容
+    const segments = splitScriptSegments(project.script, { maxChars: 9000 });
     try {
-      const r = await arkChat({
-        feature: 'parse', system: PARSE_SYSTEM, json: true, temperature: 0.4, maxTokens: 6000,
-        prompt: `剧本如下，请解析：\n${project.script.slice(0, 12000)}${project.style ? `\n（项目预设风格：${resolveStylePrompt(project.style)}，所有 image_prompt/video_prompt 必须体现该风格）` : ''}`
-      });
-      sb = normalizeStoryboard(jparse(r.text.replace(/^```(json)?|```$/gm, ''), {}));
+      if (segments.length === 1) {
+        const r = await arkChat({
+          feature: 'parse', system: PARSE_SYSTEM, json: true, temperature: 0.3, maxTokens: 8000,
+          prompt: `剧本如下，请解析：\n${segments[0].body.slice(0, 14000)}${styleNote}`
+        });
+        const j = parseJSON(r.text);
+        if (!j) throw new Error('LLM 返回的 JSON 无法解析（可能输出被截断）');
+        sb = normalizeStoryboard(j);
+      } else {
+        // 多段：逐段解析后合并（最多 8 段，控制时延/成本）
+        const cap = segments.slice(0, 8);
+        const parts = [];
+        let failed = 0;
+        for (let i = 0; i < cap.length; i++) {
+          try {
+            const r = await arkChat({
+              feature: 'parse', system: PARSE_SYSTEM, json: true, temperature: 0.3, maxTokens: 7000,
+              prompt: `这是一部「${segments[0].unit === '幕' ? '电影/长片' : '短剧'}」的第 ${i + 1}/${cap.length} ${cap[i].unit}「${cap[i].title}」。请解析这一段：\n${cap[i].body.slice(0, 12000)}${styleNote}\n（unit 填「${cap[i].unit}」；episodes 只放本段一项）`
+            });
+            const j = parseJSON(r.text);
+            if (!j?.shots?.length) throw new Error('本段无有效分镜');
+            j.unit = cap[i].unit;
+            if (!j.episodes?.length) j.episodes = [{ key: 'e1', title: cap[i].title, summary: j.logline || '' }];
+            else j.episodes[0].title = j.episodes[0].title || cap[i].title;
+            parts.push(normalizeStoryboard(j));
+          } catch (e) { failed++; console.warn(`[parse] 第 ${i + 1} 段失败：`, e.message); }
+        }
+        if (!parts.length) throw new Error('所有段落解析失败');
+        sb = mergeStoryboards(parts);
+        if (failed) warn = `${cap.length} 段中有 ${failed} 段解析失败，已跳过（可重新解析重试）`;
+      }
       byLLM = true;
     } catch (e) {
       console.warn('[pipeline] 方舟解析失败，落本地引擎：', e.message);
+      warn = `方舟解析未完成（${e.message}），已用本地引擎兜底——请检查对话模型是否支持长输出，或重试`;
     }
   }
   if (!sb) sb = normalizeStoryboard(localParse(project.script, { style: resolveStylePrompt(project.style) }));
@@ -220,10 +301,10 @@ export async function parseScript({ projectId }) {
   const canvasId = ensureCanvas(project, sb);
   touchProject(project.id, {
     storyboard: JSON.stringify(sb), status: 'parsed', canvas_id: canvasId,
-    ...(project.title === '未命名短剧' && sb.title ? { title: sb.title } : {}),
+    ...((project.title === '未命名短剧' || project.title === '未命名作品') && sb.title ? { title: sb.title } : {}),
     ...(sb.style && !project.style ? { style: sb.style.slice(0, 300) } : {})
   });
-  return { project: projectOut(q.get('SELECT * FROM projects WHERE id = ?', project.id)), storyboard: sb, byLLM, canvasId };
+  return { project: projectOut(q.get('SELECT * FROM projects WHERE id = ?', project.id)), storyboard: sb, byLLM, warn, canvasId };
 }
 
 // ---------- 续写一集 ----------
@@ -431,8 +512,12 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
       url = saveSVG(localImageSVG({ prompt, name, kind, ratio, order: 0, emotion }));
     }
   } catch (e) {
-    // 方舟失败 → 本地兜底，但记录原始错误
-    console.warn('[pipeline] 方舟图片失败，落本地：', e.message);
+    console.warn('[pipeline] 方舟图片失败：', e.message);
+    if (arkEnabled() && !localFallbackOn()) {
+      // 诚实模式：标记失败并抛出真实原因，而非伪装成功给占位图
+      q.run('UPDATE tasks SET status = ?, error = ?, updated_at = ? WHERE id = ?', 'failed', `方舟图片失败：${e.message}`, now(), taskId);
+      throw bad(`方舟图片生成失败：${e.message}。请到设置页确认图像模型 ID 已开通；如需占位预览可在设置页开启「本地兜底」`);
+    }
     url = saveSVG(localImageSVG({ prompt, name, kind, ratio, emotion }));
     q.run('UPDATE tasks SET error = ? WHERE id = ?', `ark: ${e.message}（已用本地兜底）`, taskId);
   }
@@ -588,7 +673,16 @@ export async function createVideoTask({ prompt, imageUrl = '', lastImageUrl = ''
       remoteId = r.remoteId;
       model = r.model;
     } catch (e) {
-      console.warn('[pipeline] 方舟视频任务创建失败，落本地：', e.message);
+      console.warn('[pipeline] 方舟视频任务创建失败：', e.message);
+      // 已接入方舟却失败 → 默认不静默落本地，而是把任务标记失败并暴露真实原因
+      // （让用户能看到「模型未开通 / ID 错误 / 无额度」等，而不是误以为生成了真视频）
+      if (!localFallbackOn()) {
+        q.run(`INSERT INTO tasks (id, kind, status, provider, model, prompt, params, project_id, node_id, error, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+          taskId, 'video', 'failed', 'ark', model || cfg().modelVideo, prompt.slice(0, 500), JSON.stringify(params), projectId, nodeId, `方舟视频失败：${e.message}`, now(), now());
+        if (nodeId && project?.canvas_id) { try { patchCanvasNode(project.canvas_id, nodeId, { task_id: taskId, task_status: 'failed' }); } catch { /* noop */ } }
+        throw bad(`方舟视频生成失败：${e.message}。请到设置页确认视频模型 ID 已在控制台开通；如需占位预览可在设置页开启「本地兜底」`);
+      }
       params.localError = `ark: ${e.message}（已用本地兜底）`;
     }
   }

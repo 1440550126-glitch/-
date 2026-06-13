@@ -143,6 +143,7 @@ async function execStep(name, wf, cancelled) {
       const c = getCanvas(p.canvas_id);
       const todo = epShots(c).filter((n) => !n.data.video);
       const tasks = [];
+      let firstErr = '';
       for (const n of todo) {
         if (cancelled()) break;
         try {
@@ -151,9 +152,13 @@ async function execStep(name, wf, cancelled) {
             duration: n.data.duration, projectId, nodeId: n.id, name: n.data.name, order: n.data.order
           });
           tasks.push(r.taskId);
-        } catch (e) { console.warn('[workflow] 视频任务失败：', n.data.name, e.message); }
+        } catch (e) { if (!firstErr) firstErr = e.message; console.warn('[workflow] 视频任务失败：', n.data.name, e.message); }
       }
-      if (!tasks.length) return todo.length ? '视频任务全部创建失败' : '已全部出片（无需生成）';
+      // 全部创建失败（如方舟视频模型未开通）→ 报真实原因，让用户能修
+      if (!tasks.length) {
+        if (todo.length && firstErr) throw bad(firstErr);
+        return todo.length ? '视频任务全部创建失败' : '已全部出片（无需生成）';
+      }
       // 轮询直到全部结束（上限 15 分钟）
       const deadline = now() + 15 * 60_000;
       let ok = 0;

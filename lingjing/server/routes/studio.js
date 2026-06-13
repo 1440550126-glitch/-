@@ -204,7 +204,7 @@ DEL('/api/canvases/:id', async ({ params }) => {
 });
 
 // ---------- 设置 ----------
-const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_video', 'model_video_options', 'video_extra_args', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint'];
+const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_video', 'model_video_options', 'video_extra_args', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint', 'local_fallback'];
 
 GET('/api/settings', async () => {
   const c = cfg();
@@ -222,6 +222,7 @@ GET('/api/settings', async () => {
     tts_appid: ttsCfg().appid,
     tts_token_masked: ttsCfg().token ? `${ttsCfg().token.slice(0, 4)}****` : '',
     tts_voice: ttsCfg().voice,
+    local_fallback: getSetting('local_fallback', false) === true,
     defaults: DEFAULTS, db_path: DB_PATH, upload_dir: UPLOAD_DIR
   };
 });

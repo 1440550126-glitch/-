@@ -14,6 +14,7 @@ export async function renderProject(page, params) {
   let project = await GET(`/api/projects/${params.id}`);
   let canvas = project.canvas_id ? await GET(`/api/canvases/${project.canvas_id}`).catch(() => null) : null;
   let rightTab = project.storyboard ? ((project.storyboard.episodes?.length || 0) > 1 ? 'episodes' : 'shots') : 'agent';
+  const U = () => project.storyboard?.unit || '集';   // 分段单位：电影=幕，短剧=集
 
   const nodeByKey = () => {
     const map = new Map();
@@ -65,7 +66,7 @@ export async function renderProject(page, params) {
     });
     const groups = [];
     if ((sb.episodes?.length || 0) > 1) {
-      for (const ep of sb.episodes) groups.push({ key: ep.key, label: `第${ep.order}集·${ep.title}`, shots: toShots(sb.shots.filter((x) => (x.episode || 'e1') === ep.key)) });
+      for (const ep of sb.episodes) groups.push({ key: ep.key, label: `第${ep.order}${U()}·${ep.title}`, shots: toShots(sb.shots.filter((x) => (x.episode || 'e1') === ep.key)) });
       groups.unshift({ key: 'all', label: '全片连播', shots: toShots(sb.shots) });
     } else {
       groups.push({ key: 'all', label: '全片连播', shots: toShots(sb.shots) });
@@ -146,7 +147,7 @@ export async function renderProject(page, params) {
     for (const ep of (sb.episodes || [{ key: 'e1', order: 1, title: '第一集' }])) {
       const shots = sb.shots.filter((s) => (s.episode || 'e1') === ep.key);
       if (!shots.length) continue;
-      lines.push(`## 第${ep.order}集 · ${ep.title}`, '', '| # | 景别 | 场景 | 画面 | 台词 | 时长 |', '|---|---|---|---|---|---|');
+      lines.push(`## 第${ep.order}${U()} · ${ep.title}`, '', '| # | 景别 | 场景 | 画面 | 台词 | 时长 |', '|---|---|---|---|---|---|');
       for (const s of shots) lines.push(`| ${s.order} | ${s.shot_type} | ${sceneName(s.scene)} | ${s.action.replace(/\|/g, '/')} | ${s.dialogue.replace(/\|/g, '/')} | ${s.duration}s |`);
       lines.push('');
     }
@@ -167,8 +168,10 @@ export async function renderProject(page, params) {
     try {
       saveScript.flush();
       const r = await POST('/api/ai/parse', { project_id: project.id });
-      toast(r.by_llm ? '方舟解析完成' : '本地引擎解析完成', 'ok');
-      rightTab = 'shots';
+      const sb = r.storyboard;
+      toast(`${r.by_llm ? '方舟' : '本地引擎'}解析完成：${sb.characters.length} 角色 / ${sb.scenes.length} 场景 / ${sb.shots.length} 分镜 / ${sb.episodes.length} ${sb.unit}`, 'ok');
+      if (r.warn) setTimeout(() => toast(r.warn, 'err'), 600);
+      rightTab = (sb.episodes?.length || 0) > 1 ? 'episodes' : 'shots';
       await reload();
     } catch (e) { toast(e.message, 'err'); }
     parseBtn.disabled = false;
@@ -225,7 +228,7 @@ export async function renderProject(page, params) {
     rightCard.innerHTML = '';
     rightCard.append(h('div', { class: 'panel-head' },
       h('div', { class: 'tabs' },
-        rTab('episodes', '分集', sb?.episodes?.length || null),
+        rTab('episodes', (sb?.unit === '幕' ? '分幕' : '分集'), sb?.episodes?.length || null),
         rTab('shots', '分镜', sb?.shots?.length), rTab('cast', '角色', sb?.characters?.length),
         rTab('scenes', '场景/道具', (sb?.scenes?.length || 0) + (sb?.props?.length || 0)), rTab('agent', 'Agent')),
       h('span', { class: 'grow' }),
@@ -269,20 +272,20 @@ export async function renderProject(page, params) {
         genBtn2.disabled = true;
         runBatchGenerate(project.canvas_id, { episode: ep.key, onDone: async () => { genBtn2.disabled = false; await reload(true); } });
       } });
-      genBtn2.innerHTML = `${icon('wand', 14)} 本集一键生成`;
-      const playEpBtn = h('button', { class: 'btn sm ghost', title: '连播预览本集', html: icon('play', 15), onclick: () => openRoom(ep.key) });
-      const dubBtn = h('button', { class: 'btn sm ghost', title: '本集配音（台词→语音，需配置火山 TTS）', html: '🔊', onclick: async () => {
+      genBtn2.innerHTML = `${icon('wand', 14)} 本${U()}一键生成`;
+      const playEpBtn = h('button', { class: 'btn sm ghost', title: `连播预览本${U()}`, html: icon('play', 15), onclick: () => openRoom(ep.key) });
+      const dubBtn = h('button', { class: 'btn sm ghost', title: '本段配音（台词→语音，需配置火山 TTS）', html: '🔊', onclick: async () => {
         dubBtn.disabled = true;
         try {
           const r = await POST('/api/ai/dub', { project_id: project.id, episode: ep.key });
-          toast(`本集配音完成 ×${r.dubbed}，放映室自动同步播放`, 'ok');
+          toast(`本段配音完成 ×${r.dubbed}，放映室自动同步播放`, 'ok');
           await reload(true);
         } catch (e) { toast(e.message, 'err'); }
         dubBtn.disabled = false;
       } });
       list.append(h('div', { class: 'card', style: { padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '14px' } },
         h('div', { style: { flex: 1, minWidth: 0 } },
-          h('b', { style: { fontSize: '14px' } }, `第${ep.order}集 · ${ep.title}`,
+          h('b', { style: { fontSize: '14px' } }, `第${ep.order}${U()} · ${ep.title}`,
             running ? h('span', { class: 'pill orange pulse', style: { marginLeft: '8px' } }, '生成中') : null),
           ep.summary ? h('p', { style: { fontSize: '12.5px', color: 'var(--ink3)', margin: '3px 0 0' } }, ep.summary) : null,
           h('div', { style: { display: 'flex', gap: '6px', marginTop: '7px', flexWrap: 'wrap' } },
@@ -292,19 +295,19 @@ export async function renderProject(page, params) {
         dubBtn, playEpBtn, genBtn2));
     }
     stagger(list, 50);
-    const ideaIn2 = h('input', { class: 'input', placeholder: '本集创意（可空，AI 自动升级剧情）', style: { flex: 1 } });
+    const ideaIn2 = h('input', { class: 'input', placeholder: `本${U()}创意（可空，AI 自动延展剧情）`, style: { flex: 1 } });
     const addBtn = h('button', { class: 'btn accent', onclick: async () => {
       addBtn.disabled = true;
       addBtn.innerHTML = `${icon('loader')} 续写中…`;
       try {
         const r = await POST('/api/ai/episode', { project_id: project.id, idea: ideaIn2.value.trim() });
-        toast(`第 ${r.episode_order} 集已续写并重新解析${r.by_llm ? '' : '（本地引擎）'}`, 'ok');
+        toast(`第 ${r.episode_order} ${U()}已续写并重新解析${r.by_llm ? '' : '（本地引擎）'}`, 'ok');
         await reload();
       } catch (e) { toast(e.message, 'err'); }
       addBtn.disabled = false;
-      addBtn.innerHTML = `${icon('plus', 15)} 新增一集`;
+      addBtn.innerHTML = `${icon('plus', 15)} 新增一${U()}`;
     } });
-    addBtn.innerHTML = `${icon('plus', 15)} 新增一集`;
+    addBtn.innerHTML = `${icon('plus', 15)} 新增一${U()}`;
     list.append(h('div', { style: { display: 'flex', gap: '8px', marginTop: '2px' } }, ideaIn2, addBtn));
     body.append(list);
   }
@@ -329,7 +332,7 @@ export async function renderProject(page, params) {
       body.append(h('div', { class: 'shot-row' },
         h('span', { class: 'no' }, String(shot.order).padStart(2, '0')),
         h('div', { class: 'desc' },
-          h('b', {}, multiEp ? h('span', { class: 'pill teal', style: { marginRight: '6px' } }, `第${epOrder(shot.episode || 'e1')}集`) : null,
+          h('b', {}, multiEp ? h('span', { class: 'pill teal', style: { marginRight: '6px' } }, `第${epOrder(shot.episode || "e1")}${U()}`) : null,
             `${shot.shot_type} · ${sceneName(shot.scene)} · ${shot.duration}s`),
           h('span', {}, shot.action),
           shot.dialogue ? h('div', { class: 'dlg' }, `「${shot.dialogue}」`) : null),
@@ -390,7 +393,9 @@ export async function renderProject(page, params) {
       grid.append(h('div', { class: 'char-card' },
         h('div', { class: 'ph' }, img ? h('img', { src: img }) : h('span', { html: icon(kind === 'character' ? 'user' : kind === 'prop' ? 'box' : 'image', 26) }), genBtn2),
         h('div', { class: 'info' },
-          h('b', {}, it.name, it.role ? h('span', { class: 'pill teal' }, it.role) : kind === 'prop' ? h('span', { class: 'pill' }, '道具') : null),
+          h('b', {}, it.name,
+            it.role ? h('span', { class: 'pill teal' }, it.role) : kind === 'prop' ? h('span', { class: 'pill' }, '道具') : null,
+            it.gender ? h('span', { class: `pill ${it.gender === '女' ? 'orange' : ''}` }, it.gender) : null),
           h('p', { title: it.image_prompt }, it.desc || it.image_prompt))));
     }
     stagger(grid, 35);
