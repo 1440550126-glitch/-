@@ -18,6 +18,7 @@ export async function renderRoom(page, params) {
   let seerLog = myRole?.seer_log || {};
   const myId = store.me?.id;
   const isWolfGame = room.game_type === 'werewolf';
+  const isHorror = room.game_type === 'horror';
 
   // 房主装备的房间主题皮肤（纯外观换肤）
   const theme = room.theme ? skinPayload(room.theme) : null;
@@ -47,8 +48,8 @@ export async function renderRoom(page, params) {
     ),
     h('div', { class: 'glass card', style: { background: theme ? 'rgba(255,255,255,.9)' : undefined } },
       h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--ink-2)' } },
-        theme?.emoji ? h('span', { style: { fontSize: '16px' } }, theme.emoji) : (isWolfGame ? '🐺' : '🕵️'),
-        `${room.game_name || (isWolfGame ? '狼人杀' : '谁是卧底')} · 房间号 ${room.id}`,
+        theme?.emoji ? h('span', { style: { fontSize: '16px' } }, theme.emoji) : (isHorror ? '🕯' : isWolfGame ? '🐺' : '🕵️'),
+        `${room.game_name || (isHorror ? '迷雾庄园·凶夜' : isWolfGame ? '狼人杀' : '谁是卧底')} · 房间号 ${room.id}`,
         h('span', { class: 'badge-ai' }, '🤖 AI 主持')),
       seatsEl,
       infoSlot,
@@ -69,7 +70,7 @@ export async function renderRoom(page, params) {
     if (room.status === 'waiting') return '等待开始';
     if (room.status === 'ended') return '已结束';
     if (room.phase === 'night') {
-      return `第 ${room.round} 夜 · ${{ wolf: '狼人行动中', seer: '预言家行动中', witch: '女巫行动中' }[room.stage] || '夜晚'}`;
+      return `第 ${room.round} 夜 · ${{ wolf: '狼人行动中', seer: '预言家行动中', witch: '女巫行动中', hunt: '凶手潜行中', seance: '通灵者感应中', guard: '守夜人守护中' }[room.stage] || '夜晚'}`;
     }
     return { speak: `第 ${room.round} 轮 · 发言`, vote: `第 ${room.round} 轮 · 投票` }[room.phase] || '';
   }
@@ -114,22 +115,29 @@ export async function renderRoom(page, params) {
       ));
     }
     if (room.status === 'playing' && myRole) {
-      const campColor = myRole.camp === 'wolf' ? '#c2532f' : '#2a9d76';
+      const campColor = myRole.camp_color || (myRole.camp === 'wolf' ? '#c2532f' : '#2a9d76');
+      const campLabel = myRole.camp_label || (myRole.camp === 'wolf' ? '狼人阵营' : '好人阵营');
+      const teammateLabel = myRole.teammate_label || '🐺 你的队友';
+      const clueLog = myRole.clue_log || {};
       infoSlot.append(h('div', { class: 'word-card' },
         h('div', { style: { fontSize: '10.5px', color: 'var(--ink-3)', marginBottom: '4px' } }, '你的身份（只有你能看到）'),
         h('div', { class: 'w-word' }, `${myRole.icon} ${myRole.name}`),
-        h('div', { style: { fontSize: '11px', color: campColor, marginTop: '4px', fontWeight: 700 } }, myRole.camp === 'wolf' ? '狼人阵营' : '好人阵营'),
+        h('div', { style: { fontSize: '11px', color: campColor, marginTop: '4px', fontWeight: 700 } }, campLabel),
         h('div', { style: { fontSize: '10.5px', color: 'var(--ink-3)', marginTop: '5px', lineHeight: 1.6 } }, myRole.tip),
-        myRole.teammates?.length ? h('div', { style: { fontSize: '11px', color: '#c2532f', marginTop: '5px' } }, `🐺 你的队友：${myRole.teammates.join('、')}`) : null,
+        myRole.teammates?.length ? h('div', { style: { fontSize: '11px', color: campColor, marginTop: '5px' } }, `${teammateLabel}：${myRole.teammates.join('、')}`) : null,
         myRole.potions ? h('div', { style: { fontSize: '11px', marginTop: '5px' } }, `💊 解药${myRole.potions.save ? '×1' : '已用'} · ☠️ 毒药${myRole.potions.poison ? '×1' : '已用'}`) : null,
         Object.keys(seerLog).length ? h('div', { style: { fontSize: '11px', marginTop: '5px', color: 'var(--brand)' } },
-          '🔮 查验记录：' + Object.entries(seerLog).map(([r, t]) => `第${r}夜 ${t}`).join('；')) : null
+          '🔮 查验记录：' + Object.entries(seerLog).map(([r, t]) => `第${r}夜 ${t}`).join('；')) : null,
+        Object.keys(clueLog).length ? h('div', { style: { fontSize: '11px', marginTop: '5px', color: 'var(--brand)' } },
+          '🔮 感应记录：' + Object.entries(clueLog).map(([r, t]) => `第${r}夜 ${t}`).join('；')) : null
       ));
     }
     if (room.status === 'ended' && room.reveal) {
-      const winText = isWolfGame
-        ? (room.winner === 'good' ? '🎉 好人阵营胜利！' : '🐺 狼人阵营胜利！')
-        : (room.winner === 'civilian' ? '🎉 平民阵营胜利！' : '🕶️ 卧底阵营胜利！');
+      const winText = isHorror
+        ? (room.winner === 'survivor' ? '🌅 幸存者撑到了黎明，胜利！' : '🔪 凶手笑到了最后……')
+        : isWolfGame
+          ? (room.winner === 'good' ? '🎉 好人阵营胜利！' : '🐺 狼人阵营胜利！')
+          : (room.winner === 'civilian' ? '🎉 平民阵营胜利！' : '🕶️ 卧底阵营胜利！');
       infoSlot.append(h('div', { class: 'word-card' },
         h('div', { style: { fontWeight: 800, fontSize: '17px', marginBottom: '8px' } }, winText),
         h('div', { style: { fontSize: '12px', color: 'var(--ink-2)', lineHeight: 1.9 } },
@@ -144,7 +152,7 @@ export async function renderRoom(page, params) {
     nightSlot.innerHTML = '';
     if (room.phase !== 'night') { poisonPicking = false; return; }
     const banner = h('div', { style: { textAlign: 'center', fontSize: '12px', color: 'var(--ink-2)', padding: '8px 0 2px' } },
-      '🌙 ' + ({ wolf: '夜深了，狼人正在行动…', seer: '预言家正在观星…', witch: '女巫打开了药箱…' }[room.stage] || '天黑请闭眼'));
+      '🌙 ' + ({ wolf: '夜深了，狼人正在行动…', seer: '预言家正在观星…', witch: '女巫打开了药箱…', hunt: '凶手在黑暗中游荡…', seance: '通灵者正在感应气息…', guard: '守夜人提灯巡视…' }[room.stage] || '天黑请闭眼'));
     nightSlot.append(banner);
     if (!myNight || myNight.stage !== room.stage) return;
     if (myNight.acted) {
@@ -203,6 +211,18 @@ export async function renderRoom(page, params) {
         }
         nightSlot.append(chips);
       }
+    } else if (myNight.title) {
+      // 通用夜间动作面板（恐怖等新玩法声明式渲染，无需为每个游戏写专属 UI）
+      nightSlot.append(h('div', { style: { textAlign: 'center', fontSize: '12.5px', fontWeight: 700, color: isHorror ? '#c2532f' : 'var(--brand)' } }, myNight.title));
+      if (myNight.teammates?.length) nightSlot.append(h('div', { style: { textAlign: 'center', fontSize: '11px', color: '#c2532f', marginTop: '2px' } }, `同伙：${myNight.teammates.join('、')}`));
+      if ((myNight.targets || []).length) { pickTarget(myNight.pick_label || '选择', myNight.action); nightSlot.append(chips); }
+      if (myNight.can_skip) nightSlot.append(h('button', {
+        class: 'btn mini ghost', style: { display: 'block', margin: '8px auto 0' },
+        onclick: async () => {
+          try { const r = await POST(`/api/rooms/${roomId}/action`, { action: 'skip' }); myNight.acted = true; toast(r.message || '已行动'); renderNight(); }
+          catch (e) { toast(e.message, 'warn'); }
+        }
+      }, '🌙 今夜不行动'));
     }
   }
 
@@ -319,7 +339,7 @@ export async function renderRoom(page, params) {
       const wasWaiting = room.status === 'waiting';
       const prevPhase = room.phase;
       room = { ...room, ...s };
-      if (wasWaiting && s.status === 'playing') toast(isWolfGame ? '游戏开始！天黑请闭眼 🌙' : '游戏开始！查看你的词 👀');
+      if (wasWaiting && s.status === 'playing') toast(isHorror ? '游戏开始！天黑请闭眼，活到黎明 🕯' : isWolfGame ? '游戏开始！天黑请闭眼 🌙' : '游戏开始！查看你的词 👀');
       if (prevPhase === 'night' && s.phase !== 'night') { myNight = null; poisonPicking = false; }
       renderAll();
     },
@@ -337,6 +357,11 @@ export async function renderRoom(page, params) {
       toast(`🔮 查验结果：${r.nickname} 是 ${r.result}`, 'care');
     },
     wolf_chat: (m) => addMsg({ user_id: 0, nickname: '🐺 狼队频道', kind: 'wolf', content: m.text, is_ai: false }),
+    accomplice_chat: (m) => addMsg({ user_id: 0, nickname: '🔪 同伙频道', kind: 'wolf', content: m.text, is_ai: false }),
+    sense_result: (r) => {
+      if (myRole) { myRole.clue_log = myRole.clue_log || {}; myRole.clue_log[r.round || room.round] = `${r.nickname}：${r.result}`; }
+      renderInfo();
+    },
     msg: (m) => addMsg(m),
     kicked: () => { toast('你被房主请离了房间'); nav('/games'); },
     closed: (c) => { toast(c.reason || '房间已关闭'); nav('/games'); }

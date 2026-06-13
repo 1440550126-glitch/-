@@ -5,7 +5,8 @@ import { nav } from '../router.js';
 
 const GAME_DESC = {
   undercover: '4-8 人 · 文字推理 · 十分钟一局',
-  werewolf: '6-12 人 · 狼人/预言家/女巫 · 烧脑对抗'
+  werewolf: '6-12 人 · 狼人/预言家/女巫 · 烧脑对抗',
+  horror: '5-10 人 · 凶手藏在我们中间 · 随机灵异事件 · 越夜越上头'
 };
 
 export async function renderGames(page) {

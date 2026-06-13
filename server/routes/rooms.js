@@ -5,9 +5,11 @@ import { subscribe } from '../lib/hub.js';
 import * as core from '../game/core.js';
 import { undercoverEngine } from '../game/undercover.js';
 import { werewolfEngine } from '../game/werewolf.js';
+import { horrorEngine } from '../game/horror.js';
 
 core.registerEngine(undercoverEngine);
 core.registerEngine(werewolfEngine);
+core.registerEngine(horrorEngine);
 
 GET('/api/rooms', async (ctx) => {
   const mine = ctx.user ? core.findUserRoom(ctx.user.id) : null;

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = 3199;
+const PORT = Number(process.env.SMOKE_PORT) || 3199;
 const BASE = `http://localhost:${PORT}`;
 const DB = `/tmp/jvling-smoke-${Date.now()}.sqlite`;
 
@@ -228,7 +228,12 @@ try {
   await api('POST', `/api/admin/users/${guests[2].user.id}/unban`, { token: admin.token });
   const wcfg = await api('PUT', '/api/admin/warmup', { token: admin.token, body: { posts_per_day: 20 } });
   ok('暖场频率配置', wcfg.ok && wcfg.data.config.posts_per_day === 20);
-  const wTrig = await api('POST', '/api/admin/warmup/trigger', { token: admin.token, body: {} });
+  // 暖场文案模板对「同号 24h 同文」去重，偶发撞上开机种子帖 → 换内容重试即可（非产品缺陷）
+  let wTrig;
+  for (let i = 0; i < 6; i++) {
+    wTrig = await api('POST', '/api/admin/warmup/trigger', { token: admin.token, body: {} });
+    if (wTrig.ok && wTrig.data.post_id > 0) break;
+  }
   ok('手动触发暖场发帖', wTrig.ok && wTrig.data.post_id > 0);
   const wOff = await api('PUT', '/api/admin/warmup', { token: admin.token, body: { enabled: false } });
   ok('一键关闭 AI 暖场', wOff.ok && wOff.data.config.enabled === false);
@@ -360,6 +365,47 @@ try {
   const ccleared = await api('POST', '/api/ai/chat/clear', { token: cu.token });
   const chist2 = await api('GET', '/api/ai/chat', { token: cu.token });
   ok('清空对话', ccleared.ok && chist2.data.messages.length === 0);
+
+  console.log('\n== 迷雾庄园·凶夜（恐怖 · 单人开局 AI 补位完整对局） ==');
+  const hg = (await api('POST', '/api/auth/guest', { body: {} })).data;
+  const hCreate = await api('POST', '/api/rooms', { token: hg.token, body: { name: '凶夜测试局', game_type: 'horror', max_players: 5, allow_bots: true } });
+  ok('创建恐怖房间', hCreate.ok, JSON.stringify(hCreate));
+  const horrorId = hCreate.data.room.id;
+  ok('恐怖玩法已注册进大厅', (await api('GET', '/api/rooms', { token: hg.token })).data.games.some((g) => g.type === 'horror'));
+  const horrorStream = sse(`/api/rooms/${horrorId}/events`, hg.token);
+  await api('POST', `/api/rooms/${horrorId}/ready`, { token: hg.token, body: { ready: true } });
+  const hStart = await api('POST', `/api/rooms/${horrorId}/start`, { token: hg.token });
+  ok('开始游戏（AI 补位到 5 人）', hStart.ok, JSON.stringify(hStart));
+  await new Promise((r) => setTimeout(r, 400));
+  const hSt0 = await api('GET', `/api/rooms/${horrorId}`, { token: hg.token });
+  ok('私发身份（凶手/通灵者/守夜人/幸存者）', ['killer', 'medium', 'guard', 'survivor'].includes(hSt0.data.room.my_role));
+  let horrorDone = false;
+  for (let guard = 0; guard < 600 && !horrorDone; guard++) {
+    const cur = await api('GET', `/api/rooms/${horrorId}`, { token: hg.token });
+    const r = cur.data.room;
+    if (r.status === 'ended') { horrorDone = true; break; }
+    const me = r.players.find((x) => x.user_id === hg.user.id);
+    if (r.phase === 'night' && r.my_night && !r.my_night.acted) {
+      if ((r.my_night.targets || []).length) {
+        await api('POST', `/api/rooms/${horrorId}/action`, { token: hg.token, body: { action: r.my_night.action, target_seat: r.my_night.targets[0].seat } }).catch(() => {});
+      } else if (r.my_night.can_skip) {
+        await api('POST', `/api/rooms/${horrorId}/action`, { token: hg.token, body: { action: 'skip' } }).catch(() => {});
+      }
+    } else if (r.phase === 'speak' && r.players.find((x) => x.seat === r.turn_seat)?.user_id === hg.user.id) {
+      await api('POST', `/api/rooms/${horrorId}/speak`, { token: hg.token, body: { content: '我昨晚守在房间里，什么都没敢动' } }).catch(() => {});
+    } else if (r.phase === 'vote' && me?.alive !== false && !me?.voted) {
+      const target = r.players.find((x) => x.alive && x.user_id !== hg.user.id);
+      if (target) await api('POST', `/api/rooms/${horrorId}/vote`, { token: hg.token, body: { target_seat: target.seat } }).catch(() => {});
+    }
+    await new Promise((res) => setTimeout(res, 200));
+  }
+  ok('恐怖局完整跑完（分出胜负）', horrorDone);
+  await new Promise((r) => setTimeout(r, 300));
+  const hEndEv = horrorStream.events.filter((e) => e.event === 'state').pop();
+  ok('胜负结算（幸存者/凶手）', ['survivor', 'killer'].includes(hEndEv?.data?.winner), hEndEv?.data?.winner);
+  ok('结算揭示全部身份', hEndEv?.data?.reveal?.length >= 5);
+  ok('随机灵异事件已触发', horrorStream.events.some((e) => e.event === 'msg' && (e.data.content || '').includes('灵异事件')));
+  horrorStream.close();
 
   console.log('\n== 狼人杀（4 真人 + AI 补位完整对局） ==');
   const wfCreate = await api('POST', '/api/rooms', { token: u1.token, body: { name: '狼人杀测试局', game_type: 'werewolf', max_players: 8, allow_bots: true } });
