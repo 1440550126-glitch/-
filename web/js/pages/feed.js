@@ -70,7 +70,9 @@ export function postCardEl(post, { onRemoved } = {}) {
     post.play_count ? h('span', { style: { fontSize: '10px', color: 'var(--ink-3)', marginLeft: '8px' } }, `▶ ${post.play_count}`) : null
   );
 
-  card.append(head, preview, actions);
+  card.append(head);
+  if (post.rec_reason) card.append(h('div', { class: 'rec-reason' }, '✨ ', post.rec_reason));
+  card.append(preview, actions);
   return card;
 }
 
@@ -86,6 +88,14 @@ function moreSheet(post, onRemoved) {
         }
       }, '🗑 删除这条文案'));
     } else {
+      box.append(h('button', {
+        class: 'menu-item glass', style: { width: '100%', marginBottom: '10px' },
+        onclick: async () => {
+          close();
+          try { await POST(`/api/posts/${post.id}/feedback`, { kind: 'dismiss' }); toast('好的，会少推这类内容～'); onRemoved?.(); }
+          catch (e) { toast(e.message, 'warn'); }
+        }
+      }, '🙈 不感兴趣（少推这类）'));
       box.append(h('button', {
         class: 'menu-item glass', style: { width: '100%', marginBottom: '10px' },
         onclick: () => { close(); reportSheet('post', post.id); }
@@ -128,6 +138,25 @@ export async function renderFeed(page) {
 
   const list = h('div', {});
   const topicSlot = h('div', {});
+  const tasteSlot = h('div', {});
+
+  // 「越来越懂你」：仅推荐页展示，画像积累够了才出现，让个性化被用户感知到
+  async function loadTaste() {
+    tasteSlot.innerHTML = '';
+    if (tab !== 'rec') return;
+    try {
+      const t = await GET('/api/me/taste');
+      if (!t.enough) return;
+      const tags = [...(t.emotions || []), ...(t.authors || [])].slice(0, 4);
+      if (!tags.length) return;
+      tasteSlot.append(h('div', { class: 'glass taste-banner' },
+        h('span', { class: 'tb-ic' }, '🪄'),
+        h('div', { style: { flex: 1 } },
+          h('div', { class: 'tb-t' }, '句灵越来越懂你'),
+          h('div', { class: 'tb-tags' }, ...tags.map((x) => h('span', { class: 'taste-tag' }, x))))
+      ));
+    } catch { /* 画像失败不影响信息流 */ }
+  }
 
   const tabs = [['rec', '推荐'], ['new', '最新'], ['follow', '关注'], ['hot', '热门榜']];
   const chipRow = h('div', { class: 'chip-row' });
@@ -136,7 +165,7 @@ export async function renderFeed(page) {
     for (const [id, name] of tabs) {
       chipRow.append(h('button', {
         class: `chip ${tab === id ? 'active' : ''}`,
-        onclick: () => { tab = id; cursor = null; list.innerHTML = ''; renderChips(); loadMore(true); }
+        onclick: () => { tab = id; cursor = null; list.innerHTML = ''; renderChips(); loadTaste(); loadMore(true); }
       }, name));
     }
   };
@@ -150,7 +179,7 @@ export async function renderFeed(page) {
         store.me?.unread_notifications ? h('span', { id: 'bell-badge', class: 'bell-badge' }, store.me.unread_notifications) : null),
       h('button', { class: 'icon-btn', onclick: () => nav('/member') }, '👑')
     ),
-    topicSlot, chipRow, list
+    topicSlot, chipRow, tasteSlot, list
   );
 
   // 今日话题（AI 生成，带标识）
@@ -190,6 +219,7 @@ export async function renderFeed(page) {
 
   const more = h('button', { class: 'btn block ghost', style: { marginTop: '4px' }, onclick: () => loadMore() }, '看看更多');
   page.append(more);
+  loadTaste();
   await loadMore(true);
 
   // 触底加载

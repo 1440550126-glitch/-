@@ -192,6 +192,14 @@ a { color: var(--brand); text-decoration: none; }
 .burst i { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--brand-2); animation: burstFly 0.6s var(--ease) forwards; }
 @keyframes burstFly { from { transform: none; opacity: 1; } to { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; } }
 
+/* ---- 个性化推荐：理由标签 + 懂你画像横幅 ---- */
+.rec-reason { display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--ink-2); margin: -2px 2px 9px; opacity: 0.9; }
+.taste-banner { display: flex; align-items: center; gap: 11px; padding: 12px 15px; margin-bottom: 12px; background: linear-gradient(120deg, rgba(161, 139, 255, 0.14), rgba(255, 158, 198, 0.14)), var(--glass); }
+.taste-banner .tb-ic { font-size: 22px; }
+.taste-banner .tb-t { font-size: 13px; font-weight: 700; }
+.taste-banner .tb-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.taste-tag { font-size: 11px; padding: 3px 11px; border-radius: 999px; background: var(--brand-grad); color: #fff; font-weight: 500; }
+
 /* ---- 话题横幅 ---- */
 .topic-banner {
   position: relative; overflow: hidden; padding: 15px 16px; margin-bottom: 14px;

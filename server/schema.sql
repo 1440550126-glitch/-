@@ -78,6 +78,15 @@ CREATE TABLE IF NOT EXISTS blocks (
   PRIMARY KEY (user_id, blocked_id)
 );
 
+-- 个性化推荐负反馈：「不感兴趣」→ 排除该帖并降权同类（让推荐越来越懂你）
+CREATE TABLE IF NOT EXISTS post_feedback (
+  user_id    INTEGER NOT NULL,
+  post_id    INTEGER NOT NULL,
+  kind       TEXT NOT NULL DEFAULT 'dismiss',   -- dismiss(不感兴趣)
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, post_id, kind)
+);
+
 CREATE TABLE IF NOT EXISTS reports (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   reporter_id INTEGER NOT NULL,

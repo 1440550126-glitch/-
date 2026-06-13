@@ -1,6 +1,7 @@
 import { GET, POST, DEL, bad, notFound, denied } from '../lib/httpx.js';
 import { q, tx } from '../lib/db.js';
-import { now, jparse, sanitizeText } from '../lib/util.js';
+import { now, jparse, sanitizeText, hashCode, dayCN, clamp } from '../lib/util.js';
+import { buildTasteProfile, scoreAndRank } from '../lib/recsys.js';
 import { gateContent, logModeration, aiModeratePost } from '../lib/moderation.js';
 import { buildCard } from '../lib/manifest.js';
 import { onNewUserPost, ensureTodayTopic } from '../warmup/bot.js';
@@ -49,7 +50,6 @@ function blockedIds(viewer) {
 }
 
 const hotScoreOf = (p) => 3 * p.like_count + 4 * p.comment_count + 3 * p.collect_count + 2 * p.share_count + 0.2 * p.play_count;
-const decayed = (p) => hotScoreOf(p) / Math.pow((now() - p.created_at) / 3600_000 + 2, 1.4);
 
 export function bumpHot(postId) {
   const p = q.get('SELECT * FROM posts WHERE id = ?', postId);
@@ -79,16 +79,34 @@ GET('/api/posts', async (ctx) => {
       before, before, limit + 1
     );
   } else {
-    // rec/hot：取近 7 天活跃帖在内存按"热度/时间衰减"排序（MVP 规模足够；规模化后移到离线任务）
+    // rec/hot：取近 7 天活跃帖在内存排序（MVP 规模足够；规模化后移到离线任务）
     const since = now() - 7 * 86400_000;
     const pool = q.all(`SELECT * FROM posts WHERE status = 'active' AND created_at > ? ORDER BY id DESC LIMIT 300`, since);
-    const sorted = pool.sort((a, b) => (tab === 'hot' ? hotScoreOf(b) - hotScoreOf(a) : decayed(b) - decayed(a)));
     const offset = Number(ctx.query.get('offset')) || 0;
-    rows = sorted.slice(offset, offset + limit + 1);
-    const filtered = rows.filter((p) => !blocked.has(p.user_id) && !(hideAI && p.is_ai));
+    const candidates = pool.filter((p) => !blocked.has(p.user_id) && !(hideAI && p.is_ai));
+
+    if (tab === 'hot') {
+      const sorted = candidates.sort((a, b) => hotScoreOf(b) - hotScoreOf(a));
+      const page = sorted.slice(offset, offset + limit + 1);
+      return {
+        items: page.slice(0, limit).map((p) => postView(p, viewer)),
+        next_offset: page.length > limit ? offset + limit : null
+      };
+    }
+
+    // rec：个性化「越来越懂你」。新用户无画像 → scoreAndRank 自动回退到热度+新鲜（保证引新）
+    const profile = viewer ? await buildTasteProfile(viewer.id) : null;
+    const seen = viewer ? new Set([
+      ...q.all('SELECT post_id FROM likes WHERE user_id = ?', viewer.id).map((r) => r.post_id),
+      ...q.all('SELECT post_id FROM collects WHERE user_id = ?', viewer.id).map((r) => r.post_id)
+    ]) : new Set();
+    const ranked = scoreAndRank(candidates, profile, {
+      viewerId: viewer?.id || 0, seen, daySeed: hashCode(dayCN() + ':' + (viewer?.id || 0))
+    });
+    const page = ranked.slice(offset, offset + limit + 1);
     return {
-      items: filtered.slice(0, limit).map((p) => postView(p, viewer)),
-      next_offset: rows.length > limit ? offset + limit : null
+      items: page.slice(0, limit).map(({ post, reason }) => ({ ...postView(post, viewer), rec_reason: reason })),
+      next_offset: page.length > limit ? offset + limit : null
     };
   }
   const filtered = rows.filter((p) => !blocked.has(p.user_id) && !(hideAI && p.is_ai)).slice(0, limit);
@@ -183,6 +201,30 @@ POST('/api/posts/:id/share', async (ctx) => {
 POST('/api/posts/:id/play', async (ctx) => {
   q.run("UPDATE posts SET play_count = play_count + 1 WHERE id = ? AND status = 'active'", Number(ctx.params.id));
   return { done: true };
+}, { auth: true });
+
+// 「不感兴趣」负反馈：剔除该帖并降权同类，让推荐越来越懂你
+POST('/api/posts/:id/feedback', async (ctx) => {
+  const post = q.get('SELECT id FROM posts WHERE id = ?', Number(ctx.params.id));
+  if (!post) throw notFound();
+  q.run('INSERT OR IGNORE INTO post_feedback (user_id, post_id, kind, created_at) VALUES (?,?,?,?)',
+    ctx.user.id, post.id, 'dismiss', now());
+  return { done: true };
+}, { auth: true });
+
+// 我的口味画像：用于「句灵越来越懂你」的可视化反馈
+GET('/api/me/taste', async (ctx) => {
+  const profile = await buildTasteProfile(ctx.user.id);
+  const topKeys = (obj, n) => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k);
+  const emotions = topKeys(profile.emotions, 3).filter(Boolean);
+  const authors = topKeys(profile.authors, 2)
+    .map((id) => q.get('SELECT nickname FROM users WHERE id = ?', Number(id))?.nickname)
+    .filter(Boolean);
+  return {
+    emotions, authors,
+    strength: +clamp(profile.total / (profile.total + 8), 0, 1).toFixed(2),
+    enough: profile.total >= 3
+  };
 }, { auth: true });
 
 // ---- 评论 ----

@@ -141,6 +141,23 @@ try {
   ok('关注', follow.ok);
   const ffeed = await api('GET', '/api/posts?tab=follow', { token: guests[0].token });
   ok('关注流', ffeed.data.items.some((p) => p.id === post1.id));
+
+  console.log('\n== 个性化推荐「越来越懂你」 ==');
+  const recFeed = await api('GET', '/api/posts?tab=rec', { token: guests[0].token });
+  ok('推荐流返回内容', recFeed.ok && recFeed.data.items.length > 0);
+  ok('每条带可解释推荐理由', recFeed.data.items.every((p) => typeof p.rec_reason === 'string' && p.rec_reason.length > 0), JSON.stringify(recFeed.data.items.map((p) => p.rec_reason)));
+  const taste = await api('GET', '/api/me/taste', { token: guests[0].token });
+  ok('口味画像（有交互即懂你）', taste.ok && taste.data.enough === true && Array.isArray(taste.data.emotions));
+  const coldRec = await api('GET', '/api/posts?tab=rec');
+  ok('冷启动（匿名）回退热度+新鲜仍有内容', coldRec.ok && coldRec.data.items.length > 0 && coldRec.data.items.every((p) => p.rec_reason));
+  const dismissId = recFeed.data.items.find((p) => !p.viewer?.is_author)?.id;
+  if (dismissId) {
+    const fb = await api('POST', `/api/posts/${dismissId}/feedback`, { token: guests[0].token, body: { kind: 'dismiss' } });
+    const rec2 = await api('GET', '/api/posts?tab=rec', { token: guests[0].token });
+    ok('「不感兴趣」后该帖不再出现', fb.ok && !rec2.data.items.some((p) => p.id === dismissId));
+  } else {
+    ok('「不感兴趣」后该帖不再出现', true, '(无可用样本)');
+  }
   const hot = await api('GET', '/api/posts?tab=hot');
   ok('热门榜', hot.ok && hot.data.items.length > 0);
   const blockU = await api('POST', `/api/users/${guests[1].user.id}/block`, { token: u1.token });
