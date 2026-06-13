@@ -43,33 +43,34 @@ export function createProject({ title = '', idea = '', genre = '', style = '', r
 }
 
 // ---------- 剧本生成 ----------
-const SCRIPT_SYSTEM = `你是资深短剧编剧，擅长强钩子、快节奏、高信息密度的竖屏/横屏短剧。
-输出格式要求（严格遵守，便于后续解析）：
-1. 第一行《剧名》；
-2. 【人物】块：每行"名字（身份）：人设描述"；
+const SCRIPT_SYSTEM = `你是资深编剧，电影长片与短剧皆精。严格按格式输出，便于程序解析：
+1. 第一行《剧名》；第二行可写"类型：xx"；
+2. 【人物】块：每行"名字（性别+年龄+身份，性格）：人设描述"——必须写明性别（男/女）；
 3. 【关键道具】块（如有）；
-4. 多集时每集以"第 N 集 ｜ 集标题"单独成行开头（单集可省略）；
-5. 每场以"第 N 场 ｜ 场景：场景名 ｜ 日/夜 ｜ 内/外"开头；
-6. 动作行用中文圆括号（…）单独成行；台词行用"名字：台词"；
-7. 每集结尾用"[钩子] …"留下悬念。只输出剧本本体，不要解释。`;
+4. 分段：电影用"第 N 幕 ｜ 幕标题"，短剧多集用"第 N 集 ｜ 集标题"，单段可省略；
+5. 每场以"第 N 场 ｜ 场景：场景名 ｜ 日/夜 ｜ 内/外"单独成行开头；
+6. 动作描写用中文圆括号（…）单独成行；台词行用"名字：台词"；旁白/字幕请写"旁白："或"字幕："（不要伪装成人物名）；
+7. 每幕/每集结尾用"[钩子] …"留悬念。只输出剧本本体，不要解释。`;
 
-export async function generateScript({ projectId = '', idea = '', genre = '', numScenes = 4, numEpisodes = 1, style = '', title = '' }) {
+export async function generateScript({ projectId = '', idea = '', genre = '', numScenes = 4, numEpisodes = 1, style = '', title = '', format = 'series' }) {
   let project = projectId ? getProject(projectId) : createProject({ title, idea, genre, style });
   idea = idea || project.idea || project.title;
   genre = genre || project.genre;
   style = style || project.style;
+  const movie = format === 'movie';
 
   let script = '';
   let byLLM = false;
   if (arkEnabled()) {
     try {
       const eps = clamp(numEpisodes, 1, 6);
+      const prompt = movie
+        ? `请创作一部${genre ? `「${genre}」类型的` : ''}电影长片剧本（约 90 分钟，标准六幕结构）。\n要求：\n1. 每幕以"第 N 幕 ｜ 幕标题"单独成行；全片共 24-30 场；\n2. 5-8 个性格鲜明的人物，每个在【人物】块写明性别、年龄、外貌、性格；\n3. 冲突层层递进，至少 2-3 个有力反转，结尾留余韵；\n4. 每场 4-6 个动作/台词节拍。${style ? `\n整体影像风格：${resolveStylePrompt(style)}。` : ''}\n核心创意：${idea || '自由发挥一个反转强烈、人物鲜活的故事'}`
+        : `请创作一部${genre ? `「${genre}」类型的` : ''}短剧剧本，${eps > 1 ? `共 ${eps} 集，每集 ${clamp(numScenes, 2, 8)} 场，集与集之间用强钩子衔接` : `共 ${clamp(numScenes, 2, 8)} 场`}，每场 3-6 个动作/台词节拍。人物在【人物】块写明性别身份。${style ? `整体影像风格：${resolveStylePrompt(style)}。` : ''}\n核心创意：${idea || '自由发挥一个反转强烈的故事'}`;
       const r = await arkChat({
-        feature: 'script',
-        system: SCRIPT_SYSTEM,
-        prompt: `请创作一部${genre ? `「${genre}」类型的` : ''}短剧剧本，${eps > 1 ? `共 ${eps} 集，每集 ${clamp(numScenes, 2, 8)} 场，集与集之间用强钩子衔接` : `共 ${clamp(numScenes, 2, 8)} 场`}，每场 3-6 个动作/台词节拍。${style ? `整体影像风格：${resolveStylePrompt(style)}。` : ''}\n核心创意：${idea || '自由发挥一个反转强烈的故事'}`,
+        feature: 'script', system: SCRIPT_SYSTEM, prompt,
         temperature: 0.9,
-        maxTokens: eps > 1 ? 6000 : 3000
+        maxTokens: movie ? 8000 : (eps > 1 ? 6000 : 3000)
       });
       script = r.text.trim();
       byLLM = true;
@@ -77,7 +78,7 @@ export async function generateScript({ projectId = '', idea = '', genre = '', nu
       console.warn('[pipeline] 方舟剧本生成失败，落本地引擎：', e.message);
     }
   }
-  if (!script) script = localScript({ idea, genre, numScenes, numEpisodes, title: title || (projectId ? project.title : '') });
+  if (!script) script = localScript({ idea, genre, numScenes, numEpisodes, format, title: title || (projectId ? project.title : '') });
 
   const newTitle = (script.match(/《(.+?)》/) || [])[1];
   touchProject(project.id, {
@@ -460,6 +461,7 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
           .filter(Boolean);
         const chars = incoming.filter((n) => n.type === 'character');
         const scenes = incoming.filter((n) => n.type === 'scene');
+        const props = incoming.filter((n) => n.type === 'prop');
         const shotNode = c.nodes.find((n) => n.id === nodeId);
         shotEmotion = String(shotNode?.data.emotion || '').trim();
         if (!refs.length) {
@@ -471,9 +473,10 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
             }
             return okUrl(n.data.image) ? n.data.image : '';
           };
-          refs = [...chars.map(charRef), ...scenes.map((n) => (okUrl(n.data.image) ? n.data.image : ''))]
+          // 参考图：角色（含情绪表情集）优先 → 场景 → 关键道具，最多 4 张
+          refs = [...chars.map(charRef), ...scenes.map((n) => (okUrl(n.data.image) ? n.data.image : '')), ...props.map((n) => (okUrl(n.data.image) ? n.data.image : ''))]
             .filter(Boolean)
-            .slice(0, 3);
+            .slice(0, 4);
           // 跨镜参考链：同集同场景的上一镜首帧
           if (shotNode && refs.length < 3) {
             const prev = c.nodes.find((n) => n.type === 'shot'

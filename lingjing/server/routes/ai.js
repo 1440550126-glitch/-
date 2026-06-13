@@ -10,7 +10,7 @@ import { runAgent } from '../lib/agent.js';
 POST('/api/ai/script', async ({ body }) => {
   const r = await generateScript({
     projectId: body.project_id, idea: body.idea, genre: body.genre,
-    numScenes: body.num_scenes || 4, numEpisodes: body.num_episodes || 1, style: body.style, title: body.title
+    numScenes: body.num_scenes || 4, numEpisodes: body.num_episodes || 1, style: body.style, title: body.title, format: body.format || 'series'
   });
   return { project: { ...r.project, storyboard: jparse(r.project.storyboard, null) }, script: r.script, by_llm: r.byLLM };
 });

@@ -26,7 +26,7 @@ export function matchGenre(genre = '') {
   return keys.find((k) => genre && (k.includes(genre) || genre.includes(k.slice(0, 2)))) || null;
 }
 
-export function localScript({ idea = '', genre = '', numScenes = 4, numEpisodes = 1, title = '' } = {}) {
+export function localScript({ idea = '', genre = '', numScenes = 4, numEpisodes = 1, title = '', format = 'series' } = {}) {
   const rnd = seededRandom(hashCode(idea + genre + title));
   const gKey = matchGenre(genre) || pick(Object.keys(GENRES), rnd);
   const g = GENRES[gKey];
@@ -34,24 +34,30 @@ export function localScript({ idea = '', genre = '', numScenes = 4, numEpisodes 
   const hero = pick(MALE, rnd);
   const villain = pick(VILLAIN, rnd);
   const side = pick(SIDE, rnd);
-  const n = clamp(numScenes, 3, 6);
-  const eps = clamp(numEpisodes, 1, 6);
+  const movie = format === 'movie';
+  const unit = movie ? '幕' : '集';
+  const n = movie ? clamp(numScenes, 4, 6) : clamp(numScenes, 3, 6);
+  const eps = movie ? 6 : clamp(numEpisodes, 1, 6);   // 电影固定六幕结构
   const ideaLine = idea ? `灵感：${idea}` : `灵感：${g.hook}引发的命运反转`;
   const t = title || `${gKey}·${hero}与${heroine}`;
   const ctx = { g, gKey, heroine, hero, villain, side, rnd };
 
   const parts = [];
-  parts.push(`《${t}》\n类型：${gKey} ｜ ${eps > 1 ? `共 ${eps} 集 · 每集约 ${n} 场` : `共 ${n} 场`}\n${ideaLine}\n`);
-  parts.push(`【人物】\n${heroine}（女主）：表面落魄却心性坚韧，身上藏着不为人知的秘密。\n${hero}（男主）：气场强大、身份神秘，唯独对${heroine}另眼相待。\n${villain}（反派）：势利刻薄，处处刁难${heroine}。\n${side}（配角）：关键时刻递出线索的小人物。\n`);
-  parts.push(`【关键道具】\n${g.hook}：贯穿全剧的悬念之物。\n`);
+  parts.push(`《${t}》\n类型：${gKey}${movie ? ' / 电影长片' : ''} ｜ ${eps > 1 ? `共 ${eps} ${unit} · 每${unit}约 ${n} 场` : `共 ${n} 场`}\n${ideaLine}\n`);
+  parts.push(`【人物】\n${heroine}（女主，性格坚韧，藏着秘密）：表面落魄却心性坚韧，身上藏着不为人知的过去。\n${hero}（男主，沉默强大）：气场强大、身份神秘，唯独对${heroine}另眼相待。\n${villain}（反派，心狠手辣）：势利刻薄，处处算计，是挡在主角面前的高墙。\n${side}（配角，小人物）：关键时刻递出线索、改变局势的小人物。\n`);
+  parts.push(`【关键道具】\n${g.hook}：贯穿全${movie ? '片' : '剧'}的悬念之物。\n`);
 
-  const EP_TITLES = ['初露锋芒', '暗流涌动', '步步为营', '图穷匕见', '风暴中心', '尘埃落定'];
+  const SERIES_TITLES = ['初露锋芒', '暗流涌动', '步步为营', '图穷匕见', '风暴中心', '尘埃落定'];
+  const MOVIE_TITLES = ['崩塌', '裂变', '谎言', '反水', '出逃', '余烬'];
+  const TITLES = movie ? MOVIE_TITLES : SERIES_TITLES;
   for (let e = 1; e <= eps; e++) {
-    if (eps > 1) parts.push(`\n第 ${e} 集 ｜ ${e === eps ? '尘埃落定' : EP_TITLES[(e - 1) % EP_TITLES.length]}\n`);
+    // 短剧用阿拉伯数字（第 2 集），电影用中文（第 二 幕）——与解析器/惯例一致
+    if (eps > 1) parts.push(`\n第 ${movie ? cn(e) : e} ${unit} ｜ ${e === eps ? TITLES[TITLES.length - 1] : TITLES[(e - 1) % TITLES.length]}\n`);
     parts.push(episodeBody({ ...ctx, ep: e, eps, n }));
   }
   return parts.join('');
 }
+const cn = (n) => ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'][n] || String(n);
 
 /** 单集正文（场次 + 节拍）；多集时剧情按 集数 递进 */
 function episodeBody({ g, heroine, hero, villain, side, rnd, ep, eps, n }) {
@@ -303,9 +309,9 @@ export function localParse(script = '', { style = '', maxShots = 14 } = {}) {
   const characters = [...charMap.entries()].slice(0, 12).map(([name, meta], i) => {
     const d = (meta.desc || '剧中人物').trim();
     const gender = meta.gender || guessGender(d, name);
-    // 优先用人设里的明确标签判定角色定位（避免"坏掉的收音机"误判反派）
-    const role = /女主|男主|主角|主人公|女一|男一/.test(d) ? '主角'
-      : /反派|大反派|反一|boss|首领|凶手|幕后|敌人|坏人/i.test(d) ? '反派'
+    // 角色定位：先判反派（其人设常提"与主角对立"，故反派关键词优先），再判主角
+    const role = /反派|大反派|反一|boss|首领|凶手|幕后黑手|大魔头|坏人/i.test(d) ? '反派'
+      : /女主|男主|^主角|主人公|女一号|男一号|女一|男一/.test(d) ? '主角'
         : /配角|龙套|路人|群演/.test(d) ? '配角'
           : i === 0 ? '主角' : '配角';
     const gtag = gender === '男' ? '男性' : gender === '女' ? '女性' : '';

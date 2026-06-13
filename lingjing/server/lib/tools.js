@@ -103,13 +103,13 @@ export const TOOLS = [
   },
   {
     name: 'generate_script',
-    description: 'AI 生成短剧剧本并存入项目（未传 project_id 时自动新建项目）。支持多集（num_episodes）。返回剧本全文。',
+    description: 'AI 生成剧本并存入项目（未传 project_id 时自动新建项目）。format=movie 生成约90分钟六幕电影长片，format=series 生成短剧（支持 num_episodes 多集）。返回剧本全文。',
     input_schema: {
       type: 'object',
-      properties: { project_id: str('项目 id（可选）'), idea: str('核心创意'), genre: str('类型'), style: str('画面风格'), num_scenes: num('每集场次数量 2-8，默认 4'), num_episodes: num('集数 1-6，默认 1'), title: str('剧名（可选）') }
+      properties: { project_id: str('项目 id（可选）'), idea: str('核心创意'), genre: str('类型'), style: str('画面风格'), format: str('形态', { enum: ['series', 'movie'] }), num_scenes: num('每段场次数量 2-8，默认 4'), num_episodes: num('短剧集数 1-6，默认 1（电影忽略）'), title: str('剧名（可选）') }
     },
     async execute(a) {
-      const r = await generateScript({ projectId: a.project_id, idea: a.idea, genre: a.genre, style: a.style, numScenes: a.num_scenes || 4, numEpisodes: a.num_episodes || 1, title: a.title });
+      const r = await generateScript({ projectId: a.project_id, idea: a.idea, genre: a.genre, style: a.style, numScenes: a.num_scenes || 4, numEpisodes: a.num_episodes || 1, format: a.format || 'series', title: a.title });
       return { project_id: r.project.id, title: r.project.title, by_llm: r.byLLM, script: r.script };
     }
   },
