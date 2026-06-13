@@ -3,7 +3,8 @@ import { POST } from './api.js';
 import { h, icon, toast } from './ui.js';
 
 const SUGGESTIONS = [
-  '创建一个都市逆袭项目并写剧本',
+  '做一部末日生存的电影，写剧本并解析分镜',
+  '创建一个都市逆袭短剧并一键成片',
   '解析分镜',
   '生成全部图片',
   '生成全部视频',
@@ -18,17 +19,19 @@ export function createAgentChat(container, { projectId = '', onAction } = {}) {
   const sugg = h('div', { class: 'chat-sugg' }, SUGGESTIONS.map((s) =>
     h('button', { class: 'chip', onclick: () => { input.value = s; send(); } }, s)));
 
-  log.append(botBubble('你好，我是灵境AI创作 Agent。我能直接操作工作台：建项目、写剧本、解析分镜、生成图与视频。试试下面的快捷指令，或直接吩咐。', [], null));
+  log.append(botBubble('你好，我是灵境AI创作 Agent。我会先分析你的意图、规划步骤，再动手操作工作台（建项目 / 写剧本 / 解析分镜 / 出图 / 出片 / 配音 / 一键成片）。直接吩咐，或点下面的快捷指令。'));
 
   function userBubble(text) {
     return h('div', { class: 'msg user' }, h('div', { class: 'bubble' }, text));
   }
-  function botBubble(text, steps = [], byLLM = null) {
+  function botBubble(text, { steps = [], byLLM = null, thinking = '', plan = [] } = {}) {
     return h('div', { class: 'msg bot' },
+      thinking ? h('div', { class: 'agent-think' }, h('b', {}, '💭 思考'), h('span', {}, thinking)) : null,
+      plan?.length ? h('div', { class: 'agent-plan' }, '📋 规划：', plan.map((p, i) => h('span', { class: 'plan-step' }, `${i + 1}.${p}`))) : null,
       steps.length ? h('div', { class: 'steps' }, steps.map((s) =>
         h('div', { class: `step ${s.ok ? '' : 'err'}`, title: s.summary || '' }, `⚙ ${s.tool} ${s.ok ? '✓' : '✗'}`))) : null,
       h('div', { class: 'bubble' }, text),
-      byLLM === null ? null : h('div', { class: 'meta' }, byLLM ? '由火山方舟大模型驱动' : '本地规则模式（配置方舟 Key 后由大模型驱动）'));
+      byLLM === null ? null : h('div', { class: 'meta' }, byLLM ? '火山方舟驱动（意图分析 + 函数调用）' : '本地意图引擎（配置方舟 Key 后由大模型驱动）'));
   }
 
   let busy = false;
@@ -39,16 +42,16 @@ export function createAgentChat(container, { projectId = '', onAction } = {}) {
     input.value = '';
     messages.push({ role: 'user', content: text });
     log.append(userBubble(text));
-    const thinking = h('div', { class: 'msg bot' }, h('div', { class: 'bubble' }, h('span', { class: 'pulse' }, 'Agent 正在执行…')));
-    log.append(thinking);
+    const waiting = h('div', { class: 'msg bot' }, h('div', { class: 'bubble' }, h('span', { class: 'pulse' }, 'Agent 正在分析意图、规划与执行…')));
+    log.append(waiting);
     log.scrollTop = log.scrollHeight;
     try {
       const r = await POST('/api/ai/agent', { messages, project_id: projectId });
       messages.push({ role: 'assistant', content: r.reply });
-      thinking.replaceWith(botBubble(r.reply, r.steps || [], r.by_llm));
+      waiting.replaceWith(botBubble(r.reply, { steps: r.steps || [], byLLM: r.by_llm, thinking: r.thinking || '', plan: r.plan || [] }));
       if (r.steps?.length) onAction?.(r.steps);
     } catch (e) {
-      thinking.replaceWith(botBubble('出错了：' + e.message, [], null));
+      waiting.replaceWith(botBubble('出错了：' + e.message));
       toast(e.message, 'err');
     }
     busy = false;

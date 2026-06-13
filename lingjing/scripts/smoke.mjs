@@ -278,6 +278,19 @@ try {
   const hNoAuth = await fetch(BASE + '/api/agent/v1/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'ping' }) });
   ok(hNoAuth.status === 401, 'HTTP MCP 无 Token 拒绝');
 
+  console.log('— Agent v2（意图分析 + 规划 + 调度） —');
+  const ag1 = (await api('POST', '/api/ai/agent', { messages: [{ role: 'user', content: '做一部末日生存的电影，写剧本并解析分镜' }] })).data;
+  ok(ag1.thinking && ag1.plan?.length >= 2, `输出思考与规划（${ag1.plan?.join('→')}）`);
+  ok(ag1.steps.some((s) => s.tool === 'create_project') && ag1.steps.some((s) => s.tool === 'generate_script') && ag1.steps.some((s) => s.tool === 'parse_script'), '复合指令一轮内多步调度');
+  const ag2 = (await api('POST', '/api/ai/agent', { messages: [{ role: 'user', content: '现在进度怎么样' }] })).data;
+  ok(ag2.steps.some((s) => s.tool === 'studio_overview'), '查询意图路由到总览');
+  await api('PATCH', '/api/settings', { agent_autorun: false });
+  const ag3 = (await api('POST', '/api/ai/agent', { messages: [{ role: 'user', content: '创建一个甜宠短剧并写剧本' }] })).data;
+  ok(ag3.intent === 'plan' && ag3.steps.length === 0, '关闭自动执行时只规划不动手');
+  await api('PATCH', '/api/settings', { agent_autorun: true });
+  const setA = (await api('GET', '/api/settings')).data;
+  ok(setA.agent && typeof setA.agent.temperature === 'number' && typeof setA.agent.max_steps === 'number', 'Agent 参数可读写');
+
   console.log('— 全流程工作流 —');
   const p9 = (await api('POST', '/api/projects', { title: '工作流剧', genre: '都市逆袭', idea: '保安逆袭成集团总裁' })).data;
   const wf = (await api('POST', '/api/workflows', { project_id: p9.id })).data;

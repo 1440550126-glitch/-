@@ -204,7 +204,7 @@ DEL('/api/canvases/:id', async ({ params }) => {
 });
 
 // ---------- 设置 ----------
-const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_video', 'model_video_options', 'video_extra_args', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint', 'local_fallback'];
+const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_video', 'model_video_options', 'video_extra_args', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint', 'local_fallback', 'agent_temperature', 'agent_max_steps', 'agent_autorun', 'agent_thinking', 'agent_plan_first'];
 
 GET('/api/settings', async () => {
   const c = cfg();
@@ -223,6 +223,13 @@ GET('/api/settings', async () => {
     tts_token_masked: ttsCfg().token ? `${ttsCfg().token.slice(0, 4)}****` : '',
     tts_voice: ttsCfg().voice,
     local_fallback: getSetting('local_fallback', false) === true,
+    agent: {
+      temperature: Number(getSetting('agent_temperature', 0.5)),
+      max_steps: Number(getSetting('agent_max_steps', 10)),
+      autorun: getSetting('agent_autorun', true) !== false,
+      thinking: getSetting('agent_thinking', true) !== false,
+      plan_first: getSetting('agent_plan_first', true) !== false
+    },
     defaults: DEFAULTS, db_path: DB_PATH, upload_dir: UPLOAD_DIR
   };
 });

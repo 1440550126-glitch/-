@@ -1,5 +1,5 @@
 // Agent 接入中心：MCP / HTTP API / 内置 Agent 演练场
-import { GET, POST, bootstrap } from '../api.js';
+import { GET, POST, PATCH, bootstrap } from '../api.js';
 import { h, icon, toast, copyText, fmtTime } from '../ui.js';
 import { createAgentChat } from '../agentchat.js';
 
@@ -84,6 +84,43 @@ export async function renderAgent(page) {
     logsBox.append(h('div', { style: { maxHeight: '300px', overflowY: 'auto' } }, table));
   })();
 
+  // Agent 调度参数（思考/规划/自动执行/温度/步数）
+  const sset = await GET('/api/settings').catch(() => ({ agent: {} }));
+  const ag = sset.agent || {};
+  const agToggle = (key, label, def, hint) => {
+    const sel = h('select', { class: 'select', style: { width: 'auto' } },
+      [['true', '开'], ['false', '关']].map(([v, l]) => h('option', { value: v, selected: String(ag[key] ?? def) === v }, l)));
+    sel.dataset.key = key;
+    return h('label', { class: 'ag-field', title: hint || '' }, h('span', {}, label), sel);
+  };
+  const tempIn = h('input', { class: 'input', type: 'number', min: 0, max: 1.3, step: 0.1, value: ag.temperature ?? 0.5, style: { width: '70px' } });
+  const stepIn = h('input', { class: 'input', type: 'number', min: 1, max: 24, step: 1, value: ag.max_steps ?? 10, style: { width: '70px' } });
+  const planSel = agToggle('plan_first', '先分析意图', true, '执行前先做意图分析与规划（思考）');
+  const thinkSel = agToggle('thinking', '展示思考', true, '在对话里显示思考与规划');
+  const autoSel = agToggle('autorun', '自动执行', true, '关闭则只给计划、等你回复"执行"');
+  const agentCfgBox = h('div', { class: 'card pad', style: { marginTop: '16px' } },
+    h('h3', { style: { fontSize: '15px', marginBottom: '4px' } }, '🧠 Agent 调度参数',
+      boot.ark.enabled ? h('span', { class: 'pill teal', style: { marginLeft: '8px' } }, '方舟驱动') : h('span', { class: 'pill', style: { marginLeft: '8px' } }, '本地意图引擎')),
+    h('p', { style: { fontSize: '12.5px', color: 'var(--ink3)', marginBottom: '10px' } },
+      'Agent 会先分析你的意图、规划步骤，再智能调度工具执行。这些参数控制它的"思考方式"与"行动力度"。'),
+    h('div', { class: 'ag-grid' },
+      planSel, thinkSel, autoSel,
+      h('label', { class: 'ag-field', title: '创造力：越高越发散（剧本更天马行空），越低越稳（执行更可控）' }, h('span', {}, '创造力(温度)'), tempIn),
+      h('label', { class: 'ag-field', title: '单轮最多调用多少个工具，越大越能一口气做完整条链路' }, h('span', {}, '单轮最大步数'), stepIn)),
+    h('button', { class: 'btn primary', style: { marginTop: '14px' }, onclick: async (e) => {
+      e.currentTarget.disabled = true;
+      try {
+        await PATCH('/api/settings', {
+          agent_plan_first: planSel.querySelector('select').value === 'true',
+          agent_thinking: thinkSel.querySelector('select').value === 'true',
+          agent_autorun: autoSel.querySelector('select').value === 'true',
+          agent_temperature: Number(tempIn.value), agent_max_steps: Number(stepIn.value)
+        });
+        toast('Agent 参数已保存', 'ok');
+      } catch (err) { toast(err.message, 'err'); }
+      e.currentTarget.disabled = false;
+    } }, '保存参数'));
+
   // 演练场
   const playBox = h('div', { class: 'card', style: { marginTop: '16px', height: '520px', display: 'flex', flexDirection: 'column', overflow: 'hidden' } },
     h('div', { class: 'panel-head' }, h('b', {}, '内置创作 Agent 演练场'), h('span', { class: 'grow' }),
@@ -118,5 +155,5 @@ export async function renderAgent(page) {
             '不接外部工具也能用：每个项目工作台自带 Agent 对话，由同一套工具驱动，像聊天一样完成「建项目 → 写剧本 → 解析 → 生图 → 出片」全流程。'),
           h('p', { style: { fontSize: '12.5px', color: 'var(--ink2)', marginTop: '8px' } },
             '配置火山方舟 Key 后升级为大模型函数调用循环；未配置时为本地规则模式，主流程同样可走通。'))),
-      toolsBox, playBox, logsBox));
+      toolsBox, agentCfgBox, playBox, logsBox));
 }
