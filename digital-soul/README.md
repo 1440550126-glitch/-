@@ -20,7 +20,9 @@
 | 平常干嘛 / 生前经历 | 个人记忆库（RAG 检索） | `dsoul/memory.py` |
 | 通过图片/视频/文档认人 | 人脸识别 + 文档摄取 | `dsoul/perception.py` · `scripts/ingest.py` |
 | 专属"世界大模型"（本地、16G） | 接 Ollama 跑量化小模型当推理引擎 | `dsoul/llm.py` |
-| 接入机器人 | 抽象动作接口（现模拟，后接硬件/ROS） | `dsoul/actions.py` |
+| 接入机器人 | 抽象动作接口（现模拟，后接硬件/ROS） | `dsoul/actions.py` · `dsoul/ros2_robot.py` |
+| 语音交流（听 + 说） | 本地 Whisper 转文字 + 离线 TTS | `dsoul/voice.py` · `scripts/voice_chat.py` |
+| 情感记忆 / 一生回顾 | 记忆自动打情感标签 + 时间线 | `dsoul/annotate.py` · `scripts/timeline.py` |
 
 ## 架构
 
@@ -100,6 +102,27 @@ python scripts/chat.py
 换成驱动你硬件或 ROS 的版本，把它传给 `build_agent(robot=YourRobot())` 即可，
 其余逻辑零改动。
 
+## 进阶能力
+
+**🎙️ 语音交流（听 + 说）** —— 模型全在本地，16G 可跑；缺依赖就退化为键盘/打印。
+```bash
+pip install faster-whisper pyttsx3 sounddevice numpy   # 可选
+python scripts/voice_chat.py
+# 对麦克风说话 → 本地 Whisper 转文字 → 分身回应 → 离线 TTS 念出来
+```
+
+**🕰️ 情感时间线（一生回顾）** —— 每条记忆入库时自动打情感标签（喜悦/悲伤/深情/怀念…）并抽取年份。
+```bash
+python scripts/timeline.py
+```
+
+**🤖 接入 ROS2 机器人** —— `dsoul/ros2_robot.py` 把动作映射到 ROS2 话题（`/cmd_vel`、`/soul/speech`…）。
+```python
+from dsoul.loader import build_agent
+from dsoul.ros2_robot import Ros2Robot
+agent = build_agent(robot=Ros2Robot())   # 其余逻辑零改动
+```
+
 ## 目录结构
 
 ```
@@ -111,18 +134,22 @@ digital-soul/
 ├── dsoul/             框架核心
 │   ├── agent.py       编排：感知→授权→记忆→人格→模型→动作
 │   ├── authority.py   授权：听谁的、能做什么
-│   ├── memory.py      记忆：存与检索（RAG）
+│   ├── memory.py      记忆：存与检索（RAG）+ 情感时间线
+│   ├── annotate.py    情感标注 + 时间抽取
 │   ├── persona.py     人格：组装"你"的提示词
 │   ├── perception.py  感知：图片/视频认人
+│   ├── voice.py       语音：本地 Whisper（听）+ TTS（说）
 │   ├── llm.py         本地大模型（Ollama）
-│   └── actions.py     机器人动作接口
-├── scripts/           chat.py（对话）· ingest.py（导入记忆/人脸）
-└── tests/             授权与记忆的单元测试
+│   ├── actions.py     机器人动作接口（抽象）
+│   └── ros2_robot.py  动作接口的 ROS2 实现样例
+├── scripts/           chat.py · ingest.py · timeline.py · voice_chat.py
+└── tests/             授权 / 记忆 / 情感标注 单元测试
 ```
 
 ## 路线图
 
-- [ ] 接 Whisper 做语音输入、TTS 做语音输出（"说话"）
-- [ ] 记忆加时间线与情感标注
+- [x] 接 Whisper 做语音输入、TTS 做语音输出（"说话"）
+- [x] 记忆加时间线与情感标注
+- [x] ROS2 机器人驱动样例
 - [ ] 用真实聊天记录做 LoRA 微调，逼近本人文风
-- [ ] ROS2 机器人驱动样例
+- [ ] 多模态：让它"看见"摄像头实时画面，主动打招呼

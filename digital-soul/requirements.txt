@@ -15,5 +15,14 @@ PyYAML>=6.0
 # face_recognition>=1.3.0
 # opencv-python>=4.8.0      # 仅视频认人需要
 
+# ---------- 可选：语音输入输出 ----------
+# faster-whisper>=1.0.0    # 语音转文字（本地，int8 量化模型很小）
+# pyttsx3>=2.90            # 文字转语音（离线）
+# sounddevice>=0.4.6       # 麦克风录音
+# numpy>=1.24
+
+# ---------- 可选：接入 ROS2 机器人 ----------
+# 需要系统级 ROS2 (rclpy)，见 https://docs.ros.org（不是 pip 包）
+
 # ---------- 可选：PDF 文档摄取 ----------
 # pypdf>=4.0.0

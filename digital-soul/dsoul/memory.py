@@ -15,6 +15,8 @@ import math
 import re
 from pathlib import Path
 
+from .annotate import classify_emotion, extract_when
+
 
 class Embedder:
     """把一段文字变成稀疏向量 dict[str, float]。优先语义，降级词法。"""
@@ -91,7 +93,8 @@ class Memory:
         )
 
     # ---------- 读写 ----------
-    def add(self, text: str, source: str = "manual", tags=None) -> str | None:
+    def add(self, text: str, source: str = "manual", tags=None,
+            when=None, emotion=None) -> str | None:
         text = (text or "").strip()
         if not text:
             return None
@@ -104,6 +107,8 @@ class Memory:
                 "text": text,
                 "source": source,
                 "tags": tags or [],
+                "when": when if when is not None else extract_when(text),
+                "emotion": emotion if emotion is not None else classify_emotion(text)["label"],
                 "vec": self.embedder.embed(text),
             }
         )
@@ -116,3 +121,12 @@ class Memory:
         scored = [(cosine(qv, it["vec"]), it) for it in self.items]
         scored.sort(key=lambda x: x[0], reverse=True)
         return [(s, it) for s, it in scored[:k] if s > 0]
+
+    def timeline(self) -> list[dict]:
+        """按时间（年份）升序返回记忆，时间未知的排在最后。"""
+
+        def key(it):
+            w = it.get("when")
+            return (0, int(w)) if (w and str(w).isdigit()) else (1, 0)
+
+        return sorted(self.items, key=key)

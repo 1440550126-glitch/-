@@ -10,6 +10,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
+from dsoul.annotate import EMOJI  # noqa: E402
 from dsoul.loader import build_agent  # noqa: E402
 
 HELP = """\
@@ -18,6 +19,7 @@ HELP = """\
   /do <动作>    让我执行动作：/do move  /do protect  /do shutdown
   /who          列出我认识的人和信任等级
   /mem <文字>   临时给我加一条记忆
+  /timeline     按时间线 + 情感回顾我的记忆
   /help         显示帮助
   /quit         退出
 直接打字 = 跟我聊天。
@@ -56,6 +58,16 @@ def main() -> None:
             break
         if line == "/help":
             print(HELP)
+            continue
+        if line == "/timeline":
+            cur = None
+            for it in agent.memory.timeline():
+                when = it.get("when") or "时间未知"
+                if when != cur:
+                    print(f"【{when}】")
+                    cur = when
+                emo = it.get("emotion", "平静")
+                print(f"  {EMOJI.get(emo, '·')} {emo}  {it['text']}")
             continue
         if line == "/who":
             for p in agent.authority.people.values():
