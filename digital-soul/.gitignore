@@ -1,0 +1,13 @@
+# 生成的记忆索引（含个人数据，不入库）
+data/memories/index.json
+
+# 人脸照片（隐私，不入库）
+data/faces/*.jpg
+data/faces/*.jpeg
+data/faces/*.png
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
