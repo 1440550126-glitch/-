@@ -64,16 +64,17 @@ export async function renderAgents(page) {
 
   let data;
   try {
-    const [m, teams, agents, kb, runs, gallery, triggers] = await Promise.all([
+    const [m, teams, agents, kb, runs, gallery, triggers, drafts] = await Promise.all([
       meta(), GET('/api/teams'), GET('/api/agents'), GET('/api/kb'), GET('/api/runs'),
       GET('/api/teams/gallery').catch(() => ({ items: [] })),
-      GET('/api/triggers').catch(() => ({ items: [] }))
+      GET('/api/triggers').catch(() => ({ items: [] })),
+      GET('/api/agent-drafts').catch(() => ({ items: [] }))
     ]);
-    data = { m, teams, agents, kb, runs, gallery, triggers };
+    data = { m, teams, agents, kb, runs, gallery, triggers, drafts };
   } catch (e) { wrap.replaceWith(emptyState('加载失败', e.message)); return; }
   wrap.replaceWith(body);
 
-  const { m, teams, agents, kb, runs, gallery, triggers } = data;
+  const { m, teams, agents, kb, runs, gallery, triggers, drafts } = data;
 
   // 配额条
   body.append(h('div', { class: 'glass lz-quota' },
@@ -112,6 +113,14 @@ export async function renderAgents(page) {
   if (!triggers.items.length) tl.append(h('div', { class: 'glass lz-tip' }, '还没有定时任务。给一支团队设个计划，它就会自动替你产出。'));
   else for (const t of triggers.items) tl.append(triggerCard(t));
   body.append(tl);
+
+  // 草稿箱（站内动作 draft_post 的产物）
+  if (drafts.items.length) {
+    body.append(sectionHead('草稿箱', '智能体写好的文案，去发布前可再改'));
+    const dl = h('div', {});
+    for (const d of drafts.items) dl.append(draftCard(d));
+    body.append(dl);
+  }
 
   // 我的智能体
   body.append(sectionHead('智能体成员', '团队的组成单位', h('button', { class: 'btn mini ghost', onclick: () => agentEditor(null) }, '+ 新建成员')));
@@ -172,6 +181,16 @@ export async function renderAgents(page) {
       avaEl('📚'), h('div', { class: 'lz-ac-text' },
         h('div', { class: 'lz-ac-name' }, k.name, k.is_template ? h('span', { class: 'lz-tpl-tag' }, '示例') : null),
         h('div', { class: 'lz-ac-role' }, `${k.chunk_count} 个知识片段`)));
+  }
+  function draftCard(d) {
+    const bg = d.card?.bg;
+    return h('div', { class: 'glass lz-draft', style: bg ? { borderLeft: `4px solid ${bg[1] || bg[0]}` } : {} },
+      h('div', { class: 'lz-draft-text' }, d.text),
+      h('div', { class: 'lz-draft-foot' },
+        h('span', { class: 'lz-draft-meta' }, '🪄 智能体草稿'),
+        h('div', { style: { flex: 1 } }),
+        h('button', { class: 'btn mini', onclick: () => nav(`/compose?draft=${encodeURIComponent(d.text)}`) }, '去发布'),
+        h('button', { class: 'btn mini ghost', onclick: async () => { try { await DEL(`/api/agent-drafts/${d.id}`); toast('已丢弃'); location.reload(); } catch (e) { toast(e.message, 'warn'); } } }, '丢弃')));
   }
 }
 
@@ -327,6 +346,26 @@ export async function renderTeam(page, { id }) {
     };
     box.append(h('div', { class: 'glass menu-item', style: { padding: '12px 14px', marginBottom: '12px' } },
       h('div', { style: { flex: 1 } }, h('div', {}, '🌐 发布到团队广场'), h('div', { class: 'lz-tip' }, '让其他用户也能用你这支团队派活')), pubSwitch));
+
+    // 对外 API
+    const apiBox = h('div', { class: 'glass lz-edit-card' });
+    box.append(apiBox);
+    let hasApi = team.has_api;
+    const renderApi = (newKey) => {
+      apiBox.innerHTML = '';
+      apiBox.append(h('div', { class: 'lz-edit-head' }, h('span', {}, '🔌 对外 API'),
+        hasApi ? h('button', { class: 'btn mini ghost danger', onclick: async () => { try { await DEL(`/api/teams/${id}/api-key`); hasApi = false; renderApi(); toast('已吊销'); } catch (e) { toast(e.message, 'warn'); } } }, '吊销') : null));
+      apiBox.append(h('div', { class: 'lz-tip' }, '生成密钥后，任意外部系统 / Webhook 可凭它同步调用这支团队（每日 50 次）。'));
+      if (newKey) {
+        apiBox.append(
+          h('div', { class: 'lz-api-key' }, h('code', {}, newKey), h('button', { class: 'btn mini', onclick: () => copyText(newKey) }, '复制')),
+          h('div', { class: 'lz-tip', style: { marginTop: '6px' } }, '⚠ 密钥只显示这一次，请妥善保存。'),
+          h('pre', { class: 'lz-api-curl' }, `curl -X POST ${location.origin}/api/public/run \\\n  -H "Content-Type: application/json" \\\n  -d '{"key":"${newKey}","task":"你的任务"}'`));
+      } else {
+        apiBox.append(h('button', { class: 'btn block', style: { marginTop: '10px' }, onclick: async () => { try { const r = await POST(`/api/teams/${id}/api-key`); hasApi = true; renderApi(r.api_key); toast('已生成密钥'); } catch (e) { toast(e.message, 'warn'); } } }, hasApi ? '🔄 重新生成密钥' : '🔑 生成 API 密钥'));
+      }
+    };
+    renderApi();
   }
 
   // 成员展示

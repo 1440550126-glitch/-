@@ -159,8 +159,8 @@ async function renderAgentsAdmin() {
       stat('进行中', d.runs.running, `失败 ${d.runs.failed}`),
       stat('已完成', d.runs.done, `大模型参与 ${d.runs.by_llm}`),
       stat('今日成本', yuan(d.cost_today_micro), `预算 ${d.budget_micro ? yuan(d.budget_micro) : '不限'}`),
-      stat('用户团队', d.totals.teams, `已发布到广场 ${d.totals.published}`),
-      stat('用户智能体', d.totals.agents, `知识库 ${d.totals.kbs}`),
+      stat('用户团队', d.totals.teams, `已发布 ${d.totals.published} · 开 API ${d.totals.api_teams}`),
+      stat('用户智能体', d.totals.agents, `知识库 ${d.totals.kbs} · 草稿 ${d.totals.drafts}`),
       stat('定时任务', d.totals.triggers_enabled, `共 ${d.totals.triggers} 个`)
     )
   );

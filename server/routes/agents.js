@@ -1,13 +1,13 @@
 // 灵阵 · AI 团队：REST + SSE 路由
 import { GET, POST, PUT, PATCH, DEL, bad, notFound, denied, openSSE } from '../lib/httpx.js';
 import { q, getSetting, setSetting } from '../lib/db.js';
-import { now, jparse, sanitizeText, clamp, dayCN } from '../lib/util.js';
+import { now, jparse, sanitizeText, clamp, dayCN, uid } from '../lib/util.js';
 import { isMember } from '../lib/auth.js';
 import { subscribe } from '../lib/hub.js';
 import { toolList, getTool } from '../agents/tools.js';
 import { searchKnowledge, addDoc } from '../agents/knowledge.js';
 import { STRATEGIES, STRATEGY_LIST, AGENT_QUOTA } from '../agents/catalog.js';
-import { startTeamRun, stopRun } from '../agents/engine.js';
+import { startTeamRun, runTeamSync, stopRun } from '../agents/engine.js';
 import { computeNext, fireTrigger, MIN_INTERVAL_MIN, MAX_TRIGGERS } from '../agents/scheduler.js';
 import { useQuota, quotaUsed, todayCostMicro } from '../lib/llm.js';
 
@@ -32,7 +32,7 @@ const kbPreview = (ids) => (jparse(ids, []) || []).map((id) => {
 const viewTeam = (t, uid) => t && ({
   id: t.id, name: t.name, avatar: t.avatar, goal: t.goal, strategy: t.strategy,
   manager_note: t.manager_note, max_rounds: t.max_rounds, run_count: t.run_count,
-  is_template: !!t.is_template, published: !!t.published, mine: t.owner_id === uid, updated_at: t.updated_at,
+  is_template: !!t.is_template, published: !!t.published, has_api: !!t.api_key, mine: t.owner_id === uid, updated_at: t.updated_at,
   members: memberPreview(t.member_ids), knowledge: kbPreview(t.knowledge_ids),
   knowledge_ids: jparse(t.knowledge_ids, [])
 });
@@ -220,6 +220,25 @@ POST('/api/teams/:id/publish', async (ctx) => {
   return { team: viewTeam(teamRow(t.id), ctx.user.id), published: !!pub };
 }, { auth: true });
 
+// 对外 API：生成 / 吊销调用密钥（密钥只在生成时返回一次）
+POST('/api/teams/:id/api-key', async (ctx) => {
+  const t = teamRow(ctx.params.id);
+  if (!t) throw notFound();
+  if (!canEdit(t, ctx.user.id)) throw denied('只能为自己的团队开启 API');
+  if (!(jparse(t.member_ids, []) || []).length) throw bad('空团队不能开启 API');
+  const key = 'lk_' + uid('', 28);
+  q.run('UPDATE teams SET api_key = ?, updated_at = ? WHERE id = ?', key, now(), t.id);
+  return { api_key: key, endpoint: '/api/public/run' };
+}, { auth: true });
+
+DEL('/api/teams/:id/api-key', async (ctx) => {
+  const t = teamRow(ctx.params.id);
+  if (!t) throw notFound();
+  if (!canEdit(t, ctx.user.id)) throw denied('无权操作');
+  q.run('UPDATE teams SET api_key = NULL, updated_at = ? WHERE id = ?', now(), t.id);
+  return { revoked: true };
+}, { auth: true });
+
 // ============================================================
 // 运行任务
 // ============================================================
@@ -357,6 +376,39 @@ POST('/api/triggers/:id/run-now', async (ctx) => {
 }, { auth: true });
 
 // ============================================================
+// 对外 API：用团队密钥同步调用（可被任意外部系统 / Webhook 调用，无需登录）
+// ============================================================
+const API_DAILY_LIMIT = 50;
+POST('/api/public/run', async (ctx) => {
+  const key = String(ctx.body?.key || '').trim();
+  const task = sanitizeText(ctx.body?.task, 1000);
+  if (!key) throw bad('缺少 API key');
+  if (!task) throw bad('缺少 task');
+  const team = q.get('SELECT * FROM teams WHERE api_key = ?', key);
+  if (!team) throw denied('无效的 API key');
+  const members = (jparse(team.member_ids, []) || []).map(agentRow).filter((a) => a && a.enabled);
+  if (!members.length) throw bad('该团队当前没有可用成员');
+  if (!useQuota(team.owner_id, 'agent_api', API_DAILY_LIMIT)) throw denied('该团队今日 API 调用已达上限，请明天再试');
+  const run = await runTeamSync(team, task, team.owner_id, 'api');     // 跑完返回结果
+  return { run_id: run.id, status: run.status, result: run.result, by_llm: !!run.by_llm, step_count: run.step_count };
+});
+
+// ============================================================
+// 智能体草稿箱（站内动作 draft_post 的产物）
+// ============================================================
+const draftView = (d) => ({ id: d.id, text: d.text, card: jparse(d.card, {}), run_id: d.run_id, created_at: d.created_at });
+GET('/api/agent-drafts', async (ctx) => ({
+  items: q.all("SELECT * FROM agent_post_drafts WHERE owner_id = ? AND status = 'draft' ORDER BY created_at DESC LIMIT 50", ctx.user.id).map(draftView)
+}), { auth: true });
+
+DEL('/api/agent-drafts/:id', async (ctx) => {
+  const d = q.get('SELECT * FROM agent_post_drafts WHERE id = ?', Number(ctx.params.id));
+  if (!d || d.owner_id !== ctx.user.id) throw notFound();
+  q.run('DELETE FROM agent_post_drafts WHERE id = ?', d.id);
+  return { deleted: true };
+}, { auth: true });
+
+// ============================================================
 // 知识库
 // ============================================================
 GET('/api/kb', async (ctx) => ({
@@ -428,8 +480,10 @@ GET('/api/admin/agents/overview', async () => {
       agents: q.get('SELECT COUNT(*) c FROM agents WHERE owner_id != 0').c,
       kbs: q.get('SELECT COUNT(*) c FROM knowledge_bases WHERE owner_id != 0').c,
       published: q.get('SELECT COUNT(*) c FROM teams WHERE published = 1 AND owner_id != 0').c,
+      api_teams: q.get('SELECT COUNT(*) c FROM teams WHERE api_key IS NOT NULL').c,
       triggers: q.get('SELECT COUNT(*) c FROM agent_triggers').c,
-      triggers_enabled: q.get('SELECT COUNT(*) c FROM agent_triggers WHERE enabled = 1').c
+      triggers_enabled: q.get('SELECT COUNT(*) c FROM agent_triggers WHERE enabled = 1').c,
+      drafts: q.get("SELECT COUNT(*) c FROM agent_post_drafts WHERE status = 'draft'").c
     },
     runs: { ...tot, today: q.get('SELECT COUNT(*) c FROM agent_runs WHERE started_at >= ?', start).c },
     cost_today_micro: todayCostMicro('agent_'),

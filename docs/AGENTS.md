@@ -86,6 +86,8 @@ loop (≤ max_rounds):
 | `random_pick` | 从候选随机抽取 / 范围随机整数（头脑风暴） | ✅ |
 | `web_fetch` | 抓取公开网页正文；**SSRF 防护**禁止内网/本机/元数据地址；受部署网络策略限制 | ⚠ |
 | `compose_card` | **站内动作**：把一句文案生成「句灵」预览卡（情绪/场景/版式/配色），可直接发布 | ✅ |
+| `draft_post` | **站内动作**：把文案存入用户草稿箱（自动配预览卡），审核后可发布 | ✅ |
+| `daily_topic` | **站内动作**：生成「今日话题」选题（标题 + 引导语） | ✅ |
 
 扩展：在 `TOOLS` 注册 `{ id, name, icon, desc, params, run(args, ctx) }` 即可，`ctx` 提供 `{ kbIds, userId }`。
 
@@ -119,7 +121,18 @@ loop (≤ max_rounds):
 - **调度**：`interval`（每 N 分钟，≥30）/ `daily`（每天定点·东八区）。`setInterval` 轮询到期触发器并逐个发起运行（与 AI 暖场调度同构）。
 - **防滥用**：最小间隔 30 分钟、单用户最多 5 个启用、每轮限发数量；团队被删/空则自动停用。
 - **成本**：触发产生的运行同样受引擎每日预算闸门约束（超额走本地引擎）；手动「立即运行」计入当日运行配额，后台自动调度不计 UI 配额。
-- `agent_runs.source` 标记 `manual` / `trigger`，后台监控与运行历史可区分来源。
+- `agent_runs.source` 标记 `manual` / `trigger` / `api`，后台监控与运行历史可区分来源。
+
+### 对外 API 与站内动作
+- **对外 API**：团队所有者一键生成密钥（`lk_…`，仅返回一次），外部系统 / Webhook 用 `POST /api/public/run`（**无需登录**）同步调用并拿到最终结果。按团队所有者计每日 50 次、受预算闸门约束、密钥可随时吊销/轮换。
+- **站内动作工具**：`compose_card`（生成预览卡）、`draft_post`（写入用户草稿箱，App 内审核后发布）、`daily_topic`（出选题）——让团队的产出能直接落到主站，且保持"先草稿、人工审核再发布"的安全边界（不自动发帖、不自动建房）。
+
+```bash
+# 对外调用示例
+curl -X POST https://你的域名/api/public/run \
+  -H "Content-Type: application/json" \
+  -d '{"key":"lk_xxx","task":"给「秋天的第一杯奶茶」写一句文案"}'
+```
 
 ## 8. API 一览（均需登录；前缀 `/api`）
 
@@ -145,6 +158,9 @@ loop (≤ max_rounds):
 | GET/DELETE | `/kb/:id` | 详情（含来源与样片）/ 删除 |
 | POST | `/kb/:id/docs` | 添加文档（自动切片） |
 | POST | `/kb/:id/search` | 检索测试（RAG） |
+| POST | `/public/run` | **对外 API（无需登录）**：用团队密钥同步调用，返回最终结果 |
+| POST/DELETE | `/teams/:id/api-key` | 生成（仅返回一次）/ 吊销团队 API 密钥 |
+| GET/DELETE | `/agent-drafts` · `/agent-drafts/:id` | 草稿箱列表 / 丢弃 |
 | GET | `/admin/agents/overview` | 🛠 后台：运行总览 + 最近运行（管理员） |
 | GET | `/admin/agents/runs/:id` | 🛠 后台：任意运行详情 |
 | POST | `/admin/agents/runs/:id/stop` | 🛠 后台：强制停止运行 |
@@ -163,7 +179,7 @@ SSE 事件：`step`（步骤新增/更新，按 `id` 去重、`idx` 排序）、
 
 ## 10. 扩展点（路线）
 
-- 工具：站内动作已起步（`compose_card`）；下一步做发帖/建房等更多动作、HTTP 自定义插件、代码沙箱、图像生成。
+- 工具：站内动作已落地（`compose_card` / `draft_post` / `daily_topic`）；下一步做 HTTP 自定义插件、代码沙箱、图像生成。
 - 检索：接入 Embedding 后将关键词打分替换为向量召回（接口已隔离在 `knowledge.js`）。
 - 编排：DAG 真并行执行、失败重试与人审插点（成员间质询回合已在 `debate` 多轮中实现）。
-- 发布与自动化：团队广场、定时触发器均已上线；下一步做对外 API 调用与 Webhook 触发（`teams.published` 已贯通）。
+- 发布与自动化：团队广场、定时触发器、对外 API / Webhook 调用均已上线；下一步做调用回执 Webhook（结果主动回推）。

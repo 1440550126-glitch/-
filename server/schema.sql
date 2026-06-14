@@ -275,12 +275,14 @@ CREATE TABLE IF NOT EXISTS teams (
   knowledge_ids TEXT NOT NULL DEFAULT '[]',       -- 挂载的知识库 id 数组 JSON
   max_rounds    INTEGER NOT NULL DEFAULT 3,       -- 每个成员 ReAct 最大工具轮数
   is_template   INTEGER NOT NULL DEFAULT 0,
-  published     INTEGER NOT NULL DEFAULT 0,       -- 是否发布为可被他人调用
+  published     INTEGER NOT NULL DEFAULT 0,       -- 是否发布到团队广场
+  api_key       TEXT,                             -- 对外 API 调用密钥（lk_xxx），NULL=未开启
   run_count     INTEGER NOT NULL DEFAULT 0,
   created_at    INTEGER NOT NULL,
   updated_at    INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_teams_owner ON teams(owner_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_teams_apikey ON teams(api_key);
 
 -- 一次任务运行
 CREATE TABLE IF NOT EXISTS agent_runs (
@@ -376,3 +378,15 @@ CREATE TABLE IF NOT EXISTS agent_triggers (
 );
 CREATE INDEX IF NOT EXISTS idx_triggers_due ON agent_triggers(enabled, next_run_at);
 CREATE INDEX IF NOT EXISTS idx_triggers_owner ON agent_triggers(owner_id, updated_at DESC);
+
+-- 智能体产出的文案草稿（站内动作 draft_post 写入；用户审核后到 App 发布）
+CREATE TABLE IF NOT EXISTS agent_post_drafts (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id   INTEGER NOT NULL,
+  run_id     INTEGER,
+  text       TEXT NOT NULL,
+  card       TEXT NOT NULL DEFAULT '{}',
+  status     TEXT NOT NULL DEFAULT 'draft',        -- draft | discarded
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_drafts_owner ON agent_post_drafts(owner_id, status, created_at DESC);

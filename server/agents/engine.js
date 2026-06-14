@@ -104,7 +104,7 @@ async function runToolStep(run, agent, toolId, args, kbIds, observations) {
     title: `调用工具 · ${tool.name}`, tool: toolId, tool_args: JSON.stringify(args), input: JSON.stringify(args)
   });
   let out;
-  try { out = await tool.run(args || {}, { kbIds, userId: run.user_id }); }
+  try { out = await tool.run(args || {}, { kbIds, userId: run.user_id, runId: run.id }); }
   catch (e) { out = { ok: false, result: '工具异常：' + e.message }; }
   finishStep(run.id, step, { tool_result: out.result || '', output: out.result || '', status: out.ok ? 'done' : 'failed' });
   observations.push(`【工具 ${tool.name}】入参 ${JSON.stringify(args)} → ${out.result || '(空)'}`);
@@ -199,13 +199,16 @@ async function localProduce(run, agent, item, memo, toolIds, kbIds, observations
       await runToolStep(run, agent, 'calculator', { expression: extractExpr(hay) }, kbIds, observations);
     } else if (toolIds.includes('datetime') && /时间|日期|今天|截止|deadline|多少天|工期/i.test(hay)) {
       await runToolStep(run, agent, 'datetime', {}, kbIds, observations);
-    } else if (toolIds.includes('compose_card')) {
+    } else if (toolIds.includes('compose_card') || toolIds.includes('draft_post')) {
       let line = '';
       for (const s of (memo ? memo.split('\n') : [])) {
         const cleaned = s.replace(/^【.*?】\s*/, '').trim();   // 去掉 “【某成员】” 表头，取正文
         if (cleaned.length >= 6) { line = cleaned; break; }
       }
-      await runToolStep(run, agent, 'compose_card', { text: (line || run.task).slice(0, 40) }, kbIds, observations);
+      const text = (line || run.task).slice(0, 40);
+      await runToolStep(run, agent, toolIds.includes('compose_card') ? 'compose_card' : 'draft_post', { text }, kbIds, observations);
+    } else if (toolIds.includes('daily_topic')) {
+      await runToolStep(run, agent, 'daily_topic', { theme: topKeywords(run.task, 1)[0] || '' }, kbIds, observations);
     } else if (toolIds.includes('text_stats') && memo) {
       await runToolStep(run, agent, 'text_stats', { text: memo.slice(0, 500) }, kbIds, observations);
     }
@@ -381,6 +384,18 @@ export function startTeamRun(team, task, userId, source = 'manual') {
   const runId = Number(r.lastInsertRowid);
   void executeRun(runId);
   return runId;
+}
+
+// 同步执行：跑完再返回完整 run（对外 API 调用用，调用方要拿到最终结果）
+export async function runTeamSync(team, task, userId, source = 'api') {
+  const r = q.run(
+    `INSERT INTO agent_runs (team_id, user_id, team_name, strategy, task, status, source, started_at)
+     VALUES (?,?,?,?,?, 'running', ?, ?)`,
+    team.id, userId, team.name, team.strategy, task, source, now()
+  );
+  const runId = Number(r.lastInsertRowid);
+  await executeRun(runId);                 // executeRun 自带 try/catch，必定完成
+  return q.get('SELECT * FROM agent_runs WHERE id = ?', runId);
 }
 
 export async function executeRun(runId) {

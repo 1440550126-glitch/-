@@ -507,3 +507,14 @@ h2.md-h { font-size: 16px; } h3.md-h { font-size: 14px; } h4.md-h, h5.md-h { fon
 .lz-trigger-next { font-size: 10.5px; color: var(--brand); font-weight: 600; white-space: nowrap; }
 .lz-sched-line { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); flex-wrap: wrap; }
 .lz-sched-line .input { margin: 0; }
+
+/* 草稿箱 */
+.lz-draft { padding: 12px 14px; margin-bottom: 10px; }
+.lz-draft-text { font-size: 13.5px; line-height: 1.6; color: var(--ink); }
+.lz-draft-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.lz-draft-meta { font-size: 10.5px; color: var(--ink-3); }
+
+/* 对外 API */
+.lz-api-key { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 9px 11px; border-radius: 11px; background: rgba(141, 122, 230, 0.08); }
+.lz-api-key code { flex: 1; font-size: 11.5px; word-break: break-all; color: var(--brand); font-weight: 600; }
+.lz-api-curl { margin-top: 8px; padding: 10px 12px; border-radius: 11px; background: #2a2740; color: #d7d2f0; font-size: 10.5px; line-height: 1.5; overflow-x: auto; white-space: pre; }

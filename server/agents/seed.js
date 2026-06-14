@@ -7,7 +7,8 @@ import { AGENT_TEMPLATES, TEAM_TEMPLATES, SAMPLE_KB } from './catalog.js';
 // 轻量迁移：给较早创建的库补齐新列（schema.sql 的 CREATE IF NOT EXISTS 不会改动已存在的表）
 export function runAgentMigrations() {
   for (const sql of [
-    "ALTER TABLE agent_runs ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'"
+    "ALTER TABLE agent_runs ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'",
+    'ALTER TABLE teams ADD COLUMN api_key TEXT'
   ]) { try { db.exec(sql); } catch { /* 列已存在，忽略 */ } }
 }
 

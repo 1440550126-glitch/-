@@ -514,6 +514,36 @@ try {
   const trgSteal = await api('PATCH', `/api/triggers/${trg.data.trigger.id}`, { token: guests[0].token, body: { enabled: true } });
   ok('他人无法操作我的触发器', !trgSteal.ok && trgSteal.status === 404);
 
+  // 站内动作工具 + 草稿箱
+  ok('工具含 draft_post / daily_topic', ['draft_post', 'daily_topic'].every((id) => lzMeta.data.tools.some((t) => t.id === id)));
+  const draftAgent = (await api('POST', '/api/agents', { token: lzTok, body: { name: '草稿员', avatar: '📥', role: '把文案存草稿', tools: ['draft_post'] } })).data.agent;
+  const draftTeam = (await api('POST', '/api/teams', { token: lzTok, body: { name: '草稿队', strategy: 'route', member_ids: [draftAgent.id] } })).data.team;
+  const draftRun = await api('POST', `/api/teams/${draftTeam.id}/run`, { token: lzTok, body: { task: '为「夏夜晚风」写一条温柔的句子' } });
+  const drStream = sse(`/api/runs/${draftRun.data.run_id}/events`, lzTok);
+  await drStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '草稿运行'); drStream.close();
+  const drFull = await api('GET', `/api/runs/${draftRun.data.run_id}`, { token: lzTok });
+  ok('draft_post 真实写入草稿', drFull.data.steps.some((s) => s.tool === 'draft_post' && s.status === 'done'));
+  const draftBox = await api('GET', '/api/agent-drafts', { token: lzTok });
+  ok('草稿箱可见且带预览卡', draftBox.data.items.length >= 1 && !!draftBox.data.items[0].card.bg);
+  ok('丢弃草稿', (await api('DELETE', `/api/agent-drafts/${draftBox.data.items[0].id}`, { token: lzTok })).ok);
+  const topicAgent = (await api('POST', '/api/agents', { token: lzTok, body: { name: '选题官', avatar: '💬', role: '出话题', tools: ['daily_topic'] } })).data.agent;
+  const topicTeam = (await api('POST', '/api/teams', { token: lzTok, body: { name: '选题队', strategy: 'route', member_ids: [topicAgent.id] } })).data.team;
+  const topicRun = await api('POST', `/api/teams/${topicTeam.id}/run`, { token: lzTok, body: { task: '露营主题的今日话题' } });
+  const tpStream = sse(`/api/runs/${topicRun.data.run_id}/events`, lzTok);
+  await tpStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '话题运行'); tpStream.close();
+  ok('daily_topic 工具被调用', (await api('GET', `/api/runs/${topicRun.data.run_id}`, { token: lzTok })).data.steps.some((s) => s.tool === 'daily_topic'));
+
+  // 对外 API（可被外部系统 / Webhook 调用）
+  const keyRes = await api('POST', `/api/teams/${teamId}/api-key`, { token: lzTok });
+  ok('生成对外 API 密钥', keyRes.ok && keyRes.data.api_key.startsWith('lk_'));
+  const apiKey = keyRes.data.api_key;
+  ok('团队标记 has_api', (await api('GET', `/api/teams/${teamId}`, { token: lzTok })).data.team.has_api === true);
+  const pubRun = await api('POST', '/api/public/run', { body: { key: apiKey, task: '给「秋天的第一杯奶茶」写一句文案' } });
+  ok('对外 API 同步返回结果', pubRun.ok && pubRun.data.status === 'done' && pubRun.data.result.length > 50);
+  ok('无效 API key 被拒', (await api('POST', '/api/public/run', { body: { key: 'lk_bad', task: 'x' } })).status === 403);
+  ok('吊销 API 密钥', (await api('DELETE', `/api/teams/${teamId}/api-key`, { token: lzTok })).ok);
+  ok('吊销后对外调用失败', !(await api('POST', '/api/public/run', { body: { key: apiKey, task: 'x' } })).ok);
+
   const editTpl = await api('PATCH', `/api/teams/${tpl.id}`, { token: lzTok, body: { name: '改不动' } });
   ok('内置模板不可编辑', !editTpl.ok && editTpl.status === 403);
 

@@ -4,7 +4,8 @@
 //   result：给智能体看的「观察」文本；data：可选结构化数据。
 import { searchKnowledge } from './knowledge.js';
 import { buildCard } from '../lib/manifest.js';
-import { dayCN } from '../lib/util.js';
+import { q } from '../lib/db.js';
+import { dayCN, now, pick } from '../lib/util.js';
 
 // ---- 安全计算器：递归下降解析，绝不用 eval ----
 function calc(expr) {
@@ -191,6 +192,33 @@ export const TOOLS = {
       if (!t) return { ok: false, result: '缺少 text 参数' };
       const card = buildCard(t);
       return { ok: true, result: `已为「${t}」生成预览卡：情绪「${card.emotion || '—'}」· 场景「${card.scene || '—'}」· 版式 ${card.layout} · 配色 ${card.bg?.join('→') || '—'}`, data: { card, text: t } };
+    }
+  },
+
+  draft_post: {
+    id: 'draft_post', name: '文案入草稿箱', icon: '📥', safe: true,
+    desc: '把一条文案（自动配预览卡）存入你的草稿箱，稍后可在 App 里审核并一键发布',
+    params: { text: '文案内容' },
+    async run({ text }, ctx = {}) {
+      const t = String(text || '').trim().slice(0, 300);
+      if (!t) return { ok: false, result: '缺少 text 参数' };
+      if (!ctx.userId) return { ok: true, result: `（预览）将把这条文案存入草稿箱：${t}`, data: { text: t } };
+      const card = buildCard(t, String(ctx.userId));
+      const r = q.run('INSERT INTO agent_post_drafts (owner_id, run_id, text, card, status, created_at) VALUES (?,?,?,?,?,?)',
+        ctx.userId, ctx.runId || null, t, JSON.stringify(card), 'draft', now());
+      return { ok: true, result: `已存入草稿箱（草稿 #${r.lastInsertRowid}）：${t}`, data: { draft_id: Number(r.lastInsertRowid), text: t } };
+    }
+  },
+
+  daily_topic: {
+    id: 'daily_topic', name: '今日话题灵感', icon: '💬', safe: true,
+    desc: '围绕一个方向生成适合社区发布的「今日话题」选题（标题 + 引导语）',
+    params: { theme: '话题方向（可选）' },
+    async run({ theme }) {
+      const seeds = ['此刻', '深夜', '窗外', '突然想起', '如果可以', '最近', '二十岁的我们', '一句话'];
+      const t = String(theme || '').trim().slice(0, 20);
+      const title = t ? `关于「${t}」，你最想说的一句` : `${pick(seeds)}，你最想说的一句`;
+      return { ok: true, result: `话题：${title}\n引导语：用一句话，把你此刻的心情发出来，AI 会让它活过来。`, data: { title } };
     }
   }
 };
