@@ -6,7 +6,7 @@ import { jparse, micro2yuan, now } from './util.js';
 import { arkEnabled, cfg } from './ark.js';
 import {
   createProject, getProject, projectOut, touchProject, generateScript, parseScript, addEpisode,
-  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral, generateDubbing, checkConsistency, buildCharacterProfile
+  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral, generateDubbing, checkConsistency, buildCharacterProfile, listEntities, annotateEntities
 } from './pipeline.js';
 import { STYLES, STYLE_CATS } from './styles.js';
 import { bad } from './httpx.js';
@@ -310,6 +310,26 @@ export const TOOLS = [
     description: '读取角色记忆 character_profile.json：全片形象的唯一事实源——每个角色/场景/道具的逐字锁定档案（lock）、性别年龄、已生成的定妆照 portrait 与表情集 expressions，以及总控提示词与禁止项。生成首帧/视频前应先读取，严禁忽略此记忆改变角色外观或换人。',
     input_schema: { type: 'object', properties: { project_id: str('项目 id') }, required: ['project_id'] },
     execute({ project_id }) { return buildCharacterProfile(project_id); }
+  },
+  {
+    name: 'list_entities',
+    description: '列出解析后识别到的角色/场景/道具分类，供人工或 Agent 复核（含画布缩略图、是否被用户确认过、Agent 进化等级）。怀疑有道具被误标成角色时先调用它检查。',
+    input_schema: { type: 'object', properties: { project_id: str('项目 id') }, required: ['project_id'] },
+    execute({ project_id }) { return listEntities(project_id); }
+  },
+  {
+    name: 'annotate_entities',
+    description: '校正实体分类并训练 Agent 进化：moves 是 [{name,to}]（to 取 character/scene/prop），把误分类的条目归位；confirm=true 表示分类全部正确，给 Agent 夸赞奖励涨经验。校正会被永久记住，下次解析自动应用。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        project_id: str('项目 id'),
+        moves: { type: 'array', description: '校正项 [{name:"数据芯片",to:"prop"}]', items: { type: 'object', properties: { name: str('实体名'), to: str('目标类型', { enum: ['character', 'scene', 'prop'] }) }, required: ['name', 'to'] } },
+        confirm: { type: 'boolean', description: '分类全对则填 true 夸赞 Agent' }
+      },
+      required: ['project_id']
+    },
+    execute({ project_id, moves, confirm }) { return annotateEntities({ projectId: project_id, moves: moves || [], confirm: !!confirm }); }
   },
   {
     name: 'generate_storyboard_media',

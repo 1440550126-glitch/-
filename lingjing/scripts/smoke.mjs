@@ -144,9 +144,40 @@ try {
   ok(prof.characters.every((c) => c.lock && c.name), '每个角色都带逐字锁定档案 lock');
   ok(prof.characters.some((c) => c.ready && c.portrait === upC.url), '已生成定妆照写进角色记忆（portrait）');
   ok(/全片总控|铁律/.test(prof.master_control || '') && Array.isArray(prof.forbidden_rules) && prof.forbidden_rules.length >= 8, '角色记忆含总控提示词 + 全部禁止项');
+  ok(/画风铁律|切换画风/.test(prof.master_control || ''), '画风锚定：总控含"全片只用一种画风"铁律（防日漫↔2D跳风）');
   const agentTools = (await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools;
   ok(agentTools.some((t) => t.name === 'check_consistency'), 'Agent 开放 check_consistency 工具');
   ok(agentTools.some((t) => t.name === 'get_character_profile'), 'Agent 开放 get_character_profile 工具（角色记忆）');
+  ok(agentTools.some((t) => t.name === 'list_entities') && agentTools.some((t) => t.name === 'annotate_entities'), 'Agent 开放 list_entities/annotate_entities 工具');
+
+  console.log('— 角色预选标注 / Agent 进化 —');
+  const pe = (await api('POST', '/api/projects', { title: '标注剧', genre: '悬疑反转', idea: '实验室停电夜' })).data;
+  await api('POST', '/api/ai/script', { project_id: pe.id });
+  await api('POST', '/api/ai/parse', { project_id: pe.id });
+  const ents0 = (await api('GET', `/api/projects/${pe.id}/entities`)).data;
+  ok(Array.isArray(ents0.entities) && ents0.entities.length && ents0.brain, `实体清单（${ents0.counts.character} 角 / ${ents0.counts.scene} 景 / ${ents0.counts.prop} 道）`);
+  const victim = ents0.entities.find((e) => e.type === 'character');
+  ok(!!victim, '存在可校验的角色');
+  const ann = (await api('POST', `/api/projects/${pe.id}/annotate`, { moves: [{ name: victim.name, to: 'prop' }] })).data;
+  ok(ann.applied.some((m) => m.name === victim.name && m.to === 'prop'), '人工校正：角色→道具已归位');
+  ok(ann.brain.xp > ents0.brain.xp && ann.brain.learned >= 1, 'Agent 训练后涨经验并记住分类');
+  await api('POST', '/api/ai/parse', { project_id: pe.id });   // 重解析验证进化是否持久
+  const ents1 = (await api('GET', `/api/projects/${pe.id}/entities`)).data;
+  ok(ents1.entities.find((e) => e.name === victim.name)?.type === 'prop', '进化持久化：重新解析仍把它判成道具');
+  const praise = (await api('POST', `/api/projects/${pe.id}/annotate`, { confirm: true })).data;
+  ok(praise.praised && praise.brain.streak >= 1 && praise.brain.xp > ann.brain.xp, '夸赞奖励：连击 +1、经验上涨');
+  await api('POST', `/api/projects/${pe.id}/annotate`, { moves: [{ name: victim.name, to: 'character' }] });   // 复位全局标签，避免影响其它用例
+  await api('DELETE', `/api/projects/${pe.id}`);
+
+  // 画风重锚定：解析后改画风 → 全片总控随之更新（杜绝前后画风不连贯）
+  const pr = (await api('POST', '/api/projects', { title: '锚风剧', genre: '悬疑反转', idea: '地铁末班车' })).data;
+  await api('POST', '/api/ai/script', { project_id: pr.id });
+  await api('POST', '/api/ai/parse', { project_id: pr.id });
+  const profA = (await api('GET', `/api/projects/${pr.id}/character-profile`)).data;
+  await api('PATCH', `/api/projects/${pr.id}`, { style: '美式复古好莱坞' });
+  const profB = (await api('GET', `/api/projects/${pr.id}/character-profile`)).data;
+  ok(profB.master_control !== profA.master_control && (profB.project.style || '').length > 0, '改画风后全片重锚定（总控随之更新为新画风）');
+  await api('DELETE', `/api/projects/${pr.id}`);
   // 情绪联动 + 跨镜参考链：同场景相邻两镜，前镜挂 PNG 首帧、后镜设情绪
   const pair = (() => {
     const shots = cvCon.nodes.filter((n) => n.type === 'shot').sort((a, b) => a.data.order - b.data.order);

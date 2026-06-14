@@ -5,13 +5,18 @@ import { GET, POST, PATCH, DEL, bad, notFound } from '../lib/httpx.js';
 import { q, getSetting, setSetting, UPLOAD_DIR, DB_PATH } from '../lib/db.js';
 import { uid, now, jparse, micro2yuan, token32 } from '../lib/util.js';
 import { arkEnabled, cfg, arkChat, DEFAULTS, videoModelOptions } from '../lib/ark.js';
-import { createProject, getProject, projectOut, touchProject, getCanvas, checkConsistency, buildCharacterProfile } from '../lib/pipeline.js';
+import { createProject, getProject, projectOut, touchProject, getCanvas, checkConsistency, buildCharacterProfile, listEntities, annotateEntities, getAgentBrain, restyleProject } from '../lib/pipeline.js';
 
 // 画面一致性体检
 GET('/api/projects/:id/consistency', async ({ params }) => checkConsistency(params.id));
 
 // 角色记忆 character_profile.json：全片形象事实源（锁定档案 + 已生成定妆照/表情集），可查看/下载
 GET('/api/projects/:id/character-profile', async ({ params }) => buildCharacterProfile(params.id));
+
+// 角色预选标注：列出实体分类供用户校验；提交校正即训练 Agent，全对则夸赞奖励
+GET('/api/projects/:id/entities', async ({ params }) => listEntities(params.id));
+POST('/api/projects/:id/annotate', async ({ params, body }) => annotateEntities({ projectId: params.id, moves: body.moves || [], confirm: !!body.confirm }));
+GET('/api/agent-brain', async () => getAgentBrain());
 
 // AIQC 质检
 GET('/api/projects/:id/qc', async ({ params, query }) => {
@@ -108,7 +113,12 @@ PATCH('/api/projects/:id', async ({ params, body }) => {
     if (body[k] !== undefined) fields[k] = String(body[k]).slice(0, k === 'script' ? 60_000 : 2000);
   }
   if (!Object.keys(fields).length) throw bad('没有可更新的字段');
+  const before = getProject(params.id);
   touchProject(params.id, fields);
+  // 改了画风且已解析 → 重锚定全片，杜绝前后画风不连贯
+  if (fields.style !== undefined && fields.style !== before.style && before.storyboard) {
+    try { restyleProject(params.id, fields.style); } catch (e) { console.warn('[restyle] 跳过：', e.message); }
+  }
   return projectOut(getProject(params.id));
 }, { maxBytes: 512 * 1024 });
 
