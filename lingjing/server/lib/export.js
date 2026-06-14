@@ -18,6 +18,23 @@ export function ffmpegPath() {
   return _ffmpeg;
 }
 
+/** 抽取视频最后一帧为 PNG（视频接龙：上一段尾帧→下一段首帧）。返回 /uploads/xxx.png 或空。 */
+export function extractLastFrame(videoUrl) {
+  const ff = ffmpegPath();
+  if (!ff) return '';
+  const f = localFile(videoUrl);
+  if (!f) return '';
+  const outName = `${uid('lf')}.png`;
+  const outFile = path.join(UPLOAD_DIR, outName);
+  // 从距结尾 0.15s 处取一帧（避免取到黑场尾）
+  let r = spawnSync(ff, ['-y', '-sseof', '-0.15', '-i', f, '-update', '1', '-frames:v', '1', outFile], { stdio: 'ignore', timeout: 30000 });
+  if (r.status !== 0 || !fs.existsSync(outFile)) {
+    // 退路：直接取最后一帧
+    r = spawnSync(ff, ['-y', '-i', f, '-vf', 'reverse', '-frames:v', '1', outFile], { stdio: 'ignore', timeout: 30000 });
+  }
+  return fs.existsSync(outFile) ? `/uploads/${outName}` : '';
+}
+
 function localFile(url) {
   if (!url?.startsWith('/uploads/')) return null;
   const f = path.normalize(path.join(UPLOAD_DIR, url.slice('/uploads/'.length)));

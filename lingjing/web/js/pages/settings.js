@@ -18,6 +18,7 @@ export async function renderSettings(page) {
   const qcEnSel = h('select', { class: 'select' }, [['true', '开启'], ['false', '关闭']].map(([v, l]) => h('option', { value: v, selected: String(qc.enabled !== false) === v }, l)));
   const qcFixSel = h('select', { class: 'select' }, [['true', '自动改正后复检'], ['false', '只记录不改']].map(([v, l]) => h('option', { value: v, selected: String(qc.autofix !== false) === v }, l)));
   const qcScoreIn = h('input', { class: 'input', type: 'number', min: 50, max: 95, step: 5, value: qc.min_score ?? 75, style: { width: '80px' } });
+  const chainSel = h('select', { class: 'select' }, [['false', '并行（快，各镜独立首帧）'], ['true', '接龙（连贯，上段尾帧→下段首帧，需 ffmpeg）']].map(([v, l]) => h('option', { value: v, selected: String(!!s.video_chain) === v }, l)));
   const nameIn = h('input', { class: 'input', value: s.user_name });
   const p1 = h('input', { class: 'input', type: 'number', step: '0.0001', value: s.price_chat_in });
   const p2 = h('input', { class: 'input', type: 'number', step: '0.0001', value: s.price_chat_out });
@@ -34,7 +35,7 @@ export async function renderSettings(page) {
         ark_base_url: baseIn.value.trim(), model_chat: chatIn.value.trim(), model_image: imageIn.value.trim(), model_video: videoIn.value.trim(),
         model_video_options: videoOptsIn.value.trim(), video_extra_args: extraIn.value.trim(),
         watermark: wmSel.value === 'true', local_fallback: fbSel.value === 'true',
-        qc_enabled: qcEnSel.value === 'true', qc_autofix: qcFixSel.value === 'true', qc_min_score: Number(qcScoreIn.value),
+        qc_enabled: qcEnSel.value === 'true', qc_autofix: qcFixSel.value === 'true', qc_min_score: Number(qcScoreIn.value), video_chain: chainSel.value === 'true',
         user_name: nameIn.value.trim() || '创作者',
         price_chat_in: Number(p1.value), price_chat_out: Number(p2.value), price_image: Number(p3.value), price_video_sec: Number(p4.value)
       };
@@ -100,6 +101,7 @@ export async function renderSettings(page) {
       fld('AIQC 质检', qcEnSel, '出片前用视觉模型审查画面'),
       fld('发现问题', qcFixSel, '自动按建议改提示词重生成'),
       fld('放行分数', qcScoreIn, '低于此分判为需修复')),
+    fld('视频生成方式', chainSel, '接龙=上一段视频的最后一帧作为下一段的首帧，画面更连贯（需本机 ffmpeg）'),
     h('div', { style: { display: 'flex', gap: '10px', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap' } }, saveBtn, testBtn, diagBtn, testOut),
     diagOut);
 

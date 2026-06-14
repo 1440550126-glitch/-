@@ -218,7 +218,7 @@ DEL('/api/canvases/:id', async ({ params }) => {
 });
 
 // ---------- 设置 ----------
-const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_video', 'model_video_options', 'video_extra_args', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint', 'local_fallback', 'agent_temperature', 'agent_max_steps', 'agent_autorun', 'agent_thinking', 'agent_plan_first', 'qc_enabled', 'qc_autofix', 'qc_min_score'];
+const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_video', 'model_video_options', 'video_extra_args', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint', 'local_fallback', 'agent_temperature', 'agent_max_steps', 'agent_autorun', 'agent_thinking', 'agent_plan_first', 'qc_enabled', 'qc_autofix', 'qc_min_score', 'video_chain'];
 
 GET('/api/settings', async () => {
   const c = cfg();
@@ -242,6 +242,7 @@ GET('/api/settings', async () => {
       autofix: getSetting('qc_autofix', true) !== false,
       min_score: Number(getSetting('qc_min_score', 75))
     },
+    video_chain: getSetting('video_chain', false) === true,
     agent: {
       temperature: Number(getSetting('agent_temperature', 0.5)),
       max_steps: Number(getSetting('agent_max_steps', 10)),

@@ -143,26 +143,56 @@ async function execStep(name, wf, cancelled) {
       return `生成 ${done} 张${failed ? `（失败 ${failed}）` : ''}${base.length + frames.length === 0 ? '（无需生成）' : ''}`;
     }
     case 'qc': {
-      const { qcEnabled, qcNode } = await import('./qc.js');
+      const { qcEnabled, qcNode, listQC, qcSummary } = await import('./qc.js');
       if (!qcEnabled()) throw SKIP('AIQC 已关闭（设置页可开启）');
       const c = getCanvas(project().canvas_id);
       const framed = epShots(c).filter((n) => n.data.image);
       if (!framed.length) return '无首帧可质检';
-      let pass = 0, fixed = 0, open = 0;
-      for (const n of framed.slice(0, 60)) {
+      // 出图阶段已自动质检过的帧不重复扫（省成本），只补扫没有记录的
+      const scanned = new Set(listQC(projectId).map((r) => r.node_id));
+      const todo = framed.filter((n) => !scanned.has(n.id));
+      let fixed = 0;
+      for (const n of todo.slice(0, 60)) {
         if (cancelled()) break;
-        try {
-          const r = await qcNode(projectId, n.id, { stage: 'image' });
-          if (r.passed) pass++; else open++;
-          if (r.fixed) fixed++;
-        } catch (e) { console.warn('[workflow] QC 失败：', n.data.name, e.message); }
+        try { const r = await qcNode(projectId, n.id, { stage: 'image' }); if (r.fixed) fixed++; } catch { /* noop */ }
       }
-      return `质检 ${framed.length} 帧：通过 ${pass}，自动修正 ${fixed}，待人工 ${open}（详见 QC 记录）`;
+      const s = qcSummary(projectId);
+      return `已质检 ${framed.length} 帧（本步补扫 ${todo.length}，修正 ${fixed}）｜均分 ${s.avg_score}，待处理 ${s.open}（详见 🔬QC）`;
     }
     case 'videos': {
+      const { getSetting } = await import('./db.js');
+      const chain = getSetting('video_chain', false) === true;   // 接龙模式：上段尾帧→下段首帧
       const p = project();
       const c = getCanvas(p.canvas_id);
-      const todo = epShots(c).filter((n) => !n.data.video);
+      const todo = epShots(c).filter((n) => !n.data.video).sort((a, b) => (a.data.order || 0) - (b.data.order || 0));
+      if (!todo.length) return '已全部出片（无需生成）';
+
+      if (chain) {
+        // 顺序生成：每段等完成→抽尾帧→作为下一段首帧（画面连续）
+        const { extractLastFrame } = await import('./export.js');
+        let prevFrame = '';
+        let okC = 0, failC = 0;
+        for (const n of todo) {
+          if (cancelled()) break;
+          const firstFrame = prevFrame || n.data.image;
+          let r;
+          try {
+            r = await createVideoTask({
+              prompt: n.data.video_prompt || n.data.action || n.data.name, imageUrl: firstFrame,
+              duration: n.data.duration, projectId, nodeId: n.id, name: n.data.name, order: n.data.order
+            });
+          } catch (e) { failC++; if (!okC && todo.indexOf(n) === 0) throw bad(e.message); continue; }
+          // 等这一段完成
+          const deadline = now() + 6 * 60_000;
+          let t = await pollTask(r.taskId);
+          while (t.status !== 'succeeded' && t.status !== 'failed' && now() < deadline && !cancelled()) { await sleep(2500); t = await pollTask(r.taskId); }
+          if (t.status === 'succeeded') { okC++; prevFrame = extractLastFrame(t.result?.url) || n.data.image; }
+          else { failC++; prevFrame = n.data.image; }   // 失败则重置接龙锚点
+        }
+        return `接龙完成 ${okC}/${todo.length}${failC ? `（失败 ${failC}）` : ''}${ffmpegPath() ? '' : '（无 ffmpeg，退化为各自首帧）'}`;
+      }
+
+      // 并行模式（默认）
       const tasks = [];
       let firstErr = '';
       for (const n of todo) {
@@ -175,12 +205,10 @@ async function execStep(name, wf, cancelled) {
           tasks.push(r.taskId);
         } catch (e) { if (!firstErr) firstErr = e.message; console.warn('[workflow] 视频任务失败：', n.data.name, e.message); }
       }
-      // 全部创建失败（如方舟视频模型未开通）→ 报真实原因，让用户能修
       if (!tasks.length) {
         if (todo.length && firstErr) throw bad(firstErr);
         return todo.length ? '视频任务全部创建失败' : '已全部出片（无需生成）';
       }
-      // 轮询直到全部结束（上限 15 分钟）
       const deadline = now() + 15 * 60_000;
       let ok = 0;
       let fail = 0;

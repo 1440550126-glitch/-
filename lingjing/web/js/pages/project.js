@@ -129,15 +129,21 @@ export async function renderProject(page, params) {
     tick();
     timer = setInterval(tick, 1500);
   }
-  const wfBtn = h('button', { class: 'btn accent', title: '一键托管：剧本→解析→体检→出图→出片→配音→导出', onclick: async () => {
+  const wfBtn = h('button', { class: 'btn accent', title: '一键托管：剧本→解析→体检→出图→质检→出片→配音→导出', onclick: async () => {
     wfBtn.disabled = true;
     try {
-      const w = await POST('/api/workflows', { project_id: project.id });
-      openWorkflow(w.id);
+      // 已有进行中的托管 → 直接重开面板，而不是再起一个
+      const running = (await GET(`/api/workflows?project_id=${project.id}`)).find((w) => w.status === 'running');
+      if (running) { openWorkflow(running.id); }
+      else { const w = await POST('/api/workflows', { project_id: project.id }); openWorkflow(w.id); }
     } catch (e) { toast(e.message, 'err'); }
     wfBtn.disabled = false;
   } });
   wfBtn.innerHTML = `${icon('spark', 15)} 全流程`;
+  // 进页面时若有进行中的托管，按钮提示可重开
+  GET(`/api/workflows?project_id=${project.id}`).then((ws) => {
+    if (ws.some((w) => w.status === 'running')) { wfBtn.innerHTML = `${icon('spark', 15)} 托管进行中·查看`; wfBtn.classList.add('pulse'); }
+  }).catch(() => {});
 
   function download(name, text, mime = 'text/plain') {
     const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: `${mime};charset=utf-8` })), download: name });

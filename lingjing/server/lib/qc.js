@@ -98,7 +98,7 @@ export async function qcNode(projectId, nodeId, { autofix = qcAutofix(), stage =
     try {
       await generateImage({
         prompt: newPrompt, name: node.data.name,
-        kind: node.type === 'shot' ? 'frame' : node.type, projectId, nodeId: node.id
+        kind: node.type === 'shot' ? 'frame' : node.type, projectId, nodeId: node.id, skipQC: true
       });
       action = `按质检建议重生成：${(fixes || '强化解剖/构图约束').slice(0, 80)}`;
       fixed = true;

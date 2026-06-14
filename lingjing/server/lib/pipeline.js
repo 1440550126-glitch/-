@@ -541,7 +541,7 @@ export function addAsset({ tab = 'material', kind = 'image', name, url, poster =
 }
 
 // ---------- 图像生成（同步） ----------
-export async function generateImage({ prompt, name = '', kind = 'scene', ratio = '', projectId = '', nodeId = '', refImages = [], tab = '', emotion = '' }) {
+export async function generateImage({ prompt, name = '', kind = 'scene', ratio = '', projectId = '', nodeId = '', refImages = [], tab = '', emotion = '', skipQC = false }) {
   if (!prompt?.trim()) throw bad('缺少图片提示词 prompt');
   const project = projectId ? getProject(projectId, { required: false }) : null;
   prompt = applyStyle(prompt.trim(), project?.style);
@@ -642,6 +642,15 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
   if (nodeId && project?.canvas_id) {
     try { patchCanvasNode(project.canvas_id, nodeId, { image: url }); } catch { /* 节点可能已删除 */ }
     if (!project.cover) touchProject(project.id, { cover: url });
+  }
+
+  // 自动 AIQC：每生成一张【分镜首帧/角色】图就立刻质检（含自动修正），无需等工作流。
+  // skipQC 防止修正时递归；本地 SVG 占位不质检（无接入方舟时）。
+  if (!skipQC && (kind === 'frame' || kind === 'character') && nodeId && project?.canvas_id && !/\.svg$/i.test(url)) {
+    try {
+      const { qcEnabled, qcNode } = await import('./qc.js');
+      if (qcEnabled()) await qcNode(projectId, nodeId, { stage: 'image' });
+    } catch (e) { console.warn('[qc] 自动质检跳过：', e.message); }
   }
   return { taskId, url, provider, asset };
 }
