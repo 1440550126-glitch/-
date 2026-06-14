@@ -83,6 +83,14 @@ export async function renderAgents(page) {
     m.member ? null : h('button', { class: 'btn mini ghost', onclick: () => nav('/member') }, '提额')
   ));
 
+  // 🎰 随机整活：抽一支沙雕团队 + 随机任务，一键开跑
+  body.append(h('button', { class: 'glass lz-fun-roll', onclick: () => rollFun(teams) },
+    h('span', { class: 'lz-fun-emoji' }, '🎰'),
+    h('span', { style: { flex: 1, textAlign: 'left' } },
+      h('div', { class: 'lz-fun-title' }, '随机整活'),
+      h('div', { class: 'lz-fun-sub' }, '夸夸群 / 赛博算命 / 废话文学… 抽个沙雕团队替你整活')),
+    h('span', { class: 'lz-go' }, '手气 ›')));
+
   // 我的团队
   body.append(sectionHead('我的团队', teams.mine.length ? '点击进入工作台派活' : ''));
   if (!teams.mine.length) {
@@ -197,6 +205,30 @@ export async function renderAgents(page) {
 const sectionHead = (title, sub, action) => h('div', { class: 'lz-sec-head' },
   h('div', {}, h('div', { class: 'lz-sec-title' }, title), sub ? h('div', { class: 'lz-sec-sub' }, sub) : null),
   action || null);
+
+// ---------- 🎰 随机整活 ----------
+const FUN_TEAM_NAMES = ['夸夸群', '赛博算命馆', '杠精辩论赛', '废话文学创作组'];
+const FUN_PROMPTS = [
+  '夸夸我今天又是不想上班的一天', '帮我算算今天适不适合摸鱼', '用废话文学点评一下「早睡早起身体好」',
+  '帮我吐槽一下永远开不完的会', '夸夸刚加完班还在硬撑的我', '今天水逆吗，给我算一卦',
+  '把「多喝热水」扩写成一段正确的废话', '帮我想个理由优雅地拒绝周末加班', '夸一夸坚持自律到第三天的我',
+  '帮我把「在吗」翻译成一段有文化的废话'
+];
+async function rollFun(teams) {
+  const pool = teams.templates.filter((t) => FUN_TEAM_NAMES.includes(t.name));
+  const list = pool.length ? pool : teams.templates;
+  if (!list.length) return toast('还没有可用团队', 'warn');
+  const team = list[Math.floor(Math.random() * list.length)];
+  const task = FUN_PROMPTS[Math.floor(Math.random() * FUN_PROMPTS.length)];
+  try {
+    const { run_id } = await POST(`/api/teams/${team.id}/run`, { task });
+    toast(`🎰 ${team.name} 接活：${task}`);
+    nav(`/run/${run_id}`);
+  } catch (e) {
+    if (e.extra?.need_member) confirmSheet('额度用完啦', e.message, '去看看会员', () => nav('/member'), false);
+    else toast(e.message, 'warn');
+  }
+}
 
 // ---------- 定时任务 ----------
 const scheduleDesc = (t) => t.schedule_kind === 'daily'

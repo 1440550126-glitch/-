@@ -301,8 +301,9 @@ try {
   const word2 = await s2.wait((e) => e.event === 'word', 8000, 'AI局发词');
   ok('收到词语', !!word2.data.word);
   // 轮到自己时发言，其他时间等待；玩到游戏结束（AI 随机投票，最多 6 轮）
+  // 预算给足：一局含 AI 的卧底可能跑 3~4 轮（~90s），budget 太紧会偶发超时
   let finished = false;
-  for (let guard = 0; guard < 120 && !finished; guard++) {
+  for (let guard = 0; guard < 240 && !finished; guard++) {
     const cur = await api('GET', `/api/rooms/${room2}`, { token: u1.token });
     const r = cur.data.room;
     if (r.status === 'ended') { finished = true; break; }
@@ -317,6 +318,7 @@ try {
   ok('AI 陪练局完整跑完', finished);
   const aiPlayers = s2.events.find((e) => e.event === 'state')?.data.players.filter((p) => p.is_bot) || [];
   ok('AI 陪练带明确标识', aiPlayers.every((p) => p.ai_label === 'AI 陪练'));
+  await api('POST', `/api/rooms/${room2}/leave`, { token: u1.token }).catch(() => {});  // 退出房间，避免影响后续开房测试
   s2.close(); lobby.close();
 
   console.log('\n== 通知中心 ==');
@@ -397,9 +399,11 @@ try {
   ok('每日运行额度可见', lzMeta.data.quota.limit > 0 && lzMeta.data.quota.used === 0);
 
   const lzTeams = await api('GET', '/api/teams', { token: lzTok });
-  ok('内置团队模板 ≥4', lzTeams.data.templates.length >= 4, `got ${lzTeams.data.templates.length}`);
+  ok('内置团队模板 ≥8（含整活专区）', lzTeams.data.templates.length >= 8, `got ${lzTeams.data.templates.length}`);
   const tpl = lzTeams.data.templates.find((t) => t.strategy === 'orchestrate');
   ok('编排模板含多名成员', tpl && tpl.members.length >= 3);
+  ok('整活工具 fortune 在册', lzMeta.data.tools.some((t) => t.id === 'fortune'));
+  ok('整活团队已内置', ['夸夸群', '赛博算命馆', '杠精辩论赛', '废话文学创作组'].every((n) => lzTeams.data.templates.some((t) => t.name === n)));
 
   const myAgent = await api('POST', '/api/agents', { token: lzTok, body: { name: '测试员·验', avatar: '🧪', role: '端到端验证', persona: '你负责验证产出是否达标', tools: ['text_stats', 'calculator', 'nonexistent_tool'] } });
   ok('新建智能体（非法工具被过滤）', myAgent.ok && myAgent.data.agent.tools.includes('calculator') && !myAgent.data.agent.tools.includes('nonexistent_tool'));
@@ -532,6 +536,14 @@ try {
   const tpStream = sse(`/api/runs/${topicRun.data.run_id}/events`, lzTok);
   await tpStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '话题运行'); tpStream.close();
   ok('daily_topic 工具被调用', (await api('GET', `/api/runs/${topicRun.data.run_id}`, { token: lzTok })).data.steps.some((s) => s.tool === 'daily_topic'));
+
+  // 整活：赛博算命馆掐指一算
+  const fortuneTeam = lzTeams.data.templates.find((t) => t.name === '赛博算命馆');
+  const funR = await api('POST', `/api/teams/${fortuneTeam.id}/run`, { token: lzTok, body: { task: '帮我算算今天的摸鱼运势' } });
+  const funStream = sse(`/api/runs/${funR.data.run_id}/events`, lzTok);
+  await funStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '整活运行'); funStream.close();
+  const funFull = await api('GET', `/api/runs/${funR.data.run_id}`, { token: lzTok });
+  ok('赛博算命馆掐指一算（fortune）', funFull.data.run.status === 'done' && funFull.data.steps.some((s) => s.tool === 'fortune' && s.status === 'done'));
 
   // 对外 API（可被外部系统 / Webhook 调用）
   const keyRes = await api('POST', `/api/teams/${teamId}/api-key`, { token: lzTok });

@@ -5,7 +5,7 @@
 import { searchKnowledge } from './knowledge.js';
 import { buildCard } from '../lib/manifest.js';
 import { q } from '../lib/db.js';
-import { dayCN, now, pick } from '../lib/util.js';
+import { dayCN, now, pick, seededRand, hashCode } from '../lib/util.js';
 import dns from 'node:dns/promises';
 
 // ---- 安全计算器：递归下降解析，绝不用 eval ----
@@ -251,6 +251,26 @@ export const TOOLS = {
       const t = String(theme || '').trim().slice(0, 20);
       const title = t ? `关于「${t}」，你最想说的一句` : `${pick(seeds)}，你最想说的一句`;
       return { ok: true, result: `话题：${title}\n引导语：用一句话，把你此刻的心情发出来，AI 会让它活过来。`, data: { title } };
+    }
+  },
+
+  fortune: {
+    id: 'fortune', name: '今日运势', icon: '🔮', safe: true,
+    desc: '生成今日运势（纯娱乐向）：运势指数、宜 / 忌、幸运色与幸运数字',
+    params: { who: '可选，给谁算（名字 / 星座 / 工种皆可）' },
+    async run({ who }) {
+      const day = dayCN();
+      const rnd = seededRand(hashCode(day + '|' + String(who || '')));   // 同一天同一对象结果稳定
+      const p = (arr) => arr[Math.floor(rnd() * arr.length)];
+      const YI = ['摸鱼', '早睡', '发疯文学', '给暗恋的人点赞', '买杯奶茶续命', '跟老友唠嗑', '在句灵发一句话', '大胆表白', '断舍离', '听十年前的老歌', '出门晒太阳', '请同事吃饭'];
+      const JI = ['熬夜', 'emo', '跟杠精讲道理', '报复性下单', '已读不回', '空腹喝美式', '半夜翻前任朋友圈', '在群里玩抽象被抓包', '相信"再玩五分钟"'];
+      const COLORS = ['多巴胺粉', '克莱因蓝', '抹茶奶绿', '奶油白', '落日橘', '雾霾紫', '极光青'];
+      const stars = 2 + Math.floor(rnd() * 4);   // 2~5 星，娱乐向不给差评
+      const moods = { 2: '今天宜佛系，别太用力，顺其自然就很好。', 3: '平稳的一天，小确幸藏在细节里。', 4: '状态在线，适合主动出击一把。', 5: '欧气爆棚！想做的事大胆去做～' };
+      const yi = p(YI), ji = p(JI), color = p(COLORS), num = 1 + Math.floor(rnd() * 9);
+      const result = `🔮 ${who || '你'}的今日运势（${day} · 纯娱乐）\n` +
+        `运势：${'★'.repeat(stars)}${'☆'.repeat(5 - stars)}\n宜：${yi}　忌：${ji}\n幸运色：${color}　幸运数字：${num}\n${moods[stars]}`;
+      return { ok: true, result, data: { stars, yi, ji, color, num } };
     }
   }
 };

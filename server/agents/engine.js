@@ -209,6 +209,8 @@ async function localProduce(run, agent, item, memo, toolIds, kbIds, observations
       await runToolStep(run, agent, toolIds.includes('compose_card') ? 'compose_card' : 'draft_post', { text }, kbIds, observations);
     } else if (toolIds.includes('daily_topic')) {
       await runToolStep(run, agent, 'daily_topic', { theme: topKeywords(run.task, 1)[0] || '' }, kbIds, observations);
+    } else if (toolIds.includes('fortune')) {
+      await runToolStep(run, agent, 'fortune', { who: topKeywords(run.task, 1)[0] || '' }, kbIds, observations);
     } else if (toolIds.includes('text_stats') && memo) {
       await runToolStep(run, agent, 'text_stats', { text: memo.slice(0, 500) }, kbIds, observations);
     }

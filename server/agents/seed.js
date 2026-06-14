@@ -12,30 +12,39 @@ export function runAgentMigrations() {
   ]) { try { db.exec(sql); } catch { /* 列已存在，忽略 */ } }
 }
 
+// 增量幂等：按名字补齐缺失的内置模板（这样后续新增的模板在老库里也会自动出现）
 export function seedLingArray() {
-  const has = q.get('SELECT COUNT(*) c FROM agents WHERE is_template = 1 AND owner_id = 0')?.c || 0;
-  if (has) return;
+  let added = 0;
   tx(() => {
     // 示例知识库
-    const kb = q.run('INSERT INTO knowledge_bases (owner_id, name, description, is_template, created_at, updated_at) VALUES (0,?,?,1,?,?)',
-      SAMPLE_KB.name, SAMPLE_KB.description, now(), now());
-    const kbId = Number(kb.lastInsertRowid);
-    for (const d of SAMPLE_KB.docs) addDoc(kbId, d.source, d.text);
+    let kbId = q.get('SELECT id FROM knowledge_bases WHERE is_template = 1 AND owner_id = 0 AND name = ?', SAMPLE_KB.name)?.id;
+    if (!kbId) {
+      const kb = q.run('INSERT INTO knowledge_bases (owner_id, name, description, is_template, created_at, updated_at) VALUES (0,?,?,1,?,?)',
+        SAMPLE_KB.name, SAMPLE_KB.description, now(), now());
+      kbId = Number(kb.lastInsertRowid);
+      for (const d of SAMPLE_KB.docs) addDoc(kbId, d.source, d.text);
+      added++;
+    }
     const kbMap = { [SAMPLE_KB.key]: kbId };
 
-    // 智能体模板
+    // 智能体模板（按名字补齐）
     const aMap = {};
     for (const t of AGENT_TEMPLATES) {
-      const r = q.run(
-        `INSERT INTO agents (owner_id, name, avatar, role, persona, tier, tools, temperature, is_template, enabled, created_at, updated_at)
-         VALUES (0,?,?,?,?,?,?,?,1,1,?,?)`,
-        t.name, t.avatar, t.role, t.persona, t.tier, JSON.stringify(t.tools), t.temperature, now(), now()
-      );
-      aMap[t.key] = Number(r.lastInsertRowid);
+      let id = q.get('SELECT id FROM agents WHERE is_template = 1 AND owner_id = 0 AND name = ?', t.name)?.id;
+      if (!id) {
+        const r = q.run(
+          `INSERT INTO agents (owner_id, name, avatar, role, persona, tier, tools, temperature, is_template, enabled, created_at, updated_at)
+           VALUES (0,?,?,?,?,?,?,?,1,1,?,?)`,
+          t.name, t.avatar, t.role, t.persona, t.tier, JSON.stringify(t.tools), t.temperature, now(), now()
+        );
+        id = Number(r.lastInsertRowid); added++;
+      }
+      aMap[t.key] = id;
     }
 
-    // 团队模板
+    // 团队模板（按名字补齐）
     for (const tm of TEAM_TEMPLATES) {
+      if (q.get('SELECT id FROM teams WHERE is_template = 1 AND owner_id = 0 AND name = ?', tm.name)) continue;
       const memberIds = tm.members.map((k) => aMap[k]).filter(Boolean);
       const kbIds = (tm.knowledge || []).map((k) => kbMap[k]).filter(Boolean);
       q.run(
@@ -43,7 +52,8 @@ export function seedLingArray() {
          VALUES (0,?,?,?,?,?,?,?,3,1,1,?,?)`,
         tm.name, tm.avatar, tm.goal, tm.strategy, tm.manager_note, JSON.stringify(memberIds), JSON.stringify(kbIds), now(), now()
       );
+      added++;
     }
   });
-  console.log('  🛰  灵阵：已载入内置智能体 / 团队 / 知识库模板');
+  if (added) console.log(`  🛰  灵阵：已载入/补齐内置模板（新增 ${added} 项）`);
 }
