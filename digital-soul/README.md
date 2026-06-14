@@ -85,6 +85,8 @@ python scripts/chat.py           # 命令行对话
 python scripts/desktop.py        # 或：桌面图形界面（Tkinter）
 ```
 
+也可装成命令行工具：`pip install -e .` 后用 `digital-soul demo` / `digital-soul chat` / `digital-soul daemon` 等。
+
 没接大模型时是**降级模式**：仍会认人、查权限、调记忆，只是用模板回复。
 
 ### 接入本地大模型（推荐，让回复真正"活"起来）
@@ -99,7 +101,7 @@ python scripts/chat.py
 
 ## 怎么把它变成"你"
 
-1. 改 `config/identity.yaml`：你的名字、性格、口头禅、日常。
+1. 改 `config/identity.yaml`：你的名字、性格、口头禅、日常。（`config/examples/` 有温柔妈妈 / 硬汉爸爸 / 搞笑损友模板，复制一份当起点）
 2. 改 `config/relationships.yaml`：家人朋友、谁守护、谁的话不听。
 3. 灌记忆：把日记/聊天记录/回忆写进 `data/memories/sources/`，或：
    ```bash

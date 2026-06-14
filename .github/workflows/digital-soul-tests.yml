@@ -1,0 +1,31 @@
+name: digital-soul tests
+
+on:
+  push:
+    paths:
+      - "digital-soul/**"
+  pull_request:
+    paths:
+      - "digital-soul/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: digital-soul
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install core dependency
+        run: pip install pyyaml
+      - name: Compile check
+        run: python -m compileall -q dsoul scripts
+      - name: Run unit tests
+        run: |
+          for t in authority memory annotate presence consolidate; do
+            echo "== $t =="
+            python tests/test_$t.py
+          done

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "digital-soul"
+version = "0.1.0"
+description = "本地数字分身智能体框架：用你的性格/记忆/关系来对话与行动，可接机器人。"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = ["PyYAML>=6.0"]
+
+[project.optional-dependencies]
+voice = ["faster-whisper>=1.0.0", "pyttsx3>=2.90", "sounddevice>=0.4.6", "numpy>=1.24"]
+vision = ["opencv-contrib-python>=4.8.0"]          # 树莓派友好（LBPH，免 dlib）
+vision-dlib = ["face_recognition>=1.3.0", "opencv-python>=4.8.0"]
+finetune = ["torch", "transformers", "peft", "trl", "datasets", "accelerate", "bitsandbytes"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+digital-soul = "dsoul.cli:main"
+
+[tool.setuptools]
+packages = ["dsoul"]
