@@ -6,6 +6,7 @@ import { searchKnowledge } from './knowledge.js';
 import { buildCard } from '../lib/manifest.js';
 import { q } from '../lib/db.js';
 import { dayCN, now, pick } from '../lib/util.js';
+import dns from 'node:dns/promises';
 
 // ---- 安全计算器：递归下降解析，绝不用 eval ----
 function calc(expr) {
@@ -52,16 +53,35 @@ function calc(expr) {
 }
 
 // ---- web_fetch 的 SSRF 防护：禁止内网 / 本机 / 元数据地址 ----
-function isBlockedHost(host) {
-  const h = host.toLowerCase().replace(/^\[|\]$/g, '');
-  if (['localhost', '0.0.0.0', '::1'].includes(h) || h.endsWith('.local') || h.endsWith('.internal')) return true;
-  if (h === '169.254.169.254') return true; // 云元数据
-  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+// 判断单个 IP 字面量是否属于内网/环回/链路本地/元数据（含 IPv6 与 ::ffff: 映射）
+function isBlockedIp(ip) {
+  const a = String(ip).toLowerCase();
+  if (a === '::1' || a === '::') return true;
+  if (/^f[cd]/.test(a)) return true;                  // fc00::/7 唯一本地地址
+  if (a.startsWith('fe80')) return true;              // 链路本地
+  const v4 = a.replace(/^::ffff:/, '');
+  const m = v4.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (m) {
-    const [a, b] = [Number(m[1]), Number(m[2])];
-    if (a === 127 || a === 10 || a === 0 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254)) return true;
+    const [w, x] = [Number(m[1]), Number(m[2])];
+    if (w === 127 || w === 10 || w === 0 || (w === 192 && x === 168) || (w === 172 && x >= 16 && x <= 31) || (w === 169 && x === 254)) return true;
   }
   return false;
+}
+// 判断主机名字面量（域名直接拦特殊后缀；IP 字面量交给 isBlockedIp）
+function isBlockedHost(host) {
+  const h = String(host).toLowerCase().replace(/^\[|\]$/g, '');
+  if (h === 'localhost' || h.endsWith('.local') || h.endsWith('.internal')) return true;
+  return isBlockedIp(h);
+}
+// 抓取前对单跳 URL 做完整校验：协议 + 主机名字面量 + DNS 解析后的所有地址
+async function assertSafeHop(u) {
+  if (!['http:', 'https:'].includes(u.protocol)) return '只支持 http/https';
+  if (isBlockedHost(u.hostname)) return '出于安全考虑，禁止抓取内网 / 本机 / 元数据地址';
+  try {
+    const addrs = await dns.lookup(u.hostname, { all: true });
+    if (addrs.some((a) => isBlockedIp(a.address))) return '该域名解析到内网 / 本机地址，已拒绝';
+  } catch { return '域名解析失败'; }
+  return null;
 }
 function stripHtml(html) {
   return String(html)
@@ -164,19 +184,31 @@ export const TOOLS = {
     desc: '抓取一个公开网页并提取正文文本（受部署网络策略限制，内网地址被禁止）',
     params: { url: '要抓取的 http/https 网址' },
     async run({ url }) {
-      let u;
-      try { u = new URL(String(url)); } catch { return { ok: false, result: '无效的网址' }; }
-      if (!['http:', 'https:'].includes(u.protocol)) return { ok: false, result: '只支持 http/https' };
-      if (isBlockedHost(u.hostname)) return { ok: false, result: '出于安全考虑，禁止抓取内网 / 本机 / 元数据地址' };
+      let current;
+      try { current = new URL(String(url)); } catch { return { ok: false, result: '无效的网址' }; }
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 8000);
       try {
-        const resp = await fetch(u.href, { signal: ctrl.signal, redirect: 'follow', headers: { 'User-Agent': 'LingArray-Agent/1.0' } });
+        // 手动跟随重定向：每一跳都重新做 SSRF 校验（含 DNS 解析地址），防止 302→内网/元数据绕过
+        let resp;
+        for (let hop = 0; hop < 5; hop++) {
+          const blocked = await assertSafeHop(current);
+          if (blocked) return { ok: false, result: blocked };
+          resp = await fetch(current.href, { signal: ctrl.signal, redirect: 'manual', headers: { 'User-Agent': 'LingArray-Agent/1.0' } });
+          if (resp.status >= 300 && resp.status < 400 && resp.headers.get('location')) {
+            let next;
+            try { next = new URL(resp.headers.get('location'), current); } catch { return { ok: false, result: '重定向地址无效' }; }
+            current = next;
+            continue;
+          }
+          break;
+        }
+        if (resp.status >= 300 && resp.status < 400) return { ok: false, result: '重定向次数过多' };
         if (!resp.ok) return { ok: false, result: `抓取失败：HTTP ${resp.status}` };
         const ct = resp.headers.get('content-type') || '';
         const raw = (await resp.text()).slice(0, 200_000);
         const text = (ct.includes('html') ? stripHtml(raw) : raw).slice(0, 1500);
-        return { ok: true, result: `来自 ${u.host} 的内容（已截断）：\n${text}`, data: { host: u.host, length: text.length } };
+        return { ok: true, result: `来自 ${current.host} 的内容（已截断）：\n${text}`, data: { host: current.host, length: text.length } };
       } catch (e) {
         return { ok: false, result: `抓取失败（可能是网络策略限制或超时）：${e.message}` };
       } finally { clearTimeout(timer); }
