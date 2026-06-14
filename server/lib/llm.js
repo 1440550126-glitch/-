@@ -18,6 +18,7 @@ const PRICES = {
 };
 
 export const llmEnabled = () => PROVIDER !== 'none' && !!BASE_URL && !!API_KEY;
+export const llmProvider = () => PROVIDER;
 
 export function logUsage({ userId = 0, feature, provider = 'local', model = 'rule-engine', promptTokens = 0, completionTokens = 0, ok = 1, fallback = 0, latency = 0, tier = 'default' }) {
   const price = PRICES[tier] || PRICES.default;

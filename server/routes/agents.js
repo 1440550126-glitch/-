@@ -1,0 +1,314 @@
+// 灵阵 · AI 团队：REST + SSE 路由
+import { GET, POST, PATCH, DEL, bad, notFound, denied, openSSE } from '../lib/httpx.js';
+import { q } from '../lib/db.js';
+import { now, jparse, sanitizeText, clamp } from '../lib/util.js';
+import { isMember } from '../lib/auth.js';
+import { subscribe } from '../lib/hub.js';
+import { toolList, getTool } from '../agents/tools.js';
+import { searchKnowledge, addDoc } from '../agents/knowledge.js';
+import { STRATEGIES, STRATEGY_LIST, AGENT_QUOTA } from '../agents/catalog.js';
+import { executeRun, stopRun } from '../agents/engine.js';
+import { useQuota, quotaUsed } from '../lib/llm.js';
+
+// ---------- 访问控制小工具 ----------
+const agentRow = (id) => q.get('SELECT * FROM agents WHERE id = ?', Number(id));
+const teamRow = (id) => q.get('SELECT * FROM teams WHERE id = ?', Number(id));
+const kbRow = (id) => q.get('SELECT * FROM knowledge_bases WHERE id = ?', Number(id));
+const canUse = (row, uid) => row && (row.owner_id === uid || row.is_template);
+const canEdit = (row, uid) => row && row.owner_id === uid && !row.is_template;
+
+const viewAgent = (a, uid) => a && ({
+  id: a.id, name: a.name, avatar: a.avatar, role: a.role, persona: a.persona,
+  tier: a.tier, tools: jparse(a.tools, []), temperature: a.temperature,
+  is_template: !!a.is_template, mine: a.owner_id === uid, updated_at: a.updated_at
+});
+const memberPreview = (ids) => (jparse(ids, []) || []).map((id) => {
+  const a = agentRow(id); return a ? { id: a.id, name: a.name, avatar: a.avatar, role: a.role } : null;
+}).filter(Boolean);
+const kbPreview = (ids) => (jparse(ids, []) || []).map((id) => {
+  const k = kbRow(id); return k ? { id: k.id, name: k.name, chunk_count: k.chunk_count } : null;
+}).filter(Boolean);
+const viewTeam = (t, uid) => t && ({
+  id: t.id, name: t.name, avatar: t.avatar, goal: t.goal, strategy: t.strategy,
+  manager_note: t.manager_note, max_rounds: t.max_rounds, run_count: t.run_count,
+  is_template: !!t.is_template, mine: t.owner_id === uid, updated_at: t.updated_at,
+  members: memberPreview(t.member_ids), knowledge: kbPreview(t.knowledge_ids),
+  knowledge_ids: jparse(t.knowledge_ids, [])
+});
+
+const sanitizeTools = (arr) => [...new Set((Array.isArray(arr) ? arr : []).map(String))].filter(getTool);
+const sanitizeEmoji = (s, dft) => sanitizeText(s, 8) || dft;
+
+// ============================================================
+// 元信息：工具清单 / 策略 / 我的额度
+// ============================================================
+GET('/api/agents/meta', async (ctx) => {
+  const member = isMember(ctx.user);
+  const limit = member ? AGENT_QUOTA.MEMBER_RUNS_PER_DAY : AGENT_QUOTA.FREE_RUNS_PER_DAY;
+  return {
+    tools: toolList(),
+    strategies: STRATEGY_LIST,
+    quota: { used: quotaUsed(ctx.user.id, 'agent_run'), limit, left: Math.max(0, limit - quotaUsed(ctx.user.id, 'agent_run')) },
+    limits: { max_members: AGENT_QUOTA.MAX_MEMBERS, max_rounds: AGENT_QUOTA.MAX_TOOL_ROUNDS },
+    member
+  };
+}, { auth: true });
+
+// ============================================================
+// 智能体（成员）CRUD
+// ============================================================
+GET('/api/agents', async (ctx) => ({
+  mine: q.all('SELECT * FROM agents WHERE owner_id = ? ORDER BY updated_at DESC', ctx.user.id).map((a) => viewAgent(a, ctx.user.id)),
+  templates: q.all('SELECT * FROM agents WHERE is_template = 1 AND owner_id = 0 ORDER BY id').map((a) => viewAgent(a, ctx.user.id))
+}), { auth: true });
+
+GET('/api/agents/:id', async (ctx) => {
+  const a = agentRow(ctx.params.id);
+  if (!canUse(a, ctx.user.id)) throw notFound();
+  return { agent: viewAgent(a, ctx.user.id) };
+}, { auth: true });
+
+POST('/api/agents', async (ctx) => {
+  const b = ctx.body || {};
+  const name = sanitizeText(b.name, 24);
+  if (!name) throw bad('给这个智能体起个名字');
+  const ts = now();
+  const r = q.run(
+    `INSERT INTO agents (owner_id, name, avatar, role, persona, tier, tools, temperature, is_template, enabled, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,0,1,?,?)`,
+    ctx.user.id, name, sanitizeEmoji(b.avatar, '🤖'), sanitizeText(b.role, 60), sanitizeText(b.persona, 1200),
+    b.tier === 'premium' ? 'premium' : 'default', JSON.stringify(sanitizeTools(b.tools)),
+    clamp(b.temperature ?? 0.7, 0, 1.5), ts, ts
+  );
+  return { agent: viewAgent(agentRow(Number(r.lastInsertRowid)), ctx.user.id) };
+}, { auth: true });
+
+PATCH('/api/agents/:id', async (ctx) => {
+  const a = agentRow(ctx.params.id);
+  if (!a) throw notFound();
+  if (!canEdit(a, ctx.user.id)) throw denied('内置模板不可编辑，可「复制为我的」后再改');
+  const b = ctx.body || {};
+  q.run(
+    `UPDATE agents SET name = ?, avatar = ?, role = ?, persona = ?, tier = ?, tools = ?, temperature = ?, updated_at = ? WHERE id = ?`,
+    sanitizeText(b.name, 24) || a.name, sanitizeEmoji(b.avatar, a.avatar), sanitizeText(b.role, 60),
+    sanitizeText(b.persona, 1200), b.tier === 'premium' ? 'premium' : 'default',
+    JSON.stringify(b.tools !== undefined ? sanitizeTools(b.tools) : jparse(a.tools, [])),
+    clamp(b.temperature ?? a.temperature, 0, 1.5), now(), a.id
+  );
+  return { agent: viewAgent(agentRow(a.id), ctx.user.id) };
+}, { auth: true });
+
+POST('/api/agents/:id/clone', async (ctx) => {
+  const a = agentRow(ctx.params.id);
+  if (!canUse(a, ctx.user.id)) throw notFound();
+  const ts = now();
+  const r = q.run(
+    `INSERT INTO agents (owner_id, name, avatar, role, persona, tier, tools, temperature, is_template, enabled, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,0,1,?,?)`,
+    ctx.user.id, (a.name + ' 副本').slice(0, 24), a.avatar, a.role, a.persona, a.tier, a.tools, a.temperature, ts, ts
+  );
+  return { agent: viewAgent(agentRow(Number(r.lastInsertRowid)), ctx.user.id) };
+}, { auth: true });
+
+DEL('/api/agents/:id', async (ctx) => {
+  const a = agentRow(ctx.params.id);
+  if (!a) throw notFound();
+  if (!canEdit(a, ctx.user.id)) throw denied('不能删除内置模板');
+  q.run('DELETE FROM agents WHERE id = ?', a.id);
+  return { deleted: true };
+}, { auth: true });
+
+// ============================================================
+// 团队 CRUD
+// ============================================================
+GET('/api/teams', async (ctx) => ({
+  mine: q.all('SELECT * FROM teams WHERE owner_id = ? ORDER BY updated_at DESC', ctx.user.id).map((t) => viewTeam(t, ctx.user.id)),
+  templates: q.all('SELECT * FROM teams WHERE is_template = 1 AND owner_id = 0 ORDER BY id').map((t) => viewTeam(t, ctx.user.id))
+}), { auth: true });
+
+GET('/api/teams/:id', async (ctx) => {
+  const t = teamRow(ctx.params.id);
+  if (!canUse(t, ctx.user.id)) throw notFound();
+  const members = (jparse(t.member_ids, []) || []).map((id) => viewAgent(agentRow(id), ctx.user.id)).filter(Boolean);
+  return { team: viewTeam(t, ctx.user.id), members };
+}, { auth: true });
+
+function validateMembers(ids, uid) {
+  const out = [];
+  for (const id of (Array.isArray(ids) ? ids : [])) {
+    const a = agentRow(id);
+    if (canUse(a, uid) && !out.includes(a.id)) out.push(a.id);
+  }
+  if (out.length > AGENT_QUOTA.MAX_MEMBERS) throw bad(`一个团队最多 ${AGENT_QUOTA.MAX_MEMBERS} 名成员`);
+  return out;
+}
+function validateKbs(ids, uid) {
+  return (Array.isArray(ids) ? ids : []).map(Number).filter((id) => canUse(kbRow(id), uid));
+}
+
+POST('/api/teams', async (ctx) => {
+  const b = ctx.body || {};
+  const name = sanitizeText(b.name, 24);
+  if (!name) throw bad('给团队起个名字');
+  const strategy = STRATEGIES[b.strategy] ? b.strategy : 'orchestrate';
+  const members = validateMembers(b.member_ids, ctx.user.id);
+  const ts = now();
+  const r = q.run(
+    `INSERT INTO teams (owner_id, name, avatar, goal, strategy, manager_note, member_ids, knowledge_ids, max_rounds, is_template, published, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,0,0,?,?)`,
+    ctx.user.id, name, sanitizeEmoji(b.avatar, '🛰'), sanitizeText(b.goal, 300), strategy, sanitizeText(b.manager_note, 400),
+    JSON.stringify(members), JSON.stringify(validateKbs(b.knowledge_ids, ctx.user.id)),
+    clamp(b.max_rounds ?? 3, 1, AGENT_QUOTA.MAX_TOOL_ROUNDS), ts, ts
+  );
+  return { team: viewTeam(teamRow(Number(r.lastInsertRowid)), ctx.user.id) };
+}, { auth: true });
+
+PATCH('/api/teams/:id', async (ctx) => {
+  const t = teamRow(ctx.params.id);
+  if (!t) throw notFound();
+  if (!canEdit(t, ctx.user.id)) throw denied('内置模板不可编辑，可「用此模板」复制后再改');
+  const b = ctx.body || {};
+  q.run(
+    `UPDATE teams SET name = ?, avatar = ?, goal = ?, strategy = ?, manager_note = ?, member_ids = ?, knowledge_ids = ?, max_rounds = ?, updated_at = ? WHERE id = ?`,
+    sanitizeText(b.name, 24) || t.name, sanitizeEmoji(b.avatar, t.avatar), sanitizeText(b.goal, 300),
+    STRATEGIES[b.strategy] ? b.strategy : t.strategy, sanitizeText(b.manager_note, 400),
+    JSON.stringify(b.member_ids !== undefined ? validateMembers(b.member_ids, ctx.user.id) : jparse(t.member_ids, [])),
+    JSON.stringify(b.knowledge_ids !== undefined ? validateKbs(b.knowledge_ids, ctx.user.id) : jparse(t.knowledge_ids, [])),
+    clamp(b.max_rounds ?? t.max_rounds, 1, AGENT_QUOTA.MAX_TOOL_ROUNDS), now(), t.id
+  );
+  return { team: viewTeam(teamRow(t.id), ctx.user.id) };
+}, { auth: true });
+
+POST('/api/teams/:id/clone', async (ctx) => {
+  const t = teamRow(ctx.params.id);
+  if (!canUse(t, ctx.user.id)) throw notFound();
+  const ts = now();
+  const r = q.run(
+    `INSERT INTO teams (owner_id, name, avatar, goal, strategy, manager_note, member_ids, knowledge_ids, max_rounds, is_template, published, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,0,0,?,?)`,
+    ctx.user.id, (t.name + (t.is_template ? '' : ' 副本')).slice(0, 24), t.avatar, t.goal, t.strategy, t.manager_note,
+    t.member_ids, t.knowledge_ids, t.max_rounds, ts, ts
+  );
+  return { team: viewTeam(teamRow(Number(r.lastInsertRowid)), ctx.user.id) };
+}, { auth: true });
+
+DEL('/api/teams/:id', async (ctx) => {
+  const t = teamRow(ctx.params.id);
+  if (!t) throw notFound();
+  if (!canEdit(t, ctx.user.id)) throw denied('不能删除内置模板');
+  q.run('DELETE FROM teams WHERE id = ?', t.id);
+  return { deleted: true };
+}, { auth: true });
+
+// ============================================================
+// 运行任务
+// ============================================================
+POST('/api/teams/:id/run', async (ctx) => {
+  const t = teamRow(ctx.params.id);
+  if (!canUse(t, ctx.user.id)) throw notFound();
+  const task = sanitizeText(ctx.body?.task, 1000);
+  if (!task) throw bad('先描述一下要这支团队做什么');
+  const members = (jparse(t.member_ids, []) || []).map(agentRow).filter((a) => a && a.enabled);
+  if (!members.length) throw bad('这个团队还没有成员，先去添加成员吧');
+
+  const limit = isMember(ctx.user) ? AGENT_QUOTA.MEMBER_RUNS_PER_DAY : AGENT_QUOTA.FREE_RUNS_PER_DAY;
+  if (!useQuota(ctx.user.id, 'agent_run', limit)) {
+    throw denied(
+      isMember(ctx.user) ? '今天的团队运行次数到上限了，明天再来～' : `每天可免费运行 ${AGENT_QUOTA.FREE_RUNS_PER_DAY} 次 AI 团队，开通会员可提升到 ${AGENT_QUOTA.MEMBER_RUNS_PER_DAY} 次`,
+      { need_member: !isMember(ctx.user), quota_exceeded: true }
+    );
+  }
+  const r = q.run(
+    `INSERT INTO agent_runs (team_id, user_id, team_name, strategy, task, status, started_at) VALUES (?,?,?,?,?, 'running', ?)`,
+    t.id, ctx.user.id, t.name, t.strategy, task, now()
+  );
+  const runId = Number(r.lastInsertRowid);
+  void executeRun(runId);   // 异步执行，步骤通过 SSE 实时直播
+  return { run_id: runId };
+}, { auth: true });
+
+GET('/api/runs', async (ctx) => ({
+  items: q.all('SELECT id, team_id, team_name, strategy, task, status, by_llm, step_count, started_at, ended_at FROM agent_runs WHERE user_id = ? ORDER BY started_at DESC LIMIT 30', ctx.user.id)
+}), { auth: true });
+
+GET('/api/runs/:id', async (ctx) => {
+  const run = q.get('SELECT * FROM agent_runs WHERE id = ?', Number(ctx.params.id));
+  if (!run || run.user_id !== ctx.user.id) throw notFound();
+  return { run: { ...run, plan: jparse(run.plan, null) }, steps: q.all('SELECT * FROM run_steps WHERE run_id = ? ORDER BY idx', run.id) };
+}, { auth: true });
+
+POST('/api/runs/:id/stop', async (ctx) => {
+  const run = q.get('SELECT * FROM agent_runs WHERE id = ?', Number(ctx.params.id));
+  if (!run || run.user_id !== ctx.user.id) throw notFound();
+  if (run.status === 'running') stopRun(run.id);
+  return { stopping: true };
+}, { auth: true });
+
+// 作战室实时事件流：先回放已产生的步骤，再订阅后续；终态补发 done/error
+GET('/api/runs/:id/events', async (ctx) => {
+  const run = q.get('SELECT * FROM agent_runs WHERE id = ?', Number(ctx.params.id));
+  if (!run || run.user_id !== ctx.user.id) throw notFound();
+  const client = openSSE(ctx.req, ctx.res);
+  const terminal = (r) => r.status === 'failed' ? ['error', { error: r.error || '运行失败' }] : ['done', r];
+
+  for (const s of q.all('SELECT * FROM run_steps WHERE run_id = ? ORDER BY idx', run.id)) client.send('step', s);
+  if (run.status !== 'running') { const [ev, data] = terminal(run); client.send(ev, data); client.close(); return; }
+
+  subscribe(`run:${run.id}`, client, ctx.user.id);
+  // 回放与订阅之间若已结束，立即补发终态
+  const fresh = q.get('SELECT * FROM agent_runs WHERE id = ?', run.id);
+  if (fresh.status !== 'running') { const [ev, data] = terminal(fresh); client.send(ev, data); }
+}, { auth: true });
+
+// ============================================================
+// 知识库
+// ============================================================
+GET('/api/kb', async (ctx) => ({
+  mine: q.all('SELECT * FROM knowledge_bases WHERE owner_id = ? ORDER BY updated_at DESC', ctx.user.id),
+  templates: q.all('SELECT * FROM knowledge_bases WHERE is_template = 1 AND owner_id = 0 ORDER BY id')
+    .map((k) => ({ ...k, mine: false }))
+}), { auth: true });
+
+POST('/api/kb', async (ctx) => {
+  const name = sanitizeText(ctx.body?.name, 30);
+  if (!name) throw bad('给知识库起个名字');
+  const ts = now();
+  const r = q.run('INSERT INTO knowledge_bases (owner_id, name, description, created_at, updated_at) VALUES (?,?,?,?,?)',
+    ctx.user.id, name, sanitizeText(ctx.body?.description, 200), ts, ts);
+  return { kb: kbRow(Number(r.lastInsertRowid)) };
+}, { auth: true });
+
+GET('/api/kb/:id', async (ctx) => {
+  const kb = kbRow(ctx.params.id);
+  if (!canUse(kb, ctx.user.id)) throw notFound();
+  const sources = q.all('SELECT source, COUNT(*) chunks FROM knowledge_chunks WHERE kb_id = ? GROUP BY source', kb.id);
+  const sample = q.all('SELECT id, source, idx, text FROM knowledge_chunks WHERE kb_id = ? ORDER BY idx LIMIT 8', kb.id);
+  return { kb: { ...kb, mine: kb.owner_id === ctx.user.id }, sources, sample };
+}, { auth: true });
+
+POST('/api/kb/:id/docs', async (ctx) => {
+  const kb = kbRow(ctx.params.id);
+  if (!kb) throw notFound();
+  if (!canEdit(kb, ctx.user.id)) throw denied('内置示例知识库不可修改');
+  const text = sanitizeText(ctx.body?.text, 50_000);
+  if (!text) throw bad('粘贴一些文本内容');
+  const res = addDoc(kb.id, sanitizeText(ctx.body?.source, 60) || '文档', text);
+  return { added: res.added, kb: kbRow(kb.id) };
+}, { auth: true });
+
+POST('/api/kb/:id/search', async (ctx) => {
+  const kb = kbRow(ctx.params.id);
+  if (!canUse(kb, ctx.user.id)) throw notFound();
+  const query = sanitizeText(ctx.body?.query, 200);
+  if (!query) throw bad('输入要检索的内容');
+  return { hits: searchKnowledge([kb.id], query, 5) };
+}, { auth: true });
+
+DEL('/api/kb/:id', async (ctx) => {
+  const kb = kbRow(ctx.params.id);
+  if (!kb) throw notFound();
+  if (!canEdit(kb, ctx.user.id)) throw denied('不能删除内置知识库');
+  q.run('DELETE FROM knowledge_chunks WHERE kb_id = ?', kb.id);
+  q.run('DELETE FROM knowledge_bases WHERE id = ?', kb.id);
+  return { deleted: true };
+}, { auth: true });

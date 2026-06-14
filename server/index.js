@@ -18,6 +18,9 @@ import './routes/ai.js';
 import './routes/shop.js';
 import './routes/rooms.js';
 import './routes/admin.js';
+import './routes/agents.js';
+
+import { seedLingArray } from './agents/seed.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(__dirname, '..', 'web');
@@ -44,6 +47,7 @@ recoverOnBoot();
 runSeed();
 ensureWarmupAccounts();
 seedSamplePosts();
+seedLingArray();
 if (process.env.WARMUP_AUTOSTART !== '0') startWarmupLoop();
 
 const server = http.createServer((req, res) => {

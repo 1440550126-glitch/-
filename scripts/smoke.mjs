@@ -390,6 +390,68 @@ try {
   ok('AI 主持人全程主持（天黑/天亮/投票）', wfHost.length >= 4);
   wfStream.close();
 
+  console.log('\n== 灵阵 · AI 团队（多智能体协作） ==');
+  const lzTok = guests[2].token;
+  const lzMeta = await api('GET', '/api/agents/meta', { token: lzTok });
+  ok('工具与策略元信息', lzMeta.ok && lzMeta.data.tools.some((t) => t.id === 'knowledge_search') && lzMeta.data.strategies.some((s) => s.id === 'orchestrate'));
+  ok('每日运行额度可见', lzMeta.data.quota.limit > 0 && lzMeta.data.quota.used === 0);
+
+  const lzTeams = await api('GET', '/api/teams', { token: lzTok });
+  ok('内置团队模板 ≥4', lzTeams.data.templates.length >= 4, `got ${lzTeams.data.templates.length}`);
+  const tpl = lzTeams.data.templates.find((t) => t.strategy === 'orchestrate');
+  ok('编排模板含多名成员', tpl && tpl.members.length >= 3);
+
+  const myAgent = await api('POST', '/api/agents', { token: lzTok, body: { name: '测试员·验', avatar: '🧪', role: '端到端验证', persona: '你负责验证产出是否达标', tools: ['text_stats', 'calculator', 'nonexistent_tool'] } });
+  ok('新建智能体（非法工具被过滤）', myAgent.ok && myAgent.data.agent.tools.includes('calculator') && !myAgent.data.agent.tools.includes('nonexistent_tool'));
+
+  const cloned = await api('POST', `/api/teams/${tpl.id}/clone`, { token: lzTok });
+  ok('复制团队模板为我的', cloned.ok && cloned.data.team.mine === true && cloned.data.team.members.length === tpl.members.length);
+  const teamId = cloned.data.team.id;
+
+  const runRes = await api('POST', `/api/teams/${teamId}/run`, { token: lzTok, body: { task: '用一句话介绍「句灵」这款产品，并算一下 12 个月会员按 9.9 元/月一共多少钱' } });
+  ok('发起团队运行', runRes.ok && runRes.data.run_id > 0, JSON.stringify(runRes));
+  const runId = runRes.data.run_id;
+
+  const runStream = sse(`/api/runs/${runId}/events`, lzTok);
+  const doneEv = await runStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '团队运行完成');
+  ok('运行完成（done 事件）', doneEv.event === 'done' && doneEv.data.status === 'done', JSON.stringify(doneEv.data?.status));
+  const stepEvents = runStream.events.filter((e) => e.event === 'step');
+  const phases = new Set(stepEvents.map((e) => e.data.phase));
+  ok('编排官产出计划（plan）', phases.has('plan'));
+  ok('成员实际产出（act ≥3）', stepEvents.filter((e) => e.data.phase === 'act' && e.data.status === 'done').length >= 3);
+  ok('成员真实调用工具（tool）', phases.has('tool'));
+  ok('总编整合（synthesize）', phases.has('synthesize'));
+  runStream.close();
+
+  const runFull = await api('GET', `/api/runs/${runId}`, { token: lzTok });
+  ok('运行结果已持久化', runFull.data.run.status === 'done' && runFull.data.run.result.length > 50);
+  ok('交付物为结构化报告', runFull.data.run.result.includes('团队交付') || runFull.data.run.result.includes('#'));
+  ok('拆解计划已保存', Array.isArray(runFull.data.run.plan) && runFull.data.run.plan.length >= 1);
+  ok('步骤逐条留痕（≥5）', runFull.data.steps.length >= 5);
+  const lzMeta2 = await api('GET', '/api/agents/meta', { token: lzTok });
+  ok('运行后额度递减', lzMeta2.data.quota.used === 1);
+
+  const kbList = await api('GET', '/api/kb', { token: lzTok });
+  ok('内置示例知识库存在', kbList.data.templates.length >= 1 && kbList.data.templates[0].chunk_count > 0);
+  const search = await api('POST', `/api/kb/${kbList.data.templates[0].id}/search`, { token: lzTok, body: { query: '句灵 产品 定位' } });
+  ok('知识库检索命中', search.ok && search.data.hits.length >= 1 && search.data.hits[0].text.includes('句灵'));
+  const myKb = await api('POST', '/api/kb', { token: lzTok, body: { name: '我的测试库' } });
+  const addDoc = await api('POST', `/api/kb/${myKb.data.kb.id}/docs`, { token: lzTok, body: { source: '便签', text: '露营装备清单：帐篷、防潮垫、天幕、营地灯、便携炉具。新手建议先租后买。' } });
+  ok('文档入库并切片', addDoc.ok && addDoc.data.added >= 1);
+  const mySearch = await api('POST', `/api/kb/${myKb.data.kb.id}/search`, { token: lzTok, body: { query: '露营 装备' } });
+  ok('自建知识库可检索', mySearch.data.hits.length >= 1 && mySearch.data.hits[0].text.includes('帐篷'));
+
+  const routeTeam = await api('POST', '/api/teams', { token: lzTok, body: { name: '路由小队', strategy: 'route', member_ids: [myAgent.data.agent.id, tpl.members[0].id] } });
+  ok('新建路由团队', routeTeam.ok && routeTeam.data.team.strategy === 'route');
+  const routeRun = await api('POST', `/api/teams/${routeTeam.data.team.id}/run`, { token: lzTok, body: { task: '计算 (199*12) 等于多少' } });
+  const routeStream = sse(`/api/runs/${routeRun.data.run_id}/events`, lzTok);
+  const routeDone = await routeStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '路由运行');
+  ok('路由团队单点接管完成', routeDone.event === 'done' && routeDone.data.status === 'done');
+  routeStream.close();
+
+  const editTpl = await api('PATCH', `/api/teams/${tpl.id}`, { token: lzTok, body: { name: '改不动' } });
+  ok('内置模板不可编辑', !editTpl.ok && editTpl.status === 403);
+
   console.log('\n== 后台系统开关 ==');
   const togOn = await api('PUT', '/api/admin/settings', { token: admin.token, body: { ai_moderation: true } });
   ok('开启 AI 机审开关', togOn.ok && togOn.data.ai_moderation === true);

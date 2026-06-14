@@ -90,6 +90,7 @@ export async function renderMe(page) {
       h('div', { class: 'glass stat' }, h('div', { class: 'v' }, me.following_count), h('div', { class: 'k' }, '关注'))
     ),
     h('div', { class: 'glass menu-list', style: { marginBottom: '14px' } },
+      h('button', { class: 'menu-item', style: { width: '100%' }, onclick: () => nav('/agents') }, '🛰 灵阵 · 我的 AI 团队', h('span', { class: 'mi-arrow' }, '›')),
       h('button', { class: 'menu-item', style: { width: '100%' }, onclick: () => nav('/member') }, '👑 会员中心', h('span', { class: 'mi-arrow' }, '›')),
       h('button', { class: 'menu-item', style: { width: '100%' }, onclick: () => ordersSheet() }, '🧾 我的订单', h('span', { class: 'mi-arrow' }, '›')),
       h('button', { class: 'menu-item', style: { width: '100%' }, onclick: () => nav('/settings') }, '⚙️ 设置与隐私', h('span', { class: 'mi-arrow' }, '›'))
