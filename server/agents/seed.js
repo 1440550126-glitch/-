@@ -1,8 +1,15 @@
 // 灵阵 · 种子数据：开机幂等载入内置智能体 / 团队模板 / 示例知识库
-import { q, tx } from '../lib/db.js';
+import { q, tx, db } from '../lib/db.js';
 import { now } from '../lib/util.js';
 import { addDoc } from './knowledge.js';
 import { AGENT_TEMPLATES, TEAM_TEMPLATES, SAMPLE_KB } from './catalog.js';
+
+// 轻量迁移：给较早创建的库补齐新列（schema.sql 的 CREATE IF NOT EXISTS 不会改动已存在的表）
+export function runAgentMigrations() {
+  for (const sql of [
+    "ALTER TABLE agent_runs ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'"
+  ]) { try { db.exec(sql); } catch { /* 列已存在，忽略 */ } }
+}
 
 export function seedLingArray() {
   const has = q.get('SELECT COUNT(*) c FROM agents WHERE is_template = 1 AND owner_id = 0')?.c || 0;

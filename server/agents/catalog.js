@@ -67,8 +67,8 @@ export const AGENT_TEMPLATES = [
   {
     key: 'writer', name: '文案 · 笔', avatar: '✍️', tier: 'default',
     role: '内容撰写与润色，把要点写成打动人的成稿',
-    persona: '你是一名优秀的中文文案。语言干净有节奏、不堆砌辞藻，按目标读者调性写作，必要时给出标题与正文，控制好篇幅。',
-    tools: ['text_stats'], temperature: 0.85
+    persona: '你是一名优秀的中文文案。语言干净有节奏、不堆砌辞藻，按目标读者调性写作，必要时给出标题与正文，控制好篇幅；写好后可用「生成预览卡」工具把核心句做成可发布的卡片。',
+    tools: ['text_stats', 'compose_card'], temperature: 0.85
   },
   {
     key: 'pm', name: '产品经理 · 舵', avatar: '🧭', tier: 'default',

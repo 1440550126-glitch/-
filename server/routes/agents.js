@@ -7,7 +7,8 @@ import { subscribe } from '../lib/hub.js';
 import { toolList, getTool } from '../agents/tools.js';
 import { searchKnowledge, addDoc } from '../agents/knowledge.js';
 import { STRATEGIES, STRATEGY_LIST, AGENT_QUOTA } from '../agents/catalog.js';
-import { executeRun, stopRun } from '../agents/engine.js';
+import { startTeamRun, stopRun } from '../agents/engine.js';
+import { computeNext, fireTrigger, MIN_INTERVAL_MIN, MAX_TRIGGERS } from '../agents/scheduler.js';
 import { useQuota, quotaUsed, todayCostMicro } from '../lib/llm.js';
 
 // ---------- 访问控制小工具 ----------
@@ -237,12 +238,7 @@ POST('/api/teams/:id/run', async (ctx) => {
       { need_member: !isMember(ctx.user), quota_exceeded: true }
     );
   }
-  const r = q.run(
-    `INSERT INTO agent_runs (team_id, user_id, team_name, strategy, task, status, started_at) VALUES (?,?,?,?,?, 'running', ?)`,
-    t.id, ctx.user.id, t.name, t.strategy, task, now()
-  );
-  const runId = Number(r.lastInsertRowid);
-  void executeRun(runId);   // 异步执行，步骤通过 SSE 实时直播
+  const runId = startTeamRun(t, task, ctx.user.id, 'manual');   // 异步执行，步骤通过 SSE 实时直播
   return { run_id: runId };
 }, { auth: true });
 
@@ -277,6 +273,87 @@ GET('/api/runs/:id/events', async (ctx) => {
   // 回放与订阅之间若已结束，立即补发终态
   const fresh = q.get('SELECT * FROM agent_runs WHERE id = ?', run.id);
   if (fresh.status !== 'running') { const [ev, data] = terminal(fresh); client.send(ev, data); }
+}, { auth: true });
+
+// ============================================================
+// 定时触发器：让团队按计划自动执行任务
+// ============================================================
+const triggerView = (t) => ({
+  id: t.id, team_id: t.team_id, team_name: q.get('SELECT name FROM teams WHERE id = ?', t.team_id)?.name || '(团队已删除)',
+  name: t.name, task: t.task, schedule_kind: t.schedule_kind, interval_min: t.interval_min,
+  at_hour: t.at_hour, at_minute: t.at_minute, enabled: !!t.enabled,
+  next_run_at: t.next_run_at, last_run_at: t.last_run_at, last_run_id: t.last_run_id, run_count: t.run_count
+});
+const triggerRow = (id) => q.get('SELECT * FROM agent_triggers WHERE id = ?', Number(id));
+
+function readTrigger(b, base = {}) {
+  const kind = b.schedule_kind === 'daily' ? 'daily' : (b.schedule_kind === 'interval' ? 'interval' : base.schedule_kind || 'interval');
+  return {
+    name: sanitizeText(b.name ?? base.name, 30),
+    task: sanitizeText(b.task ?? base.task, 500),
+    schedule_kind: kind,
+    interval_min: Math.max(MIN_INTERVAL_MIN, Math.round(Number(b.interval_min ?? base.interval_min) || 60)),
+    at_hour: clamp(b.at_hour ?? base.at_hour ?? 9, 0, 23),
+    at_minute: clamp(b.at_minute ?? base.at_minute ?? 0, 0, 59)
+  };
+}
+
+GET('/api/triggers', async (ctx) => ({
+  items: q.all('SELECT * FROM agent_triggers WHERE owner_id = ? ORDER BY updated_at DESC', ctx.user.id).map(triggerView),
+  limits: { min_interval_min: MIN_INTERVAL_MIN, max_triggers: MAX_TRIGGERS }
+}), { auth: true });
+
+POST('/api/triggers', async (ctx) => {
+  const b = ctx.body || {};
+  const team = teamRow(b.team_id);
+  if (!canUse(team, ctx.user.id)) throw bad('团队不存在或无权使用');
+  if (!(jparse(team.member_ids, []) || []).length) throw bad('空团队不能设定时任务');
+  const f = readTrigger(b);
+  if (!f.task) throw bad('设定要自动执行的任务');
+  if (!f.name) f.name = team.name + ' · 定时任务';
+  if (q.get('SELECT COUNT(*) c FROM agent_triggers WHERE owner_id = ? AND enabled = 1', ctx.user.id).c >= MAX_TRIGGERS) {
+    throw bad(`最多同时启用 ${MAX_TRIGGERS} 个定时任务，先停用一些吧`);
+  }
+  const ts = now();
+  const r = q.run(
+    `INSERT INTO agent_triggers (owner_id, team_id, name, task, schedule_kind, interval_min, at_hour, at_minute, enabled, next_run_at, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,1,?,?,?)`,
+    ctx.user.id, team.id, f.name, f.task, f.schedule_kind, f.interval_min, f.at_hour, f.at_minute, computeNext(f), ts, ts
+  );
+  return { trigger: triggerView(triggerRow(Number(r.lastInsertRowid))) };
+}, { auth: true });
+
+PATCH('/api/triggers/:id', async (ctx) => {
+  const t = triggerRow(ctx.params.id);
+  if (!t || t.owner_id !== ctx.user.id) throw notFound();
+  const b = ctx.body || {};
+  const f = readTrigger(b, t);
+  const enabling = b.enabled !== undefined ? (b.enabled ? 1 : 0) : t.enabled;
+  if (enabling && !t.enabled && q.get('SELECT COUNT(*) c FROM agent_triggers WHERE owner_id = ? AND enabled = 1 AND id != ?', ctx.user.id, t.id).c >= MAX_TRIGGERS) {
+    throw bad(`最多同时启用 ${MAX_TRIGGERS} 个定时任务`);
+  }
+  q.run(
+    `UPDATE agent_triggers SET name = ?, task = ?, schedule_kind = ?, interval_min = ?, at_hour = ?, at_minute = ?, enabled = ?, next_run_at = ?, updated_at = ? WHERE id = ?`,
+    f.name || t.name, f.task || t.task, f.schedule_kind, f.interval_min, f.at_hour, f.at_minute, enabling, computeNext(f), now(), t.id
+  );
+  return { trigger: triggerView(triggerRow(t.id)) };
+}, { auth: true });
+
+DEL('/api/triggers/:id', async (ctx) => {
+  const t = triggerRow(ctx.params.id);
+  if (!t || t.owner_id !== ctx.user.id) throw notFound();
+  q.run('DELETE FROM agent_triggers WHERE id = ?', t.id);
+  return { deleted: true };
+}, { auth: true });
+
+POST('/api/triggers/:id/run-now', async (ctx) => {
+  const t = triggerRow(ctx.params.id);
+  if (!t || t.owner_id !== ctx.user.id) throw notFound();
+  const limit = isMember(ctx.user) ? AGENT_QUOTA.MEMBER_RUNS_PER_DAY : AGENT_QUOTA.FREE_RUNS_PER_DAY;
+  if (!useQuota(ctx.user.id, 'agent_run', limit)) throw denied('今天的运行次数到上限了', { need_member: !isMember(ctx.user), quota_exceeded: true });
+  const runId = fireTrigger(t, { advance: false });   // 立即跑一次，不打乱原定计划
+  if (!runId) throw bad('团队已不可用，触发器已自动停用');
+  return { run_id: runId };
 }, { auth: true });
 
 // ============================================================
@@ -350,14 +427,16 @@ GET('/api/admin/agents/overview', async () => {
       teams: q.get('SELECT COUNT(*) c FROM teams WHERE owner_id != 0').c,
       agents: q.get('SELECT COUNT(*) c FROM agents WHERE owner_id != 0').c,
       kbs: q.get('SELECT COUNT(*) c FROM knowledge_bases WHERE owner_id != 0').c,
-      published: q.get('SELECT COUNT(*) c FROM teams WHERE published = 1 AND owner_id != 0').c
+      published: q.get('SELECT COUNT(*) c FROM teams WHERE published = 1 AND owner_id != 0').c,
+      triggers: q.get('SELECT COUNT(*) c FROM agent_triggers').c,
+      triggers_enabled: q.get('SELECT COUNT(*) c FROM agent_triggers WHERE enabled = 1').c
     },
     runs: { ...tot, today: q.get('SELECT COUNT(*) c FROM agent_runs WHERE started_at >= ?', start).c },
     cost_today_micro: todayCostMicro('agent_'),
     budget_micro: Number(getSetting('agent_budget_micro', AGENT_QUOTA.DEFAULT_BUDGET_MICRO)),
     quota: { free: AGENT_QUOTA.FREE_RUNS_PER_DAY, member: AGENT_QUOTA.MEMBER_RUNS_PER_DAY },
     recent: q.all(
-      `SELECT r.id, r.team_name, r.strategy, r.status, r.step_count, r.token_total, r.cost_micro, r.by_llm, r.started_at, u.nickname owner_name
+      `SELECT r.id, r.team_name, r.strategy, r.status, r.step_count, r.token_total, r.cost_micro, r.by_llm, r.source, r.started_at, u.nickname owner_name
        FROM agent_runs r LEFT JOIN users u ON u.id = r.user_id ORDER BY r.started_at DESC LIMIT 30`
     )
   };

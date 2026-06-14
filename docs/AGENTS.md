@@ -85,6 +85,7 @@ loop (≤ max_rounds):
 | `knowledge_search` | 在团队挂载的知识库做 RAG 检索 | ✅ |
 | `random_pick` | 从候选随机抽取 / 范围随机整数（头脑风暴） | ✅ |
 | `web_fetch` | 抓取公开网页正文；**SSRF 防护**禁止内网/本机/元数据地址；受部署网络策略限制 | ⚠ |
+| `compose_card` | **站内动作**：把一句文案生成「句灵」预览卡（情绪/场景/版式/配色），可直接发布 | ✅ |
 
 扩展：在 `TOOLS` 注册 `{ id, name, icon, desc, params, run(args, ctx) }` 即可，`ctx` 提供 `{ kbIds, userId }`。
 
@@ -113,6 +114,13 @@ loop (≤ max_rounds):
 - **每日运行配额**：免费 8 次 / 会员 80 次（`server/agents/catalog.js` 的 `AGENT_QUOTA`）。
 - **后台管控**：管理后台「🛰 灵阵团队」面板实时监控运行状态/步数/成本，可**强制停止**进行中的运行，并**在线调整每日预算**。
 
+### 定时触发器（`server/agents/scheduler.js`）
+让团队按计划自动执行某个任务（对标并超越扣子的定时任务）。
+- **调度**：`interval`（每 N 分钟，≥30）/ `daily`（每天定点·东八区）。`setInterval` 轮询到期触发器并逐个发起运行（与 AI 暖场调度同构）。
+- **防滥用**：最小间隔 30 分钟、单用户最多 5 个启用、每轮限发数量；团队被删/空则自动停用。
+- **成本**：触发产生的运行同样受引擎每日预算闸门约束（超额走本地引擎）；手动「立即运行」计入当日运行配额，后台自动调度不计 UI 配额。
+- `agent_runs.source` 标记 `manual` / `trigger`，后台监控与运行历史可区分来源。
+
 ## 8. API 一览（均需登录；前缀 `/api`）
 
 | 方法 | 路径 | 说明 |
@@ -130,6 +138,9 @@ loop (≤ max_rounds):
 | GET | `/runs` · `/runs/:id` | 我的运行列表 / 单次详情（含步骤） |
 | GET(SSE) | `/runs/:id/events` | **作战室实时事件流**（回放已有步骤 + 直播后续 + 终态） |
 | POST | `/runs/:id/stop` | 请求停止运行 |
+| GET/POST | `/triggers` | 我的定时任务 / 新建 |
+| PATCH/DELETE | `/triggers/:id` | 编辑（含启停）/ 删除 |
+| POST | `/triggers/:id/run-now` | 立即运行一次（不打乱原定计划） |
 | GET/POST | `/kb` | 知识库列表 / 新建 |
 | GET/DELETE | `/kb/:id` | 详情（含来源与样片）/ 删除 |
 | POST | `/kb/:id/docs` | 添加文档（自动切片） |
@@ -152,7 +163,7 @@ SSE 事件：`step`（步骤新增/更新，按 `id` 去重、`idx` 排序）、
 
 ## 10. 扩展点（路线）
 
-- 工具：HTTP 自定义插件、代码沙箱执行、图像生成、发帖/建房等"站内动作"工具。
+- 工具：站内动作已起步（`compose_card`）；下一步做发帖/建房等更多动作、HTTP 自定义插件、代码沙箱、图像生成。
 - 检索：接入 Embedding 后将关键词打分替换为向量召回（接口已隔离在 `knowledge.js`）。
 - 编排：DAG 真并行执行、失败重试与人审插点（成员间质询回合已在 `debate` 多轮中实现）。
-- 发布：团队广场已上线；下一步做定时触发器与对外 API 调用（`teams.published` 已贯通）。
+- 发布与自动化：团队广场、定时触发器均已上线；下一步做对外 API 调用与 Webhook 触发（`teams.published` 已贯通）。

@@ -64,15 +64,16 @@ export async function renderAgents(page) {
 
   let data;
   try {
-    const [m, teams, agents, kb, runs, gallery] = await Promise.all([
+    const [m, teams, agents, kb, runs, gallery, triggers] = await Promise.all([
       meta(), GET('/api/teams'), GET('/api/agents'), GET('/api/kb'), GET('/api/runs'),
-      GET('/api/teams/gallery').catch(() => ({ items: [] }))
+      GET('/api/teams/gallery').catch(() => ({ items: [] })),
+      GET('/api/triggers').catch(() => ({ items: [] }))
     ]);
-    data = { m, teams, agents, kb, runs, gallery };
+    data = { m, teams, agents, kb, runs, gallery, triggers };
   } catch (e) { wrap.replaceWith(emptyState('加载失败', e.message)); return; }
   wrap.replaceWith(body);
 
-  const { m, teams, agents, kb, runs, gallery } = data;
+  const { m, teams, agents, kb, runs, gallery, triggers } = data;
 
   // 配额条
   body.append(h('div', { class: 'glass lz-quota' },
@@ -104,6 +105,13 @@ export async function renderAgents(page) {
     for (const t of gallery.items) gg.append(galleryCard(t));
     body.append(gg);
   }
+
+  // 定时任务
+  body.append(sectionHead('定时任务', '让团队按计划自动跑', h('button', { class: 'btn mini ghost', onclick: () => triggerSheet([...teams.mine, ...teams.templates]) }, '+ 新建')));
+  const tl = h('div', {});
+  if (!triggers.items.length) tl.append(h('div', { class: 'glass lz-tip' }, '还没有定时任务。给一支团队设个计划，它就会自动替你产出。'));
+  else for (const t of triggers.items) tl.append(triggerCard(t));
+  body.append(tl);
 
   // 我的智能体
   body.append(sectionHead('智能体成员', '团队的组成单位', h('button', { class: 'btn mini ghost', onclick: () => agentEditor(null) }, '+ 新建成员')));
@@ -170,6 +178,79 @@ export async function renderAgents(page) {
 const sectionHead = (title, sub, action) => h('div', { class: 'lz-sec-head' },
   h('div', {}, h('div', { class: 'lz-sec-title' }, title), sub ? h('div', { class: 'lz-sec-sub' }, sub) : null),
   action || null);
+
+// ---------- 定时任务 ----------
+const scheduleDesc = (t) => t.schedule_kind === 'daily'
+  ? `每天 ${String(t.at_hour).padStart(2, '0')}:${String(t.at_minute).padStart(2, '0')}`
+  : `每 ${t.interval_min} 分钟`;
+function fmtNext(ts) {
+  const d = ts - Date.now();
+  if (d <= 0) return '即将';
+  if (d < 3600_000) return `${Math.ceil(d / 60_000)} 分钟后`;
+  if (d < 86400_000) return `${Math.round(d / 3600_000)} 小时后`;
+  const t = new Date(ts);
+  return `${t.getMonth() + 1}-${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+}
+
+function triggerCard(t) {
+  const enSwitch = h('button', { class: `switch ${t.enabled ? 'on' : ''}` });
+  enSwitch.onclick = async () => {
+    try { const r = await PATCH(`/api/triggers/${t.id}`, { enabled: !t.enabled }); t.enabled = r.trigger.enabled; t.next_run_at = r.trigger.next_run_at; enSwitch.classList.toggle('on', t.enabled); nextEl.textContent = t.enabled ? `下次 ${fmtNext(t.next_run_at)}` : '已暂停'; toast(t.enabled ? '已启用' : '已暂停'); }
+    catch (e) { toast(e.message, 'warn'); }
+  };
+  const nextEl = h('span', { class: 'lz-trigger-next' }, t.enabled ? `下次 ${fmtNext(t.next_run_at)}` : '已暂停');
+  return h('div', { class: 'glass lz-trigger' },
+    h('div', { class: 'lz-trigger-top' },
+      h('div', { style: { flex: 1, minWidth: 0 } },
+        h('div', { class: 'lz-trigger-name' }, '⏰ ', t.name),
+        h('div', { class: 'lz-trigger-meta' }, `${t.team_name} · ${scheduleDesc(t)} · 跑过 ${t.run_count} 次`)),
+      enSwitch),
+    h('div', { class: 'lz-trigger-task' }, t.task),
+    h('div', { class: 'lz-trigger-foot' }, nextEl, h('div', { style: { flex: 1 } }),
+      t.last_run_id ? h('button', { class: 'btn mini ghost', onclick: () => nav(`/run/${t.last_run_id}`) }, '上次结果') : null,
+      h('button', {
+        class: 'btn mini ghost', onclick: async (e) => {
+          e.currentTarget.disabled = true;
+          try { const r = await POST(`/api/triggers/${t.id}/run-now`); nav(`/run/${r.run_id}`); }
+          catch (err) { e.currentTarget.disabled = false; if (err.extra?.need_member) confirmSheet('额度用完啦', err.message, '去看看会员', () => nav('/member'), false); else toast(err.message, 'warn'); }
+        }
+      }, '▶ 立即跑'),
+      h('button', { class: 'lz-mp-x', onclick: () => confirmSheet('删除定时任务', '不会影响团队本身。', '删除', async () => { await DEL(`/api/triggers/${t.id}`); toast('已删除'); location.reload(); }) }, '×')));
+}
+
+async function triggerSheet(teamPool) {
+  sheet((box, close) => {
+    if (!teamPool.length) { box.append(h('h3', {}, '新建定时任务'), h('p', { class: 'sheet-sub' }, '先创建或选择一个团队。')); return; }
+    let teamId = teamPool[0].id, kind = 'interval';
+    const teamRow = h('div', { class: 'lz-pick-list' });
+    const renderTeams = () => { teamRow.innerHTML = ''; for (const t of teamPool) teamRow.append(h('button', { class: `lz-pick ${teamId === t.id ? 'on' : ''}`, onclick: () => { teamId = t.id; renderTeams(); } }, avaEl(t.avatar), h('div', { style: { flex: 1, textAlign: 'left' } }, h('div', { class: 'lz-mp-name' }, t.name), h('div', { class: 'lz-mp-role' }, `${STRAT_ICON[t.strategy] || ''} ${stratName(t.strategy)}`)), h('span', { class: 'lz-pick-tick' }, teamId === t.id ? '✓' : ''))); };
+    renderTeams();
+    const nameI = h('input', { class: 'input', maxlength: 30, placeholder: '任务名（可选）' });
+    const taskI = h('textarea', { class: 'input', rows: 3, placeholder: '每次自动执行的任务，例如：给句灵想 3 个今天适合发的文案选题' });
+    const intI = h('input', { class: 'input', type: 'number', value: '60', min: '30', style: { width: '90px' } });
+    const hourI = h('input', { class: 'input', type: 'number', value: '9', min: '0', max: '23', style: { width: '64px' } });
+    const minI = h('input', { class: 'input', type: 'number', value: '0', min: '0', max: '59', style: { width: '64px' } });
+    const schedBody = h('div', { style: { marginTop: '8px' } });
+    const kindRow = h('div', { class: 'lz-strat-row' });
+    const renderSched = () => { schedBody.innerHTML = ''; schedBody.append(kind === 'interval' ? h('div', { class: 'lz-sched-line' }, '每', intI, '分钟（最少 30）') : h('div', { class: 'lz-sched-line' }, '每天', hourI, ':', minI, '（北京时间）')); };
+    const renderKind = () => { kindRow.innerHTML = ''; for (const [k, label, desc] of [['interval', '⏱ 每隔一段', '每 N 分钟跑一次'], ['daily', '📅 每天定点', '每天某时刻跑一次']]) kindRow.append(h('button', { class: `lz-strat ${kind === k ? 'active' : ''}`, onclick: () => { kind = k; renderKind(); renderSched(); } }, h('div', { class: 'lz-strat-name' }, label), h('div', { class: 'lz-strat-blurb' }, desc))); };
+    renderKind(); renderSched();
+    box.append(h('h3', {}, '新建定时任务'),
+      h('div', { class: 'field' }, h('label', {}, '选择团队'), teamRow),
+      h('div', { class: 'field' }, h('label', {}, '任务名'), nameI),
+      h('div', { class: 'field' }, h('label', {}, '自动执行的任务'), taskI),
+      h('div', { class: 'field' }, h('label', {}, '调度方式'), kindRow, schedBody),
+      h('button', {
+        class: 'btn block', onclick: async () => {
+          if (!taskI.value.trim()) return toast('写下要自动执行的任务', 'warn');
+          try {
+            await POST('/api/triggers', { team_id: teamId, name: nameI.value.trim(), task: taskI.value.trim(), schedule_kind: kind, interval_min: Number(intI.value) || 60, at_hour: Number(hourI.value) || 0, at_minute: Number(minI.value) || 0 });
+            close(); toast('已创建定时任务'); location.reload();
+          } catch (e) { toast(e.message, 'warn'); }
+        }
+      }, '创建'));
+  });
+}
 
 // ============================================================
 // 团队工作台（编排 + 派活）

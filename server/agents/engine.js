@@ -199,6 +199,13 @@ async function localProduce(run, agent, item, memo, toolIds, kbIds, observations
       await runToolStep(run, agent, 'calculator', { expression: extractExpr(hay) }, kbIds, observations);
     } else if (toolIds.includes('datetime') && /时间|日期|今天|截止|deadline|多少天|工期/i.test(hay)) {
       await runToolStep(run, agent, 'datetime', {}, kbIds, observations);
+    } else if (toolIds.includes('compose_card')) {
+      let line = '';
+      for (const s of (memo ? memo.split('\n') : [])) {
+        const cleaned = s.replace(/^【.*?】\s*/, '').trim();   // 去掉 “【某成员】” 表头，取正文
+        if (cleaned.length >= 6) { line = cleaned; break; }
+      }
+      await runToolStep(run, agent, 'compose_card', { text: (line || run.task).slice(0, 40) }, kbIds, observations);
     } else if (toolIds.includes('text_stats') && memo) {
       await runToolStep(run, agent, 'text_stats', { text: memo.slice(0, 500) }, kbIds, observations);
     }
@@ -364,6 +371,18 @@ async function synthesize(run, team, members, blackboard) {
 // ============================================================
 // 运行总控
 // ============================================================
+// 创建一次运行并异步执行（路由派活 / 定时触发器共用）。source: manual | trigger
+export function startTeamRun(team, task, userId, source = 'manual') {
+  const r = q.run(
+    `INSERT INTO agent_runs (team_id, user_id, team_name, strategy, task, status, source, started_at)
+     VALUES (?,?,?,?,?, 'running', ?, ?)`,
+    team.id, userId, team.name, team.strategy, task, source, now()
+  );
+  const runId = Number(r.lastInsertRowid);
+  void executeRun(runId);
+  return runId;
+}
+
 export async function executeRun(runId) {
   const run = q.get('SELECT * FROM agent_runs WHERE id = ?', runId);
   if (!run) return;

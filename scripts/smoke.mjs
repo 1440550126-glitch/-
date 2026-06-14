@@ -74,7 +74,7 @@ function sse(url, token) {
 }
 
 const server = spawn('node', ['--disable-warning=ExperimentalWarning', path.join(__dirname, '..', 'server', 'index.js')], {
-  env: { ...process.env, PORT: String(PORT), DB_PATH: DB, WARMUP_AUTOSTART: '0', LLM_PROVIDER: 'none' },
+  env: { ...process.env, PORT: String(PORT), DB_PATH: DB, WARMUP_AUTOSTART: '0', TRIGGER_AUTOSTART: '0', LLM_PROVIDER: 'none' },
   stdio: ['ignore', 'pipe', 'inherit']
 });
 server.stdout.on('data', () => {});
@@ -489,6 +489,30 @@ try {
   ok('后台可查看任意运行详情', adminRunView.ok && adminRunView.data.steps.length >= 5);
   const nonAdmin = await api('GET', '/api/admin/agents/overview', { token: lzTok });
   ok('非管理员无法访问监控', !nonAdmin.ok && nonAdmin.status === 403);
+
+  // 定时触发器 + 站内动作工具
+  ok('工具含站内动作 compose_card', lzMeta.data.tools.some((t) => t.id === 'compose_card'));
+  ok('空任务的触发器被拒', !(await api('POST', '/api/triggers', { token: lzTok, body: { team_id: teamId, task: '' } })).ok);
+  const trg = await api('POST', '/api/triggers', { token: lzTok, body: { team_id: teamId, name: '每日选题', task: '给句灵想 3 个今天适合发的文案选题', schedule_kind: 'interval', interval_min: 5 } });
+  ok('创建定时任务（间隔钳到 ≥30）', trg.ok && trg.data.trigger.interval_min === 30 && trg.data.trigger.enabled === true);
+  const trgDaily = await api('POST', '/api/triggers', { token: lzTok, body: { team_id: teamId, task: '每天早报', schedule_kind: 'daily', at_hour: 8, at_minute: 30 } });
+  ok('创建每日定点任务', trgDaily.ok && trgDaily.data.trigger.schedule_kind === 'daily' && trgDaily.data.trigger.next_run_at > Date.now());
+  const trgList = await api('GET', '/api/triggers', { token: lzTok });
+  ok('定时任务列表与上限', trgList.data.items.length >= 2 && trgList.data.limits.max_triggers === 5);
+  const trgRun = await api('POST', `/api/triggers/${trg.data.trigger.id}/run-now`, { token: lzTok });
+  ok('立即运行定时任务', trgRun.ok && trgRun.data.run_id > 0);
+  const trgStream = sse(`/api/runs/${trgRun.data.run_id}/events`, lzTok);
+  await trgStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '触发运行');
+  trgStream.close();
+  const trgFull = await api('GET', `/api/runs/${trgRun.data.run_id}`, { token: lzTok });
+  ok('触发运行标记来源 trigger', trgFull.data.run.source === 'trigger' && trgFull.data.run.status === 'done');
+  ok('文案成员生成了预览卡（compose_card）', trgFull.data.steps.some((s) => s.tool === 'compose_card' && s.status === 'done'));
+  const trgAfter = (await api('GET', '/api/triggers', { token: lzTok })).data.items.find((t) => t.id === trg.data.trigger.id);
+  ok('立即运行不打乱原定计划', trgAfter.run_count === 1 && trgAfter.next_run_at === trg.data.trigger.next_run_at);
+  ok('暂停定时任务', (await api('PATCH', `/api/triggers/${trg.data.trigger.id}`, { token: lzTok, body: { enabled: false } })).data.trigger.enabled === false);
+  ok('删除定时任务', (await api('DELETE', `/api/triggers/${trgDaily.data.trigger.id}`, { token: lzTok })).ok);
+  const trgSteal = await api('PATCH', `/api/triggers/${trg.data.trigger.id}`, { token: guests[0].token, body: { enabled: true } });
+  ok('他人无法操作我的触发器', !trgSteal.ok && trgSteal.status === 404);
 
   const editTpl = await api('PATCH', `/api/teams/${tpl.id}`, { token: lzTok, body: { name: '改不动' } });
   ok('内置模板不可编辑', !editTpl.ok && editTpl.status === 403);

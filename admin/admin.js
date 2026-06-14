@@ -160,7 +160,8 @@ async function renderAgentsAdmin() {
       stat('已完成', d.runs.done, `大模型参与 ${d.runs.by_llm}`),
       stat('今日成本', yuan(d.cost_today_micro), `预算 ${d.budget_micro ? yuan(d.budget_micro) : '不限'}`),
       stat('用户团队', d.totals.teams, `已发布到广场 ${d.totals.published}`),
-      stat('用户智能体', d.totals.agents, `知识库 ${d.totals.kbs}`)
+      stat('用户智能体', d.totals.agents, `知识库 ${d.totals.kbs}`),
+      stat('定时任务', d.totals.triggers_enabled, `共 ${d.totals.triggers} 个`)
     )
   );
   const budgetInput = el('input', { type: 'number', value: String((d.budget_micro / 1e6) || 0), step: '0.5', style: 'width:110px' });
@@ -177,8 +178,9 @@ async function renderAgentsAdmin() {
   ));
   main.append(
     el('h2', { style: 'margin-top:22px' }, '最近运行'),
-    table(['#', '用户', '团队', '策略', '状态', '步数', 'tokens', '成本', '时间', '操作'], d.recent.map((r) => [
+    table(['#', '用户', '团队', '策略', '来源', '状态', '步数', 'tokens', '成本', '时间', '操作'], d.recent.map((r) => [
       String(r.id), r.owner_name || '-', r.team_name, r.strategy,
+      el('span', { class: 'tag ' + (r.source === 'trigger' ? 'green' : 'gray') }, r.source === 'trigger' ? '定时' : '手动'),
       el('span', { class: 'tag ' + (r.status === 'done' ? 'green' : r.status === 'failed' ? 'red' : r.status === 'running' ? '' : 'gray') }, r.status),
       String(r.step_count), String(r.token_total), yuan(r.cost_micro), fmtTime(r.started_at),
       r.status === 'running'

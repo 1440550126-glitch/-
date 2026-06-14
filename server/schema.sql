@@ -298,6 +298,7 @@ CREATE TABLE IF NOT EXISTS agent_runs (
   token_total INTEGER NOT NULL DEFAULT 0,
   cost_micro  INTEGER NOT NULL DEFAULT 0,
   by_llm      INTEGER NOT NULL DEFAULT 0,         -- 本次是否真正用了大模型（否=本地引擎）
+  source      TEXT NOT NULL DEFAULT 'manual',     -- manual | trigger（定时任务触发）
   started_at  INTEGER NOT NULL,
   ended_at    INTEGER
 );
@@ -353,3 +354,25 @@ CREATE TABLE IF NOT EXISTS knowledge_chunks (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_chunks_kb ON knowledge_chunks(kb_id, idx);
+
+-- 定时触发器：让团队按计划自动执行某个任务（对标并超越扣子的定时任务）
+CREATE TABLE IF NOT EXISTS agent_triggers (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id      INTEGER NOT NULL,
+  team_id       INTEGER NOT NULL,
+  name          TEXT NOT NULL,
+  task          TEXT NOT NULL,                      -- 每次自动执行的任务
+  schedule_kind TEXT NOT NULL DEFAULT 'interval',   -- interval（每 N 分钟）| daily（每天定点·东八区）
+  interval_min  INTEGER NOT NULL DEFAULT 60,
+  at_hour       INTEGER NOT NULL DEFAULT 9,
+  at_minute     INTEGER NOT NULL DEFAULT 0,
+  enabled       INTEGER NOT NULL DEFAULT 1,
+  last_run_at   INTEGER,
+  next_run_at   INTEGER NOT NULL,
+  last_run_id   INTEGER,
+  run_count     INTEGER NOT NULL DEFAULT 0,
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_triggers_due ON agent_triggers(enabled, next_run_at);
+CREATE INDEX IF NOT EXISTS idx_triggers_owner ON agent_triggers(owner_id, updated_at DESC);

@@ -20,7 +20,8 @@ import './routes/rooms.js';
 import './routes/admin.js';
 import './routes/agents.js';
 
-import { seedLingArray } from './agents/seed.js';
+import { seedLingArray, runAgentMigrations } from './agents/seed.js';
+import { startTriggerLoop } from './agents/scheduler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(__dirname, '..', 'web');
@@ -47,8 +48,10 @@ recoverOnBoot();
 runSeed();
 ensureWarmupAccounts();
 seedSamplePosts();
+runAgentMigrations();
 seedLingArray();
 if (process.env.WARMUP_AUTOSTART !== '0') startWarmupLoop();
+if (process.env.TRIGGER_AUTOSTART !== '0') startTriggerLoop();
 
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://localhost');

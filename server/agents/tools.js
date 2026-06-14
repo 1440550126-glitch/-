@@ -3,6 +3,7 @@
 // 工具形态：{ id, name, icon, desc, params, safe, run(args, ctx) -> { ok, result, data? } }
 //   result：给智能体看的「观察」文本；data：可选结构化数据。
 import { searchKnowledge } from './knowledge.js';
+import { buildCard } from '../lib/manifest.js';
 import { dayCN } from '../lib/util.js';
 
 // ---- 安全计算器：递归下降解析，绝不用 eval ----
@@ -178,6 +179,18 @@ export const TOOLS = {
       } catch (e) {
         return { ok: false, result: `抓取失败（可能是网络策略限制或超时）：${e.message}` };
       } finally { clearTimeout(timer); }
+    }
+  },
+
+  compose_card: {
+    id: 'compose_card', name: '生成预览卡', icon: '🪄', safe: true,
+    desc: '把一句文案生成「句灵」风格的 AI 预览卡（情绪/场景/版式/配色），可直接用于发布',
+    params: { text: '文案内容（一句话最佳）' },
+    async run({ text }) {
+      const t = String(text || '').trim().slice(0, 140);
+      if (!t) return { ok: false, result: '缺少 text 参数' };
+      const card = buildCard(t);
+      return { ok: true, result: `已为「${t}」生成预览卡：情绪「${card.emotion || '—'}」· 场景「${card.scene || '—'}」· 版式 ${card.layout} · 配色 ${card.bg?.join('→') || '—'}`, data: { card, text: t } };
     }
   }
 };
