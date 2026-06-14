@@ -1,6 +1,9 @@
 # ---------- 核心（必需）----------
 PyYAML>=6.0
 
+# ---------- 桌面界面 ----------
+# tkinter 是 Python 自带的；Linux 若缺失：sudo apt install python3-tk
+
 # ---------- 本地大模型（推荐）----------
 # 不需要 Python 包，安装 Ollama 即可：https://ollama.com
 # 然后拉一个 16G 内存能跑的 4-bit 量化模型，例如：

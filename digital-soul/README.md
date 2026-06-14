@@ -26,6 +26,8 @@
 | 持续感知 / 主动打招呼 | 摄像头认人，进画面即主动问候 | `dsoul/presence.py` · `scripts/watch.py` |
 | 贴近本人文风 | QLoRA 本地微调流水线 | `scripts/finetune_*.py` · `docs/finetune.md` |
 | 越用越懂你 | 对话日记 + 睡眠巩固成长期记忆 | `dsoul/journal.py` · `dsoul/consolidate.py` · `scripts/sleep.py` |
+| 桌面聊天界面 | Tkinter GUI（Python 自带） | `scripts/desktop.py` |
+| 一键常驻 / 部署 | 感知+巩固守护进程 · 树莓派/机器人指南 | `scripts/daemon.py` · `docs/deploy.md` |
 
 ## 架构
 
@@ -57,7 +59,8 @@ pip install pyyaml          # 唯一必需依赖
 
 python tests/test_authority.py   # 跑测试
 python tests/test_memory.py
-python scripts/chat.py           # 开始对话
+python scripts/chat.py           # 命令行对话
+python scripts/desktop.py        # 或：桌面图形界面（Tkinter）
 ```
 
 没接大模型时是**降级模式**：仍会认人、查权限、调记忆，只是用模板回复。
@@ -147,6 +150,19 @@ python scripts/sleep.py --loop 8   # 每 8 小时自动巩固（常驻）
 ```
 今天答应的事、聊到的事，明天它就记得了。
 
+**🖥️ 桌面聊天界面** —— Python 自带的 Tkinter，跨平台、零额外依赖。
+```bash
+python scripts/desktop.py     # Linux 若缺 tkinter：sudo apt install python3-tk
+```
+窗口里能切换说话人（测不同人的权限/感情）、一键看时间线、一键"睡一觉"巩固记忆。
+
+**🚀 一键常驻 + 部署到树莓派/机器人** —— 把感知与巩固合成一个守护进程。
+```bash
+python scripts/daemon.py                 # 持续感知 + 定时睡眠巩固
+python scripts/daemon.py --robot ros2    # 动作走 ROS2 机器人
+```
+完整的树莓派安装、systemd 自启、机器人接线见 **[docs/deploy.md](docs/deploy.md)**。
+
 ## 目录结构
 
 ```
@@ -169,8 +185,8 @@ digital-soul/
 │   ├── presence.py    持续感知：认人进画面 → 主动打招呼
 │   ├── journal.py     对话日记（短期记忆）
 │   └── consolidate.py 睡眠巩固：对话 → 长期记忆
-├── scripts/           chat · ingest · timeline · voice_chat · watch · finetune_* · sleep
-├── docs/              finetune.md（微调指南）
+├── scripts/           chat · desktop(GUI) · ingest · timeline · voice_chat · watch · sleep · finetune_* · daemon
+├── docs/              finetune.md（微调）· deploy.md（树莓派/机器人部署）
 └── tests/             授权 / 记忆 / 情感 / 感知 / 巩固 单元测试
 ```
 
