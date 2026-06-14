@@ -82,11 +82,14 @@ pip install face_recognition            # 依赖 dlib，Pi 上编译较慢，请
 python scripts/ingest.py face xiaoting 小婷的照片.jpg   # 先登记人脸
 python scripts/watch.py                  # 摄像头实时认人 + 主动打招呼
 ```
-> dlib 在 Pi 上编译吃力。可考虑预编译包，或换更轻的人脸库（替换 `dsoul/perception.py` 实现即可）。
+> **树莓派推荐免 dlib 方案**：装 `opencv-contrib-python`，再 `export DSOUL_FACE_BACKEND=opencv`，
+> 框架自动改用内置的 OpenCV LBPH 人脸后端（`dsoul/perception_opencv.py`），装得快、跑得动。
+> 每个人多放几张照片（`data/faces/<id>/*.jpg`）可明显提升准确率。
 
 ### 1.6 一键常驻服务
 ```bash
 python scripts/daemon.py                 # 持续感知 + 每 8 小时睡眠巩固
+python scripts/daemon.py --voice --web   # 全感官 + 手机网页状态页(http://<IP>:8765)
 python scripts/daemon.py --no-vision     # 无摄像头时仅定时巩固
 ```
 
@@ -168,6 +171,7 @@ agent = build_agent(robot=MyHardwareRobot())
 |---|---|---|
 | `DSOUL_LLM_HOST` | 大模型(Ollama)地址 | `http://192.168.1.10:11434` |
 | `DSOUL_LLM_MODEL` | 使用的模型名 | `qwen2.5:3b-instruct` |
+| `DSOUL_FACE_BACKEND` | 人脸后端 auto/opencv/face_recognition | `opencv` |
 
 ## 4. 取舍贴士
 - 树莓派本机跑 7B 会很慢；要快就用方案 B 把大模型放算力机，或本机只用 1.5B~3B。

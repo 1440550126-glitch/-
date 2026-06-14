@@ -28,6 +28,8 @@
 | 越用越懂你 | 对话日记 + 睡眠巩固成长期记忆 | `dsoul/journal.py` · `dsoul/consolidate.py` · `scripts/sleep.py` |
 | 桌面聊天界面 | Tkinter GUI（Python 自带） | `scripts/desktop.py` |
 | 一键常驻 / 部署 | 感知+巩固守护进程 · 树莓派/机器人指南 | `scripts/daemon.py` · `docs/deploy.md` |
+| 手机网页状态页 | 实时看"看到谁 / 记了什么" | `dsoul/webstatus.py` |
+| 轻量人脸(树莓派) | OpenCV LBPH 后端，免 dlib | `dsoul/perception_opencv.py` |
 
 ## 架构
 
@@ -57,6 +59,7 @@
 cd digital-soul
 pip install pyyaml          # 唯一必需依赖
 
+python scripts/demo.py           # ★ 先看这个：一口气跑完"一天"的完整故事
 python tests/test_authority.py   # 跑测试
 python tests/test_memory.py
 python scripts/chat.py           # 命令行对话
@@ -180,6 +183,11 @@ python scripts/daemon.py --voice         # 感知 + 语音对话 + 定时巩固
 docker build -t digital-soul . && docker run --rm -e DSOUL_LLM_HOST=http://192.168.1.10:11434 digital-soul
 ```
 
+**📱 手机网页状态页** —— 常驻时随手看它"现在看到谁、记了什么、聊了啥"。
+```bash
+python scripts/daemon.py --web        # 浏览器打开 http://<树莓派IP>:8765/
+```
+
 ## 目录结构
 
 ```
@@ -201,8 +209,10 @@ digital-soul/
 │   ├── ros2_robot.py  动作接口的 ROS2 实现样例
 │   ├── presence.py    持续感知：认人进画面 → 主动打招呼
 │   ├── journal.py     对话日记（短期记忆）
-│   └── consolidate.py 睡眠巩固：对话 → 长期记忆
-├── scripts/           chat · desktop · ingest · timeline · voice_chat · watch · sleep · finetune_* · daemon · doctor
+│   ├── consolidate.py 睡眠巩固：对话 → 长期记忆
+│   ├── perception_opencv.py  轻量人脸后端（OpenCV LBPH，免 dlib）
+│   └── webstatus.py   手机网页状态页
+├── scripts/           demo · chat · desktop · ingest · timeline · voice_chat · watch · sleep · finetune_* · daemon · doctor
 ├── docs/              finetune.md（微调）· deploy.md（树莓派/机器人部署）
 ├── Dockerfile · scripts/install.sh   一键容器 / 一键安装
 └── tests/             授权 / 记忆 / 情感 / 感知 / 巩固 单元测试

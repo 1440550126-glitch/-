@@ -84,10 +84,20 @@ def main() -> None:
         line(OK if opened else WARN, "摄像头", "已打开" if opened else "未检测到设备")
 
     nfaces = len(getattr(agent.perception, "known", {})) if agent is not None else 0
-    if not _imp("face_recognition"):
-        line(WARN, "人脸识别", "未安装", "pip install face_recognition")
+    fr = _imp("face_recognition")
+    cvface = False
+    try:
+        import cv2
+
+        cvface = hasattr(cv2, "face")
+    except Exception:
+        cvface = False
+    if not fr and not cvface:
+        line(WARN, "人脸识别", "未安装",
+             "face_recognition（精度高）或 opencv-contrib-python（树莓派友好）")
     else:
-        line(OK if nfaces else WARN, "人脸识别", f"{nfaces} 张已登记人脸",
+        backend = "face_recognition" if fr else "opencv-LBPH"
+        line(OK if nfaces else WARN, "人脸识别", f"{backend} · {nfaces} 张已登记人脸",
              "用 scripts/ingest.py face <id> <图片> 登记")
 
     line(OK if _imp("tkinter") else WARN, "桌面界面(tkinter)",

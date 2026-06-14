@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 
@@ -109,3 +110,24 @@ class Perception:
         finally:
             cap.release()
         return None
+
+
+def build_perception(faces_dir, authority=None, backend: str | None = None):
+    """按可用情况 / 环境变量选择人脸识别后端。
+
+    DSOUL_FACE_BACKEND = auto | face_recognition | opencv（默认 auto）。
+    auto：优先 dlib 版（face_recognition），不可用则退到树莓派友好的 OpenCV LBPH 版。
+    """
+    backend = backend or os.environ.get("DSOUL_FACE_BACKEND", "auto")
+
+    if backend in ("auto", "face_recognition"):
+        p = Perception(faces_dir, authority)
+        if p.available or backend == "face_recognition":
+            return p
+
+    try:
+        from .perception_opencv import OpenCVPerception
+
+        return OpenCVPerception(faces_dir, authority)
+    except Exception:
+        return Perception(faces_dir, authority)

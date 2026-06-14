@@ -9,6 +9,7 @@
   python scripts/daemon.py --no-vision        # 不开摄像头，仅定时巩固
   python scripts/daemon.py --robot ros2       # 动作走 ROS2 机器人
   python scripts/daemon.py --voice            # 看 + 听 + 说（全感官）
+  python scripts/daemon.py --web              # 顺带开手机网页状态页(默认 8765)
 """
 
 import argparse
@@ -86,6 +87,8 @@ def main() -> None:
     ap.add_argument("--no-vision", action="store_true", help="不启用摄像头感知")
     ap.add_argument("--robot", choices=["sim", "ros2"], default="sim", help="动作执行后端")
     ap.add_argument("--voice", action="store_true", help="启用语音对话（听 + 说）")
+    ap.add_argument("--web", nargs="?", const=8765, type=int, default=None,
+                    help="开启网页状态页（可指定端口，默认 8765）")
     args = ap.parse_args()
 
     robot = None
@@ -104,6 +107,13 @@ def main() -> None:
     )
 
     monitor = start_vision(agent) if not args.no_vision else None
+
+    if args.web is not None:
+        from dsoul.webstatus import start_web
+
+        start_web(agent, monitor, args.web)
+        print(f"🌐 网页状态页：http://<本机IP>:{args.web}/ （手机同一局域网可访问）", flush=True)
+
     threading.Thread(target=sleep_loop, args=(agent, args.sleep_every), daemon=True).start()
     print(f"🌙 每 {args.sleep_every} 小时自动巩固一次。Ctrl+C 退出。", flush=True)
 

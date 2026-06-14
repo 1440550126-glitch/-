@@ -12,7 +12,7 @@ from .authority import Authority
 from .journal import Journal
 from .llm import LLM
 from .memory import Memory
-from .perception import Perception
+from .perception import build_perception
 from .persona import Persona
 
 
@@ -58,7 +58,7 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
 
     authority = Authority(relationships)
     persona = Persona(identity)
-    perception = Perception(base / "data" / "faces", authority)
+    perception = build_perception(base / "data" / "faces", authority)
     llm = LLM(model=llm_model) if llm_model else LLM()
     robot = robot or SimulationRobot()
     journal = Journal(base / "data" / "journal" / "journal.jsonl")
