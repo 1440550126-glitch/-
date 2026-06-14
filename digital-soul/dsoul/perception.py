@@ -65,6 +65,21 @@ class Perception:
                 return self._face_id_to_name(fid)
         return None
 
+    def identify_frame(self, rgb) -> list[str]:
+        """识别一帧画面（RGB numpy 数组）里所有已登记的人，返回名字列表。"""
+        if not self.available:
+            return []
+        names: list[str] = []
+        ids = list(self.known.keys())
+        vecs = list(self.known.values())
+        for enc in self._fr.face_encodings(rgb):
+            matches = self._fr.compare_faces(vecs, enc, tolerance=0.5)
+            for fid, ok in zip(ids, matches):
+                if ok:
+                    names.append(self._face_id_to_name(fid))
+                    break
+        return names
+
     def identify_video(self, video_path, sample_every: int = 30) -> str | None:
         """从视频里抽帧认人，返回第一个识别到的人。需要 opencv。"""
         if not self.available:

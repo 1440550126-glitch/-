@@ -90,3 +90,33 @@ class Agent:
         mem_part = (" 我想起来：" + "；".join(mems[:2]) + "。") if mems else ""
         tail = "（当前是降级模式：装好 Ollama 并 `ollama pull qwen2.5:7b-instruct` 后，我就能用完整性格和全部记忆回应了。）"
         return f"{opener}{addr}你说「{utterance}」，我听到了。{mem_part} {tail}"
+
+    # ---------- 主动打招呼（由持续感知 presence 触发）----------
+    def greet(self, person_name: str) -> str:
+        who = self.authority.resolve(person_name)
+        mems = [it["text"] for _, it in self.memory.recall(person_name or who["relation"], k=2)]
+        if self.llm.available:
+            system = self.persona.system_prompt(
+                speaker=who if who.get("known") else None, memories=mems
+            )
+            prompt = f"{who['name']} 刚出现在你面前。请主动、自然地跟TA打个招呼，一句话就好。"
+            try:
+                text = self.llm.chat(system, prompt)
+            except Exception:
+                text = self._fallback_greet(who)
+        else:
+            text = self._fallback_greet(who)
+        self.robot.say(text)
+        return text
+
+    def _fallback_greet(self, who: dict) -> str:
+        name = who["name"]
+        if not who.get("known"):
+            return "你好，请问您是哪位？"
+        if not who.get("obey"):
+            return f"（看了一眼{name}，没有说话。）"
+        if who.get("guard"):
+            return f"{name}回来啦！我一直在等你呢。"
+        if who.get("trust") == "family":
+            return f"{name}，你来啦！"
+        return f"嘿，{name}，好久不见！"

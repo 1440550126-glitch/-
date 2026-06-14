@@ -24,5 +24,8 @@ PyYAML>=6.0
 # ---------- 可选：接入 ROS2 机器人 ----------
 # 需要系统级 ROS2 (rclpy)，见 https://docs.ros.org（不是 pip 包）
 
+# ---------- 可选：LoRA 微调（逼近本人文风，建议有 GPU）----------
+# torch transformers peft trl datasets accelerate bitsandbytes
+
 # ---------- 可选：PDF 文档摄取 ----------
 # pypdf>=4.0.0

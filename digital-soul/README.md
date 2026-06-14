@@ -23,6 +23,8 @@
 | 接入机器人 | 抽象动作接口（现模拟，后接硬件/ROS） | `dsoul/actions.py` · `dsoul/ros2_robot.py` |
 | 语音交流（听 + 说） | 本地 Whisper 转文字 + 离线 TTS | `dsoul/voice.py` · `scripts/voice_chat.py` |
 | 情感记忆 / 一生回顾 | 记忆自动打情感标签 + 时间线 | `dsoul/annotate.py` · `scripts/timeline.py` |
+| 持续感知 / 主动打招呼 | 摄像头认人，进画面即主动问候 | `dsoul/presence.py` · `scripts/watch.py` |
+| 贴近本人文风 | QLoRA 本地微调流水线 | `scripts/finetune_*.py` · `docs/finetune.md` |
 
 ## 架构
 
@@ -123,6 +125,19 @@ from dsoul.ros2_robot import Ros2Robot
 agent = build_agent(robot=Ros2Robot())   # 其余逻辑零改动
 ```
 
+**👁️ 持续感知 + 主动打招呼** —— 摄像头认出走进画面的人，自动问候（"小婷回来啦！"）。
+```bash
+python scripts/watch.py                       # 摄像头实时（需 opencv + face_recognition）
+python scripts/watch.py --simulate 小婷 老钱   # 无摄像头时模拟演示
+```
+
+**🧬 LoRA 微调（逼近你的文风）** —— 用记忆 + 真实聊天记录训练一个很小的 LoRA 适配器。
+```bash
+python scripts/finetune_prepare.py --chat 微信导出.txt   # 生成数据集
+python scripts/finetune_train.py                         # QLoRA 训练（建议有 GPU）
+# 训练完把适配器加载回 Ollama/llama.cpp，详见 docs/finetune.md
+```
+
 ## 目录结构
 
 ```
@@ -141,9 +156,11 @@ digital-soul/
 │   ├── voice.py       语音：本地 Whisper（听）+ TTS（说）
 │   ├── llm.py         本地大模型（Ollama）
 │   ├── actions.py     机器人动作接口（抽象）
-│   └── ros2_robot.py  动作接口的 ROS2 实现样例
-├── scripts/           chat.py · ingest.py · timeline.py · voice_chat.py
-└── tests/             授权 / 记忆 / 情感标注 单元测试
+│   ├── ros2_robot.py  动作接口的 ROS2 实现样例
+│   └── presence.py    持续感知：认人进画面 → 主动打招呼
+├── scripts/           chat · ingest · timeline · voice_chat · watch · finetune_*
+├── docs/              finetune.md（微调指南）
+└── tests/             授权 / 记忆 / 情感 / 感知 单元测试
 ```
 
 ## 路线图
@@ -151,5 +168,6 @@ digital-soul/
 - [x] 接 Whisper 做语音输入、TTS 做语音输出（"说话"）
 - [x] 记忆加时间线与情感标注
 - [x] ROS2 机器人驱动样例
-- [ ] 用真实聊天记录做 LoRA 微调，逼近本人文风
-- [ ] 多模态：让它"看见"摄像头实时画面，主动打招呼
+- [x] 用真实聊天记录做 LoRA 微调，逼近本人文风
+- [x] 多模态：让它"看见"摄像头实时画面，主动打招呼
+- [ ] 长期记忆巩固：定期把对话提炼成新记忆（"睡眠"机制）

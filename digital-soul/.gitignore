@@ -6,6 +6,10 @@ data/faces/*.jpg
 data/faces/*.jpeg
 data/faces/*.png
 
+# 微调产物（含个人数据 / 体积大，不入库）
+data/finetune/dataset.jsonl
+data/finetune/lora-adapter/
+
 # Python
 __pycache__/
 *.pyc
