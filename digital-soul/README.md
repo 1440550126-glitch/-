@@ -25,6 +25,7 @@
 | 情感记忆 / 一生回顾 | 记忆自动打情感标签 + 时间线 | `dsoul/annotate.py` · `scripts/timeline.py` |
 | 持续感知 / 主动打招呼 | 摄像头认人，进画面即主动问候 | `dsoul/presence.py` · `scripts/watch.py` |
 | 贴近本人文风 | QLoRA 本地微调流水线 | `scripts/finetune_*.py` · `docs/finetune.md` |
+| 越用越懂你 | 对话日记 + 睡眠巩固成长期记忆 | `dsoul/journal.py` · `dsoul/consolidate.py` · `scripts/sleep.py` |
 
 ## 架构
 
@@ -138,6 +139,14 @@ python scripts/finetune_train.py                         # QLoRA 训练（建议
 # 训练完把适配器加载回 Ollama/llama.cpp，详见 docs/finetune.md
 ```
 
+**😴 长期记忆巩固（"睡眠"机制）** —— 平时对话写进日记，定期"睡一觉"提炼成新记忆，越用越懂你。
+```bash
+python scripts/sleep.py            # 跑一次巩固
+python scripts/sleep.py --loop 8   # 每 8 小时自动巩固（常驻）
+# 或在 chat.py 里输入 /sleep 立即巩固
+```
+今天答应的事、聊到的事，明天它就记得了。
+
 ## 目录结构
 
 ```
@@ -157,10 +166,12 @@ digital-soul/
 │   ├── llm.py         本地大模型（Ollama）
 │   ├── actions.py     机器人动作接口（抽象）
 │   ├── ros2_robot.py  动作接口的 ROS2 实现样例
-│   └── presence.py    持续感知：认人进画面 → 主动打招呼
-├── scripts/           chat · ingest · timeline · voice_chat · watch · finetune_*
+│   ├── presence.py    持续感知：认人进画面 → 主动打招呼
+│   ├── journal.py     对话日记（短期记忆）
+│   └── consolidate.py 睡眠巩固：对话 → 长期记忆
+├── scripts/           chat · ingest · timeline · voice_chat · watch · finetune_* · sleep
 ├── docs/              finetune.md（微调指南）
-└── tests/             授权 / 记忆 / 情感 / 感知 单元测试
+└── tests/             授权 / 记忆 / 情感 / 感知 / 巩固 单元测试
 ```
 
 ## 路线图
@@ -170,4 +181,4 @@ digital-soul/
 - [x] ROS2 机器人驱动样例
 - [x] 用真实聊天记录做 LoRA 微调，逼近本人文风
 - [x] 多模态：让它"看见"摄像头实时画面，主动打招呼
-- [ ] 长期记忆巩固：定期把对话提炼成新记忆（"睡眠"机制）
+- [x] 长期记忆巩固：定期把对话提炼成新记忆（"睡眠"机制）

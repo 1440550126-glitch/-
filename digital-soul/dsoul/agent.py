@@ -12,7 +12,8 @@ from __future__ import annotations
 
 
 class Agent:
-    def __init__(self, identity, persona, memory, authority, perception, llm, robot) -> None:
+    def __init__(self, identity, persona, memory, authority, perception, llm, robot,
+                 journal=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -20,6 +21,7 @@ class Agent:
         self.perception = perception
         self.llm = llm
         self.robot = robot
+        self.journal = journal
 
     def identify_speaker(self, image_path=None, video_path=None, name=None) -> str | None:
         """优先用人脸认人，认不出再用传入的名字。"""
@@ -63,6 +65,18 @@ class Agent:
                 result["reply"] = self._fallback(who, utterance, mems) + f"\n（注：调用本地模型出错：{e}）"
         else:
             result["reply"] = self._fallback(who, utterance, mems)
+
+        # --- 写入对话日记（短期记忆，供日后"睡眠巩固"）---
+        if self.journal is not None:
+            self.journal.append(
+                {
+                    "speaker": who.get("name"),
+                    "speaker_relation": who.get("relation"),
+                    "utterance": utterance,
+                    "reply": result["reply"],
+                    "executed": result.get("executed"),
+                }
+            )
         return result
 
     # ---------- 内部 ----------

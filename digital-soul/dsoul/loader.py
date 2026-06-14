@@ -9,6 +9,7 @@ import yaml
 from .actions import SimulationRobot
 from .agent import Agent
 from .authority import Authority
+from .journal import Journal
 from .llm import LLM
 from .memory import Memory
 from .perception import Perception
@@ -60,5 +61,6 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
     perception = Perception(base / "data" / "faces", authority)
     llm = LLM(model=llm_model) if llm_model else LLM()
     robot = robot or SimulationRobot()
+    journal = Journal(base / "data" / "journal" / "journal.jsonl")
 
-    return Agent(identity, persona, memory, authority, perception, llm, robot)
+    return Agent(identity, persona, memory, authority, perception, llm, robot, journal)

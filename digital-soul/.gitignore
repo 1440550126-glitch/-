@@ -10,6 +10,10 @@ data/faces/*.png
 data/finetune/dataset.jsonl
 data/finetune/lora-adapter/
 
+# 对话日记（隐私，不入库）
+data/journal/*.jsonl
+data/journal/*.state.json
+
 # Python
 __pycache__/
 *.pyc

@@ -11,6 +11,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from dsoul.annotate import EMOJI  # noqa: E402
+from dsoul.consolidate import Consolidator  # noqa: E402
 from dsoul.loader import build_agent  # noqa: E402
 
 HELP = """\
@@ -20,6 +21,7 @@ HELP = """\
   /who          列出我认识的人和信任等级
   /mem <文字>   临时给我加一条记忆
   /timeline     按时间线 + 情感回顾我的记忆
+  /sleep        睡一觉：把刚才的对话巩固成长期记忆
   /help         显示帮助
   /quit         退出
 直接打字 = 跟我聊天。
@@ -68,6 +70,15 @@ def main() -> None:
                     cur = when
                 emo = it.get("emotion", "平静")
                 print(f"  {EMOJI.get(emo, '·')} {emo}  {it['text']}")
+            continue
+        if line == "/sleep":
+            report = Consolidator(
+                agent.memory, agent.journal, llm=agent.llm,
+                identity=agent.identity, authority=agent.authority,
+            ).run()
+            print(f"😴 巩固了 {report['processed']} 条对话，新增 {len(report['learned'])} 条长期记忆：")
+            for m in report["learned"]:
+                print(f"  + {m}")
             continue
         if line == "/who":
             for p in agent.authority.people.values():

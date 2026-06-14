@@ -1,0 +1,4 @@
+# 对话日记（短期记忆，含个人数据）：
+#   journal.jsonl        每次对话追加一行（由 agent 自动写入）
+#   journal.state.json   巩固进度游标
+# 二者默认 gitignore。运行 scripts/sleep.py 把它们巩固成长期记忆。
