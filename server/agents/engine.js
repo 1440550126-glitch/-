@@ -304,13 +304,43 @@ function topoOrder(plan) {
 }
 
 // ============================================================
+// 圆桌论战：成员逐轮看到他人观点后回应/反驳/修正
+// ============================================================
+async function runDebate(run, team, members, kbIds) {
+  const rounds = clamp(team.max_rounds, 1, 3);
+  const latest = new Map(); // memberId -> { agentName, output }
+  const finalBB = () => [...latest.values()].map((v) => ({ agentName: v.agentName, step: '最终立场', output: v.output }));
+  for (let r = 1; r <= rounds && !isStopped(run.id); r++) {
+    if (rounds > 1) {
+      const div = newStep(run.id, { phase: 'system', agent_name: '圆桌主持', agent_avatar: '⚖️', title: r === 1 ? '第 1 轮 · 各陈立场' : `第 ${r} 轮 · 互相回应`, status: 'running' });
+      finishStep(run.id, div, { output: r === 1 ? '请各位先独立给出立场与理由。' : '请阅读他人最新观点后，明确同意 / 反驳 / 补充，并更新结论。', status: 'done' });
+    }
+    for (const member of members) {
+      if (isStopped(run.id)) return finalBB();
+      // 传给该成员的"黑板"= 其他成员的最新观点
+      const others = [...latest.entries()].filter(([id]) => id !== member.id).map(([, v]) => ({ agentName: v.agentName, step: '观点', output: v.output }));
+      const objective = r === 1
+        ? `就「${run.task}」给出你的立场、核心理由，以及你看到的潜在风险（从你的${member.role || '专业'}视角）。`
+        : `第 ${r} 轮：阅读其他成员的最新观点后，明确表示同意 / 反驳 / 补充，并据此更新你的结论。`;
+      const item = { step: r === 1 ? `${member.name} 的立场` : `${member.name} · 第${r}轮回应`, objective };
+      await runSubtask(run, team, member, item, others, kbIds);
+      const produced = others[others.length - 1]; // runSubtask 把新产出追加到传入数组末尾
+      if (produced) latest.set(member.id, { agentName: member.name, output: produced.output });
+    }
+  }
+  return finalBB();
+}
+
+// ============================================================
 // 整合阶段
 // ============================================================
 function localSynthesize(run, team, blackboard) {
   const stratName = STRATEGIES[team.strategy]?.name || team.strategy;
-  const lead = blackboard.length
-    ? `团队已从 ${blackboard.length} 个角度完成「${run.task}」，以下是整合后的成果与下一步建议。`
-    : `团队就「${run.task}」完成了处理。`;
+  const lead = !blackboard.length
+    ? `团队就「${run.task}」完成了处理。`
+    : team.strategy === 'debate'
+      ? `${blackboard.length} 位成员经过多轮交锋，围绕「${run.task}」形成了下列立场；如需更精炼的共识/分歧裁决，配置大模型 Key 后重跑即可。`
+      : `团队已从 ${blackboard.length} 个角度完成「${run.task}」，以下是整合后的成果与下一步建议。`;
   const sections = blackboard.map((b) => `### ${b.agentName} · ${b.step}\n${b.output}`).join('\n\n');
   const roles = blackboard.map((b) => b.agentName).join('、');
   return `# 「${run.task}」· 团队交付\n> 由 ${team.name}（${stratName}）的 ${blackboard.length} 位成员协作完成：${roles}\n\n` +
@@ -319,7 +349,9 @@ function localSynthesize(run, team, blackboard) {
 }
 
 async function synthesize(run, team, members, blackboard) {
-  const sys = `你是团队「${team.name}」的总编。把成员们的产出整合成给用户的最终交付物：结构清晰、可直接使用的中文 Markdown；开头给一句话结论，中间分要点，最后给「下一步建议」。只给成果，不要复述过程。`;
+  const sys = team.strategy === 'debate'
+    ? `你是圆桌论战的主持总编。综合各成员的观点，写出中文 Markdown：先给「一句话裁决」，再分「共识」「分歧」两栏，最后给「结论与建议」。客观中立，不偏袒某一方。`
+    : `你是团队「${team.name}」的总编。把成员们的产出整合成给用户的最终交付物：结构清晰、可直接使用的中文 Markdown；开头给一句话结论，中间分要点，最后给「下一步建议」。只给成果，不要复述过程。`;
   const parts = blackboard.map((b) => `## ${b.agentName} · ${b.step}\n${b.output}`).join('\n\n');
   const prompt = `用户任务：${run.task}\n团队策略：${STRATEGIES[team.strategy]?.name || team.strategy}\n各成员产出：\n${parts}\n\n请整合成最终交付物。`;
   const step = newStep(run.id, { phase: 'synthesize', agent_id: 0, agent_name: '总编 · 整合官', agent_avatar: '🧩', title: '整合各成员产出，生成最终交付物', input: run.task, status: 'running' });
@@ -355,13 +387,18 @@ export async function executeRun(runId) {
 
     if (isStopped(run.id)) return finalizeStopped(run.id);
 
-    // ② 执行（按依赖拓扑序，共享黑板）
-    const blackboard = [];
-    for (const idx of topoOrder(plan)) {
-      if (isStopped(run.id)) return finalizeStopped(run.id);
-      const item = plan[idx];
-      const agent = members.find((m) => m.id === item.agentId) || members[0];
-      await runSubtask(run, team, agent, item, blackboard, kbIds);
+    // ② 执行：debate 走多轮互评，其余按依赖拓扑序共享黑板
+    let blackboard;
+    if (team.strategy === 'debate') {
+      blackboard = await runDebate(run, team, members, kbIds);
+    } else {
+      blackboard = [];
+      for (const idx of topoOrder(plan)) {
+        if (isStopped(run.id)) return finalizeStopped(run.id);
+        const item = plan[idx];
+        const agent = members.find((m) => m.id === item.agentId) || members[0];
+        await runSubtask(run, team, agent, item, blackboard, kbIds);
+      }
     }
 
     if (isStopped(run.id)) return finalizeStopped(run.id);

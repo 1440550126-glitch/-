@@ -1,20 +1,20 @@
 // 灵阵 · AI 团队：REST + SSE 路由
-import { GET, POST, PATCH, DEL, bad, notFound, denied, openSSE } from '../lib/httpx.js';
-import { q } from '../lib/db.js';
-import { now, jparse, sanitizeText, clamp } from '../lib/util.js';
+import { GET, POST, PUT, PATCH, DEL, bad, notFound, denied, openSSE } from '../lib/httpx.js';
+import { q, getSetting, setSetting } from '../lib/db.js';
+import { now, jparse, sanitizeText, clamp, dayCN } from '../lib/util.js';
 import { isMember } from '../lib/auth.js';
 import { subscribe } from '../lib/hub.js';
 import { toolList, getTool } from '../agents/tools.js';
 import { searchKnowledge, addDoc } from '../agents/knowledge.js';
 import { STRATEGIES, STRATEGY_LIST, AGENT_QUOTA } from '../agents/catalog.js';
 import { executeRun, stopRun } from '../agents/engine.js';
-import { useQuota, quotaUsed } from '../lib/llm.js';
+import { useQuota, quotaUsed, todayCostMicro } from '../lib/llm.js';
 
 // ---------- 访问控制小工具 ----------
 const agentRow = (id) => q.get('SELECT * FROM agents WHERE id = ?', Number(id));
 const teamRow = (id) => q.get('SELECT * FROM teams WHERE id = ?', Number(id));
 const kbRow = (id) => q.get('SELECT * FROM knowledge_bases WHERE id = ?', Number(id));
-const canUse = (row, uid) => row && (row.owner_id === uid || row.is_template);
+const canUse = (row, uid) => row && (row.owner_id === uid || row.is_template || row.published);
 const canEdit = (row, uid) => row && row.owner_id === uid && !row.is_template;
 
 const viewAgent = (a, uid) => a && ({
@@ -31,7 +31,7 @@ const kbPreview = (ids) => (jparse(ids, []) || []).map((id) => {
 const viewTeam = (t, uid) => t && ({
   id: t.id, name: t.name, avatar: t.avatar, goal: t.goal, strategy: t.strategy,
   manager_note: t.manager_note, max_rounds: t.max_rounds, run_count: t.run_count,
-  is_template: !!t.is_template, mine: t.owner_id === uid, updated_at: t.updated_at,
+  is_template: !!t.is_template, published: !!t.published, mine: t.owner_id === uid, updated_at: t.updated_at,
   members: memberPreview(t.member_ids), knowledge: kbPreview(t.knowledge_ids),
   knowledge_ids: jparse(t.knowledge_ids, [])
 });
@@ -126,6 +126,14 @@ GET('/api/teams', async (ctx) => ({
   templates: q.all('SELECT * FROM teams WHERE is_template = 1 AND owner_id = 0 ORDER BY id').map((t) => viewTeam(t, ctx.user.id))
 }), { auth: true });
 
+// 团队广场：他人发布的团队（注意必须注册在 /api/teams/:id 之前）
+GET('/api/teams/gallery', async (ctx) => ({
+  items: q.all(
+    `SELECT t.*, u.nickname owner_name FROM teams t LEFT JOIN users u ON u.id = t.owner_id
+     WHERE t.published = 1 AND t.owner_id != 0 ORDER BY t.run_count DESC, t.updated_at DESC LIMIT 30`
+  ).map((t) => ({ ...viewTeam(t, ctx.user.id), owner_name: t.owner_name || '匿名创作者' }))
+}), { auth: true });
+
 GET('/api/teams/:id', async (ctx) => {
   const t = teamRow(ctx.params.id);
   if (!canUse(t, ctx.user.id)) throw notFound();
@@ -198,6 +206,17 @@ DEL('/api/teams/:id', async (ctx) => {
   if (!canEdit(t, ctx.user.id)) throw denied('不能删除内置模板');
   q.run('DELETE FROM teams WHERE id = ?', t.id);
   return { deleted: true };
+}, { auth: true });
+
+// 发布 / 取消发布到团队广场
+POST('/api/teams/:id/publish', async (ctx) => {
+  const t = teamRow(ctx.params.id);
+  if (!t) throw notFound();
+  if (!canEdit(t, ctx.user.id)) throw denied('只能发布自己的团队');
+  const pub = ctx.body?.published ? 1 : 0;
+  if (pub && !(jparse(t.member_ids, []) || []).length) throw bad('空团队不能发布');
+  q.run('UPDATE teams SET published = ?, updated_at = ? WHERE id = ?', pub, now(), t.id);
+  return { team: viewTeam(teamRow(t.id), ctx.user.id), published: !!pub };
 }, { auth: true });
 
 // ============================================================
@@ -312,3 +331,53 @@ DEL('/api/kb/:id', async (ctx) => {
   q.run('DELETE FROM knowledge_bases WHERE id = ?', kb.id);
   return { deleted: true };
 }, { auth: true });
+
+// ============================================================
+// 后台：灵阵运行监控与管控
+// ============================================================
+GET('/api/admin/agents/overview', async () => {
+  const start = new Date(dayCN() + 'T00:00:00+08:00').getTime();
+  const tot = q.get(
+    `SELECT COUNT(*) total,
+       COALESCE(SUM(CASE WHEN status='running' THEN 1 ELSE 0 END),0) running,
+       COALESCE(SUM(CASE WHEN status='done'    THEN 1 ELSE 0 END),0) done,
+       COALESCE(SUM(CASE WHEN status='failed'  THEN 1 ELSE 0 END),0) failed,
+       COALESCE(SUM(CASE WHEN by_llm=1 THEN 1 ELSE 0 END),0) by_llm
+     FROM agent_runs`
+  );
+  return {
+    totals: {
+      teams: q.get('SELECT COUNT(*) c FROM teams WHERE owner_id != 0').c,
+      agents: q.get('SELECT COUNT(*) c FROM agents WHERE owner_id != 0').c,
+      kbs: q.get('SELECT COUNT(*) c FROM knowledge_bases WHERE owner_id != 0').c,
+      published: q.get('SELECT COUNT(*) c FROM teams WHERE published = 1 AND owner_id != 0').c
+    },
+    runs: { ...tot, today: q.get('SELECT COUNT(*) c FROM agent_runs WHERE started_at >= ?', start).c },
+    cost_today_micro: todayCostMicro('agent_'),
+    budget_micro: Number(getSetting('agent_budget_micro', AGENT_QUOTA.DEFAULT_BUDGET_MICRO)),
+    quota: { free: AGENT_QUOTA.FREE_RUNS_PER_DAY, member: AGENT_QUOTA.MEMBER_RUNS_PER_DAY },
+    recent: q.all(
+      `SELECT r.id, r.team_name, r.strategy, r.status, r.step_count, r.token_total, r.cost_micro, r.by_llm, r.started_at, u.nickname owner_name
+       FROM agent_runs r LEFT JOIN users u ON u.id = r.user_id ORDER BY r.started_at DESC LIMIT 30`
+    )
+  };
+}, { admin: true });
+
+GET('/api/admin/agents/runs/:id', async (ctx) => {
+  const run = q.get('SELECT * FROM agent_runs WHERE id = ?', Number(ctx.params.id));
+  if (!run) throw notFound();
+  return { run: { ...run, plan: jparse(run.plan, null) }, steps: q.all('SELECT * FROM run_steps WHERE run_id = ? ORDER BY idx', run.id) };
+}, { admin: true });
+
+POST('/api/admin/agents/runs/:id/stop', async (ctx) => {
+  const run = q.get('SELECT * FROM agent_runs WHERE id = ?', Number(ctx.params.id));
+  if (!run) throw notFound();
+  if (run.status === 'running') stopRun(run.id);
+  return { stopping: true };
+}, { admin: true });
+
+PUT('/api/admin/agents/config', async (ctx) => {
+  const v = Math.max(0, Math.round(Number(ctx.body?.budget_micro) || 0));
+  setSetting('agent_budget_micro', v);
+  return { budget_micro: v };
+}, { admin: true });

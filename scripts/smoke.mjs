@@ -449,6 +449,47 @@ try {
   ok('路由团队单点接管完成', routeDone.event === 'done' && routeDone.data.status === 'done');
   routeStream.close();
 
+  // 圆桌论战：多轮互评
+  const debateTeam = await api('POST', '/api/teams', { token: lzTok, body: { name: '论战小队', strategy: 'debate', max_rounds: 2, member_ids: [tpl.members[0].id, tpl.members[1].id] } });
+  ok('新建论战团队', debateTeam.ok && debateTeam.data.team.strategy === 'debate');
+  const debateRun = await api('POST', `/api/teams/${debateTeam.data.team.id}/run`, { token: lzTok, body: { task: '远程办公对早期创业团队利大于弊还是弊大于利' } });
+  const debateStream = sse(`/api/runs/${debateRun.data.run_id}/events`, lzTok);
+  const debateDone = await debateStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '论战运行');
+  ok('论战团队运行完成', debateDone.event === 'done' && debateDone.data.status === 'done');
+  debateStream.close();
+  const debateFull = await api('GET', `/api/runs/${debateRun.data.run_id}`, { token: lzTok });
+  ok('论战多轮（2 人 ×2 轮 ≥4 段产出）', debateFull.data.steps.filter((s) => s.phase === 'act' && s.status === 'done').length >= 4, `got ${debateFull.data.steps.filter((s) => s.phase === 'act').length}`);
+  ok('论战含轮次分隔', debateFull.data.steps.some((s) => s.phase === 'system'));
+
+  // 团队广场：发布 + 他人运行
+  const pub = await api('POST', `/api/teams/${teamId}/publish`, { token: lzTok, body: { published: true } });
+  ok('发布团队到广场', pub.ok && pub.data.published === true);
+  const otherTok = guests[0].token;
+  const gallery = await api('GET', '/api/teams/gallery', { token: otherTok });
+  ok('广场可见已发布团队', gallery.data.items.some((t) => t.id === teamId));
+  const otherView = await api('GET', `/api/teams/${teamId}`, { token: otherTok });
+  ok('他人可查看已发布团队', otherView.ok && otherView.data.team.mine === false);
+  const otherRun = await api('POST', `/api/teams/${teamId}/run`, { token: otherTok, body: { task: '推荐三个周末短途露营的好去处' } });
+  ok('他人可运行已发布团队', otherRun.ok && otherRun.data.run_id > 0);
+  const otherStream = sse(`/api/runs/${otherRun.data.run_id}/events`, otherTok);
+  const otherDone = await otherStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '他人运行');
+  ok('他人运行已发布团队完成', otherDone.event === 'done' && otherDone.data.status === 'done');
+  otherStream.close();
+  const unpub = await api('POST', `/api/teams/${teamId}/publish`, { token: lzTok, body: { published: false } });
+  ok('取消发布', unpub.ok && unpub.data.published === false);
+
+  // 后台监控与预算管控
+  const ov = await api('GET', '/api/admin/agents/overview', { token: admin.token });
+  ok('后台运行总览', ov.ok && ov.data.runs.total >= 3 && Array.isArray(ov.data.recent) && ov.data.recent.length >= 1);
+  ok('后台统计用户资产', ov.data.totals.teams >= 1 && ov.data.totals.agents >= 1);
+  const cfg = await api('PUT', '/api/admin/agents/config', { token: admin.token, body: { budget_micro: 8_000_000 } });
+  ok('后台设置每日预算', cfg.ok && cfg.data.budget_micro === 8_000_000);
+  ok('预算已生效', (await api('GET', '/api/admin/agents/overview', { token: admin.token })).data.budget_micro === 8_000_000);
+  const adminRunView = await api('GET', `/api/admin/agents/runs/${runId}`, { token: admin.token });
+  ok('后台可查看任意运行详情', adminRunView.ok && adminRunView.data.steps.length >= 5);
+  const nonAdmin = await api('GET', '/api/admin/agents/overview', { token: lzTok });
+  ok('非管理员无法访问监控', !nonAdmin.ok && nonAdmin.status === 403);
+
   const editTpl = await api('PATCH', `/api/teams/${tpl.id}`, { token: lzTok, body: { name: '改不动' } });
   ok('内置模板不可编辑', !editTpl.ok && editTpl.status === 403);
 

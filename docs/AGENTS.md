@@ -71,7 +71,7 @@ loop (≤ max_rounds):
 | `orchestrate` 编排协作 | 拆解→按专长分派（可依赖）→整合。最强默认模式 |
 | `sequential` 流水线 | 成员按固定顺序逐棒加工，前序产出喂给后序 |
 | `route` 智能路由 | 编排官只挑一名最合适的成员独立承接（类扣子接管） |
-| `debate` 圆桌论战 | 每名成员独立给观点，总编综合各方下结论 |
+| `debate` 圆桌论战 | **真·多轮**：成员逐轮看到他人观点后回应/反驳/修正，总编综合共识与分歧 |
 
 ## 4. 工具 / 插件（`server/agents/tools.js`）
 
@@ -110,7 +110,8 @@ loop (≤ max_rounds):
 
 - 每次模型调用 `logUsage` 记账，feature 前缀 `agent_`（`agent_plan / agent_act / agent_synth`），自动并入后台 AI 成本日报。
 - **每日预算封顶**：`settings.agent_budget_micro`（默认 5 元，0=不限）；超预算后强制走本地引擎，绝不超支。
-- **每日运行配额**：免费 8 次 / 会员 80 次（`server/agents/catalog.js` 的 `AGENT_QUOTA`，后台可调）。
+- **每日运行配额**：免费 8 次 / 会员 80 次（`server/agents/catalog.js` 的 `AGENT_QUOTA`）。
+- **后台管控**：管理后台「🛰 灵阵团队」面板实时监控运行状态/步数/成本，可**强制停止**进行中的运行，并**在线调整每日预算**。
 
 ## 8. API 一览（均需登录；前缀 `/api`）
 
@@ -121,8 +122,10 @@ loop (≤ max_rounds):
 | GET/PATCH/DELETE | `/agents/:id` | 成员详情 / 编辑 / 删除 |
 | POST | `/agents/:id/clone` | 复制成员（模板→我的） |
 | GET/POST | `/teams` | 我的团队 + 模板 / 新建团队 |
+| GET | `/teams/gallery` | **团队广场**：他人发布的团队 |
 | GET/PATCH/DELETE | `/teams/:id` | 团队详情 / 编辑 / 删除 |
 | POST | `/teams/:id/clone` | 复制团队（模板→我的） |
+| POST | `/teams/:id/publish` | 发布 / 取消发布到团队广场 |
 | POST | `/teams/:id/run` | **派活**：发起一次运行，返回 `run_id` |
 | GET | `/runs` · `/runs/:id` | 我的运行列表 / 单次详情（含步骤） |
 | GET(SSE) | `/runs/:id/events` | **作战室实时事件流**（回放已有步骤 + 直播后续 + 终态） |
@@ -131,18 +134,25 @@ loop (≤ max_rounds):
 | GET/DELETE | `/kb/:id` | 详情（含来源与样片）/ 删除 |
 | POST | `/kb/:id/docs` | 添加文档（自动切片） |
 | POST | `/kb/:id/search` | 检索测试（RAG） |
+| GET | `/admin/agents/overview` | 🛠 后台：运行总览 + 最近运行（管理员） |
+| GET | `/admin/agents/runs/:id` | 🛠 后台：任意运行详情 |
+| POST | `/admin/agents/runs/:id/stop` | 🛠 后台：强制停止运行 |
+| PUT | `/admin/agents/config` | 🛠 后台：设置每日成本预算封顶 |
+
+> ⚠ 路由注册顺序：`/teams/gallery` 必须在 `/teams/:id` 之前注册，否则 `gallery` 会被当作 `:id`。
 
 SSE 事件：`step`（步骤新增/更新，按 `id` 去重、`idx` 排序）、`done`（运行结束，载最终 run）、`error`。
 
 ## 9. 前端（`web/js/pages/agents.js`）
 
-- `/agents` 灵阵首页：额度条 / 我的团队 / 团队模板 / 智能体 / 知识库 / 最近运行。
-- `/team/:id` 团队工作台：派活入口 + 成员/知识库/编排设置（自有团队可编辑，模板可一键复制）。
+- `/agents` 灵阵首页：额度条 / 我的团队 / 团队模板 / **团队广场** / 智能体 / 知识库 / 最近运行。
+- `/team/:id` 团队工作台：派活入口 + **发布到广场** + 成员/知识库/编排设置（自有团队可编辑，模板/他人发布团队可一键复制）。
 - `/run/:id` **作战室**：SSE 直播时间线（编排官计划、成员工作中动画、工具调用、总编整合）+ 最终交付（极简 Markdown 渲染 + 一键复制）。
+- 管理后台「🛰 灵阵团队」：运行监控 + 强制停止 + 每日预算管控。
 
 ## 10. 扩展点（路线）
 
 - 工具：HTTP 自定义插件、代码沙箱执行、图像生成、发帖/建房等"站内动作"工具。
 - 检索：接入 Embedding 后将关键词打分替换为向量召回（接口已隔离在 `knowledge.js`）。
-- 编排：DAG 真并行执行、成员间质询回合、失败重试与人审插点。
-- 发布：把团队发布为可被他人调用 / 定时触发器（`teams.published` 已预留）。
+- 编排：DAG 真并行执行、失败重试与人审插点（成员间质询回合已在 `debate` 多轮中实现）。
+- 发布：团队广场已上线；下一步做定时触发器与对外 API 调用（`teams.published` 已贯通）。

@@ -75,6 +75,7 @@ const MODULES = {
   users: ['👥 用户管理', renderUsers],
   warmup: ['🤖 AI 暖场', renderWarmup],
   cost: ['💰 AI 成本', renderCost],
+  agents: ['🛰 灵阵团队', renderAgentsAdmin],
   rooms: ['🎲 桌游房间', renderRooms],
   shop: ['🛍 皮肤与订单', renderShopOrders],
   words: ['🔞 敏感词', renderWords],
@@ -144,6 +145,47 @@ async function renderDashboard() {
       el('span', { class: 'tag ' + (sys.ai_moderation ? 'green' : 'gray') }, sys.ai_moderation ? '运行中' : '未开启')
     ));
   } catch { /* 旧版后端无此接口 */ }
+}
+
+async function renderAgentsAdmin() {
+  const d = await api('GET', '/api/admin/agents/overview');
+  main.innerHTML = '';
+  const yuan = (micro) => '¥' + (micro / 1e6).toFixed(4);
+  const stat = (k, v, extra = '') => el('div', { class: 'stat' }, el('div', { class: 'k' }, k), el('div', { class: 'v' }, String(v)), extra ? el('div', { class: 'muted' }, extra) : null);
+  main.append(
+    el('h2', {}, '🛰 灵阵 · AI 团队'),
+    el('div', { class: 'cards' },
+      stat('累计运行', d.runs.total, `今日 ${d.runs.today} 次`),
+      stat('进行中', d.runs.running, `失败 ${d.runs.failed}`),
+      stat('已完成', d.runs.done, `大模型参与 ${d.runs.by_llm}`),
+      stat('今日成本', yuan(d.cost_today_micro), `预算 ${d.budget_micro ? yuan(d.budget_micro) : '不限'}`),
+      stat('用户团队', d.totals.teams, `已发布到广场 ${d.totals.published}`),
+      stat('用户智能体', d.totals.agents, `知识库 ${d.totals.kbs}`)
+    )
+  );
+  const budgetInput = el('input', { type: 'number', value: String((d.budget_micro / 1e6) || 0), step: '0.5', style: 'width:110px' });
+  main.append(el('div', { class: 'row', style: 'margin-top:14px' },
+    el('span', {}, '每日成本预算封顶（元，0=不限；超额后强制走本地引擎，不超支）：'),
+    budgetInput,
+    el('button', {
+      class: 'btn ok', onclick: async () => {
+        await api('PUT', '/api/admin/agents/config', { budget_micro: Math.round(Number(budgetInput.value || 0) * 1e6) });
+        toast('已更新预算'); load();
+      }
+    }, '保存'),
+    el('span', { class: 'tag green' }, `运行配额：免费 ${d.quota.free} / 会员 ${d.quota.member} 次每日`)
+  ));
+  main.append(
+    el('h2', { style: 'margin-top:22px' }, '最近运行'),
+    table(['#', '用户', '团队', '策略', '状态', '步数', 'tokens', '成本', '时间', '操作'], d.recent.map((r) => [
+      String(r.id), r.owner_name || '-', r.team_name, r.strategy,
+      el('span', { class: 'tag ' + (r.status === 'done' ? 'green' : r.status === 'failed' ? 'red' : r.status === 'running' ? '' : 'gray') }, r.status),
+      String(r.step_count), String(r.token_total), yuan(r.cost_micro), fmtTime(r.started_at),
+      r.status === 'running'
+        ? el('button', { class: 'btn warn', onclick: async () => { if (!confirm('强制停止该运行？')) return; await api('POST', `/api/admin/agents/runs/${r.id}/stop`); toast('已请求停止'); load(); } }, '停止')
+        : ''
+    ]))
+  );
 }
 
 async function renderRooms() {

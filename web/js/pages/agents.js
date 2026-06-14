@@ -64,14 +64,15 @@ export async function renderAgents(page) {
 
   let data;
   try {
-    const [m, teams, agents, kb, runs] = await Promise.all([
-      meta(), GET('/api/teams'), GET('/api/agents'), GET('/api/kb'), GET('/api/runs')
+    const [m, teams, agents, kb, runs, gallery] = await Promise.all([
+      meta(), GET('/api/teams'), GET('/api/agents'), GET('/api/kb'), GET('/api/runs'),
+      GET('/api/teams/gallery').catch(() => ({ items: [] }))
     ]);
-    data = { m, teams, agents, kb, runs };
+    data = { m, teams, agents, kb, runs, gallery };
   } catch (e) { wrap.replaceWith(emptyState('加载失败', e.message)); return; }
   wrap.replaceWith(body);
 
-  const { m, teams, agents, kb, runs } = data;
+  const { m, teams, agents, kb, runs, gallery } = data;
 
   // 配额条
   body.append(h('div', { class: 'glass lz-quota' },
@@ -95,6 +96,14 @@ export async function renderAgents(page) {
   const tg = h('div', { class: 'lz-grid' });
   for (const t of teams.templates) tg.append(teamCard(t, true));
   body.append(tg);
+
+  // 团队广场（他人发布）
+  if (gallery.items.length) {
+    body.append(sectionHead('团队广场', '其他用户发布的团队，点开即可派活'));
+    const gg = h('div', { class: 'lz-grid' });
+    for (const t of gallery.items) gg.append(galleryCard(t));
+    body.append(gg);
+  }
 
   // 我的智能体
   body.append(sectionHead('智能体成员', '团队的组成单位', h('button', { class: 'btn mini ghost', onclick: () => agentEditor(null) }, '+ 新建成员')));
@@ -130,6 +139,16 @@ export async function renderAgents(page) {
           h('div', { class: 'lz-team-name' }, t.name, isTpl ? h('span', { class: 'lz-tpl-tag' }, '模板') : null),
           h('div', { class: 'lz-team-strat' }, `${STRAT_ICON[t.strategy] || ''} ${stratName(t.strategy)} · ${t.members.length} 名成员`)),
       ),
+      t.goal ? h('div', { class: 'lz-team-goal' }, t.goal) : null,
+      h('div', { class: 'lz-member-avas' }, t.members.slice(0, 6).map((mm) => avaEl(mm.avatar)))
+    );
+  }
+  function galleryCard(t) {
+    return h('div', { class: 'glass lz-team-card', onclick: () => nav(`/team/${t.id}`) },
+      h('div', { class: 'lz-team-top' }, avaEl(t.avatar, 'big'),
+        h('div', { style: { flex: 1, minWidth: 0 } },
+          h('div', { class: 'lz-team-name' }, t.name),
+          h('div', { class: 'lz-team-strat' }, `${STRAT_ICON[t.strategy] || ''} ${stratName(t.strategy)} · by ${t.owner_name} · 跑过 ${t.run_count} 次`))),
       t.goal ? h('div', { class: 'lz-team-goal' }, t.goal) : null,
       h('div', { class: 'lz-member-avas' }, t.members.slice(0, 6).map((mm) => avaEl(mm.avatar)))
     );
@@ -216,6 +235,18 @@ export async function renderTeam(page, { id }) {
       }
     }, '▶ 开始协作')
   ));
+
+  // 发布到团队广场（仅自有团队）
+  if (editable) {
+    let published = team.published;
+    const pubSwitch = h('button', { class: `switch ${published ? 'on' : ''}` });
+    pubSwitch.onclick = async () => {
+      try { const r = await POST(`/api/teams/${id}/publish`, { published: !published }); published = r.published; pubSwitch.classList.toggle('on', published); toast(published ? '已发布到团队广场' : '已取消发布'); }
+      catch (e) { toast(e.message, 'warn'); }
+    };
+    box.append(h('div', { class: 'glass menu-item', style: { padding: '12px 14px', marginBottom: '12px' } },
+      h('div', { style: { flex: 1 } }, h('div', {}, '🌐 发布到团队广场'), h('div', { class: 'lz-tip' }, '让其他用户也能用你这支团队派活')), pubSwitch));
+  }
 
   // 成员展示
   const memberBox = h('div', { class: 'glass lz-edit-card' });
