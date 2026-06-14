@@ -5,10 +5,13 @@ import { GET, POST, PATCH, DEL, bad, notFound } from '../lib/httpx.js';
 import { q, getSetting, setSetting, UPLOAD_DIR, DB_PATH } from '../lib/db.js';
 import { uid, now, jparse, micro2yuan, token32 } from '../lib/util.js';
 import { arkEnabled, cfg, arkChat, DEFAULTS, videoModelOptions } from '../lib/ark.js';
-import { createProject, getProject, projectOut, touchProject, getCanvas, checkConsistency } from '../lib/pipeline.js';
+import { createProject, getProject, projectOut, touchProject, getCanvas, checkConsistency, buildCharacterProfile } from '../lib/pipeline.js';
 
 // 画面一致性体检
 GET('/api/projects/:id/consistency', async ({ params }) => checkConsistency(params.id));
+
+// 角色记忆 character_profile.json：全片形象事实源（锁定档案 + 已生成定妆照/表情集），可查看/下载
+GET('/api/projects/:id/character-profile', async ({ params }) => buildCharacterProfile(params.id));
 
 // AIQC 质检
 GET('/api/projects/:id/qc', async ({ params, query }) => {

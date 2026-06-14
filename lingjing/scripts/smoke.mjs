@@ -138,7 +138,15 @@ try {
   ok(conTask.params?.seed > 0 && conTask.params?.ref_images >= 1, '首帧带种子 + 角色参考图');
   ok(/【角色】|五官发型服装固定|全片总控/.test(conTask.prompt || ''), '角色锁定档案注入首帧提示词');
   ok(/解剖|肢体残缺|人物完整|不被画框裁断|脚部在画面内|半身/.test(conTask.prompt || ''), '构图/解剖护栏注入首帧提示词（防上下身错位）');
-  ok((await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools.some((t) => t.name === 'check_consistency'), 'Agent 开放 check_consistency 工具');
+  // 角色记忆 character_profile.json：锁定档案 + 总控 + 禁止项 + 已生成定妆照
+  const prof = (await api('GET', `/api/projects/${p.id}/character-profile`)).data;
+  ok(prof.schema === 'lingjing.character_profile/1' && Array.isArray(prof.characters) && prof.characters.length, `角色记忆导出（角色 ${prof.characters.length}）`);
+  ok(prof.characters.every((c) => c.lock && c.name), '每个角色都带逐字锁定档案 lock');
+  ok(prof.characters.some((c) => c.ready && c.portrait === upC.url), '已生成定妆照写进角色记忆（portrait）');
+  ok(/全片总控|铁律/.test(prof.master_control || '') && Array.isArray(prof.forbidden_rules) && prof.forbidden_rules.length >= 8, '角色记忆含总控提示词 + 全部禁止项');
+  const agentTools = (await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools;
+  ok(agentTools.some((t) => t.name === 'check_consistency'), 'Agent 开放 check_consistency 工具');
+  ok(agentTools.some((t) => t.name === 'get_character_profile'), 'Agent 开放 get_character_profile 工具（角色记忆）');
   // 情绪联动 + 跨镜参考链：同场景相邻两镜，前镜挂 PNG 首帧、后镜设情绪
   const pair = (() => {
     const shots = cvCon.nodes.filter((n) => n.type === 'shot').sort((a, b) => a.data.order - b.data.order);

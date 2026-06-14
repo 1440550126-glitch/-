@@ -6,7 +6,7 @@ import { jparse, micro2yuan, now } from './util.js';
 import { arkEnabled, cfg } from './ark.js';
 import {
   createProject, getProject, projectOut, touchProject, generateScript, parseScript, addEpisode,
-  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral, generateDubbing, checkConsistency
+  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral, generateDubbing, checkConsistency, buildCharacterProfile
 } from './pipeline.js';
 import { STYLES, STYLE_CATS } from './styles.js';
 import { bad } from './httpx.js';
@@ -304,6 +304,12 @@ export const TOOLS = [
     description: '画面一致性体检：扫描风格缺失、角色/场景缺定妆照、分镜未连线、提示词漏人名等会导致画面漂移的问题，返回评分（0-100）、统计与修复建议。批量生成前建议先调用并修复 err 级问题。',
     input_schema: { type: 'object', properties: { project_id: str('项目 id') }, required: ['project_id'] },
     execute({ project_id }) { return checkConsistency(project_id); }
+  },
+  {
+    name: 'get_character_profile',
+    description: '读取角色记忆 character_profile.json：全片形象的唯一事实源——每个角色/场景/道具的逐字锁定档案（lock）、性别年龄、已生成的定妆照 portrait 与表情集 expressions，以及总控提示词与禁止项。生成首帧/视频前应先读取，严禁忽略此记忆改变角色外观或换人。',
+    input_schema: { type: 'object', properties: { project_id: str('项目 id') }, required: ['project_id'] },
+    execute({ project_id }) { return buildCharacterProfile(project_id); }
   },
   {
     name: 'generate_storyboard_media',

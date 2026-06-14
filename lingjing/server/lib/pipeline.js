@@ -790,6 +790,52 @@ export function checkConsistency(projectId) {
   };
 }
 
+// ---------- 角色记忆 character_profile.json：把锁定档案 + 已生成的定妆照/表情集导出为可查可下载的单一事实源 ----------
+// 这就是「禁止忽略 character_profile.json 里的角色记忆」中所指的那份记忆：
+// 解析时确定下来的逐字锁定档案，加上画布上真实生成的参考图 URL，全片生成都以此为准。
+export function buildCharacterProfile(projectId) {
+  const project = getProject(projectId);
+  const sb = jparse(project.storyboard, null);
+  if (!sb) throw bad('项目还没有分镜，先解析剧本');
+  const c = project.canvas_id ? getCanvas(project.canvas_id, { required: false }) : null;
+  const byKey = new Map((c?.nodes || []).filter((n) => n.data?.key).map((n) => [n.data.key, n]));
+  const real = (u) => (u && !/\.svg$/i.test(u) ? u : '');   // 只认真实生成图（占位 SVG 不算定妆）
+
+  const characters = (sb.characters || []).map((ch) => {
+    const n = byKey.get(ch.key);
+    const portrait = real(n?.data.image);
+    const expressions = (n?.data.variants || [])
+      .filter((v) => real(v.url))
+      .map((v) => ({ emotion: v.emotion, image: v.url }));
+    return {
+      key: ch.key, name: ch.name, role: ch.role || '角色',
+      gender: ch.gender || '未定', age: ageTag(cleanDesc(ch.desc)),
+      appearance: cleanDesc(ch.desc),
+      lock: ch.lock || '',                       // 全片每处逐字复用的锁定档案
+      portrait,                                  // 主定妆照（首帧参考基准），空＝未生成
+      expressions,                               // 各情绪表情集（同一张脸的变体）
+      ready: !!portrait                          // 是否已锁定形象
+    };
+  });
+  const scenes = (sb.scenes || []).map((s) => ({
+    key: s.key, name: s.name, desc: cleanDesc(s.desc), lock: s.lock || '', image: real(byKey.get(s.key)?.data.image), ready: !!real(byKey.get(s.key)?.data.image)
+  }));
+  const props = (sb.props || []).map((p) => ({
+    key: p.key, name: p.name, desc: cleanDesc(p.desc), lock: p.lock || '', image: real(byKey.get(p.key)?.data.image), ready: !!real(byKey.get(p.key)?.data.image)
+  }));
+
+  return {
+    schema: 'lingjing.character_profile/1',
+    project: { id: project.id, title: project.title, style: project.style || '', ratio: project.ratio || '16:9', seed: project.seed || 0 },
+    master_control: sb.bible || buildBible(sb),   // 总控提示词：写进每一张参考图
+    forbidden_rules: FORBIDDEN_RULES,             // 负面提示词（禁止项），注入每张图/每段视频
+    video_forbidden: VIDEO_NEG,
+    characters, scenes, props,
+    locked_at: now(),
+    note: '全片生成（首帧/视频）以本档案为唯一形象事实源：同名角色逐字复用 lock 文案 + 同一张 portrait 作参考图，禁止中途改外观或换人。'
+  };
+}
+
 // ---------- 配音：带台词的分镜逐镜合成语音（火山 TTS），写回节点 audio ----------
 export async function generateDubbing({ projectId, episode = '', nodeId = '' }) {
   const { synthesize } = await import('./tts.js');
