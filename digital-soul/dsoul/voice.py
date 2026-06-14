@@ -64,3 +64,24 @@ class Mouth:
             self._engine.runAndWait()
         else:
             print(f"🔊（未装 TTS，用文字代替）{text}")
+
+
+def record_wav(seconds: float = 5, samplerate: int = 16000) -> str | None:
+    """录一段麦克风音频存成 wav，返回路径。缺 sounddevice 则返回 None。"""
+    try:
+        import numpy as np  # noqa: F401
+        import sounddevice as sd
+    except Exception:
+        return None
+    import tempfile
+    import wave
+
+    audio = sd.rec(int(seconds * samplerate), samplerate=samplerate, channels=1, dtype="int16")
+    sd.wait()
+    path = tempfile.mktemp(suffix=".wav")
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(samplerate)
+        w.writeframes(audio.tobytes())
+    return path

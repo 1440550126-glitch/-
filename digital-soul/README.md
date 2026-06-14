@@ -163,6 +163,23 @@ python scripts/daemon.py --robot ros2    # 动作走 ROS2 机器人
 ```
 完整的树莓派安装、systemd 自启、机器人接线见 **[docs/deploy.md](docs/deploy.md)**。
 
+**🩺 一键安装 + 开机自检** —— 树莓派/Debian 上一行装好，再自检各能力是否就绪。
+```bash
+./scripts/install.sh           # 核心；--full 连语音+视觉一起装
+python scripts/doctor.py       # 自检：大模型/记忆/语音/摄像头/人脸/界面
+```
+
+**👂 全感官常驻（看 + 听 + 说）**
+```bash
+python scripts/daemon.py --voice         # 感知 + 语音对话 + 定时巩固
+```
+听到话时，它结合"当前画面里的人"判断在跟谁说话，再按关系回应。
+
+**🐳 Docker（跑"大脑"容器）**
+```bash
+docker build -t digital-soul . && docker run --rm -e DSOUL_LLM_HOST=http://192.168.1.10:11434 digital-soul
+```
+
 ## 目录结构
 
 ```
@@ -185,8 +202,9 @@ digital-soul/
 │   ├── presence.py    持续感知：认人进画面 → 主动打招呼
 │   ├── journal.py     对话日记（短期记忆）
 │   └── consolidate.py 睡眠巩固：对话 → 长期记忆
-├── scripts/           chat · desktop(GUI) · ingest · timeline · voice_chat · watch · sleep · finetune_* · daemon
+├── scripts/           chat · desktop · ingest · timeline · voice_chat · watch · sleep · finetune_* · daemon · doctor
 ├── docs/              finetune.md（微调）· deploy.md（树莓派/机器人部署）
+├── Dockerfile · scripts/install.sh   一键容器 / 一键安装
 └── tests/             授权 / 记忆 / 情感 / 感知 / 巩固 单元测试
 ```
 

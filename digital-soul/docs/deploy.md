@@ -22,6 +22,14 @@
 
 ## 1. 树莓派部署
 
+### 1.0 一键安装（最快）
+```bash
+git clone <你的仓库地址> && cd digital-soul
+./scripts/install.sh            # 核心；--full 连语音+视觉一起装
+python scripts/doctor.py        # 自检各能力是否就绪
+```
+下面是分步说明与可选项。
+
 ### 1.1 硬件建议
 - 树莓派 4B / 5，**8GB 内存**（要在本机跑小模型就尽量 8GB）。
 - microSD ≥ 32GB，建议外接 SSD（读写更稳）。
@@ -109,6 +117,13 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now digital-soul
 journalctl -u digital-soul -f            # 看日志
 ```
+
+### 1.8 Docker（可选，跑"大脑"容器）
+```bash
+docker build -t digital-soul .
+docker run --rm -e DSOUL_LLM_HOST=http://192.168.1.10:11434 digital-soul
+```
+> 容器内没有摄像头/麦克风/桌面，主要用于跑常驻"大脑"；视觉/语音请在宿主机跑。
 
 ---
 

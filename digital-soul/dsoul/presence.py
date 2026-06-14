@@ -56,6 +56,12 @@ class PresenceMonitor:
 
         return entered, left
 
+    def current_speaker(self) -> str | None:
+        """当前画面里"最近被看到"的人（没有则 None）。供语音对话判断在跟谁说话。"""
+        if not self.present:
+            return None
+        return max(self.present, key=self.present.get)
+
     def run(self, poll_interval: float = 1.0) -> None:
         """阻塞式摄像头循环。需要 opencv 与可用的人脸识别。"""
         if self._cv2 is None:
