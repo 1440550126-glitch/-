@@ -295,7 +295,7 @@ try {
   console.log('— 全流程工作流 —');
   const p9 = (await api('POST', '/api/projects', { title: '工作流剧', genre: '都市逆袭', idea: '保安逆袭成集团总裁' })).data;
   const wf = (await api('POST', '/api/workflows', { project_id: p9.id })).data;
-  ok(wf.id && wf.status === 'running' && wf.steps.length === 8, '工作流启动（8 步含 AIQC）');
+  ok(wf.id && wf.status === 'running' && wf.steps.length === 9, '工作流启动（9 步含表情+AIQC）');
   const wfDone = await until(async () => {
     const w = (await api('GET', `/api/workflows/${wf.id}`)).data;
     return w.status !== 'running' ? w : null;

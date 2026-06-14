@@ -15,6 +15,7 @@ const STEP_DEFS = [
   { name: 'parse', label: '解析分镜' },
   { name: 'check', label: '一致性体检' },
   { name: 'images', label: '定妆照与首帧' },
+  { name: 'expressions', label: '角色表情库' },
   { name: 'qc', label: 'AIQC 质检' },
   { name: 'videos', label: '分镜视频' },
   { name: 'dub', label: '配音' },
@@ -141,6 +142,21 @@ async function execStep(name, wf, cancelled) {
       }
       if (!done && failed) throw bad(`出图全部失败（${failed} 张）`);
       return `生成 ${done} 张${failed ? `（失败 ${failed}）` : ''}${base.length + frames.length === 0 ? '（无需生成）' : ''}`;
+    }
+    case 'expressions': {
+      const { getSetting } = await import('./db.js');
+      if (getSetting('auto_expressions', false) !== true) throw SKIP('未开启「角色表情库自动生成」（设置页可开启）');
+      const { generateExpressions } = await import('./pipeline.js');
+      const c = getCanvas(project().canvas_id);
+      // 给主要角色（主角/反派，最多 4 个）生成表情集，落到画布角色节点
+      const mains = c.nodes.filter((n) => n.type === 'character' && /主角|反派/.test(n.data.role || '') && n.data.image && !/\.svg$/i.test(n.data.image)).slice(0, 4);
+      if (!mains.length) return '无可生成表情的主要角色（需先有真实定妆照）';
+      let made = 0;
+      for (const n of mains) {
+        if (cancelled()) break;
+        try { const r = await generateExpressions({ projectId, nodeId: n.id, emotions: ['冷酷', '愤怒', '悲伤', '微笑', '惊恐'] }); made += r.variants.length; } catch (e) { console.warn('[workflow] 表情失败：', n.data.name, e.message); }
+      }
+      return `为 ${mains.length} 个主要角色生成表情库，共 ${made} 张`;
     }
     case 'qc': {
       const { qcEnabled, qcNode, listQC, qcSummary } = await import('./qc.js');
