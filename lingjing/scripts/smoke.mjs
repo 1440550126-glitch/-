@@ -136,7 +136,7 @@ try {
   const conFrame = (await api('POST', '/api/ai/image', { prompt: '两人对峙特写', kind: 'frame', project_id: p.id, node_id: conShot.id })).data;
   const conTask = (await api('GET', `/api/ai/task/${conFrame.taskId}`)).data;
   ok(conTask.params?.seed > 0 && conTask.params?.ref_images >= 1, '首帧带种子 + 角色参考图');
-  ok(/保持人物五官|出场人物/.test(conTask.prompt || ''), '锁定词自动注入首帧提示词');
+  ok(/【角色】|五官发型服装固定|全片总控/.test(conTask.prompt || ''), '角色锁定档案注入首帧提示词');
   ok(/解剖|肢体残缺|人物完整|不被画框裁断|脚部在画面内|半身/.test(conTask.prompt || ''), '构图/解剖护栏注入首帧提示词（防上下身错位）');
   ok((await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools.some((t) => t.name === 'check_consistency'), 'Agent 开放 check_consistency 工具');
   // 情绪联动 + 跨镜参考链：同场景相邻两镜，前镜挂 PNG 首帧、后镜设情绪
@@ -153,7 +153,7 @@ try {
   const chainFrame = (await api('POST', '/api/ai/image', { prompt: '冲突升级', kind: 'frame', project_id: p.id, node_id: pair[1].id })).data;
   const chainTask = (await api('GET', `/api/ai/task/${chainFrame.taskId}`)).data;
   ok(chainTask.params?.chain_ref === true, '跨镜参考链：上一镜首帧已入参考');
-  ok(chainTask.params?.emotion === '愤怒' && /情绪：愤怒/.test(chainTask.prompt || ''), '分镜情绪注入锁定词');
+  ok(chainTask.params?.emotion === '愤怒' && /愤怒/.test(chainTask.prompt || ''), '分镜情绪注入提示词');
 
   console.log('— 配音（TTS） —');
   const dub = await api('POST', '/api/ai/dub', { project_id: p.id });

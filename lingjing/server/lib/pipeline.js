@@ -267,45 +267,94 @@ function normalizeStoryboard(sb) {
   });
   if (!out.shots.length) throw bad('解析结果里没有分镜');
   out.bible = buildBible(out);
+  buildLocks(out);
+  out.bible = buildBible(out);
   alignStoryboard(out);
   return out;
 }
 
-/** 故事总纲（防跑偏的全局提示词）：风格 + 角色锁定外貌，注入每次生成 */
-function buildBible(sb) {
-  const chars = sb.characters.map((c) => `${c.name}[${c.gender || '?'}/${c.role}：${String(c.desc || '').replace(/\s+/g, '').slice(0, 40)}]`).join('；');
-  return `【全片设定】${sb.style || '统一影像风格'}。【角色锁定】${chars}。全片保持各角色五官/发型/服装/年龄一致，不同角色外貌必须明显区分、不可撞脸。`;
+const cleanDesc = (s) => String(s || '').replace(/\s+/g, '').replace(/^[，,。.；;、]+|[，,。.；;、]+$/g, '');
+const ageTag = (d) => /老|年迈|苍老|花甲|白发|爷|奶/.test(d) ? '老年' : /少年|少女|小孩|儿童|孩子/.test(d) ? '少年' : /中年|大叔|大妈/.test(d) ? '中年' : '青年';
+
+/** 为每个角色/场景/道具建【完整锁定档案】——全片每处逐字复用同一段，保证细节一致 */
+function buildLocks(sb) {
+  const style = sb.style || '电影质感';
+  for (const c of sb.characters) {
+    const d = cleanDesc(c.desc).slice(0, 110);
+    const g = c.gender === '男' ? '男性' : c.gender === '女' ? '女性' : '';
+    // 角色锁定档案：性别+年龄+完整外貌/服装/特征，固定不变
+    c.lock = `${c.name}（${g}${ageTag(d)}/${c.role}：${d}，五官发型服装固定不变）`;
+    // 定妆照提示词与锁定档案一致（定义图＝首帧引用的同一形象）
+    c.image_prompt = `${style} ｜ 单人定妆照 ｜ ${c.lock}`;
+  }
+  for (const s of sb.scenes) {
+    const d = cleanDesc(s.desc).slice(0, 90);
+    s.lock = `${s.name}（${d || s.name}，环境陈设光线固定一致）`;
+    s.image_prompt = `${style} ｜ 场景空镜 ｜ ${s.lock}`;
+  }
+  for (const p of sb.props) {
+    const d = cleanDesc(p.desc).slice(0, 70);
+    p.lock = `${p.name}（${d || p.name}，外形固定）`;
+    p.image_prompt = `${style} ｜ 道具特写 ｜ ${p.lock}`;
+  }
 }
 
-/** 慢思考自动对齐：把每个分镜涉及人物的锁定外貌烤进 image_prompt，修正与角色设定不一致的描述 */
+/** 故事总纲（总控提示词）：写进每一张参考图，全片防跑偏 */
+function buildBible(sb) {
+  const chars = sb.characters.map((c) => c.lock).join('；');
+  return `【全片总控】影像风格：${sb.style || '统一电影质感'}，全片色调/光线/画风统一。【角色档案锁定】${chars}。【铁律】各角色五官·发型·服装·身材比例全片严格一致，不同角色外貌明显区分不可撞脸，不得中途换人或改外观。`;
+}
+
+/** 慢思考自动对齐：把每个分镜重建为【确定性规范提示词】——同一角色/场景永远是同一段锁定文字 */
 function alignStoryboard(sb) {
   const charByKey = new Map(sb.characters.map((c) => [c.key, c]));
   const sceneByKey = new Map(sb.scenes.map((s) => [s.key, s]));
+  const propByKey = new Map(sb.props.map((p) => [p.key, p]));
   for (const sh of sb.shots) {
-    const names = [];
-    for (const ck of (sh.characters || [])) {
-      const c = charByKey.get(ck);
-      if (!c) continue;
-      const tag = `${c.name}（${c.gender || ''}，${String(c.desc || '').replace(/\s+/g, '').slice(0, 36)}）`;
-      // 提示词没写明该角色锁定特征 → 补上（防"分镜人物描述与角色形象不符"）
-      if (!sh.image_prompt.includes(c.name) || !hasAppearance(sh.image_prompt, c)) {
-        names.push(tag);
-      }
-    }
-    if (names.length) {
-      sh.image_prompt = `${sh.image_prompt}｜出场：${names.join('、')}`.slice(0, 400);
-    }
-    // 场景锁定
+    const chars = (sh.characters || []).map((k) => charByKey.get(k)).filter(Boolean);
     const sc = sceneByKey.get(sh.scene);
-    if (sc && sc.name && !sh.image_prompt.includes(sc.name)) {
-      sh.image_prompt = `${sh.image_prompt}｜场景：${sc.name}`.slice(0, 400);
-    }
+    const props = (sh.props || []).map((k) => propByKey.get(k)).filter(Boolean);
+    const action = cleanDesc(sh.action).slice(0, 80) || sh.name;
+    // 规范化首帧提示词：角色锁定档案逐字复用 + 场景锁定 + 画面动作 + 情绪
+    const parts = [`${sb.style || '电影质感'}`, sh.shot_type || '中景'];
+    if (chars.length) parts.push(`【角色】${chars.map((c) => c.lock).join('；')}`);
+    if (sc) parts.push(`【场景】${sc.lock}`);
+    if (props.length) parts.push(`【道具】${props.map((p) => p.name).join('、')}`);
+    parts.push(`【画面】${action}`);
+    if (sh.emotion) parts.push(`【情绪】${chars[0]?.name || '主角'}：${sh.emotion}`);
+    sh.image_prompt = parts.join(' ｜ ').slice(0, 900);
+    // 视频提示词：动作+运镜，并重申角色锁定（防动画中途变形/换人）
+    const vp = cleanDesc(sh.video_prompt).slice(0, 80) || action;
+    sh.video_prompt = `${vp}｜${sh.camera || '固定机位'}｜${chars.map((c) => c.name).join('、')}保持外观一致`.slice(0, 300);
   }
 }
-function hasAppearance(prompt, c) {
-  // 简单判断提示词是否已含该角色的关键外貌词（性别或描述前几字）
-  const key = String(c.desc || '').replace(/[，,。.；;（）()]/g, '').slice(0, 6);
-  return key && prompt.includes(key);
+
+/** 大模型分类校正：判断被标为"角色"的条目里哪些其实是道具/场景，自动归位（细节决定一致性） */
+async function refineEntitiesLLM(sb) {
+  if (!arkEnabled() || !sb.characters?.length) return sb;
+  try {
+    const list = sb.characters.map((c) => `${c.name}：${cleanDesc(c.desc).slice(0, 36)}`).join('\n');
+    const r = await arkChat({
+      feature: 'classify', json: true, temperature: 0, maxTokens: 800,
+      system: '你是剧本实体分类器。下列条目当前都被标为"角色"，请判断哪些其实是【道具/物体】(非人、非拟人生物，如：芯片/计数器/钥匙/能源核心/水囊/武器等)，哪些其实是【场景/地点】。只输出 JSON：{"props":["误标的物体名"],"scenes":["误标的地点名"]}，没有则空数组。',
+      prompt: list
+    });
+    const j = jparse(String(r.text).replace(/```(json)?/gi, '').replace(/```/g, ''), {});
+    const toProp = new Set((j.props || []).map(String));
+    const toScene = new Set((j.scenes || []).map(String));
+    if (!toProp.size && !toScene.size) return sb;
+    const keep = [];
+    const movedKeys = new Set();
+    for (const c of sb.characters) {
+      if (toProp.has(c.name)) { if (!sb.props.some((p) => p.name === c.name)) sb.props.push({ key: c.key, name: c.name, desc: c.desc, image_prompt: '' }); movedKeys.add(c.key); }
+      else if (toScene.has(c.name)) { if (!sb.scenes.some((s) => s.name === c.name)) sb.scenes.push({ key: c.key, name: c.name, desc: c.desc, image_prompt: '' }); movedKeys.add(c.key); }
+      else keep.push(c);
+    }
+    if (!movedKeys.size) return sb;
+    sb.characters = keep;
+    for (const sh of sb.shots) sh.characters = (sh.characters || []).filter((k) => !movedKeys.has(k));
+    return normalizeStoryboard(sb);   // 重排 key + 重建锁定/总纲/对齐
+  } catch (e) { console.warn('[parse] LLM 分类校正失败：', e.message); return sb; }
 }
 
 /** 合并多段解析结果：角色/场景/道具按名字去重，分镜顺序拼接、段落映射到 episode */
@@ -397,6 +446,9 @@ export async function parseScript({ projectId }) {
     }
   }
   if (!sb) sb = normalizeStoryboard(localParse(project.script, { style: resolveStylePrompt(project.style) }));
+
+  // 大模型分类校正：把误判为角色的道具/场景归位（仅 LLM 模式）
+  if (byLLM) sb = await refineEntitiesLLM(sb);
 
   // 同步画布（已有画布则整体重建结构，保留画布 id）
   const canvasId = ensureCanvas(project, sb);
@@ -547,8 +599,8 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
   prompt = applyStyle(prompt.trim(), project?.style);
   ratio = ratio || project?.ratio || '16:9';
 
-  // 画面一致性：分镜首帧自动 ①引用连线角色/场景定妆图（角色优先，情绪联动表情集）
-  // ②同集同场景的上一镜首帧作为跨镜参考（无缝衔接） ③注入文本锁定词
+  // 画面一致性：自动选参考图（分镜首帧）——角色（含情绪表情集）优先→场景→道具→上一镜尾帧
+  // 文本锁定由解析时的规范化 image_prompt 承担（每处逐字一致），此处不再临时截断拼接
   let refs = (refImages || []).filter(Boolean);
   let shotEmotion = '';
   let shotType = '';
@@ -557,9 +609,7 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
     try {
       const c = getCanvas(project.canvas_id, { required: false });
       if (c) {
-        const incoming = c.edges.filter((e) => e.to === nodeId)
-          .map((e) => c.nodes.find((n) => n.id === e.from))
-          .filter(Boolean);
+        const incoming = c.edges.filter((e) => e.to === nodeId).map((e) => c.nodes.find((n) => n.id === e.from)).filter(Boolean);
         const chars = incoming.filter((n) => n.type === 'character');
         const scenes = incoming.filter((n) => n.type === 'scene');
         const props = incoming.filter((n) => n.type === 'prop');
@@ -571,37 +621,27 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
           const charRef = (n) => {
             if (shotEmotion && Array.isArray(n.data.variants)) {
               const v = n.data.variants.find((x) => x.emotion === shotEmotion && okUrl(x.url));
-              if (v) return v.url;       // 该情绪的表情定妆照优先
+              if (v) return v.url;
             }
             return okUrl(n.data.image) ? n.data.image : '';
           };
-          // 参考图：角色（含情绪表情集）优先 → 场景 → 关键道具，最多 4 张
-          refs = [...chars.map(charRef), ...scenes.map((n) => (okUrl(n.data.image) ? n.data.image : '')), ...props.map((n) => (okUrl(n.data.image) ? n.data.image : ''))]
-            .filter(Boolean)
-            .slice(0, 4);
-          // 跨镜参考链：同集同场景的上一镜首帧
+          refs = [...chars.map(charRef), ...scenes.map((n) => (okUrl(n.data.image) ? n.data.image : '')), ...props.map((n) => (okUrl(n.data.image) ? n.data.image : ''))].filter(Boolean).slice(0, 4);
           if (shotNode && refs.length < 3) {
-            const prev = c.nodes.find((n) => n.type === 'shot'
-              && (n.data.episode || 'e1') === (shotNode.data.episode || 'e1')
-              && n.data.scene === shotNode.data.scene
-              && n.data.order === shotNode.data.order - 1);
-            if (prev && okUrl(prev.data.image)) {
-              refs.push(prev.data.image);
-              chainRef = true;
-            }
+            const prev = c.nodes.find((n) => n.type === 'shot' && (n.data.episode || 'e1') === (shotNode.data.episode || 'e1') && n.data.scene === shotNode.data.scene && n.data.order === shotNode.data.order - 1);
+            if (prev && okUrl(prev.data.image)) { refs.push(prev.data.image); chainRef = true; }
           }
         }
-        const lockChars = chars.slice(0, 3).map((n) => `${n.data.name}（${String(n.data.desc || n.data.prompt || '').slice(0, 50)}）`).filter(Boolean);
-        const lockScene = scenes[0] ? `${scenes[0].data.name}（${String(scenes[0].data.desc || '').slice(0, 40)}）` : '';
-        if (lockChars.length || lockScene) {
-          prompt += `。出场人物：${lockChars.join('、') || '同前'}${shotEmotion ? `，情绪：${shotEmotion}` : ''}${lockScene ? `；场景：${lockScene}` : ''}。严格保持人物五官、发型、服装与场景陈设和参考图完全一致，不同角色不可撞脸${chainRef ? '，并与上一镜画面无缝衔接' : ''}`;
-        }
-        // 注入故事总纲（防跑偏的全局设定）
-        const bible = jparse(project.storyboard, {})?.bible;
-        if (bible) prompt += `\n${bible}`;
       }
     } catch { /* 画布可能已删除 */ }
   }
+  // 情绪（含手动改后的）补进提示词
+  if (shotEmotion && !prompt.includes(`：${shotEmotion}`)) prompt += `，情绪：${shotEmotion}`;
+  // 总控提示词（角色档案+风格+铁律）注入【每一张】参考图（角色/场景/道具/首帧），全片防跑偏
+  if (project?.storyboard) {
+    const bible = jparse(project.storyboard, {})?.bible;
+    if (bible && !prompt.includes('【全片总控】')) prompt += `\n${bible}`;
+  }
+  if (chainRef) prompt += '，与上一镜画面无缝衔接、同一角色同一造型';
   // 追加构图/解剖护栏（修复人物残缺、上下身分离等问题）
   prompt += framingGuide(kind, shotType);
   const seed = project?.seed || 0;
