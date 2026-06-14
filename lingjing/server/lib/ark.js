@@ -14,10 +14,12 @@ export const DEFAULTS = {
   model_chat: 'doubao-seed-1-6-250615',
   model_image: 'doubao-seedream-4-0-250828',
   model_video: 'doubao-seedance-1-0-pro-250528',
-  // 创作框可选的视频模型（每行「显示名|模型ID」；Seedance 2.0 上线后加一行即可）
+  // 创作框可选的视频模型（每行「显示名|模型ID」）；以方舟控制台「开通管理」里的准确 ID 为准。
+  // 想用最强：去控制台复制 Seedance 2.0 / Pro 的模型 ID 或推理接入点 ep-xxxx 替换下面对应行。
   model_video_options: [
+    'Seedance 2.0 Pro（最强，请核对ID）|doubao-seedance-2-0-pro',
+    'Seedance 2.0|doubao-seedance-2-0',
     'Seedance 1.0 Pro|doubao-seedance-1-0-pro-250528',
-    'Seedance 1.0 Lite 文生视频|doubao-seedance-1-0-lite-t2v-250428',
     'Seedance 1.0 Lite 图生视频|doubao-seedance-1-0-lite-i2v-250428'
   ].join('\n'),
   video_extra_args: '',     // 追加到视频任务文本命令的参数，如 --camerafixed true

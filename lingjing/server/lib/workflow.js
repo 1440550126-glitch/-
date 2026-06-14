@@ -247,10 +247,10 @@ async function execStep(name, wf, cancelled) {
       } catch (e) { throw SKIP(`配音跳过：${e.message.slice(0, 120)}`); }
     }
     case 'export': {
-      if (!ffmpegPath()) throw SKIP('未检测到 ffmpeg，已跳过（安装后可一键导出）');
+      if (!ffmpegPath()) throw SKIP('未检测到 ffmpeg，已跳过（安装后可一键导出带配音/字幕的成片）');
       try {
         const r = await exportEpisode({ projectId, episode });
-        return `成片已导出：${r.url}（${r.shots} 镜）`;
+        return `成片已导出（${r.shots} 镜，混入配音 ${r.dubbed || 0}，烧录字幕 ${r.subbed || 0}）：${r.url}`;
       } catch (e) { throw SKIP(`导出跳过：${e.message.slice(0, 120)}`); }
     }
     default:

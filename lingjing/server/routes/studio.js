@@ -37,9 +37,9 @@ import { ttsCfg, ttsEnabled } from '../lib/tts.js';
 import { startWorkflow, getWorkflow, cancelWorkflow, listWorkflows } from '../lib/workflow.js';
 import { STYLES, STYLE_CATS } from '../lib/styles.js';
 
-// 成片导出（拼接分镜 MP4，需本机有 ffmpeg）
+// 成片导出（逐镜混配音+烧字幕后拼接，需本机有 ffmpeg）
 POST('/api/projects/:id/export', async ({ params, body }) => {
-  return await exportEpisode({ projectId: params.id, episode: body.episode || '' });
+  return await exportEpisode({ projectId: params.id, episode: body.episode || '', subtitles: body.subtitles !== false, dub: body.dub !== false });
 });
 
 // ---------- 风格库 ----------

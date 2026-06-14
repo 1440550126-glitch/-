@@ -41,9 +41,9 @@ function localFile(url) {
   return f.startsWith(UPLOAD_DIR) && fs.existsSync(f) ? f : null;
 }
 
-function run(bin, args) {
+function run(bin, args, opts = {}) {
   return new Promise((resolve) => {
-    const p = spawn(bin, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    const p = spawn(bin, args, { stdio: ['ignore', 'ignore', 'pipe'], ...opts });
     let err = '';
     p.stderr.on('data', (d) => { err += d; if (err.length > 8000) err = err.slice(-8000); });
     p.on('close', (code) => resolve({ code, err }));
@@ -51,15 +51,35 @@ function run(bin, args) {
   });
 }
 
-/** 导出项目（或其中一集）的成片：按分镜顺序拼接已生成的 MP4 */
-export async function exportEpisode({ projectId, episode = '' }) {
+const srtTime = (sec) => {
+  const ms = Math.round((sec % 1) * 1000), s = Math.floor(sec);
+  const p = (n, w = 2) => String(n).padStart(w, '0');
+  return `${p(Math.floor(s / 3600))}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)},${p(ms, 3)}`;
+};
+
+/**
+ * 导出成片：逐镜【混入配音 + 烧录字幕】后拼接（音画/字幕逐镜对齐，带容错）。
+ * @param opts.subtitles 是否烧录字幕（默认 true） opts.dub 是否混入配音（默认 true）
+ */
+export async function exportEpisode({ projectId, episode = '', subtitles = true, dub = true }) {
   const project = getProject(projectId);
   const sb = jparse(project.storyboard, null);
   if (!sb?.shots?.length) throw bad('项目还没有分镜，先解析剧本');
   if (!project.canvas_id) throw bad('项目还没有画布');
+  const ff = ffmpegPath();
+  if (!ff) throw bad('未检测到 ffmpeg：安装后即可一键导出（macOS: brew install ffmpeg / Ubuntu: apt install ffmpeg），放映室连播预览不受影响');
 
-  if (!ffmpegPath()) {
-    throw bad('未检测到 ffmpeg：安装后即可一键导出成片（macOS: brew install ffmpeg / Ubuntu: apt install ffmpeg），放映室连播预览不受影响');
+  // 配音齐活：开了配音 + 已配置 TTS + 有台词镜头还没配音 → 先自动补配音，保证成片有声
+  if (dub) {
+    try {
+      const { ttsEnabled } = await import('./tts.js');
+      const { generateDubbing } = await import('./pipeline.js');
+      if (ttsEnabled()) {
+        const cv0 = getCanvas(project.canvas_id);
+        const need = cv0.nodes.some((n) => n.type === 'shot' && n.data.dialogue?.trim() && !n.data.audio && (!episode || (n.data.episode || 'e1') === episode));
+        if (need) { try { await generateDubbing({ projectId, episode }); } catch (e) { console.warn('[export] 自动配音跳过：', e.message); } }
+      }
+    } catch { /* noop */ }
   }
 
   const canvas = getCanvas(project.canvas_id);
@@ -67,30 +87,65 @@ export async function exportEpisode({ projectId, episode = '' }) {
   const shots = sb.shots.filter((s) => !episode || (s.episode || 'e1') === episode);
   if (!shots.length) throw bad('该集没有分镜');
 
-  const files = [];
+  // 收集每镜的视频/配音/台词
+  const clips = [];
   const missing = [];
   for (const s of shots) {
-    const v = byKey.get(s.key)?.data?.video || '';
+    const n = byKey.get(s.key);
+    const v = n?.data?.video || '';
     const f = /\.mp4$/i.test(v) ? localFile(v) : null;
-    if (f) files.push(f);
+    if (f) clips.push({ file: f, audio: dub ? localFile(n?.data?.audio || '') : null, text: (s.dialogue || '').trim(), order: s.order });
     else missing.push(`镜头${s.order}`);
   }
-  if (missing.length) {
-    throw bad(`还有 ${missing.length} 个分镜没有可拼接的 MP4（${missing.slice(0, 6).join('、')}${missing.length > 6 ? '…' : ''}）。本地预览片不能导出，请接入方舟生成真实视频后再试`);
+  if (missing.length) throw bad(`还有 ${missing.length} 个分镜没有可拼接的 MP4（${missing.slice(0, 6).join('、')}${missing.length > 6 ? '…' : ''}）。请先生成真实视频`);
+
+  // 逐镜处理：烧字幕 + 混配音（在 UPLOAD_DIR 内作业，规避字幕滤镜路径转义问题）
+  const processed = [];
+  const tmp = [];
+  let dubbed = 0, subbed = 0;
+  const STYLE = "force_style='Fontsize=22,PrimaryColour=&H00FFFFFF,OutlineColour=&H80000000,Outline=2,Shadow=0,Alignment=2,MarginV=28'";
+  for (let i = 0; i < clips.length; i++) {
+    const c = clips[i];
+    const base = path.basename(c.file);
+    const outName = `${uid('seg')}.mp4`;
+    const vf = [];
+    let srtName = '';
+    if (subtitles && c.text) {
+      srtName = `${uid('s')}.srt`;
+      fs.writeFileSync(path.join(UPLOAD_DIR, srtName), `1\n${srtTime(0)} --> ${srtTime(60)}\n${c.text}\n`);
+      vf.push(`subtitles=${srtName}:${STYLE}`);
+    }
+    const args = ['-y', '-i', base];
+    if (c.audio) args.push('-i', path.basename(c.audio));
+    if (vf.length) args.push('-vf', vf.join(','));
+    if (c.audio) {
+      // 视频时长为准：音频补静音再裁齐（-shortest）
+      args.push('-map', '0:v:0', '-map', '1:a:0', '-af', 'apad', '-shortest', '-c:a', 'aac');
+    } else {
+      args.push('-c:a', 'aac');   // 保留原声道（多为静音）
+    }
+    args.push('-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-r', '24', outName);
+    const r = await run(ff, args, { cwd: UPLOAD_DIR });
+    if (srtName) tmp.push(path.join(UPLOAD_DIR, srtName));
+    if (r.code === 0 && fs.existsSync(path.join(UPLOAD_DIR, outName))) {
+      processed.push(path.join(UPLOAD_DIR, outName));
+      tmp.push(path.join(UPLOAD_DIR, outName));
+      if (c.audio) dubbed++;
+      if (srtName) subbed++;
+    } else {
+      processed.push(c.file);   // 处理失败 → 退回原片（无字幕/配音）
+    }
   }
 
+  // 拼接（已统一编码，concat 重编码确保兼容）
   const listFile = path.join(UPLOAD_DIR, `${uid('cc')}.txt`);
-  fs.writeFileSync(listFile, files.map((f) => `file '${f.replace(/'/g, `'\\''`)}'`).join('\n'));
+  fs.writeFileSync(listFile, processed.map((f) => `file '${f.replace(/'/g, `'\\''`)}'`).join('\n'));
+  tmp.push(listFile);
   const outName = `${uid('cut')}.mp4`;
   const outFile = path.join(UPLOAD_DIR, outName);
-
-  // 同源片段直接流拷贝；失败再重编码一次
-  let r = await run(ffmpegPath(), ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', outFile]);
-  if (r.code !== 0) {
-    r = await run(ffmpegPath(), ['-y', '-f', 'concat', '-safe', '0', '-i', listFile,
-      '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', outFile]);
-  }
-  fs.rmSync(listFile, { force: true });
+  let r = await run(ff, ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', outFile]);
+  if (r.code !== 0) r = await run(ff, ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', outFile]);
+  for (const t of tmp) { try { fs.rmSync(t, { force: true }); } catch { /* noop */ } }
   if (r.code !== 0) throw bad('ffmpeg 拼接失败：' + r.err.split('\n').slice(-3).join(' ').slice(0, 300));
 
   const epTitle = episode ? (sb.episodes?.find((e) => e.key === episode)?.title || episode) : '全片';
@@ -98,5 +153,5 @@ export async function exportEpisode({ projectId, episode = '' }) {
     tab: 'material', kind: 'video', name: `成片·${project.title}·${epTitle}`,
     url: `/uploads/${outName}`, prompt: '', source: 'local', projectId: project.id
   });
-  return { url: `/uploads/${outName}`, asset_id: asset.id, shots: files.length, project: projectOut(getProject(projectId)) };
+  return { url: `/uploads/${outName}`, asset_id: asset.id, shots: clips.length, dubbed, subbed, project: projectOut(getProject(projectId)) };
 }
