@@ -96,6 +96,12 @@ def _snapshot(agent, monitor) -> dict:
             fading = [f"{t}（{int(s * 100)}%）" for s, t in agent.fading_memories(5)]
         except Exception:
             fading = []
+    dreams = []
+    if getattr(agent, "dreams", None) is not None:
+        try:
+            dreams = [r["text"] for r in agent.dreams.recent(3)]
+        except Exception:
+            dreams = []
     devices = agent.devices.rows() if getattr(agent, "devices", None) is not None else []
     scenes = agent.scenes.names() if getattr(agent, "scenes", None) is not None else []
     triggers = [t["desc"] for t in agent.triggers.all()] if getattr(agent, "triggers", None) is not None else []
@@ -121,6 +127,7 @@ def _snapshot(agent, monitor) -> dict:
         "timeline": timeline,
         "timeline_entities": tl_entities,
         "fading": fading,
+        "dreams": dreams,
         "plan": plan_items,
         "devices": devices,
         "scenes": scenes,
@@ -183,6 +190,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 <div class=card><div class=k>🗓️ 今天的计划</div><ul id=plan></ul></div>
 <div class=card><div class=k>💡 它最近的领悟</div><ul id=refl></ul></div>
 <div class=card><div class=k>🧠 正在淡忘</div><ul id=fading></ul></div>
+<div class=card><div class=k>🌙 昨夜的梦</div><ul id=dreams></ul></div>
 <div class=card><div class=k>🕸️ 关系图谱</div><div id=graph></div>
   <div class=row style="margin-top:6px"><button id=gplay class=devbtn>▶ 生长</button><input id=gyslider type=range style="flex:1"><span id=gylabel class=dim>全部</span></div>
   <div id=graphtop class=dim></div></div>
@@ -240,6 +248,7 @@ async function refresh(){
     $('#plan').innerHTML=li(s.plan||[]);
     $('#refl').innerHTML=li(s.reflections||[]);
     $('#fading').innerHTML=(s.fading&&s.fading.length)?li(s.fading):'<li class=dim>记忆都还清晰</li>';
+    $('#dreams').innerHTML=(s.dreams&&s.dreams.length)?li(s.dreams):'<li class=dim>还没做过梦（睡一觉 / sleep 后生成）</li>';
     _gv=s.graph_viz||{nodes:[],edges:[]};const _yr=gYears(_gv),_sl=$('#gyslider');if(_yr){_sl.min=_yr[0];_sl.max=_yr[1];if(_sl.dataset.init!=='1'){_sl.value=_yr[1];_sl.dataset.init='1';}}drawGraph();
     $('#graphtop').textContent=((s.graph&&s.graph.length)?('最核心：'+s.graph.join(' · ')):'')+((s.graph_viz&&s.graph_viz.nodes.length)?'　·　点节点筛选时间线 / ▶生长看关系网长出来':'');
     _tl=s.timeline||[]; $('#tlfilters').innerHTML=renderTLfilters(s.timeline_entities); drawTL();

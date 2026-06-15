@@ -29,6 +29,10 @@ def one_cycle(agent) -> None:
     )
     for m in report["learned"]:
         print(f"  + {m}")
+    if hasattr(agent, "dream"):
+        d = agent.dream()                       # 睡着了，做个梦
+        if d:
+            print(f"🌙 梦见：{d}")
 
 
 def main() -> None:

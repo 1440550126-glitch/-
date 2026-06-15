@@ -14,10 +14,11 @@ data/finetune/lora-adapter/
 data/journal/*.jsonl
 data/journal/*.state.json
 
-# 派活待办本 / 当天计划 / 自动化（含个人事项，不入库）
+# 派活待办本 / 当天计划 / 自动化 / 梦境（含个人事项，不入库）
 data/tasks.json
 data/plan.json
 data/triggers.json
+data/dreams.json
 
 # Python
 __pycache__/

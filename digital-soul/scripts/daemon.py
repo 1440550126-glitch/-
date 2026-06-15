@@ -104,6 +104,10 @@ def sleep_loop(agent, hours: float) -> None:
             identity=agent.identity, authority=agent.authority,
         ).run()
         print(f"[睡眠] 巩固 {rep['processed']} 条 → 新增 {len(rep['learned'])} 条记忆", flush=True)
+        if hasattr(agent, "dream"):
+            d = agent.dream()
+            if d:
+                print(f"[梦境] {d}", flush=True)
 
 
 def trigger_loop(agent, mouth=None) -> None:

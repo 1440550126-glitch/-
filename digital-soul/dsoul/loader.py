@@ -10,6 +10,7 @@ from .actions import SimulationRobot
 from .agent import Agent
 from .authority import Authority
 from .devices import build_device_hub, build_sensor_source
+from .dream import DreamLog
 from .emotions import EmotionState
 from .journal import Journal
 from .knowledge import Knowledge
@@ -84,7 +85,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
     return Agent(identity, persona, memory, authority, perception, llm, robot, journal,
                  emotions=emotions, knowledge=knowledge, skills=skills, hub=hub, tasks=tasks,
                  reflector=reflector, planner=planner, plan=plan, devices=devices, scenes=scenes,
-                 triggers=triggers, sensor_source=build_sensor_source(devcfg))
+                 triggers=triggers, sensor_source=build_sensor_source(devcfg),
+                 dreams=DreamLog(base / "data" / "dreams.json"))
 
 
 def _seed_memory(base: Path, memory) -> None:

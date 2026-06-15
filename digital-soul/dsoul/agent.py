@@ -30,7 +30,7 @@ class Agent:
     def __init__(self, identity, persona, memory, authority, perception, llm, robot,
                  journal=None, emotions=None, knowledge=None, skills=None, hub=None,
                  tasks=None, reflector=None, planner=None, plan=None, devices=None,
-                 scenes=None, triggers=None, sensor_source=None) -> None:
+                 scenes=None, triggers=None, sensor_source=None, dreams=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -57,6 +57,7 @@ class Agent:
         self._sun_times = {"sunrise": "06:30", "sunset": "18:30"}  # 日出/日落（可配置）
         self.sensors = {"temperature": 22}                        # 模拟读数（无真实传感器时的兜底）
         self.sensor_source = sensor_source                        # 真实传感器源（如 HA），可为空
+        self.dreams = dreams                                      # 梦境日志（睡眠时生成）
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
@@ -525,6 +526,18 @@ class Agent:
         cand = self.memory.recall(text, k=k * 3)
         ranked = sorted(cand, key=lambda si: -(si[0] * (0.4 + 0.6 * strength(si[1], now))))
         return ranked[:k]
+
+    def dream(self) -> str:
+        """睡眠时做一个梦：记忆碎片 + 情绪 + 纠缠联想重组成一段超现实叙事。"""
+        if self.dreams is None:
+            return ""
+        from .dream import compose_dream
+        mood = self.emotions.mood()[0] if self.emotions is not None else None
+        names = [p.get("name") for p in self.authority.people.values()]
+        text = compose_dream(self.memory.items, mood=mood, names=names, llm=self.llm)
+        if text:
+            self.dreams.add(text, mood=mood)
+        return text
 
     def _entangled_recall(self, recalled):
         """对被回忆的记忆做扩散激活，牵动并强化与之纠缠的记忆。返回 [(强度, 文本), …]。"""
