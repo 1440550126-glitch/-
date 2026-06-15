@@ -214,4 +214,25 @@ ab.reset(); ok(ab.stats.rounds === 0 && ab.enhancedSlot === null, 'reset 清零'
 ok(createABTest(abDolby) instanceof DolbyABTest, 'createABTest 工厂函数');
 abDolby.dispose();
 
+// 14) 音频湍流可视化（频谱分析 / 节拍）
+const { DolbyVisualizer } = await import('../dolby-visualizer.js');
+const vAn = { fftSize: 1024, frequencyBinCount: 256, _v: new Uint8Array(256), getByteFrequencyData(a) { a.set(this._v); } };
+const vCanvas = { clientWidth: 320, clientHeight: 200, width: 0, height: 0, getContext: () => ({ setTransform() {} }) };
+const viz = new DolbyVisualizer(vCanvas, { analyser: vAn, particles: 12 });
+ok(viz.particles.length === 12, '可视化初始化粒子');
+vAn._v.fill(0); const a0 = viz.analyze(); ok(a0.energy === 0 && !a0.beat, '静音：无能量无节拍');
+for (let i = 0; i < 20; i++) vAn._v[i] = 250; const a1 = viz.analyze();
+ok(a1.bass > 0.5 && a1.beat, '强低频：触发节拍');
+viz.setBaseHue(200); ok(viz.baseHue === 200, 'setBaseHue');
+viz.start(); viz.stop(); viz.dispose(); ok(!viz.running, 'start/stop/dispose（无 rAF 环境）不抛错');
+
+// 15) 预设导入/导出
+const jsonP = store.exportPreset({ id: 'x', label: 'X', p: { bass: { gain: 6 } } });
+ok(typeof jsonP === 'string' && JSON.parse(jsonP).id === 'x', 'exportPreset → JSON');
+ok(store.importPreset(jsonP).p.bass.gain === 6, 'importPreset ← JSON');
+let badThrew = false; try { store.importPreset('{"oops":1}'); } catch { badThrew = true; }
+ok(badThrew, 'importPreset 校验非法结构');
+const jsonAll = store.exportPresets([{ id: 'a', p: {} }, { id: 'b', p: {} }]);
+ok(store.importPresets(jsonAll).length === 2, 'exportPresets/importPresets 往返');
+
 console.log(`\n========== dolby-audio：${pass} 项断言全部通过 ✅ ==========`);

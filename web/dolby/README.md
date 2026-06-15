@@ -25,6 +25,8 @@
 - 🎧 **开箱即用播放器层** — `dolby-player.js`：`<audio>`+引擎+播放列表（上下一首/进度/音量/循环/随机/事件）
 - 🔒 **锁屏/通知栏控制** — 自动接入 Media Session（封面/曲目信息 + 上一首/下一首/进度），移动端体验到位
 - 🆎 **A/B 盲测打分** — `dolby-abtest.js`：盲听对比并统计偏好率，客观验证调音
+- 🌀 **音频湍流可视化** — `dolby-visualizer.js`：跟随节奏流动、随频谱/封面变色的流体视觉冲击
+- 📤 **预设导入/导出 + 封面取色** — 自定义预设转 JSON 分享/备份；从封面取主色为播放器换肤
 - 🪶 **零依赖 / 零构建** — ES Module，含 TypeScript 类型定义
 
 ## 快速开始
@@ -183,6 +185,43 @@ dolby.setPreset('my-room');      // 之后随时套用
 
 `demo.html` 的曲线图即是一个可拖拽 EQ：拖圆点调各频段、「重置」「存为预设」一键操作。
 
+### 预设导入/导出（分享 · 备份 · 跨设备）
+
+```js
+import { exportPresets, importPresets } from './dolby/dolby-store.js';
+import { registerPreset } from './dolby/dolby-audio.js';
+
+const json = exportPresets([dolby.snapshotPreset('a', 'A')]);   // → JSON 文本
+importPresets(json).forEach(registerPreset);                    // ← 文本恢复并注册
+// 单个用 exportPreset / importPreset
+```
+
+## 音频湍流可视化
+
+`dolby-visualizer.js` 把声音化成一团跟随节奏流动、随频谱变色的"湍流"，做沉浸视觉背景：
+
+```js
+import { DolbyVisualizer } from './dolby/dolby-visualizer.js';
+const dolby = new DolbyAudio({ analyser: true });   // 需要 analyser
+dolby.attachMedia(audioEl);
+const viz = new DolbyVisualizer(canvas, { dolby, particles: 120 });
+viz.start();                       // 低频/能量→翻涌，频谱→色相，节拍→冲击环
+```
+
+也可直接传 `{ analyser }` 或 `{ node, context }`。`viz.analyze()` 返回
+`{ bass, mid, treble, energy, beat }` 可自行驱动其它动效。
+
+**封面取色换肤**：`coverColor(img)` 从封面取主色，喂给 `viz.setBaseHue()` 让整片视觉随专辑变色：
+
+```js
+import { coverColor } from './dolby/dolby-visualizer.js';
+const img = new Image(); img.crossOrigin = 'anonymous';
+img.onload = () => viz.setBaseHue(coverColor(img).hue);
+img.src = track.cover;
+```
+
+`player.html` 已用它做整页反应式背景，并随曲目切换变色。
+
 ## 动态、响度与人声
 
 ```js
@@ -302,8 +341,9 @@ Demo 内置一段合成音乐可直接试听，也能载入你自己的音频做
 均衡曲线图、输出电平表、「按住听原声」即时对比按钮，预设/强度/宽度/低音/空间/高频/人声
 滑杆，以及「耳机环绕 / 多频带压缩 / 响度对齐」开关。
 `player.html` 演示播放器层，内置两段同源 WAV 片段（`demo-assets/`，由
-`tools/make-demo-tracks.mjs` 可复现生成）；可用「添加本地文件」把自己的歌加入列表
-（站点 CSP 需允许 `blob:` 媒体）。
+`tools/make-demo-tracks.mjs` 可复现生成），整页背景是跟随节奏流动、随曲目变色的湍流
+可视化；可用「添加本地文件」把自己的歌加入列表（站点 CSP 需允许 `blob:` 媒体）。
+`demo.html` 则带可拖拽图形均衡与预设导出/导入。
 
 独立使用时用任意静态服务器即可（如 `npx serve web/dolby`）——注意 ES Module 需经
 `http(s)` 加载，直接 `file://` 双击可能被浏览器的模块 CORS 策略拦截。

@@ -16,3 +16,8 @@ export function savePrefs(prefs: Partial<DolbyPrefs>, key?: string): boolean;
 export function snapshot(dolby: DolbyAudio): DolbyPrefs;
 export function applyPrefs(dolby: DolbyAudio, prefs?: DolbyPrefs, opts?: { instant?: boolean }): DolbyAudio;
 export function autosave(dolby: DolbyAudio, key?: string, delay?: number): DolbyAudio;
+
+export function exportPreset(preset: object, pretty?: boolean): string;
+export function importPreset(json: string | object): object;
+export function exportPresets(presets: object[], pretty?: boolean): string;
+export function importPresets(json: string | object[]): object[];

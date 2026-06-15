@@ -84,6 +84,11 @@
         <button id="eqReset" style="padding:7px 12px;font-size:12px;border-radius:10px">重置</button>
         <button id="eqSave" class="primary" style="padding:7px 12px;font-size:12px;border-radius:10px">存为预设</button>
       </div>
+      <div class="row" style="gap:8px;margin-bottom:10px">
+        <button id="pExport" style="flex:1;padding:7px 12px;font-size:12px;border-radius:10px">导出预设</button>
+        <button id="pImport" style="flex:1;padding:7px 12px;font-size:12px;border-radius:10px">导入预设</button>
+      </div>
+      <textarea id="ioBox" placeholder="预设 JSON：导出后可复制保存；粘贴后再点「导入预设」" style="display:none;width:100%;height:84px;background:rgba(0,0,0,.25);color:#cfc8ff;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px;font-size:11px;font-family:monospace;margin-bottom:10px"></textarea>
       <div class="slider"><span class="label">强度</span><input id="intensity" type="range" min="0" max="100" value="85" /><span class="val" id="intensityV">85%</span></div>
       <div class="slider"><span class="label">声场宽度</span><input id="width" type="range" min="0" max="220" value="130" /><span class="val" id="widthV">1.30×</span></div>
       <div class="slider"><span class="label">低音</span><input id="bass" type="range" min="0" max="12" value="5" /><span class="val" id="bassV">+5dB</span></div>

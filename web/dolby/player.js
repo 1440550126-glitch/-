@@ -1,6 +1,7 @@
-// dolby-player Demo：播放列表 / 传输控制 / 进度 / 杜比音效
+// dolby-player Demo：播放列表 / 传输控制 / 进度 / 杜比音效 / 湍流可视化
 import { DolbyPlayer } from './dolby-player.js';
 import { DOLBY_PRESETS, presetById } from './dolby-audio.js';
+import { DolbyVisualizer, coverColor } from './dolby-visualizer.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -11,19 +12,30 @@ const player = new DolbyPlayer({
     { src: 'demo-assets/track-1.wav', title: '潮汐 · Am–F–C–G', artist: 'dolby-audio demo', album: 'dolby-audio' },
     { src: 'demo-assets/track-2.wav', title: '夜行 · Dm–B♭–F–C', artist: 'dolby-audio demo', album: 'dolby-audio' }
   ],
-  dolby: { preset: 'music' }
+  dolby: { preset: 'music', analyser: true }
 });
 const dolby = player.dolby;
 
+// —— 湍流可视化背景（跟随节奏流动 + 随频谱/封面变色） ——
+const viz = new DolbyVisualizer($('viz'), { dolby, particles: 120 });
+let vizStarted = false;
+const HUES = [275, 205, 330, 150];
+function applyTheme(track, index) {
+  const setHue = (hue) => { viz.setBaseHue(hue); document.documentElement.style.setProperty('--hue', String(Math.round(hue))); };
+  const cover = track && typeof track === 'object' ? track.cover : null;
+  if (cover) { const img = new Image(); img.crossOrigin = 'anonymous'; img.onload = () => { try { setHue(coverColor(img).hue); } catch { /* ok */ } }; img.src = cover; }
+  else setHue(HUES[index % HUES.length]);
+}
+
 // —— 现在播放 + 进度 ——
 const seek = $('seek'); let seeking = false;
-player.on('track', ({ track }) => { $('title').textContent = track.title || track.src; $('artist').textContent = track.artist || ''; renderList(); });
+player.on('track', ({ index, track }) => { $('title').textContent = track.title || track.src; $('artist').textContent = track.artist || ''; renderList(); applyTheme(track, index); });
 player.on('time', ({ currentTime, duration }) => {
   $('cur').textContent = fmt(currentTime); $('dur').textContent = fmt(duration);
   if (!seeking && duration) seek.value = Math.round(currentTime / duration * 1000);
 });
 player.on('loaded', ({ duration }) => { $('dur').textContent = fmt(duration); });
-player.on('play', () => { $('play').textContent = '⏸'; });
+player.on('play', () => { $('play').textContent = '⏸'; if (!vizStarted) { vizStarted = true; viz.start(); } });
 player.on('pause', () => { $('play').textContent = '▶'; });
 player.on('error', () => { $('plHint').textContent = '该音频无法播放（可能是浏览器 CSP 限制了 blob: 媒体）。'; });
 
@@ -84,3 +96,4 @@ const cur = player.current;
 $('title').textContent = cur ? (cur.title || cur.src) : '—';
 $('artist').textContent = cur ? (cur.artist || '') : '';
 refreshDolby();
+applyTheme(cur, Math.max(0, player.index));

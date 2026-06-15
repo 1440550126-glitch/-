@@ -9,8 +9,10 @@
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     body { font-family: "PingFang SC", system-ui, -apple-system, sans-serif; color: #ece9ff;
       background: radial-gradient(120% 120% at 50% 0%, #241d3b 0%, #14101f 60%); min-height: 100vh; padding: 28px 18px 60px; }
-    .wrap { max-width: 560px; margin: 0 auto; }
+    #viz { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; display: block; }
+    .wrap { max-width: 560px; margin: 0 auto; position: relative; z-index: 1; }
     h1 { font-size: 22px; font-weight: 800; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .now-title { text-shadow: 0 0 20px hsla(var(--hue, 270), 90%, 60%, .55); }
     .sub { color: rgba(255,255,255,.5); font-size: 12.5px; margin: 6px 0 20px; line-height: 1.7; }
     .card { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 18px; padding: 16px; margin-bottom: 14px; }
     .now-title { font-size: 17px; font-weight: 800; }
@@ -43,6 +45,7 @@
   </style>
 </head>
 <body>
+  <canvas id="viz"></canvas>
   <div class="wrap">
     <h1>🎧 dolby-player</h1>
     <div class="sub">在杜比引擎之上的播放器层：播放列表 · 上下一首 · 进度 · 音量 · 循环/随机 · 事件，全程经沉浸音效处理。</div>

@@ -1,6 +1,7 @@
 // dolby-audio Demo：内置合成音乐 + 文件 A/B + 频谱可视化 + 均衡曲线
 import { DolbyAudio, DOLBY_PRESETS, presetById, registerPreset } from './dolby-audio.js';
 import { DolbyABTest } from './dolby-abtest.js';
+import { exportPresets, importPresets } from './dolby-store.js';
 
 const $ = (id) => document.getElementById(id);
 const clampN = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -208,15 +209,30 @@ eqC.addEventListener('pointerdown', (e) => {
 eqC.addEventListener('pointermove', eqMove);
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) eqC.addEventListener(ev, () => { dragIdx = -1; });
 $('eqReset').addEventListener('click', () => { dolby.resetEQ(); drawEq(); });
-let customN = 0;
+const customPresets = []; let customN = 0;
+function addCustomChip(preset, activate = true) {
+  const b = document.createElement('button'); b.className = 'chip' + (activate ? ' active' : ''); b.textContent = preset.label; b.title = '我保存的预设';
+  b.addEventListener('click', () => { dolby.setEnabled(true); dolby.setPreset(preset.id); [...presetsEl.children].forEach((c) => c.classList.toggle('active', c === b)); syncSliders(presetById(preset.id).p); refreshState(); drawEq(); });
+  if (activate) [...presetsEl.children].forEach((c) => c.classList.remove('active'));
+  presetsEl.append(b); if (activate) refreshState();
+}
 $('eqSave').addEventListener('click', () => {
   customN++;
   const preset = dolby.snapshotPreset('custom-' + customN, '自定义 ' + customN);
-  registerPreset(preset);
-  const b = document.createElement('button'); b.className = 'chip active'; b.textContent = preset.label; b.title = '我保存的预设';
-  b.addEventListener('click', () => { dolby.setEnabled(true); dolby.setPreset(preset.id); [...presetsEl.children].forEach((c) => c.classList.toggle('active', c === b)); syncSliders(presetById(preset.id).p); refreshState(); drawEq(); });
-  [...presetsEl.children].forEach((c) => c.classList.remove('active'));
-  presetsEl.append(b); refreshState();
+  registerPreset(preset); customPresets.push(preset); addCustomChip(preset);
+});
+const ioBox = $('ioBox');
+$('pExport').addEventListener('click', () => {
+  ioBox.style.display = 'block';
+  ioBox.value = exportPresets(customPresets.length ? customPresets : [dolby.snapshotPreset('current', '当前设置')]);
+});
+$('pImport').addEventListener('click', () => {
+  if (ioBox.style.display === 'none' || !ioBox.value.trim()) { ioBox.style.display = 'block'; ioBox.placeholder = '粘贴预设 JSON 后，再点一次「导入预设」'; return; }
+  try {
+    const arr = importPresets(ioBox.value);
+    for (const p of arr) { registerPreset(p); customPresets.push(p); addCustomChip(p, false); }
+    ioBox.value = `已导入 ${arr.length} 个预设 ✅（在预设区可点选）`;
+  } catch (e) { ioBox.value = '导入失败：' + e.message; }
 });
 
 refreshState();

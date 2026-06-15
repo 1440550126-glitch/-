@@ -60,3 +60,23 @@ export function autosave(dolby, key = KEY, delay = 400) {
   }
   return dolby;
 }
+
+// ---- 预设导入/导出（分享 / 备份 / 跨设备迁移） ----
+const validPreset = (p) => p && typeof p.id === 'string' && p.p && typeof p.p === 'object';
+
+/** 单个预设 → JSON 文本 */
+export function exportPreset(preset, pretty = true) { return JSON.stringify(preset, null, pretty ? 2 : 0); }
+/** JSON 文本/对象 → 预设（校验结构） */
+export function importPreset(json) {
+  const p = typeof json === 'string' ? JSON.parse(json) : json;
+  if (!validPreset(p)) throw new Error('无效预设：需要 { id, p }');
+  return p;
+}
+/** 多个预设 → JSON 文本 */
+export function exportPresets(presets, pretty = true) { return JSON.stringify(presets, null, pretty ? 2 : 0); }
+/** JSON 文本/数组 → 预设数组（逐个校验） */
+export function importPresets(json) {
+  const arr = typeof json === 'string' ? JSON.parse(json) : json;
+  if (!Array.isArray(arr)) throw new Error('应为预设数组');
+  return arr.map(importPreset);
+}
