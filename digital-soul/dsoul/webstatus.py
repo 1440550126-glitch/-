@@ -50,7 +50,7 @@ def _snapshot(agent, monitor) -> dict:
         ][::-1][:6]
         tasks_done = len(agent.tasks.done())
     reflections = agent.recent_reflections() if hasattr(agent, "recent_reflections") else []
-    devices = agent.devices.describe() if getattr(agent, "devices", None) is not None else []
+    devices = agent.devices.rows() if getattr(agent, "devices", None) is not None else []
     plan_items = []
     if getattr(agent, "plan", None) is not None:
         plan_items = [
@@ -101,12 +101,15 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 .barlab{width:24px;font-size:15px;text-align:center}
 .bartrk{flex:1;height:8px;background:#0f1115;border-radius:6px;overflow:hidden}
 .bartrk i{display:block;height:100%;background:linear-gradient(90deg,#2e7d32,#5fdd9d)}
+.devrow{display:flex;align-items:center;gap:8px;margin:5px 0}
+.devname{width:46px} .devst{flex:1;color:#8aa0c0;font-size:13px}
+.devbtn{padding:3px 12px;font-size:13px;background:#2a2f3a;border:1px solid #3a4150;color:#e6e6e6;border-radius:8px}
 </style></head>
 <body><div class=wrap>
 <h1 id=title>🧠 数字分身</h1>
 <div class=card><span id=llm class="badge off">…</span>&nbsp;&nbsp;<span id=memc>记忆 …</span></div>
 <div class=card><div class=k>👁️ 现在看到谁</div><div id=present>…</div></div>
-<div class=card><div class=k>🏠 设备</div><div id=devices class=dim>…</div></div>
+<div class=card><div class=k>🏠 设备</div><div id=devices></div></div>
 <div class=card><div class=k>💞 此刻心情</div><div id=mood>…</div><div id=moodbars></div></div>
 <div class=card><div class=k>🤵 管家</div>
   <button id=brief>☀️ 要一份简报</button>&nbsp;<button id=diag style="background:#37474f">🩺 系统自检</button></div>
@@ -130,6 +133,8 @@ const MOODS={"喜":"😄 愉悦","怒":"😠 生气","哀":"😢 低落","惧":"
 const EMO={"喜":"😄","怒":"😠","哀":"😢","惧":"😨","爱":"❤️","恶":"😒","欲":"🥺"};
 const SEVEN=["喜","怒","哀","惧","爱","恶","欲"];
 function bars(lv){return SEVEN.map(e=>{const v=Math.max(0,Math.min(100,Math.round((lv[e]||0)*100)));return '<div class=barrow><span class=barlab title="'+e+'">'+EMO[e]+'</span><span class=bartrk><i style="width:'+v+'%"></i></span></div>';}).join('');}
+function devRow(d){const st=d.on?('开'+(d.detail?(' '+d.detail):'')):'关';return '<div class=devrow><span class=devname>'+d.label+'</span><span class=devst>'+st+'</span><button class=devbtn onclick="dev(\''+d.key+'\',\'on\')">开</button><button class=devbtn onclick="dev(\''+d.key+'\',\'off\')">关</button></div>';}
+async function dev(k,a){const sp=$('#speaker').value;try{const r=await (await fetch('/api/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device:k,action:a,speaker:sp})})).json();add(soulName,r.reply,'soul');}catch(e){}refresh();}
 let inited=false, soulName="它";
 function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
 function li(a){return a.map(x=>'<li>'+esc(x)+'</li>').join('')||'<li class=dim>—</li>';}
@@ -142,7 +147,7 @@ async function refresh(){
     $('#llm').className='badge '+(s.llm?'on':'off');
     $('#memc').textContent='记忆 '+s.memory_count+' 条';
     $('#present').textContent=s.present.length?s.present.join('、'):'暂时没看到人';
-    $('#devices').textContent=(s.devices&&s.devices.length)?s.devices.join('　'):'无设备';
+    $('#devices').innerHTML=(s.devices&&s.devices.length)?s.devices.map(devRow).join(''):'<span class=dim>无设备</span>';
     $('#mood').textContent=s.mood?(MOODS[s.mood]||s.mood):'平静';
     $('#moodbars').innerHTML=s.mood_levels?bars(s.mood_levels):'';
     $('#disp').innerHTML=li(s.dispatches||[]);
@@ -211,6 +216,13 @@ def start_web(agent, monitor=None, port: int = 8765):
             except Exception:
                 data = {}
             speaker = (data.get("speaker") or _owner(agent)).strip()
+            if self.path.startswith("/api/device"):
+                res = agent.device_control(speaker, data.get("device"), data.get("action"), data.get("value")) \
+                    if hasattr(agent, "device_control") else {"msg": "暂不支持"}
+                rows = agent.devices.rows() if getattr(agent, "devices", None) else []
+                body = json.dumps({"reply": res.get("msg", ""), "devices": rows}, ensure_ascii=False).encode("utf-8")
+                self._send(body, "application/json; charset=utf-8")
+                return
             if self.path.startswith("/api/retry"):
                 res = agent.retry_open(speaker) if hasattr(agent, "retry_open") else {"reply": "暂不支持重试"}
                 body = json.dumps({"speaker": speaker, "reply": res.get("reply", "")}, ensure_ascii=False).encode("utf-8")

@@ -52,6 +52,12 @@ def test_owner_controls_stranger_denied():
     assert a._device_route("张明", "你好呀") is None          # 非设备指令
 
 
+def test_device_control_direct():
+    a = _agent_with_devices()
+    assert a.device_control("张明", "light", "on")["msg"] == "已开启灯"
+    assert a.device_control("路人", "light", "off")["ok"] is False   # 网页按钮也走授权
+
+
 if __name__ == "__main__":
     for _n, _f in sorted(globals().items()):
         if _n.startswith("test_") and callable(_f):

@@ -116,3 +116,18 @@ class DeviceHub:
                 extra = f" {st['level']}"
             out.append(f"{label}：{'开' if on else '关'}{extra}")
         return out
+
+    def rows(self) -> list[dict]:
+        """结构化设备状态，供网页渲染开关按钮。"""
+        out = []
+        for n, st in self.states().items():
+            on = st.get("power") == "on"
+            detail = ""
+            if on and n == "ac" and "temp" in st:
+                detail = f"{st['temp']}度"
+            elif on and n == "music" and "volume" in st:
+                detail = f"音量{st['volume']}"
+            elif on and "level" in st:
+                detail = str(st["level"])
+            out.append({"key": n, "label": _LABEL.get(n, n), "on": on, "detail": detail})
+        return out

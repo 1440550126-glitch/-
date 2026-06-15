@@ -509,6 +509,15 @@ class Agent:
         return 5 <= (now or datetime.now()).hour < 11
 
     # ---------- 设备 / 家居控制 ----------
+    def device_control(self, speaker_name, device, action, value=None) -> dict:
+        """直接控制某设备（网页按钮用），走 control_devices 授权。"""
+        if self.devices is None:
+            return {"ok": False, "msg": "未启用设备"}
+        ok, _who, reason = self.authority.can(speaker_name, "control_devices")
+        if not ok:
+            return {"ok": False, "msg": reason}
+        return self.devices.control(device, action, value)
+
     def _device_route(self, speaker_name, utterance):
         """识别设备指令并执行（走 control_devices 授权）。不是设备指令则返回 None。"""
         from .devices import parse_device_command
