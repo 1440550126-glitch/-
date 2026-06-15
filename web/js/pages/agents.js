@@ -80,7 +80,7 @@ export async function renderAgents(page) {
   body.append(h('div', { class: 'glass lz-quota' },
     h('span', {}, `今日团队运行额度　${m.quota.used}/${m.quota.limit}`),
     h('div', { class: 'lz-quota-bar' }, h('i', { style: { width: Math.min(100, m.quota.used / m.quota.limit * 100) + '%' } })),
-    m.member ? null : h('button', { class: 'btn mini ghost', onclick: () => nav('/member') }, '提额')
+    h('button', { class: 'btn mini ghost', onclick: usageSheet }, '📊 用量')
   ));
 
   // 🎰 随机整活：抽一支沙雕团队 + 随机任务，一键开跑
@@ -230,6 +230,73 @@ async function rollFun(teams) {
   }
 }
 
+// ---------- 批量运行 ----------
+function batchSheet(teamId, presetTask) {
+  sheet((sb, close) => {
+    const tplI = h('textarea', { class: 'input', rows: 3, placeholder: '任务模板，用 {{input}} 代表每条输入' }); tplI.value = presetTask || '';
+    const itemsI = h('textarea', { class: 'input', rows: 5, placeholder: '每行一条输入（最多 10 条）' });
+    sb.append(h('h3', {}, '批量运行'),
+      h('p', { class: 'sheet-sub' }, '一个任务模板套用多条输入，逐条产出。模板里写 {{input}} 代表每条。'),
+      h('div', { class: 'field' }, h('label', {}, '任务模板'), tplI),
+      h('div', { class: 'field' }, h('label', {}, '输入清单（每行一条）'), itemsI),
+      h('button', {
+        class: 'btn block', onclick: async () => {
+          const items = itemsI.value.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 10);
+          if (!tplI.value.trim()) return toast('写个任务模板', 'warn');
+          if (!items.length) return toast('至少一条输入', 'warn');
+          try { const r = await POST(`/api/teams/${teamId}/batch`, { task: tplI.value.trim(), items }); close(); nav(`/batch/${r.batch_id}`); }
+          catch (e) { if (e.extra?.need_member) confirmSheet('额度不够', e.message, '去看会员', () => nav('/member'), false); else toast(e.message, 'warn'); }
+        }
+      }, '开跑'));
+  });
+}
+
+export async function renderBatch(page, { id }) {
+  page.append(h('div', { class: 'topbar' },
+    h('button', { class: 'icon-btn', onclick: () => nav('/agents') }, '‹'),
+    h('div', {}, h('h1', {}, '批量运行')), h('div', { class: 'spacer' })));
+  page.append(spinner());
+  const slot = page.lastChild; const body = h('div', {}); let first = true; let timer = null;
+  async function load() {
+    let data;
+    try { data = await GET(`/api/runs/batch/${id}`); } catch (e) { (first ? slot : body).replaceWith(emptyState('批次不存在', e.message)); return; }
+    if (first) { slot.replaceWith(body); first = false; }
+    body.innerHTML = '';
+    const doneN = data.items.filter((x) => x.status !== 'running').length;
+    body.append(h('div', { class: 'glass lz-run-head' },
+      h('div', { class: 'lz-rh-team' }, `⫶ 批量运行 · ${doneN}/${data.items.length} 完成`),
+      h('button', { class: 'btn mini ghost', style: { marginTop: '8px' }, onclick: () => copyText(data.items.map((x, i) => `# ${i + 1}. ${x.task}\n${x.result || '（' + x.status + '）'}`).join('\n\n---\n\n')) }, '复制全部结果')));
+    for (const [i, r] of data.items.entries()) {
+      const [label, cls] = STATUS[r.status] || ['—', ''];
+      body.append(h('div', { class: 'glass lz-batch-item', onclick: () => nav(`/run/${r.id}`) },
+        h('div', { class: 'lz-batch-head' }, h('span', { class: `st-badge ${cls}` }, label), h('span', { class: 'lz-batch-task' }, `${i + 1}. ${r.task}`)),
+        r.result ? h('div', { class: 'lz-batch-res' }, r.result.slice(0, 220)) : null));
+    }
+    timer = data.done ? null : setTimeout(load, 1500);
+  }
+  load();
+  return () => { if (timer) clearTimeout(timer); };
+}
+
+// ---------- 用量看板 ----------
+const usageStat = (k, v, sub) => h('div', { class: 'lz-usage-cell' }, h('div', { class: 'lz-usage-v' }, String(v)), h('div', { class: 'lz-usage-k' }, k), sub ? h('div', { class: 'lz-usage-sub' }, sub) : null);
+async function usageSheet() {
+  let u;
+  try { u = await GET('/api/agents/usage'); } catch (e) { return toast(e.message, 'warn'); }
+  const yuan = (mc) => '¥' + (mc / 1e6).toFixed(4);
+  sheet((sb, close) => {
+    sb.append(h('h3', {}, '📊 我的用量'),
+      h('div', { class: 'lz-usage-grid' },
+        usageStat('今日运行', u.runs.today, `累计 ${u.runs.total}`),
+        usageStat('成功 / 失败', `${u.runs.done} / ${u.runs.failed}`, ''),
+        usageStat('运行额度', `${u.quota.run.used}/${u.quota.run.limit}`, u.member ? '会员' : '免费'),
+        usageStat('对外 API', `${u.quota.api.used}/${u.quota.api.limit}`, '今日'),
+        usageStat('今日成本', yuan(u.cost.today_micro), `累计 ${yuan(u.cost.total_micro)}`),
+        usageStat('我的资产', `${u.assets.teams} 队`, `${u.assets.agents} 体 · ${u.assets.kbs} 库`)),
+      u.member ? null : h('button', { class: 'btn block', style: { marginTop: '12px' }, onclick: () => { close(); nav('/member'); } }, '升级会员，运行额度 8 → 80'));
+  });
+}
+
 // ---------- 定时任务 ----------
 const scheduleDesc = (t) => t.schedule_kind === 'daily'
   ? `每天 ${String(t.at_hour).padStart(2, '0')}:${String(t.at_minute).padStart(2, '0')}`
@@ -345,27 +412,31 @@ export async function renderTeam(page, { id }) {
   }
   renderHeader();
 
-  // 派活区（最重要：所有可用团队都能直接派活）
-  const taskInput = h('textarea', { class: 'input lz-task', rows: 3, placeholder: '把任务交给这支团队，越具体越好。例如：帮我策划一场面向大学生的露营主题活动，给出主题、玩法和一条宣传文案。' });
+  // 派活区（最重要：所有可用团队都能直接派活）。支持 {{变量}}：运行前填值，团队记忆自动补全
+  const taskInput = h('textarea', { class: 'input lz-task', rows: 3, placeholder: '把任务交给这支团队。支持 {{变量}}（运行前填值，团队记忆会自动补全）。例如：帮 {{昵称}} 策划一场 {{主题}} 活动。' });
+  const varsBox = h('div', {});
+  const renderVars = () => {
+    const keys = [...new Set([...taskInput.value.matchAll(/\{\{\s*([\w一-鿿.-]+)\s*\}\}/g)].map((m) => m[1]))];
+    varsBox.innerHTML = '';
+    if (!keys.length) return;
+    varsBox.append(h('div', { class: 'lz-tip', style: { margin: '8px 2px 2px' } }, '变量（留空＝用团队记忆或原样保留）'));
+    for (const k of keys) varsBox.append(h('div', { class: 'lz-var-row' }, h('span', { class: 'lz-var-key' }, `{{${k}}}`), h('input', { class: 'input', 'data-var': k, placeholder: '值' })));
+  };
+  taskInput.addEventListener('input', renderVars);
+  const collectVars = () => { const v = {}; varsBox.querySelectorAll('[data-var]').forEach((el) => { if (el.value.trim()) v[el.dataset.var] = el.value.trim(); }); return v; };
+  const runOnce = async (e) => {
+    const task = taskInput.value.trim();
+    if (!task) return toast('先写下要做的任务', 'warn');
+    const btn = e.currentTarget; btn.disabled = true; btn.textContent = '团队集结中…';
+    try { const { run_id } = await POST(`/api/teams/${id}/run`, { task, vars: collectVars() }); nav(`/run/${run_id}`); }
+    catch (err) { btn.disabled = false; btn.textContent = '▶ 开始协作'; if (err.extra?.need_member) confirmSheet('额度用完啦', err.message, '去看看会员', () => nav('/member'), false); else toast(err.message, 'warn'); }
+  };
   box.append(h('div', { class: 'glass lz-launch' },
     h('div', { class: 'lz-launch-title' }, '▶ 给团队派活'),
-    taskInput,
-    h('button', {
-      class: 'btn block', style: { marginTop: '10px' },
-      onclick: async (e) => {
-        const task = taskInput.value.trim();
-        if (!task) return toast('先写下要做的任务', 'warn');
-        const btn = e.currentTarget; btn.disabled = true; btn.textContent = '团队集结中…';
-        try {
-          const { run_id } = await POST(`/api/teams/${id}/run`, { task });
-          nav(`/run/${run_id}`);
-        } catch (err) {
-          btn.disabled = false; btn.textContent = '▶ 开始协作';
-          if (err.extra?.need_member) confirmSheet('额度用完啦', err.message, '去看看会员', () => nav('/member'), false);
-          else toast(err.message, 'warn');
-        }
-      }
-    }, '▶ 开始协作')
+    taskInput, varsBox,
+    h('div', { style: { display: 'flex', gap: '8px', marginTop: '10px' } },
+      h('button', { class: 'btn', style: { flex: 1 }, onclick: runOnce }, '▶ 开始协作'),
+      h('button', { class: 'btn ghost', onclick: () => batchSheet(id, taskInput.value) }, '⫶ 批量'))
   ));
 
   // 发布到团队广场（仅自有团队）
@@ -398,6 +469,22 @@ export async function renderTeam(page, { id }) {
       }
     };
     renderApi();
+
+    // 出站 Webhook
+    const whBox = h('div', { class: 'glass lz-edit-card' });
+    box.append(whBox);
+    const renderWh = () => {
+      whBox.innerHTML = '';
+      const cur = team.webhook_url || '';
+      const inp = h('input', { class: 'input', placeholder: 'https://你的服务/callback', value: cur });
+      whBox.append(
+        h('div', { class: 'lz-edit-head' }, h('span', {}, '🪝 出站 Webhook')),
+        h('div', { class: 'lz-tip' }, '每次运行结束把结果 POST 到此地址（仅限公网，自动做 SSRF 校验）。'),
+        h('div', { style: { display: 'flex', gap: '8px', marginTop: '8px' } }, inp,
+          h('button', { class: 'btn mini', onclick: async () => { if (!inp.value.trim()) return toast('填个地址', 'warn'); try { const r = await PUT(`/api/teams/${id}/webhook`, { url: inp.value.trim() }); team.webhook_url = r.webhook_url; toast('已保存'); renderWh(); } catch (e) { toast(e.message, 'warn'); } } }, '保存')),
+        cur ? h('button', { class: 'btn block ghost danger', style: { marginTop: '8px' }, onclick: async () => { try { await DEL(`/api/teams/${id}/webhook`); team.webhook_url = ''; toast('已移除'); renderWh(); } catch (e) { toast(e.message, 'warn'); } } }, '移除 Webhook') : null);
+    };
+    renderWh();
   }
 
   // 成员展示

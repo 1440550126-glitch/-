@@ -8,7 +8,9 @@ import { AGENT_TEMPLATES, TEAM_TEMPLATES, SAMPLE_KB } from './catalog.js';
 export function runAgentMigrations() {
   for (const sql of [
     "ALTER TABLE agent_runs ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'",
-    'ALTER TABLE teams ADD COLUMN api_key TEXT'
+    'ALTER TABLE agent_runs ADD COLUMN batch_id TEXT',
+    'ALTER TABLE teams ADD COLUMN api_key TEXT',
+    'ALTER TABLE teams ADD COLUMN webhook_url TEXT'
   ]) { try { db.exec(sql); } catch { /* 列已存在，忽略 */ } }
 }
 

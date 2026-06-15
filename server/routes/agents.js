@@ -7,8 +7,9 @@ import { subscribe } from '../lib/hub.js';
 import { toolList, getTool } from '../agents/tools.js';
 import { searchKnowledge, addDoc } from '../agents/knowledge.js';
 import { STRATEGIES, STRATEGY_LIST, AGENT_QUOTA } from '../agents/catalog.js';
-import { startTeamRun, runTeamSync, stopRun } from '../agents/engine.js';
+import { startTeamRun, runTeamSync, stopRun, resolveTask, startBatch } from '../agents/engine.js';
 import { computeNext, fireTrigger, MIN_INTERVAL_MIN, MAX_TRIGGERS } from '../agents/scheduler.js';
+import { assertSafeHop } from '../agents/safefetch.js';
 import { useQuota, quotaUsed, todayCostMicro } from '../lib/llm.js';
 
 // ---------- 访问控制小工具 ----------
@@ -32,7 +33,7 @@ const kbPreview = (ids) => (jparse(ids, []) || []).map((id) => {
 const viewTeam = (t, uid) => t && ({
   id: t.id, name: t.name, avatar: t.avatar, goal: t.goal, strategy: t.strategy,
   manager_note: t.manager_note, max_rounds: t.max_rounds, run_count: t.run_count,
-  is_template: !!t.is_template, published: !!t.published, has_api: !!t.api_key, mine: t.owner_id === uid, updated_at: t.updated_at,
+  is_template: !!t.is_template, published: !!t.published, has_api: !!t.api_key, has_webhook: !!t.webhook_url, mine: t.owner_id === uid, updated_at: t.updated_at,
   members: memberPreview(t.member_ids), knowledge: kbPreview(t.knowledge_ids),
   knowledge_ids: jparse(t.knowledge_ids, [])
 });
@@ -52,6 +53,37 @@ GET('/api/agents/meta', async (ctx) => {
     quota: { used: quotaUsed(ctx.user.id, 'agent_run'), limit, left: Math.max(0, limit - quotaUsed(ctx.user.id, 'agent_run')) },
     limits: { max_members: AGENT_QUOTA.MAX_MEMBERS, max_rounds: AGENT_QUOTA.MAX_TOOL_ROUNDS },
     member
+  };
+}, { auth: true });
+
+// 个人用量看板（注册在 /api/agents/:id 之前）
+GET('/api/agents/usage', async (ctx) => {
+  const start = new Date(dayCN() + 'T00:00:00+08:00').getTime();
+  const uidv = ctx.user.id;
+  const runs = q.get(
+    `SELECT COUNT(*) total,
+       COALESCE(SUM(CASE WHEN status='done'   THEN 1 ELSE 0 END),0) done,
+       COALESCE(SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END),0) failed,
+       COALESCE(SUM(CASE WHEN started_at >= ? THEN 1 ELSE 0 END),0) today
+     FROM agent_runs WHERE user_id = ?`, start, uidv
+  );
+  const member = isMember(ctx.user);
+  const runLimit = member ? AGENT_QUOTA.MEMBER_RUNS_PER_DAY : AGENT_QUOTA.FREE_RUNS_PER_DAY;
+  return {
+    member, runs,
+    quota: {
+      run: { used: quotaUsed(uidv, 'agent_run'), limit: runLimit },
+      api: { used: quotaUsed(uidv, 'agent_api'), limit: 50 }
+    },
+    cost: {
+      today_micro: q.get("SELECT COALESCE(SUM(cost_micro),0) c FROM ai_usage_logs WHERE user_id = ? AND feature LIKE 'agent_%' AND created_at >= ?", uidv, start).c,
+      total_micro: q.get("SELECT COALESCE(SUM(cost_micro),0) c FROM ai_usage_logs WHERE user_id = ? AND feature LIKE 'agent_%'", uidv).c
+    },
+    assets: {
+      teams: q.get('SELECT COUNT(*) c FROM teams WHERE owner_id = ?', uidv).c,
+      agents: q.get('SELECT COUNT(*) c FROM agents WHERE owner_id = ?', uidv).c,
+      kbs: q.get('SELECT COUNT(*) c FROM knowledge_bases WHERE owner_id = ?', uidv).c
+    }
   };
 }, { auth: true });
 
@@ -139,7 +171,9 @@ GET('/api/teams/:id', async (ctx) => {
   const t = teamRow(ctx.params.id);
   if (!canUse(t, ctx.user.id)) throw notFound();
   const members = (jparse(t.member_ids, []) || []).map((id) => viewAgent(agentRow(id), ctx.user.id)).filter(Boolean);
-  return { team: viewTeam(t, ctx.user.id), members };
+  const team = viewTeam(t, ctx.user.id);
+  if (t.owner_id === ctx.user.id) team.webhook_url = t.webhook_url || '';
+  return { team, members };
 }, { auth: true });
 
 function validateMembers(ids, uid) {
@@ -267,14 +301,37 @@ DEL('/api/teams/:id/memory/:key', async (ctx) => {
   return { deleted: true };
 }, { auth: true });
 
+// 出站 Webhook：运行完成后把结果 POST 给这个地址（设置时即做 SSRF 校验）
+PUT('/api/teams/:id/webhook', async (ctx) => {
+  const t = teamRow(ctx.params.id);
+  if (!t) throw notFound();
+  if (!canEdit(t, ctx.user.id)) throw denied('只能配置自己团队的 Webhook');
+  const raw = sanitizeText(ctx.body?.url, 300);
+  if (!raw) throw bad('填一个回调地址');
+  let u; try { u = new URL(raw); } catch { throw bad('无效的网址'); }
+  const blocked = await assertSafeHop(u);
+  if (blocked) throw bad('该地址不可用：' + blocked);
+  q.run('UPDATE teams SET webhook_url = ?, updated_at = ? WHERE id = ?', u.href, now(), t.id);
+  return { webhook_url: u.href };
+}, { auth: true });
+
+DEL('/api/teams/:id/webhook', async (ctx) => {
+  const t = teamRow(ctx.params.id);
+  if (!t) throw notFound();
+  if (!canEdit(t, ctx.user.id)) throw denied('无权操作');
+  q.run('UPDATE teams SET webhook_url = NULL, updated_at = ? WHERE id = ?', now(), t.id);
+  return { removed: true };
+}, { auth: true });
+
 // ============================================================
 // 运行任务
 // ============================================================
 POST('/api/teams/:id/run', async (ctx) => {
   const t = teamRow(ctx.params.id);
   if (!canUse(t, ctx.user.id)) throw notFound();
-  const task = sanitizeText(ctx.body?.task, 1000);
-  if (!task) throw bad('先描述一下要这支团队做什么');
+  const raw = sanitizeText(ctx.body?.task, 1000);
+  if (!raw) throw bad('先描述一下要这支团队做什么');
+  const task = resolveTask(raw, ctx.body?.vars || {}, t.id);   // {{变量}} 用入参 / 团队记忆填充
   const members = (jparse(t.member_ids, []) || []).map(agentRow).filter((a) => a && a.enabled);
   if (!members.length) throw bad('这个团队还没有成员，先去添加成员吧');
 
@@ -289,6 +346,24 @@ POST('/api/teams/:id/run', async (ctx) => {
   return { run_id: runId };
 }, { auth: true });
 
+// 批量运行：一个任务模板套用多条输入（最多 10 条），逐条顺序执行
+POST('/api/teams/:id/batch', async (ctx) => {
+  const t = teamRow(ctx.params.id);
+  if (!canUse(t, ctx.user.id)) throw notFound();
+  const task = sanitizeText(ctx.body?.task, 1000);
+  if (!task) throw bad('先写好任务模板（用 {{input}} 代表每条输入）');
+  let items = (Array.isArray(ctx.body?.items) ? ctx.body.items : [])
+    .slice(0, 10).map((x) => typeof x === 'string' ? sanitizeText(x, 500) : x).filter((x) => x && (typeof x !== 'string' || x.length));
+  if (!items.length) throw bad('至少给一条输入');
+  if (!(jparse(t.member_ids, []) || []).map(agentRow).some((a) => a && a.enabled)) throw bad('这个团队还没有成员');
+  const limit = isMember(ctx.user) ? AGENT_QUOTA.MEMBER_RUNS_PER_DAY : AGENT_QUOTA.FREE_RUNS_PER_DAY;
+  const left = Math.max(0, limit - quotaUsed(ctx.user.id, 'agent_run'));
+  if (items.length > left) throw denied(`批量需要 ${items.length} 次运行额度，今天只剩 ${left} 次`, { need_member: !isMember(ctx.user), quota_exceeded: true });
+  for (let i = 0; i < items.length; i++) useQuota(ctx.user.id, 'agent_run', limit);
+  const { batchId, runIds } = startBatch(t, task, items, ctx.user.id);
+  return { batch_id: batchId, run_ids: runIds, count: runIds.length };
+}, { auth: true });
+
 GET('/api/runs', async (ctx) => ({
   items: q.all('SELECT id, team_id, team_name, strategy, task, status, by_llm, step_count, started_at, ended_at FROM agent_runs WHERE user_id = ? ORDER BY started_at DESC LIMIT 30', ctx.user.id)
 }), { auth: true });
@@ -297,6 +372,13 @@ GET('/api/runs/:id', async (ctx) => {
   const run = q.get('SELECT * FROM agent_runs WHERE id = ?', Number(ctx.params.id));
   if (!run || run.user_id !== ctx.user.id) throw notFound();
   return { run: { ...run, plan: jparse(run.plan, null) }, steps: q.all('SELECT * FROM run_steps WHERE run_id = ? ORDER BY idx', run.id) };
+}, { auth: true });
+
+// 批量运行结果（轮询用）
+GET('/api/runs/batch/:batchId', async (ctx) => {
+  const items = q.all('SELECT id, task, status, result, step_count, by_llm, started_at, ended_at FROM agent_runs WHERE batch_id = ? AND user_id = ? ORDER BY id', ctx.params.batchId, ctx.user.id);
+  if (!items.length) throw notFound();
+  return { batch_id: ctx.params.batchId, items, done: items.every((r) => r.status !== 'running') };
 }, { auth: true });
 
 POST('/api/runs/:id/stop', async (ctx) => {

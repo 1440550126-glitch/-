@@ -3,11 +3,12 @@
 // 三种策略：orchestrate(编排) / sequential(流水线) / route(路由) / debate(论战)。
 // 铁律：每个大模型调用都有确定性本地兜底——无 Key / 断网 / 超预算时全程走规则引擎，真实调用工具、产出结构化成果。
 import { q, getSetting } from '../lib/db.js';
-import { now, clamp, jparse } from '../lib/util.js';
+import { now, clamp, jparse, uid } from '../lib/util.js';
 import { publish } from '../lib/hub.js';
 import { chatLLM, logUsage, llmEnabled, llmProvider, todayCostMicro } from '../lib/llm.js';
 import { getTool, toolsSpec } from './tools.js';
 import { terms } from './knowledge.js';
+import { safeFetch } from './safefetch.js';
 import { AGENT_QUOTA, STRATEGIES } from './catalog.js';
 
 // ---- 运行控制（停止）----
@@ -394,6 +395,48 @@ export function startTeamRun(team, task, userId, source = 'manual') {
   return runId;
 }
 
+// 变量替换：把任务里的 {{key}} 替换为 vars[key]，其次取团队记忆，都没有则原样保留
+export function resolveTask(rawTask, vars = {}, teamId) {
+  const mem = {};
+  if (teamId) for (const r of q.all('SELECT key, value FROM team_memory WHERE team_id = ?', teamId)) mem[r.key] = r.value;
+  return String(rawTask || '').replace(/\{\{\s*([\w一-鿿.-]+)\s*\}\}/g, (m, k) => {
+    if (vars[k] != null && String(vars[k]) !== '') return String(vars[k]);
+    if (mem[k] != null) return String(mem[k]);
+    return m;
+  });
+}
+
+// 批量运行：对一组输入套用同一个任务模板，逐个建运行并顺序执行（避免一次性打满大模型）
+export function startBatch(team, rawTask, items, userId) {
+  const batchId = 'b_' + uid('', 12);
+  const runIds = [];
+  for (const item of items) {
+    const vars = typeof item === 'string' ? { input: item } : (item && typeof item === 'object' ? item : {});
+    let task = resolveTask(rawTask, vars, team.id);
+    if (typeof item === 'string' && task === rawTask && !/\{\{/.test(rawTask)) task = item;  // 模板无占位符时，字符串项即任务
+    const r = q.run(
+      `INSERT INTO agent_runs (team_id, user_id, team_name, strategy, task, status, source, batch_id, started_at)
+       VALUES (?,?,?,?,?, 'running', 'batch', ?, ?)`,
+      team.id, userId, team.name, team.strategy, task.slice(0, 1000), batchId, now()
+    );
+    runIds.push(Number(r.lastInsertRowid));
+  }
+  (async () => { for (const id of runIds) { if (!isStopped(id)) await executeRun(id); } })();
+  return { batchId, runIds };
+}
+
+// 出站 Webhook：运行结束后把结果 POST 给团队配置的回调地址（SSRF 防护，失败不影响主流程）
+async function fireWebhook(url, run) {
+  try {
+    await safeFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'LingArray-Webhook/1.0' },
+      body: JSON.stringify({ run_id: run.id, team_id: run.team_id, team_name: run.team_name, task: run.task, status: run.status, result: run.result, by_llm: !!run.by_llm, source: run.source, ended_at: run.ended_at }),
+      timeoutMs: 6000, followRedirects: false
+    });
+  } catch (e) { console.warn('[webhook]', run.id, e.message); }
+}
+
 // 同步执行：跑完再返回完整 run（对外 API 调用用，调用方要拿到最终结果）
 export async function runTeamSync(team, task, userId, source = 'api') {
   const r = q.run(
@@ -459,6 +502,13 @@ export async function executeRun(runId) {
     emit(runId, 'error', { error: String(e.message || e).slice(0, 200) });
   } finally {
     STOPPED.delete(Number(runId));
+    try {
+      const fr = q.get('SELECT * FROM agent_runs WHERE id = ?', runId);
+      if (fr && fr.status !== 'running') {
+        const tm = q.get('SELECT webhook_url FROM teams WHERE id = ?', fr.team_id);
+        if (tm?.webhook_url) void fireWebhook(tm.webhook_url, fr);
+      }
+    } catch { /* webhook 失败不影响运行 */ }
   }
 }
 

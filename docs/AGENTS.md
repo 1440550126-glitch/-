@@ -145,6 +145,14 @@ curl -X POST https://你的域名/api/public/run \
 - 成员侧：`memory` 工具 `get/set/list/delete`，运行中按 `ctx.teamId` 作用域读写——团队可"记住"用户偏好、上次结论、风格约定等，下次运行直接复用。
 - 用户侧：团队工作台「🧠 团队记忆」卡片可查看 / 增改 / 删除；`GET/PUT /teams/:id/memory`（仅团队所有者可写）。
 
+### 运行变量 / 批量 / 出站 Webhook / 用量看板
+- **运行变量**：任务里写 `{{key}}`，`resolveTask` 按「入参 vars → 团队记忆 → 原样保留」依次填充。前端派活区自动识别占位符并生成输入框。
+- **批量运行**：`startBatch` 把一个任务模板套用多条输入（字符串项填 `{{input}}`，对象项按键填充），逐条建运行并**顺序执行**（避免一次性打满大模型），按 `batch_id` 分组；前端 `/batch/:id` 轮询展示并可一键导出全部结果。每条计 1 次运行配额。
+- **出站 Webhook**：团队配 `webhook_url`，运行结束（done/failed/stopped）后把结果 JSON `POST` 过去；**复用 `safefetch.js` 的 SSRF 防护**（设置时与发送时都校验，禁止内网/本机/元数据），失败不影响主流程。
+- **个人用量看板**：`GET /agents/usage` 汇总用户的运行数 / 成功失败 / 运行与 API 配额 / 今日与累计成本 / 资产数量；前端首页配额条「📊 用量」打开。
+
+> SSRF 防护集中在 `server/agents/safefetch.js`（`isBlockedIp` / `isBlockedHost` / `assertSafeHop` / `safeFetch`），`web_fetch` 工具与出站 Webhook 共用。
+
 ## 8. API 一览（均需登录；前缀 `/api`）
 
 | 方法 | 路径 | 说明 |
@@ -158,8 +166,12 @@ curl -X POST https://你的域名/api/public/run \
 | GET/PATCH/DELETE | `/teams/:id` | 团队详情 / 编辑 / 删除 |
 | POST | `/teams/:id/clone` | 复制团队（模板→我的） |
 | POST | `/teams/:id/publish` | 发布 / 取消发布到团队广场 |
-| POST | `/teams/:id/run` | **派活**：发起一次运行，返回 `run_id` |
+| POST | `/teams/:id/run` | **派活**：发起一次运行（body 可带 `vars` 填充 `{{变量}}`），返回 `run_id` |
+| POST | `/teams/:id/batch` | **批量运行**：一个任务模板套用多条 `items`（≤10），返回 `batch_id` |
+| PUT/DELETE | `/teams/:id/webhook` | 配置 / 移除**出站 Webhook**（设置时即做 SSRF 校验） |
 | GET | `/runs` · `/runs/:id` | 我的运行列表 / 单次详情（含步骤） |
+| GET | `/runs/batch/:batchId` | 批量运行结果（轮询用） |
+| GET | `/agents/usage` | 个人用量看板（运行 / 额度 / 成本 / 资产） |
 | GET(SSE) | `/runs/:id/events` | **作战室实时事件流**（回放已有步骤 + 直播后续 + 终态） |
 | POST | `/runs/:id/stop` | 请求停止运行 |
 | GET/POST | `/triggers` | 我的定时任务 / 新建 |

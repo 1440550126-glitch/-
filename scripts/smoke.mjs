@@ -575,6 +575,29 @@ try {
   ok('删除团队记忆', (await api('DELETE', `/api/teams/${memTeam.id}/memory/${encodeURIComponent('品牌调性')}`, { token: utilTok })).ok);
   ok('他人不能写我的团队记忆', (await api('PUT', `/api/teams/${memTeam.id}/memory`, { token: guests[0].token, body: { key: 'x', value: 'y' } })).status === 403);
 
+  // ===== 运行变量 / 批量 / 出站 Webhook / 用量看板（独立新游客控配额） =====
+  const featTok = (await api('POST', '/api/auth/guest', { body: {} })).data.token;
+  const featTeam = (await api('POST', `/api/teams/${lzTeams.data.templates.find((t) => t.name === '夸夸群').id}/clone`, { token: featTok })).data.team;
+  await api('PUT', `/api/teams/${featTeam.id}/memory`, { token: featTok, body: { key: '昵称', value: '小明' } });
+  const varRun = await api('POST', `/api/teams/${featTeam.id}/run`, { token: featTok, body: { task: '夸夸 {{昵称}}，他正在 {{活动}}', vars: { 活动: '考研' } } });
+  const vStream = sse(`/api/runs/${varRun.data.run_id}/events`, featTok);
+  await vStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '变量运行'); vStream.close();
+  ok('运行变量替换（入参 + 团队记忆）', (await api('GET', `/api/runs/${varRun.data.run_id}`, { token: featTok })).data.run.task === '夸夸 小明，他正在 考研');
+
+  const batch = await api('POST', `/api/teams/${featTeam.id}/batch`, { token: featTok, body: { task: '夸夸正在 {{input}} 的我', items: ['加班', '健身', '带娃'] } });
+  ok('批量发起 3 条', batch.ok && batch.data.count === 3 && String(batch.data.batch_id).startsWith('b_'));
+  let bdone = null;
+  for (let i = 0; i < 50; i++) { const bv = await api('GET', `/api/runs/batch/${batch.data.batch_id}`, { token: featTok }); if (bv.data.done) { bdone = bv.data; break; } await new Promise((r) => setTimeout(r, 300)); }
+  ok('批量全部完成', bdone && bdone.items.length === 3 && bdone.items.every((x) => x.status === 'done'));
+  ok('批量套用了任务模板', !!bdone && bdone.items.some((x) => x.task.includes('加班') && x.task.includes('夸夸')));
+
+  ok('Webhook 拒绝元数据地址', (await api('PUT', `/api/teams/${featTeam.id}/webhook`, { token: featTok, body: { url: 'http://169.254.169.254/cb' } })).status === 400);
+  ok('Webhook 拒绝本机地址', (await api('PUT', `/api/teams/${featTeam.id}/webhook`, { token: featTok, body: { url: 'http://localhost:9000/cb' } })).status === 400);
+  ok('他人不能配置我的 Webhook', (await api('PUT', `/api/teams/${featTeam.id}/webhook`, { token: guests[0].token, body: { url: 'https://example.com/cb' } })).status === 403);
+
+  const myUsage = await api('GET', '/api/agents/usage', { token: featTok });
+  ok('用量看板数据完整', myUsage.ok && myUsage.data.runs.total >= 4 && myUsage.data.quota.run.limit > 0 && myUsage.data.cost.today_micro >= 0 && myUsage.data.assets.teams >= 1);
+
   // 对外 API（可被外部系统 / Webhook 调用）
   const keyRes = await api('POST', `/api/teams/${teamId}/api-key`, { token: lzTok });
   ok('生成对外 API 密钥', keyRes.ok && keyRes.data.api_key.startsWith('lk_'));

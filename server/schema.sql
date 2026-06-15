@@ -277,6 +277,7 @@ CREATE TABLE IF NOT EXISTS teams (
   is_template   INTEGER NOT NULL DEFAULT 0,
   published     INTEGER NOT NULL DEFAULT 0,       -- 是否发布到团队广场
   api_key       TEXT,                             -- 对外 API 调用密钥（lk_xxx），NULL=未开启
+  webhook_url   TEXT,                             -- 运行完成回调地址（出站 Webhook），NULL=未开启
   run_count     INTEGER NOT NULL DEFAULT 0,
   created_at    INTEGER NOT NULL,
   updated_at    INTEGER NOT NULL
@@ -300,7 +301,8 @@ CREATE TABLE IF NOT EXISTS agent_runs (
   token_total INTEGER NOT NULL DEFAULT 0,
   cost_micro  INTEGER NOT NULL DEFAULT 0,
   by_llm      INTEGER NOT NULL DEFAULT 0,         -- 本次是否真正用了大模型（否=本地引擎）
-  source      TEXT NOT NULL DEFAULT 'manual',     -- manual | trigger（定时任务触发）
+  source      TEXT NOT NULL DEFAULT 'manual',     -- manual | trigger | api | batch
+  batch_id    TEXT,                               -- 批量运行分组 id（NULL=单次）
   started_at  INTEGER NOT NULL,
   ended_at    INTEGER
 );
