@@ -5,6 +5,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
+from dsoul.agent import Agent  # noqa: E402
 from dsoul.remote_agents import parse_dispatch  # noqa: E402
 
 NAMES = ["openclaw", "爱马仕"]
@@ -26,6 +27,19 @@ def test_no_name_is_chat():
 def test_empty():
     assert parse_dispatch("", NAMES) is None
     assert parse_dispatch("让它去办", []) is None
+
+
+def test_is_affirm():
+    assert Agent._is_affirm("好的，麻烦你") is True
+    assert Agent._is_affirm("行，去吧") is True
+    assert Agent._is_affirm("不用了") is False
+    assert Agent._is_affirm("算了别弄了") is False
+
+
+def test_pick_agent():
+    assert Agent._pick_agent("周报还没写", NAMES) == "爱马仕"
+    assert Agent._pick_agent("代码还没打包", NAMES) == "openclaw"
+    assert Agent._pick_agent("随便干点啥", NAMES) == "openclaw"  # 无命中 → 第一个
 
 
 if __name__ == "__main__":

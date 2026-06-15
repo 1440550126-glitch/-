@@ -47,12 +47,12 @@
 | 越用越懂你 | 对话日记 + 睡眠巩固成长期记忆 | `dsoul/journal.py` · `dsoul/consolidate.py` · `scripts/sleep.py` |
 | 桌面聊天界面 | Tkinter GUI（Python 自带） | `scripts/desktop.py` |
 | 一键常驻 / 部署 | 感知+巩固守护进程 · 树莓派/机器人指南 | `scripts/daemon.py` · `docs/deploy.md` |
-| 手机网页状态页 | 实时看"看到谁 / 记了什么" | `dsoul/webstatus.py` |
+| 手机网页状态页 | 实时看"看到谁 / 七情条 / 记了啥 / 派了啥活" | `dsoul/webstatus.py` |
 | 轻量人脸(树莓派) | OpenCV LBPH 后端，免 dlib | `dsoul/perception_opencv.py` |
 | 七情六欲 | 情绪随互动起伏、影响口吻 | `dsoul/emotions.py` |
 | 多学科视角 | 心理/哲学/医学…思维调度 | `dsoul/knowledge.py` |
 | 技能（做饭/家务）| 授权可执行的技能 | `dsoul/skills.py` |
-| 隔空指挥智能体 | 派活给爱马仕/openclaw 并回传 | `dsoul/remote_agents.py` |
+| 隔空指挥智能体 | 大白话派活给爱马仕/openclaw、听出有活没干还会主动提议 | `dsoul/remote_agents.py` · `dsoul/agent.py` |
 | 人格热切换 | 运行时一键换"灵魂" | `dsoul/personas.py` |
 
 ## 架构
@@ -214,7 +214,7 @@ docker build -t digital-soul . && docker run --rm -e DSOUL_LLM_HOST=http://192.1
 python scripts/demo_agents.py            # 本地起两个 worker，一条命令跑通整条链路
 # 真机：在那两台机器各跑 digital-soul worker --name openclaw --port 9302
 ```
-端点配置见 `config/agents.yaml`；任何监听 `POST /task` 的智能体都能接。它是机器人，却能隔空驱动主机上的智能体干活、再把结果带回来。**直接用大白话**就行：对它说「让 openclaw 把这周代码打个包」，它会自动选中 openclaw、派活、并把结果回话给你（仍受 `control_agents` 授权约束）。
+端点配置见 `config/agents.yaml`；任何监听 `POST /task` 的智能体都能接。它是机器人，却能隔空驱动主机上的智能体干活、再把结果带回来。**直接用大白话**就行：对它说「让 openclaw 把这周代码打个包」，它会自动选中 openclaw、派活、并把结果回话给你（仍受 `control_agents` 授权约束）。它还会**主动提议**——你随口一句「周报还没弄」，它会问「要不要我让爱马仕帮你办了？」，你说声「好」它才真去办（绝不擅自行动）。
 
 **🎭 人格热切换 + 七情六欲** —— 运行时一键换"灵魂"，且情绪会随相处起伏。
 ```bash

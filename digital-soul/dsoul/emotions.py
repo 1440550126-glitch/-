@@ -73,6 +73,11 @@ class EmotionState:
         top = max(self.levels, key=lambda k: self.levels[k])
         return top, self.levels[top]
 
+    def snapshot(self, now: float | None = None) -> dict:
+        """当前七情强度（0~1，已回落到此刻），供可视化。"""
+        self._tick(now)
+        return {e: round(self.levels[e], 2) for e in SEVEN}
+
     def prompt_hint(self, now: float | None = None) -> str:
         top, val = self.mood(now)
         if val < self.baseline + 0.08:

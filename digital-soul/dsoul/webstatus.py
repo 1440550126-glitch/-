@@ -24,12 +24,24 @@ def _owner(agent) -> str:
 def _snapshot(agent, monitor) -> dict:
     present = sorted(monitor.present.keys()) if monitor is not None else []
     mems = [it["text"] for it in agent.memory.items[-8:]][::-1]
-    journal = []
+    journal, dispatches = [], []
     if agent.journal is not None:
+        entries = agent.journal._all()
         journal = [
             f'{e.get("speaker", "?")}: {e.get("utterance", "")}'
-            for e in agent.journal._all()[-8:]
+            for e in entries[-8:]
         ][::-1]
+        for e in entries[-16:]:
+            ex = e.get("executed") or ""
+            if isinstance(ex, str) and (ex.startswith("dispatch:") or ex.startswith("propose:")):
+                kind, who = ex.split(":", 1)
+                tag = "✅ 已派活" if kind == "dispatch" else "💡 提议"
+                dispatches.append(f'{tag} → {who}：{e.get("utterance", "")}')
+        dispatches = dispatches[::-1][:6]
+    mood_char, mood_levels = None, {}
+    if getattr(agent, "emotions", None):
+        mood_levels = agent.emotions.snapshot()
+        mood_char = max(mood_levels, key=mood_levels.get) if mood_levels else None
     return {
         "name": agent.identity.get("name", "我"),
         "llm": bool(agent.llm.available),
@@ -37,7 +49,9 @@ def _snapshot(agent, monitor) -> dict:
         "present": present,
         "recent_memories": mems,
         "recent_journal": journal,
-        "mood": agent.emotions.mood()[0] if getattr(agent, "emotions", None) else None,
+        "dispatches": dispatches,
+        "mood": mood_char,
+        "mood_levels": mood_levels,
         "people": [p["name"] for p in agent.authority.people.values()],
         "owner": _owner(agent),
     }
@@ -63,12 +77,16 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 .msg{padding:7px 11px;border-radius:12px;max-width:80%;white-space:pre-wrap;word-break:break-word}
 .me{align-self:flex-end;background:#1565c0;color:#fff}
 .soul{align-self:flex-start;background:#26303a}
+.barrow{display:flex;align-items:center;gap:8px;margin:4px 0}
+.barlab{width:24px;font-size:15px;text-align:center}
+.bartrk{flex:1;height:8px;background:#0f1115;border-radius:6px;overflow:hidden}
+.bartrk i{display:block;height:100%;background:linear-gradient(90deg,#2e7d32,#5fdd9d)}
 </style></head>
 <body><div class=wrap>
 <h1 id=title>🧠 数字分身</h1>
 <div class=card><span id=llm class="badge off">…</span>&nbsp;&nbsp;<span id=memc>记忆 …</span></div>
 <div class=card><div class=k>👁️ 现在看到谁</div><div id=present>…</div></div>
-<div class=card><div class=k>💞 此刻心情</div><div id=mood>…</div></div>
+<div class=card><div class=k>💞 此刻心情</div><div id=mood>…</div><div id=moodbars></div></div>
 <div class=card><div class=k>💬 跟 TA 聊聊</div>
   <div class=row><span class=dim>身份：</span><select id=speaker></select></div>
   <div id=chat class=chat></div>
@@ -76,11 +94,15 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 </div>
 <div class=card><div class=k>🧩 最近记住</div><ul id=mems></ul></div>
 <div class=card><div class=k>🕘 最近对话</div><ul id=jour></ul></div>
+<div class=card><div class=k>🛰️ 最近派活 / 提议</div><ul id=disp></ul></div>
 <p class=dim style="text-align:center">状态每 3 秒自动刷新 · /api/status 提供 JSON</p>
 </div>
 <script>
 const $=s=>document.querySelector(s);
 const MOODS={"喜":"😄 愉悦","怒":"😠 生气","哀":"😢 低落","惧":"😨 不安","爱":"❤️ 满心欢喜","恶":"😒 有点反感","欲":"🥺 渴望陪伴"};
+const EMO={"喜":"😄","怒":"😠","哀":"😢","惧":"😨","爱":"❤️","恶":"😒","欲":"🥺"};
+const SEVEN=["喜","怒","哀","惧","爱","恶","欲"];
+function bars(lv){return SEVEN.map(e=>{const v=Math.max(0,Math.min(100,Math.round((lv[e]||0)*100)));return '<div class=barrow><span class=barlab title="'+e+'">'+EMO[e]+'</span><span class=bartrk><i style="width:'+v+'%"></i></span></div>';}).join('');}
 let inited=false, soulName="它";
 function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
 function li(a){return a.map(x=>'<li>'+esc(x)+'</li>').join('')||'<li class=dim>—</li>';}
@@ -94,6 +116,8 @@ async function refresh(){
     $('#memc').textContent='记忆 '+s.memory_count+' 条';
     $('#present').textContent=s.present.length?s.present.join('、'):'暂时没看到人';
     $('#mood').textContent=s.mood?(MOODS[s.mood]||s.mood):'平静';
+    $('#moodbars').innerHTML=s.mood_levels?bars(s.mood_levels):'';
+    $('#disp').innerHTML=li(s.dispatches||[]);
     $('#mems').innerHTML=li(s.recent_memories);
     $('#jour').innerHTML=li(s.recent_journal);
     if(!inited){$('#speaker').innerHTML=s.people.map(p=>'<option'+(p===s.owner?' selected':'')+'>'+esc(p)+'</option>').join('');inited=true;}

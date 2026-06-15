@@ -10,6 +10,15 @@
 
 from __future__ import annotations
 
+# 主动派活用的词表
+_AFFIRM = ("好", "可以", "行", "嗯", "麻烦", "拜托", "去吧", "办", "对", "是的", "搞定", "就这么", "那就", "ok", "OK")
+_NEGATE = ("不", "别", "算了", "先不", "不用", "甭")
+_UNDONE = ("还没", "没弄", "没做", "还得", "还要", "忘了", "没空", "来不及", "没整", "没备份",
+           "该弄", "得弄", "要弄", "没写", "堆着", "积压", "没处理", "没搞", "拖着")
+_AGENT_HINTS = {"代码": "openclaw", "打包": "openclaw", "部署": "openclaw", "备份": "openclaw",
+                "编译": "openclaw", "周报": "爱马仕", "报告": "爱马仕", "文档": "爱马仕",
+                "整理": "爱马仕", "邮件": "爱马仕", "表格": "爱马仕"}
+
 
 class Agent:
     def __init__(self, identity, persona, memory, authority, perception, llm, robot,
@@ -26,6 +35,7 @@ class Agent:
         self.knowledge = knowledge   # 领域知识调度
         self.skills = skills         # 技能（做饭/家务…）
         self.hub = hub               # 外部智能体桥（爱马仕/openclaw…）
+        self._pending_dispatch = None  # 待你点头的"主动派活"提议
 
     def _hints(self) -> list[str]:
         out = []
@@ -62,18 +72,33 @@ class Agent:
             self._execute(action, who)
             result["executed"] = action
 
+        # --- 主动派活的"二段确认"：上一轮我提议过，这一轮你说"好" → 执行 ---
+        if action is None and self._pending_dispatch is not None:
+            allowed = self.authority.can(speaker_name, "control_agents")[0]
+            if allowed and self._is_affirm(utterance):
+                done = self._run_pending_dispatch()
+                result["reply"] = done["reply"]
+                result["dispatch"] = done
+                self._log_journal(who, utterance, done["reply"], f"dispatch:{done['agent']}")
+                return result
+            self._pending_dispatch = None  # 你没接这个茬，作罢
+
         # --- 自然语言派活（如"让 openclaw 把代码打包"）---
         if action is None and self.hub is not None:
             disp = self.nl_dispatch(speaker_name, utterance)
             if disp is not None:
                 result["reply"] = disp["reply"]
                 result["dispatch"] = disp
-                if self.journal is not None:
-                    self.journal.append({
-                        "speaker": who.get("name"), "speaker_relation": who.get("relation"),
-                        "utterance": utterance, "reply": disp["reply"],
-                        "executed": f"dispatch:{disp['agent']}",
-                    })
+                self._log_journal(who, utterance, disp["reply"], f"dispatch:{disp['agent']}")
+                return result
+
+        # --- 主动派活：听出"有活儿没干"，主动提议（不擅自执行，等你点头）---
+        if action is None and self.hub is not None:
+            prop = self.propose_dispatch(speaker_name, utterance)
+            if prop is not None:
+                result["reply"] = prop["reply"]
+                result["proposal"] = prop
+                self._log_journal(who, utterance, prop["reply"], f"propose:{prop['agent']}")
                 return result
 
         # --- 检索记忆 ---
@@ -204,6 +229,52 @@ class Agent:
         else:
             reply = f"我想交给「{name}」办，但没联系上它（{str(res.get('error', ''))[:30]}）。"
         return {"dispatched": bool(res.get("ok")), "agent": name, "result": res, "reply": reply}
+
+    # ---------- 主动派活：听出有活儿没干就提议，点头才执行 ----------
+    def propose_dispatch(self, speaker_name, utterance) -> dict | None:
+        if self.hub is None:
+            return None
+        names = self.hub.names()
+        if not names or not any(c in (utterance or "") for c in _UNDONE):
+            return None
+        if not self.authority.can(speaker_name, "control_agents")[0]:
+            return None  # 只对能指挥智能体的人主动提议
+        name = self._pick_agent(utterance, names)
+        self._pending_dispatch = {"agent": name, "instruction": utterance, "speaker": speaker_name}
+        reply = f"听起来这事儿还没着落。要不要我让「{name}」帮你办了？（说声“好”我就去办）"
+        return {"proposed": True, "agent": name, "instruction": utterance, "reply": reply}
+
+    def _run_pending_dispatch(self) -> dict:
+        pd = self._pending_dispatch or {}
+        self._pending_dispatch = None
+        name, instr = pd.get("agent"), pd.get("instruction", "")
+        res = self.hub.dispatch(name, "nl", instruction=instr)
+        if res.get("ok"):
+            reply = f"好嘞，已经让「{name}」去办「{instr}」了。它回话：{res.get('result', '（无返回）')}"
+        else:
+            reply = f"我去找「{name}」办，但没联系上它（{str(res.get('error', ''))[:30]}）。"
+        return {"dispatched": bool(res.get("ok")), "agent": name, "instruction": instr, "result": res, "reply": reply}
+
+    @staticmethod
+    def _is_affirm(text: str) -> bool:
+        t = (text or "").strip()
+        if any(n in t for n in _NEGATE):
+            return False
+        return any(a in t for a in _AFFIRM)
+
+    @staticmethod
+    def _pick_agent(text: str, names) -> str:
+        for kw, who in _AGENT_HINTS.items():
+            if kw in (text or "") and who in names:
+                return who
+        return names[0]
+
+    def _log_journal(self, who, utterance, reply, executed) -> None:
+        if self.journal is not None:
+            self.journal.append({
+                "speaker": who.get("name"), "speaker_relation": who.get("relation"),
+                "utterance": utterance, "reply": reply, "executed": executed,
+            })
 
     # ---------- 人格热切换（无需重启）----------
     def switch_persona(self, name, base_dir=None, seed_memory=False) -> dict:
