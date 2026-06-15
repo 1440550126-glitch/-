@@ -23,7 +23,7 @@ _AGENT_HINTS = {"代码": "openclaw", "打包": "openclaw", "部署": "openclaw"
 class Agent:
     def __init__(self, identity, persona, memory, authority, perception, llm, robot,
                  journal=None, emotions=None, knowledge=None, skills=None, hub=None,
-                 tasks=None, reflector=None) -> None:
+                 tasks=None, reflector=None, planner=None, plan=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -42,6 +42,8 @@ class Agent:
         self.reflector = reflector   # 自主反思（记忆流 → 领悟）
         self._reflect_every = 8      # 每积累 8 条新经历自主反思一次
         self._last_reflect_len = len(journal._all()) if journal is not None else 0
+        self.planner = planner       # 自主规划（领悟+欠账 → 今天打算做的事）
+        self.plan = plan             # 当天计划（持久化）
 
     def _hints(self) -> list[str]:
         out = []
@@ -366,9 +368,9 @@ class Agent:
             reply = f"重试了 {len(op)} 件，还是没联系上，我先记着，过会儿再试。"
         return {"retried": len(op), "ok": done, "reply": reply}
 
-    # ---------- 自主心跳：到点就反思、顺手把欠账补一补（由 daemon 定期调用）----------
+    # ---------- 自主心跳：反思 → 规划 → 推进计划（由 daemon 定期调用）----------
     def tick(self, now=None) -> dict:
-        out: dict = {"reflections": [], "retried": None, "notices": []}
+        out: dict = {"reflections": [], "plan": [], "notices": []}
         # 1) 自主反思（攒够新经历才反思，免得话痨）
         if self.reflector is not None and self.journal is not None:
             total = len(self.journal._all())
@@ -378,15 +380,46 @@ class Agent:
                 if ref:
                     out["reflections"] = ref
                     out["notices"].append("我刚回想了一下，想明白几件事：" + "；".join(ref))
-        # 2) 自主补欠账（以主人身份、带重试上限，避免对掉线的智能体死磕）
-        if self.tasks is not None and self.hub is not None and self.tasks.open():
-            owner = self._owner_name()
-            if owner and any(t.get("attempts", 1) < 6 for t in self.tasks.open()):
-                rr = self.retry_open(owner, cap=6)
-                out["retried"] = rr
-                if rr.get("ok"):
-                    out["notices"].append(f"趁这会儿空，我把 {rr['ok']} 件欠着的事补上了。")
+        # 2) 自主规划：每天排一次计划（领悟 + 欠账 + 心情 → 今天打算做的事）
+        if self.planner is not None and self.plan is not None and not self.plan.fresh_today():
+            mood = self.emotions.mood()[0] if self.emotions is not None else None
+            open_tasks = self.tasks.open() if self.tasks is not None else []
+            refl = self.recent_reflections()
+            if refl or open_tasks:
+                items = self.planner.make_plan(refl, open_tasks, mood)
+                if items:
+                    self.plan.set(items)
+                    out["plan"] = [it["text"] for it in items]
+                    out["notices"].append("我给今天列了个小计划：" + "；".join(out["plan"]))
+        # 3) 推进计划：能办的去办，该提醒的提醒
+        if self.plan is not None:
+            out["notices"] += self._advance_plan()
         return out
+
+    def _advance_plan(self) -> list:
+        notices: list = []
+        for it in self.plan.open():
+            if it.get("kind") == "followup":
+                inst = it.get("instruction", "")
+                match = [o for o in (self.tasks.open() if self.tasks else []) if o.get("instruction") == inst]
+                if not match:                          # 欠账已被补上 → 计划项完成
+                    self.plan.mark_done(it["id"])
+                    continue
+                if match[0].get("attempts", 1) >= 6:   # 试太多次仍不行 → 搁置，别再纠缠
+                    self.plan.mark_done(it["id"])
+                    notices.append(f"「{inst}」试了多次还是没成，我先搁一搁。")
+                    continue
+                if self.hub is not None and self._owner_name():
+                    res = self.hub.dispatch(it.get("agent"), "nl", instruction=inst)
+                    self._record_task(it.get("agent"), inst, res)
+                    if res.get("ok"):
+                        self._remember_deed(it.get("agent"), inst, res.get("result"))
+                        self.plan.mark_done(it["id"])
+                        notices.append(f"计划里的「{inst}」办好了。")
+            else:                                       # remind / checkin：提醒一次即完成
+                self.plan.mark_done(it["id"])
+                notices.append(it.get("text", ""))
+        return notices
 
     def _owner_name(self):
         for p in self.authority.people.values():

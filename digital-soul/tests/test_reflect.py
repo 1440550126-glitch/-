@@ -69,6 +69,8 @@ def test_tick_reflects_when_due_then_quiet():
     a._last_reflect_len = 0
     a.tasks = None
     a.hub = None
+    a.planner = None
+    a.plan = None
     out1 = a.tick()
     assert out1["reflections"] and out1["notices"]
     out2 = a.tick()               # 没有新经历 → 不再反思
