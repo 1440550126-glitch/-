@@ -539,6 +539,11 @@ export function playManifest(canvas, manifest, opts = {}) {
 
   return {
     toggleMute: () => sound?.toggleMute(),
+    // 杜比沉浸音效控制（透传给声音引擎）
+    setDolby: (on) => sound?.setDolby(on),
+    setDolbyPreset: (id) => sound?.setDolbyPreset(id),
+    setDolbyIntensity: (v) => sound?.setDolbyIntensity(v),
+    dolbyState: () => sound?.dolbyState,
     stop() {
       stopped = true;
       cancelAnimationFrame(raf);

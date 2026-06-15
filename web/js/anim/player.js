@@ -3,6 +3,7 @@ import { GET, POST } from '../api.js';
 import { h, toast, aiBadge } from '../ui.js';
 import { store, skinPayload } from '../store.js';
 import { playManifest } from './engine.js';
+import { DOLBY_PRESETS, loadDolbyPref, saveDolbyPref } from './dolby.js';
 import { nav } from '../router.js';
 
 export async function openAnimPlayer(post) {
@@ -15,6 +16,10 @@ export async function openAnimPlayer(post) {
   const chipsRow = h('div', { class: 'style-chips' });
   const quotaTip = h('div', { style: { textAlign: 'center', fontSize: '10.5px', color: 'rgba(255,255,255,.4)', marginTop: '10px' } });
   const muteBtn = h('button', { class: 'icon-btn', style: { background: 'rgba(255,255,255,.12)', border: 'none', color: '#fff' } }, '🔊');
+  const dolbyBtn = h('button', {
+    class: 'dolby-btn', title: '杜比沉浸音效',
+    style: { border: 'none', color: '#fff', fontSize: '12px', fontWeight: '700', padding: '0 12px', height: '36px', borderRadius: '18px', display: 'flex', alignItems: 'center', gap: '5px' }
+  }, h('span', { style: { fontSize: '13px' } }, '🎚'), h('span', { class: 'dolby-label' }, '杜比'));
 
   const overlay = h('div', { class: 'anim-overlay' },
     cvs,
@@ -22,6 +27,7 @@ export async function openAnimPlayer(post) {
       aiBadge('内容由 AI 辅助生成'),
       h('span', { style: { color: 'rgba(255,255,255,.45)', fontSize: '11px' } }, `「${post.card?.emotion || ''}」`),
       h('div', { style: { flex: 1 } }),
+      dolbyBtn,
       muteBtn
     ),
     h('button', { class: 'anim-close', style: { top: 'calc(60px + env(safe-area-inset-top, 0px))' } }, '✕'),
@@ -38,6 +44,61 @@ export async function openAnimPlayer(post) {
   };
   overlay.querySelector('.anim-close').addEventListener('click', close);
   muteBtn.addEventListener('click', () => { muteBtn.textContent = engine?.toggleMute() ? '🔇' : '🔊'; });
+
+  // —— 杜比沉浸音效面板 ——
+  let dolbyPref = loadDolbyPref();
+  let dolbyPanel = null;
+  function applyDolby(patch) {
+    dolbyPref = { ...dolbyPref, ...patch };
+    saveDolbyPref(dolbyPref);                       // 持久化（无声模式也能记住偏好）
+    if ('on' in patch) engine?.setDolby(dolbyPref.on);
+    if ('preset' in patch) engine?.setDolbyPreset(dolbyPref.preset);
+    if ('intensity' in patch) engine?.setDolbyIntensity(dolbyPref.intensity);
+    refreshDolbyBtn();
+  }
+  function refreshDolbyBtn() {
+    const cur = DOLBY_PRESETS.find((x) => x.id === dolbyPref.preset) || DOLBY_PRESETS[0];
+    dolbyBtn.classList.toggle('on', dolbyPref.on);
+    dolbyBtn.querySelector('.dolby-label').textContent = dolbyPref.on ? cur.label : '杜比·关';
+  }
+  function toggleDolbyPanel() {
+    if (dolbyPanel) { dolbyPanel.remove(); dolbyPanel = null; return; }
+    dolbyPanel = buildDolbyPanel();
+    overlay.append(dolbyPanel);
+  }
+  function buildDolbyPanel() {
+    const sw = h('button', { class: `switch ${dolbyPref.on ? 'on' : ''}` });
+    sw.addEventListener('click', () => { applyDolby({ on: !dolbyPref.on }); sw.classList.toggle('on', dolbyPref.on); renderPresetChips(); });
+    const chipsWrap = h('div', { class: 'style-chips', style: { flexWrap: 'wrap', rowGap: '8px' } });
+    const intensity = h('input', { type: 'range', min: '0', max: '100', value: String(Math.round(dolbyPref.intensity * 100)) });
+    const pct = h('span', { class: 'dolby-pct' }, `${Math.round(dolbyPref.intensity * 100)}%`);
+    intensity.addEventListener('input', () => { pct.textContent = `${intensity.value}%`; applyDolby({ intensity: (+intensity.value) / 100 }); });
+    function renderPresetChips() {
+      chipsWrap.innerHTML = '';
+      for (const pst of DOLBY_PRESETS) {
+        const active = dolbyPref.on && pst.id === dolbyPref.preset;
+        chipsWrap.append(h('button', {
+          class: `chip ${active ? 'active' : ''}`, title: pst.desc,
+          onclick: () => { applyDolby({ on: true, preset: pst.id }); sw.classList.add('on'); renderPresetChips(); }
+        }, pst.label));
+      }
+    }
+    renderPresetChips();
+    const panel = h('div', { class: 'dolby-panel', onclick: (e) => e.stopPropagation() },
+      h('div', { style: { display: 'flex', alignItems: 'center', marginBottom: '10px' } },
+        h('div', { style: { fontWeight: 700, fontSize: '15px', flex: 1 } }, '🎚 杜比沉浸音效'),
+        sw
+      ),
+      h('div', { style: { fontSize: '11.5px', color: 'rgba(255,255,255,.5)', lineHeight: 1.6, marginBottom: '12px' } },
+        '虚拟环绕 · 低频增强 · 空间混响，让实时合成的音效更具包围感'),
+      chipsWrap,
+      h('div', { class: 'dolby-intensity' }, h('span', {}, '强度'), intensity, pct)
+    );
+    return h('div', { class: 'dolby-backdrop', onclick: () => toggleDolbyPanel() }, panel);
+  }
+  dolbyBtn.addEventListener('click', toggleDolbyPanel);
+  refreshDolbyBtn();
+
   overlays.append(overlay);
 
   let counted = false;
