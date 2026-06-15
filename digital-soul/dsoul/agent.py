@@ -225,6 +225,7 @@ class Agent:
             return {"dispatched": False, "agent": name, "reply": reason}
         res = self.hub.dispatch(name, "nl", instruction=utterance)
         if res.get("ok"):
+            self._remember_deed(name, utterance, res.get("result"))
             reply = f"好的，已经让「{name}」去办了。它回话：{res.get('result', '（无返回）')}"
         else:
             reply = f"我想交给「{name}」办，但没联系上它（{str(res.get('error', ''))[:30]}）。"
@@ -250,6 +251,7 @@ class Agent:
         name, instr = pd.get("agent"), pd.get("instruction", "")
         res = self.hub.dispatch(name, "nl", instruction=instr)
         if res.get("ok"):
+            self._remember_deed(name, instr, res.get("result"))
             reply = f"好嘞，已经让「{name}」去办「{instr}」了。它回话：{res.get('result', '（无返回）')}"
         else:
             reply = f"我去找「{name}」办，但没联系上它（{str(res.get('error', ''))[:30]}）。"
@@ -275,6 +277,22 @@ class Agent:
                 "speaker": who.get("name"), "speaker_relation": who.get("relation"),
                 "utterance": utterance, "reply": reply, "executed": executed,
             })
+
+    def _remember_deed(self, agent_name, instruction, result) -> None:
+        """把"成功办成的事"写进长期记忆，让它日后记得、能主动跟进。"""
+        text = f"我已让「{agent_name}」帮忙办了「{instruction}」（已完成）。"
+        snippet = str(result or "").strip()[:50]
+        if snippet:
+            text += f"它回复：{snippet}"
+        try:
+            self.memory.add(text, source="dispatch", tags=["deed", "派活", agent_name])
+        except Exception:
+            pass
+
+    def recent_deeds(self, k: int = 5) -> list[str]:
+        """最近办成的事（供回顾 / 主动跟进）。"""
+        deeds = [it["text"] for it in self.memory.items if "deed" in (it.get("tags") or [])]
+        return deeds[-k:][::-1]
 
     # ---------- 人格热切换（无需重启）----------
     def switch_persona(self, name, base_dir=None, seed_memory=False) -> dict:
