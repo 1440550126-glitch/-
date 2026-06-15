@@ -98,6 +98,14 @@ function refreshState() {
 }
 swEl.addEventListener('click', () => { dolby.setEnabled(!dolby.enabled); refreshState(); });
 
+// —— 耳机 HRTF 虚拟环绕 ——
+const hpEl = $('hpSwitch');
+hpEl.addEventListener('click', () => {
+  const on = dolby.spatialMode !== 'headphones';
+  dolby.setSpatialMode(on ? 'headphones' : 'speakers');
+  hpEl.classList.toggle('on', on);
+});
+
 // —— 预设 ——
 const presetsEl = $('presets');
 DOLBY_PRESETS.forEach((p) => {
@@ -126,8 +134,8 @@ B.addEventListener('input', () => { dolby.setBass(+B.value); $('bassV').textCont
 R.addEventListener('input', () => { dolby.setReverb(R.value / 100); $('reverbV').textContent = R.value + '%'; });
 A.addEventListener('input', () => { dolby.setAir(+A.value); $('airV').textContent = `+${A.value}dB`; });
 
-// —— 频谱可视化 ——
-const cvs = $('viz'), cc = cvs.getContext('2d'), analyser = dolby.getAnalyser();
+// —— 频谱可视化 + 输出电平表 ——
+const cvs = $('viz'), cc = cvs.getContext('2d'), analyser = dolby.getAnalyser(), meterFill = $('meterFill');
 const bins = analyser.frequencyBinCount, data = new Uint8Array(bins);
 function resize() { const dpr = Math.min(devicePixelRatio || 1, 2); cvs.width = cvs.clientWidth * dpr; cvs.height = 120 * dpr; cc.setTransform(dpr, 0, 0, dpr, 0, 0); }
 resize(); addEventListener('resize', resize);
@@ -144,6 +152,7 @@ function draw() {
     const bw = w / n;
     cc.fillRect(i * bw + 1, h - bh, bw - 2, bh);
   }
+  meterFill.style.width = Math.min(100, dolby.getLevel().peak * 130) + '%';
 }
 draw();
 refreshState();

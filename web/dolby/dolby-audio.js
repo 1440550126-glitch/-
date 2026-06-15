@@ -7,15 +7,16 @@
 //   低频增强（低架 + 次谐波激励器）→ 中频清晰 + 高频空气感
 //   → 立体声声场展宽（M/S 处理，保留并增强原始立体声，单声道安全）
 //   → 缓慢声场"呼吸"（LFO 调制 Side，营造环绕移动感）
-//   → 空间混响（实时合成立体声脉冲响应）→ 动态压缩（响度/胶水）
-//   → 软削波限制（防过载）→ 干湿混合（强度可调 / 一键旁通）
+//   → 空间混响（实时合成立体声脉冲响应）
+//   → 声场渲染：扬声器立体声 / 耳机 HRTF 双耳虚拟环绕（虚拟前置+环绕音箱）
+//   → 动态压缩（响度/胶水）→ 软削波限制（防过载）→ 干湿混合（强度可调 / 一键旁通）
 //
 // 用法：
 //   import { DolbyAudio } from './dolby-audio.js';
 //   const dolby = new DolbyAudio({ preset: 'cinema' });
 //   dolby.attachMedia(document.querySelector('audio'));   // 接 <audio>
 //   await dolby.resume();                                  // 用户手势后唤醒
-//   dolby.setIntensity(0.9); dolby.setEnabled(true);
+//   dolby.setIntensity(0.9); dolby.setSpatialMode('headphones');
 // ============================================================
 
 // ---- 预设：每一档对应一种听感性格 ----
@@ -48,6 +49,13 @@ export const DOLBY_PRESETS = [
     comp: { threshold: -22, ratio: 3, knee: 22, attack: 0.01, release: 0.2 }, outGain: 1.08 } }
 ];
 export const presetById = (id) => DOLBY_PRESETS.find((x) => x.id === id) || DOLBY_PRESETS[0];
+/** 注册/覆盖一个自定义预设（按 id 去重），返回该预设 */
+export function registerPreset(preset) {
+  if (!preset || !preset.id || !preset.p) throw new Error('preset 需要 { id, p }');
+  const i = DOLBY_PRESETS.findIndex((x) => x.id === preset.id);
+  if (i >= 0) DOLBY_PRESETS[i] = preset; else DOLBY_PRESETS.push(preset);
+  return preset;
+}
 
 // 软饱和/限制曲线（tanh 形）
 function shaperCurve(k, n = 2048) {
@@ -85,22 +93,32 @@ export function createImpulseResponse(ctx, seconds, decay) {
 export class DolbyAudio {
   /**
    * @param {object} [options]
-   * @param {AudioContext} [options.context]   复用已有的 AudioContext（不传则自建）
-   * @param {string}  [options.preset='standard']
-   * @param {number}  [options.intensity=0.85] 0..1 干湿比
-   * @param {boolean} [options.enabled=true]
-   * @param {boolean} [options.autoConnect=true] 自动连接到 context.destination
-   * @param {boolean} [options.analyser=false]  额外挂一个 AnalyserNode（做可视化）
+   * @param {AudioContext} [options.context]      复用已有的 AudioContext（不传则自建）
+   * @param {string}  [options.preset='standard'] 初始预设 id，或传完整预设对象
+   * @param {number}  [options.intensity=0.85]    干湿比 0..1
+   * @param {boolean} [options.enabled=true]      是否启用（关=直通原声）
+   * @param {boolean} [options.autoConnect=true]  自动连接到 context.destination
+   * @param {boolean} [options.analyser=false]    额外挂频谱 AnalyserNode（getAnalyser 取出）
+   * @param {'speakers'|'headphones'} [options.spatialMode='speakers'] 声场渲染方式
    */
   constructor(options = {}) {
     const Ctor = typeof window !== 'undefined' ? (window.AudioContext || window.webkitAudioContext) : null;
     if (!options.context && !Ctor) throw new Error('Web Audio API 不可用：请传入 options.context');
     this.context = options.context || new Ctor();
     this._ownsContext = !options.context;
-    this._sources = new Map();         // mediaEl/node -> 已建立的源节点（避免重复 createMediaElementSource）
+    this._sources = new Map();         // mediaEl/node -> 源节点（避免重复 createMediaElementSource）
 
     const ctx = this.context;
     const Gain = () => ctx.createGain(), Filt = () => ctx.createBiquadFilter();
+    // HRTF 虚拟音箱：方位角(度) → 三维坐标（默认听者朝 -z）
+    const vSpeaker = (azDeg) => {
+      const p = ctx.createPanner();
+      p.panningModel = 'HRTF'; p.distanceModel = 'inverse';
+      const rad = azDeg * Math.PI / 180, x = Math.sin(rad), z = -Math.cos(rad);
+      if (p.positionX) { p.positionX.value = x; p.positionY.value = 0; p.positionZ.value = z; }
+      else if (p.setPosition) p.setPosition(x, 0, z);
+      return p;
+    };
 
     // —— 节点 ——
     this.input = Gain(); this.output = Gain(); this.pre = Gain();
@@ -126,9 +144,15 @@ export class DolbyAudio {
     this.motionLfo = ctx.createOscillator(); this.motionLfo.type = 'sine';
     this.motionDepth = Gain(); this.motionDepth.gain.value = 0;
     this.motionLfo.connect(this.motionDepth); this.motionDepth.connect(this.sideW.gain);
-    // 空间混响（并联湿声）
+    // 空间混响
     this.convolver = ctx.createConvolver();
     this.reverbGain = Gain(); this.reverbGain.gain.value = 0;
+    // 声场渲染：扬声器路 / 耳机 HRTF 路（交叉淡化）
+    this.stereoBus = Gain(); this.stereoTap = Gain();
+    this.bSplit = ctx.createChannelSplitter(2); this.bRevSplit = ctx.createChannelSplitter(2);
+    this.panFL = vSpeaker(-30); this.panFR = vSpeaker(30);     // 虚拟前置音箱 ±30°
+    this.panRL = vSpeaker(-110); this.panRR = vSpeaker(110);   // 虚拟环绕音箱 ±110°
+    this.binauralBus = Gain(); this.binauralTap = Gain();
     // 动态 + 限制
     this.comp = ctx.createDynamicsCompressor();
     this.limiter = ctx.createWaveShaper(); this.limiter.curve = shaperCurve(2.2); this.limiter.oversample = '4x';
@@ -136,33 +160,43 @@ export class DolbyAudio {
     // 干湿混合
     this.dry = Gain(); this.wet = Gain();
     const preComp = Gain(); this._preComp = preComp;
+    // 输出电平表（时域，做 UI 电平条）
+    this._meter = ctx.createAnalyser(); this._meter.fftSize = 256;
 
     // —— 连线 ——
     this.input.connect(this.pre);
     this.pre.connect(this.low); this.low.connect(this.midEq); this.midEq.connect(this.high); this.high.connect(this.tone);
     this.pre.connect(this.bassLP); this.bassLP.connect(this.bassSat); this.bassSat.connect(this.bassGain); this.bassGain.connect(this.tone);
-    // M/S：tone → 分离 → 重建
+    // M/S：tone → 分离 → 重建为加宽立体声（merger）
     this.tone.connect(this.splitter);
     this.splitter.connect(this.midL, 0); this.splitter.connect(this.midR, 1);
     this.midL.connect(this.midBus); this.midR.connect(this.midBus);
     this.splitter.connect(this.sideL, 0); this.splitter.connect(this.sideR, 1);
     this.sideL.connect(this.sideBus); this.sideR.connect(this.sideBus);
     this.sideBus.connect(this.sideW);
-    this.midBus.connect(this.merger, 0, 0); this.midBus.connect(this.merger, 0, 1);   // 左右都含 Mid
-    this.sideW.connect(this.sidePlus); this.sidePlus.connect(this.merger, 0, 0);       // 左 = Mid + Side
-    this.sideW.connect(this.sideMinus); this.sideMinus.connect(this.merger, 0, 1);     // 右 = Mid − Side
-    this.merger.connect(preComp);
-    // 混响并联
-    this.tone.connect(this.convolver); this.convolver.connect(this.reverbGain); this.reverbGain.connect(preComp);
-    // 动态 → 限制 → 补偿 → 湿声
+    this.midBus.connect(this.merger, 0, 0); this.midBus.connect(this.merger, 0, 1);
+    this.sideW.connect(this.sidePlus); this.sidePlus.connect(this.merger, 0, 0);
+    this.sideW.connect(this.sideMinus); this.sideMinus.connect(this.merger, 0, 1);
+    // 混响：tone → 卷积 → reverbGain（被两种渲染共享）
+    this.tone.connect(this.convolver); this.convolver.connect(this.reverbGain);
+    // 扬声器路：加宽立体声 + 立体声混响
+    this.merger.connect(this.stereoBus); this.reverbGain.connect(this.stereoBus);
+    this.stereoBus.connect(this.stereoTap); this.stereoTap.connect(preComp);
+    // 耳机路：HRTF 虚拟前置（取加宽立体声）+ 虚拟环绕（取混响）
+    this.merger.connect(this.bSplit);
+    this.bSplit.connect(this.panFL, 0); this.bSplit.connect(this.panFR, 1);
+    this.reverbGain.connect(this.bRevSplit);
+    this.bRevSplit.connect(this.panRL, 0); this.bRevSplit.connect(this.panRR, 1);
+    for (const sp of [this.panFL, this.panFR, this.panRL, this.panRR]) sp.connect(this.binauralBus);
+    this.binauralBus.connect(this.binauralTap); this.binauralTap.connect(preComp);
+    // 动态 → 限制 → 补偿 → 湿声；输入 → 干声
     preComp.connect(this.comp); this.comp.connect(this.limiter); this.limiter.connect(this.makeup);
     this.makeup.connect(this.wet); this.wet.connect(this.output);
-    // 干声直通
     this.input.connect(this.dry); this.dry.connect(this.output);
+    this.output.connect(this._meter);
 
     try { this.motionLfo.start(); } catch { /* 已启动 */ }
 
-    // 可选可视化分析器
     if (options.analyser) {
       this.analyser = ctx.createAnalyser();
       this.analyser.fftSize = 2048; this.analyser.smoothingTimeConstant = 0.82;
@@ -173,6 +207,7 @@ export class DolbyAudio {
     this._intensity = options.intensity != null ? Math.min(1, Math.max(0, options.intensity)) : 0.85;
     this._enabled = options.enabled !== false;
     this.setPreset(options.preset || 'standard', true);
+    this.setSpatialMode(options.spatialMode || 'speakers', true);
     this._applyMix(true);
   }
 
@@ -196,9 +231,13 @@ export class DolbyAudio {
   resume() { return this.context.state === 'suspended' ? this.context.resume() : Promise.resolve(); }
 
   // ---- 参数控制 ----
-  setPreset(id, instant = false) {
+  setPreset(idOrPreset, instant = false) {
     const ctx = this.context, t = ctx.currentTime, tc = instant ? 0.001 : 0.08;
-    const p = presetById(id).p; this._p = p; this._presetId = presetById(id).id;
+    let p;
+    if (typeof idOrPreset === 'string') { const pr = presetById(idOrPreset); p = pr.p; this._presetId = pr.id; }
+    else if (idOrPreset && idOrPreset.p) { p = idOrPreset.p; this._presetId = idOrPreset.id || 'custom'; }
+    else { p = idOrPreset; this._presetId = 'custom'; }
+    this._p = p;
     const set = (param, v) => param.setTargetAtTime(v, t, tc);
     set(this.pre.gain, p.preGain);
     this.low.frequency.setTargetAtTime(p.bass.freq, t, tc); set(this.low.gain, p.bass.gain);
@@ -216,6 +255,16 @@ export class DolbyAudio {
     this.comp.attack.setTargetAtTime(p.comp.attack, t, tc);
     this.comp.release.setTargetAtTime(p.comp.release, t, tc);
     set(this.makeup.gain, p.outGain);
+    return this;
+  }
+
+  /** 声场渲染：'speakers'（外放立体声）/ 'headphones'（HRTF 双耳虚拟环绕） */
+  setSpatialMode(mode, instant = false) {
+    this._spatialMode = mode === 'headphones' ? 'headphones' : 'speakers';
+    const t = this.context.currentTime, tc = instant ? 0.001 : 0.1;
+    const hp = this._spatialMode === 'headphones' ? 1 : 0;
+    this.binauralTap.gain.setTargetAtTime(hp, t, tc);
+    this.stereoTap.gain.setTargetAtTime(1 - hp, t, tc);
     return this;
   }
 
@@ -240,10 +289,22 @@ export class DolbyAudio {
   }
 
   getAnalyser() { return this.analyser || null; }
+  /** 输出电平：{ rms, peak }（0..1）与 db（dBFS），用于电平表/动效 */
+  getLevel() {
+    if (!this._meterBuf) this._meterBuf = new Float32Array(this._meter.fftSize);
+    const buf = this._meterBuf;
+    if (this._meter.getFloatTimeDomainData) this._meter.getFloatTimeDomainData(buf);
+    let sum = 0, peak = 0;
+    for (let i = 0; i < buf.length; i++) { const v = buf[i]; sum += v * v; if (Math.abs(v) > peak) peak = Math.abs(v); }
+    const rms = Math.sqrt(sum / buf.length);
+    return { rms, peak, db: 20 * Math.log10(rms || 1e-6) };
+  }
+
   get enabled() { return this._enabled; }
   get intensity() { return this._intensity; }
   get presetId() { return this._presetId; }
-  get state() { return { enabled: this._enabled, preset: this._presetId, intensity: this._intensity, supported: true }; }
+  get spatialMode() { return this._spatialMode; }
+  get state() { return { enabled: this._enabled, preset: this._presetId, intensity: this._intensity, spatialMode: this._spatialMode, supported: true }; }
 
   /** 释放节点。closeContext=true 且 context 为自建时，关闭 AudioContext */
   dispose({ closeContext = false } = {}) {
@@ -251,8 +312,10 @@ export class DolbyAudio {
     const nodes = [this.input, this.output, this.pre, this.low, this.midEq, this.high, this.tone,
       this.bassLP, this.bassSat, this.bassGain, this.splitter, this.merger, this.midL, this.midR,
       this.midBus, this.sideL, this.sideR, this.sideBus, this.sideW, this.sidePlus, this.sideMinus,
-      this.motionLfo, this.motionDepth, this.convolver, this.reverbGain, this.comp, this.limiter,
-      this.makeup, this.dry, this.wet, this._preComp, this.analyser];
+      this.motionLfo, this.motionDepth, this.convolver, this.reverbGain, this.stereoBus, this.stereoTap,
+      this.bSplit, this.bRevSplit, this.panFL, this.panFR, this.panRL, this.panRR, this.binauralBus,
+      this.binauralTap, this.comp, this.limiter, this.makeup, this.dry, this.wet, this._preComp,
+      this._meter, this.analyser];
     for (const n of nodes) { try { n && n.disconnect(); } catch { /* ok */ } }
     this._sources.clear();
     if (closeContext && this._ownsContext) { try { this.context.close(); } catch { /* ok */ } }
