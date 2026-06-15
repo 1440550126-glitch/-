@@ -32,11 +32,12 @@ def novel_terms(text: str, known_blob: str):
     return out[:3]
 
 
-def form_questions(text: str, known_blob: str):
-    """把陌生事物变成好奇的提问：[(问题, 词), …]。"""
+def form_questions(text: str, known_blob: str, importance: float = 0.0):
+    """把陌生事物变成好奇的提问：[(问题, 词, 优先级), …]。越新奇/越重要优先级越高。"""
     qs = []
     for i, t in enumerate(novel_terms(text, known_blob)):
-        qs.append((_TEMPLATES[i % len(_TEMPLATES)].format(t=t), t))
+        pr = round(min(1.0, 0.5 + importance), 3)
+        qs.append((_TEMPLATES[i % len(_TEMPLATES)].format(t=t), t, pr))
     return qs
 
 
@@ -57,18 +58,19 @@ class QuestionLog:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps({"items": self.items}, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    def add(self, term: str, q: str):
+    def add(self, term: str, q: str, priority: float = 0.5):
         if any(it["term"] == term for it in self.items):       # 同一件事不重复好奇
             return None
         rec = {"id": hashlib.sha1((term + str(time.time())).encode("utf-8")).hexdigest()[:12],
-               "term": term, "q": q, "asked": False, "ts": time.time()}
+               "term": term, "q": q, "priority": priority, "asked": False, "ts": time.time()}
         self.items.append(rec)
         self.items = self.items[-50:]
         self._save()
         return rec
 
     def open(self):
-        return [it for it in self.items if not it.get("asked")]
+        return sorted([it for it in self.items if not it.get("asked")],
+                      key=lambda it: -it.get("priority", 0.5))
 
     def mark_asked(self, qid: str):
         for it in self.items:

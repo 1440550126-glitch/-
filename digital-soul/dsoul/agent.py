@@ -193,6 +193,16 @@ class Agent:
                 self._log_journal(who, utterance, gret, "graph")
                 return result
 
+        # --- 信念解释（"你怎么看我/你眼中的我"）：说出理解 + 依据 ---
+        if action is None and who.get("obey") and any(
+                k in utterance for k in ("你怎么看我", "你眼中的我", "你对我的理解", "你了解我吗",
+                                         "说说你对我", "你觉得我是", "你怎么理解我")):
+            exp = self.explain_beliefs()
+            if exp:
+                result["reply"] = exp
+                self._log_journal(who, utterance, exp, "explain_beliefs")
+                return result
+
         # --- 好奇心自学（"去查一下/满足你的好奇"）：交给外部智能体学回来 ---
         if action is None and who.get("obey") and any(
                 k in utterance for k in ("解答你的好奇", "去自学", "自己学一下", "查查你不懂",
@@ -544,10 +554,15 @@ class Agent:
     def _be_curious(self, utterance) -> None:
         if self.curiosity is None:
             return
+        from .annotate import classify_emotion
         from .curiosity import form_questions
         known = " ".join(it.get("text", "") for it in self.memory.items)
-        for q, term in form_questions(utterance, known):
-            self.curiosity.add(term, q)
+        importance = 0.3 if classify_emotion(utterance)["label"] != "平静" else 0.0  # 情绪重的更好奇
+        if any(p.get("name") and p["name"] in utterance and p.get("trust") in ("owner", "family")
+               for p in self.authority.people.values()):
+            importance += 0.2                                   # 牵涉重要的人更好奇
+        for q, term, pr in form_questions(utterance, known, importance):
+            self.curiosity.add(term, q, pr)
         self.curiosity.resolve_known(known)          # 学到了的就销账
 
     def wonder(self) -> str:
@@ -612,6 +627,31 @@ class Agent:
         if getattr(self, "worldmodel", None) is None:
             return []
         return [s for _, s in self.worldmodel.shaky(k)]
+
+    def explain_beliefs(self, k: int = 3) -> str:
+        """说出"我怎么看你"，并给出依据（举出支持的记忆）。"""
+        if getattr(self, "worldmodel", None) is None:
+            return ""
+        top = self.worldmodel.top(k)
+        if not top:
+            return ""
+        parts = []
+        for conf, stmt in top:
+            line = f"我{'挺确信' if conf >= 0.85 else '觉得'}{stmt}"
+            ev = self._belief_evidence(stmt)
+            if ev:
+                line += f"——因为我记得「{ev}」"
+            parts.append(line + "。")
+        return "在我眼里，" + " ".join(parts)
+
+    def _belief_evidence(self, stmt) -> str:
+        import re
+        m = re.search(r"「(.+?)」", stmt)
+        ent = m.group(1) if m else stmt.split("（")[0].split("对你")[0].split("你看重")[-1].strip()
+        for it in self.memory.items:
+            if ent and ent in it.get("text", "") and "dream" not in (it.get("tags") or []):
+                return it["text"][:30]
+        return ""
 
     def self_learn(self, max_q: int = 2) -> list:
         """好奇心驱动自学：把疑问交给外部智能体去查，学到的写进记忆、销账。"""
