@@ -51,6 +51,7 @@ def _snapshot(agent, monitor) -> dict:
         tasks_done = len(agent.tasks.done())
     reflections = agent.recent_reflections() if hasattr(agent, "recent_reflections") else []
     devices = agent.devices.rows() if getattr(agent, "devices", None) is not None else []
+    scenes = agent.scenes.names() if getattr(agent, "scenes", None) is not None else []
     plan_items = []
     if getattr(agent, "plan", None) is not None:
         plan_items = [
@@ -70,6 +71,7 @@ def _snapshot(agent, monitor) -> dict:
         "reflections": reflections,
         "plan": plan_items,
         "devices": devices,
+        "scenes": scenes,
         "mood": mood_char,
         "mood_levels": mood_levels,
         "people": [p["name"] for p in agent.authority.people.values()],
@@ -110,6 +112,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 <div class=card><span id=llm class="badge off">…</span>&nbsp;&nbsp;<span id=memc>记忆 …</span></div>
 <div class=card><div class=k>👁️ 现在看到谁</div><div id=present>…</div></div>
 <div class=card><div class=k>🏠 设备</div><div id=devices></div></div>
+<div class=card><div class=k>🎬 场景</div><div id=scenes></div></div>
 <div class=card><div class=k>💞 此刻心情</div><div id=mood>…</div><div id=moodbars></div></div>
 <div class=card><div class=k>🤵 管家</div>
   <button id=brief>☀️ 要一份简报</button>&nbsp;<button id=diag style="background:#37474f">🩺 系统自检</button></div>
@@ -135,6 +138,7 @@ const SEVEN=["喜","怒","哀","惧","爱","恶","欲"];
 function bars(lv){return SEVEN.map(e=>{const v=Math.max(0,Math.min(100,Math.round((lv[e]||0)*100)));return '<div class=barrow><span class=barlab title="'+e+'">'+EMO[e]+'</span><span class=bartrk><i style="width:'+v+'%"></i></span></div>';}).join('');}
 function devRow(d){const st=d.on?('开'+(d.detail?(' '+d.detail):'')):'关';return '<div class=devrow><span class=devname>'+d.label+'</span><span class=devst>'+st+'</span><button class=devbtn onclick="dev(\''+d.key+'\',\'on\')">开</button><button class=devbtn onclick="dev(\''+d.key+'\',\'off\')">关</button></div>';}
 async function dev(k,a){const sp=$('#speaker').value;try{const r=await (await fetch('/api/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device:k,action:a,speaker:sp})})).json();add(soulName,r.reply,'soul');}catch(e){}refresh();}
+async function scene(n){const sp=$('#speaker').value;try{const r=await (await fetch('/api/scene',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scene:n,speaker:sp})})).json();add(soulName,r.reply,'soul');}catch(e){}refresh();}
 let inited=false, soulName="它";
 function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
 function li(a){return a.map(x=>'<li>'+esc(x)+'</li>').join('')||'<li class=dim>—</li>';}
@@ -148,6 +152,7 @@ async function refresh(){
     $('#memc').textContent='记忆 '+s.memory_count+' 条';
     $('#present').textContent=s.present.length?s.present.join('、'):'暂时没看到人';
     $('#devices').innerHTML=(s.devices&&s.devices.length)?s.devices.map(devRow).join(''):'<span class=dim>无设备</span>';
+    $('#scenes').innerHTML=(s.scenes&&s.scenes.length)?s.scenes.map(n=>'<button class=devbtn style="margin:3px" onclick="scene(\''+n+'\')">'+n+'</button>').join(''):'<span class=dim>无</span>';
     $('#mood').textContent=s.mood?(MOODS[s.mood]||s.mood):'平静';
     $('#moodbars').innerHTML=s.mood_levels?bars(s.mood_levels):'';
     $('#disp').innerHTML=li(s.dispatches||[]);
@@ -219,6 +224,12 @@ def start_web(agent, monitor=None, port: int = 8765):
             if self.path.startswith("/api/device"):
                 res = agent.device_control(speaker, data.get("device"), data.get("action"), data.get("value")) \
                     if hasattr(agent, "device_control") else {"msg": "暂不支持"}
+                rows = agent.devices.rows() if getattr(agent, "devices", None) else []
+                body = json.dumps({"reply": res.get("msg", ""), "devices": rows}, ensure_ascii=False).encode("utf-8")
+                self._send(body, "application/json; charset=utf-8")
+                return
+            if self.path.startswith("/api/scene"):
+                res = agent.run_scene(speaker, data.get("scene")) if hasattr(agent, "run_scene") else {"msg": "暂不支持"}
                 rows = agent.devices.rows() if getattr(agent, "devices", None) else []
                 body = json.dumps({"reply": res.get("msg", ""), "devices": rows}, ensure_ascii=False).encode("utf-8")
                 self._send(body, "application/json; charset=utf-8")

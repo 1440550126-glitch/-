@@ -29,7 +29,8 @@ _DIAG_KW = ("自检", "系统状态", "运行状况", "诊断", "各系统", "�
 class Agent:
     def __init__(self, identity, persona, memory, authority, perception, llm, robot,
                  journal=None, emotions=None, knowledge=None, skills=None, hub=None,
-                 tasks=None, reflector=None, planner=None, plan=None, devices=None) -> None:
+                 tasks=None, reflector=None, planner=None, plan=None, devices=None,
+                 scenes=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -51,6 +52,7 @@ class Agent:
         self.planner = planner       # 自主规划（领悟+欠账 → 今天打算做的事）
         self.plan = plan             # 当天计划（持久化）
         self.devices = devices       # 设备/家居控制（灯/空调/音乐…）
+        self.scenes = scenes         # 场景/例程（回家/睡眠/离家…）
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
@@ -105,6 +107,14 @@ class Agent:
             if bret is not None:
                 result["reply"] = bret
                 self._log_journal(who, utterance, bret, "butler")
+                return result
+
+        # --- 场景 / 例程（"回家模式" / "我回来了"）---
+        if action is None and who.get("obey"):
+            sret = self._scene_route(speaker_name, utterance)
+            if sret is not None:
+                result["reply"] = sret
+                self._log_journal(who, utterance, sret, "scene")
                 return result
 
         # --- 多步任务编排（"把灯关了，再放点音乐" / "订会议并通知大家"）---
@@ -528,6 +538,27 @@ class Agent:
         if not ok:
             return reason
         return self.devices.control(*cmd).get("msg", "好的")
+
+    # ---------- 场景 / 例程 ----------
+    def run_scene(self, speaker_name, name) -> dict:
+        if self.scenes is None or self.devices is None:
+            return {"ok": False, "msg": "未启用场景"}
+        ok, _who, reason = self.authority.can(speaker_name, "control_devices")
+        if not ok:
+            return {"ok": False, "msg": reason}
+        msgs = self.scenes.run(name, self.devices)
+        if msgs is None:
+            return {"ok": False, "msg": f"没有场景：{name}"}
+        return {"ok": True, "msg": f"已启动「{name}」：" + "、".join(m for m in msgs if m)}
+
+    def _scene_route(self, speaker_name, utterance):
+        if self.scenes is None or self.devices is None:
+            return None
+        from .scenes import parse_scene
+        name = parse_scene(utterance, self.scenes.names())
+        if not name:
+            return None
+        return self.run_scene(speaker_name, name)["msg"]
 
     # ---------- 多步编排里的"执行单步" ----------
     def _exec_one_step(self, speaker_name, step):

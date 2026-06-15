@@ -20,6 +20,7 @@ from .persona import Persona
 from .planner import Planner, PlanBook
 from .reflect import Reflector
 from .remote_agents import AgentHub
+from .scenes import SceneBook
 from .skills import SkillRegistry
 from .tasks import TaskBook
 
@@ -74,10 +75,11 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
     planner = Planner(memory=memory, llm=llm, identity=identity)
     plan = PlanBook(base / "data" / "plan.json")
     devices = DeviceHub()
+    scenes = SceneBook(_load_yaml(base / "config" / "scenes.yaml"))
 
     return Agent(identity, persona, memory, authority, perception, llm, robot, journal,
                  emotions=emotions, knowledge=knowledge, skills=skills, hub=hub, tasks=tasks,
-                 reflector=reflector, planner=planner, plan=plan, devices=devices)
+                 reflector=reflector, planner=planner, plan=plan, devices=devices, scenes=scenes)
 
 
 def _seed_memory(base: Path, memory) -> None:
