@@ -1,6 +1,6 @@
 # 极速去水印 · 微信小程序
 
-粘贴抖音 / 快手 / 小红书 / 微博 / B站 / 皮皮虾 的分享链接，一键提取**无水印**视频或图片并保存到相册。**靠广告变现**：保存前看一条激励视频广告，配合 Banner / 插屏广告，对接微信「流量主」即可产生收入。内置一个按 openid 鉴权的**数据看板**看解析量与留存。
+粘贴抖音 / 快手 / 小红书 / 微博 / B站 / 皮皮虾 的分享链接，一键提取**无水印**视频或图片并保存到相册。**靠广告变现**：保存前看一条激励视频广告，配合 Banner / 插屏广告，对接微信「流量主」即可产生收入。内置**新人免广告 + 分享得次数**的增长玩法、解析记录云端同步、以及按 openid 鉴权的**数据看板**。
 
 > 这是一个独立项目，位于本仓库的 `dewatermark/` 目录，与仓库里的「AI句灵」社交项目互不相干。
 
@@ -26,7 +26,7 @@ dewatermark/
 │   │   ├── about/    我的：协议 / 隐私 / 版权 / 反馈
 │   │   ├── doc/      协议文档承载页
 │   │   └── admin/    数据看板（连点版本号进入，按 openid 鉴权）
-│   └── utils/        cloud / ad(激励视频) / link(识别) / save(存相册) / store(缓存+合并) / platform
+│   └── utils/        cloud / ad / link / save / store / platform / gate(额度闸门) / quota / share
 ├── cloudfunctions/
 │   ├── parse/        核心解析云函数
 │   │   ├── parsers/  douyin / kuaishou / xiaohongshu / weibo / bilibili / pipixia + 调度
@@ -34,7 +34,8 @@ dewatermark/
 │   │   └── index.js  入口：内置解析 → 第三方兜底 →(可选)转存云存储 → 统计
 │   ├── login/        静默登录 + 用户统计
 │   ├── stats/        数据看板聚合（按 ADMIN_OPENIDS 鉴权）
-│   └── history/      解析记录云端同步（add/list/clear，按 openid）
+│   ├── history/      解析记录云端同步（add/list/clear，按 openid）
+│   └── quota/        免广告额度 + 分享奖励（get/spend/reward，按 openid）
 ├── scripts/test.js   离线逻辑自测（不联网）
 └── docs/             DEPLOY 部署 / REVIEW 上架避坑 / MONETIZE 变现配置
 ```
@@ -44,8 +45,8 @@ dewatermark/
 1. **导入项目**：微信开发者工具 → 导入 → 选择 `dewatermark/` 目录，填入你的小程序 AppID。
 2. **开通云开发**：工具顶部「云开发」→ 开通 → 新建环境，复制**环境 ID**。
 3. **填配置**：把环境 ID 和广告位 ID 填进 `miniprogram/config.js`。
-4. **部署云函数**：右键 `cloudfunctions/parse`、`login`、`stats`、`history` → 上传并部署（云端安装依赖）。
-5. **建数据库集合**：云开发控制台新建集合 `users`、`parse_logs`、`histories`（权限选「仅创建者可读写」即可）。
+4. **部署云函数**：右键 `cloudfunctions/parse`、`login`、`stats`、`history`、`quota` → 上传并部署（云端安装依赖）。
+5. **建数据库集合**：云开发控制台新建集合 `users`、`parse_logs`、`histories`、`credits`（权限选「仅创建者可读写」即可）。
 6. 真机预览，粘贴一条抖音分享链接测试。
 
 详细步骤见 **[docs/DEPLOY.md](docs/DEPLOY.md)**。
@@ -63,6 +64,7 @@ cd dewatermark && npm test
 - **激励视频**：`result` 页点「保存」前播放，看完才解锁下载——这是主要收入来源。
 - **Banner**：首页 / 结果页底部横幅。
 - **插屏**：保存成功后偶发弹出（可在 `config.js` 留空关闭）。
+- **新人免广告 + 分享得次数**：`quota` 云函数按 openid 发放免广告额度，扣减优先级「每日免费 → 免广告额度 → 看广告」；兼顾变现与拉新留存，调参与取舍见 [docs/MONETIZE.md](docs/MONETIZE.md)。
 
 开通「流量主」需要小程序**累计独立访客 ≥ 1000**且类目合规。广告位创建、收益预估、策略调优见 **[docs/MONETIZE.md](docs/MONETIZE.md)**。
 

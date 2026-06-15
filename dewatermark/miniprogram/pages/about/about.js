@@ -1,11 +1,39 @@
 const app = getApp();
 const { version } = require('../../utils/version');
+const quota = require('../../utils/quota');
+const { buildShare, grantShare } = require('../../utils/share');
 
 Page({
-  data: { email: '', version },
+  data: { email: '', version, freeBalance: 0, shareReward: 0, shareLeft: 0, showCredits: false },
 
   onLoad() {
-    this.setData({ email: app.globalData.config.contactEmail || '' });
+    this.setData({
+      email: app.globalData.config.contactEmail || '',
+      showCredits: !!app.globalData.config.requireAdToDownload,
+    });
+  },
+
+  onShow() {
+    this.loadQuota();
+  },
+
+  loadQuota() {
+    if (!app.globalData.config.requireAdToDownload) return;
+    quota.get().then((q) => {
+      if (!q) return;
+      this.setData({
+        freeBalance: (q.credits || 0) + (q.daily ? q.daily.left : 0),
+        shareReward: q.share ? q.share.reward : 0,
+        shareLeft: q.share ? q.share.left : 0,
+      });
+    });
+  },
+
+  onShareAppMessage() {
+    grantShare();
+    // 稍后刷新余额展示
+    setTimeout(() => this.loadQuota(), 1500);
+    return buildShare();
   },
 
   openDoc(e) {

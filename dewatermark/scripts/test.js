@@ -220,4 +220,13 @@ const ok = (name) => {
   ok('store: add rid / merge dedup / clear');
 })();
 
+// 9) 分享内容
+(() => {
+  const { buildShare } = R('miniprogram/utils/share');
+  const s = buildShare();
+  assert.ok(s.title && typeof s.title === 'string');
+  assert.strictEqual(s.path, '/pages/index/index');
+  ok('share.buildShare');
+})();
+
 console.log(`\n全部通过：${n} 组用例 ✅`);

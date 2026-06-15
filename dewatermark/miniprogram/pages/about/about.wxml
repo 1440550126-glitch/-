@@ -5,7 +5,19 @@
       <view class="p-name">极速去水印</view>
       <view class="muted" bindtap="tapVersion">无水印素材提取助手 · v{{version}}</view>
     </view>
+    <view wx:if="{{showCredits}}" class="credits">
+      <view class="credits-num">{{freeBalance}}</view>
+      <view class="credits-lbl">免广告次数</view>
+    </view>
   </view>
+
+  <button wx:if="{{showCredits}}" class="share-card card" open-type="share">
+    <view class="share-l">
+      <view class="share-t">分享得免广告次数</view>
+      <view class="muted share-s">每次分享 +{{shareReward}} 次（今日还可得 {{shareLeft}} 次）</view>
+    </view>
+    <view class="share-go">去分享 ›</view>
+  </button>
 
   <view class="menu card">
     <view class="mi" bindtap="goHistory">

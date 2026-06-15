@@ -1,6 +1,7 @@
 const app = getApp();
 const { detect } = require('../../utils/link');
 const { callParse } = require('../../utils/cloud');
+const { buildShare, grantShare } = require('../../utils/share');
 
 Page({
   data: {
@@ -74,5 +75,10 @@ Page({
 
   goBatch() {
     wx.navigateTo({ url: '/pages/batch/batch' });
+  },
+
+  onShareAppMessage() {
+    grantShare();
+    return buildShare();
   },
 });

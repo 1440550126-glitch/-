@@ -1,9 +1,10 @@
 const app = getApp();
 const { extractAll } = require('../../utils/link');
 const { callParse, historyAdd } = require('../../utils/cloud');
-const { showRewarded } = require('../../utils/ad');
+const { passDownloadGate, refund } = require('../../utils/gate');
 const { saveMedia } = require('../../utils/save');
 const { name } = require('../../utils/platform');
+const { buildShare, grantShare } = require('../../utils/share');
 const store = require('../../utils/store');
 
 const MAX = 20; // 单批上限
@@ -80,13 +81,10 @@ Page({
   async saveOne(e) {
     const it = this.data.items[e.currentTarget.dataset.idx];
     if (!it || !it.data) return;
-    const cfg = app.globalData.config;
-    if (cfg.requireAdToDownload) {
-      const ok = await showRewarded(cfg.rewardedAdUnitId);
-      if (!ok) {
-        wx.showToast({ title: '看完广告才能保存', icon: 'none' });
-        return;
-      }
+    const gate = await passDownloadGate(app.globalData.config);
+    if (!gate.allowed) {
+      wx.showToast({ title: '看完广告才能保存', icon: 'none' });
+      return;
     }
     wx.showLoading({ title: '保存中…', mask: true });
     try {
@@ -95,24 +93,22 @@ Page({
       wx.showToast({ title: '已保存', icon: 'success' });
     } catch (err) {
       wx.hideLoading();
+      if (gate.free) refund();
       wx.showModal({ title: '保存失败', content: (err && err.message) || '请重试', showCancel: false });
     }
   },
 
-  // 看一次广告解锁「全部保存」
+  // 看一次广告（或扣一次免广告额度）解锁「全部保存」
   async saveAll() {
     const dones = this.data.items.filter((x) => x.status === 'done' && x.data);
     if (!dones.length) {
       wx.showToast({ title: '没有可保存的内容', icon: 'none' });
       return;
     }
-    const cfg = app.globalData.config;
-    if (cfg.requireAdToDownload) {
-      const ok = await showRewarded(cfg.rewardedAdUnitId);
-      if (!ok) {
-        wx.showToast({ title: '看完广告解锁全部保存', icon: 'none' });
-        return;
-      }
+    const gate = await passDownloadGate(app.globalData.config);
+    if (!gate.allowed) {
+      wx.showToast({ title: '看完广告解锁全部保存', icon: 'none' });
+      return;
     }
     this.setData({ savingAll: true });
     let ok = 0;
@@ -126,10 +122,16 @@ Page({
       }
     }
     this.setData({ savingAll: false });
+    if (ok === 0 && gate.free) refund(); // 全部失败则退还本批的额度
     wx.showModal({
       title: '保存完成',
       content: `成功 ${ok} 个${fail ? `，失败 ${fail} 个` : ''}`,
       showCancel: false,
     });
+  },
+
+  onShareAppMessage() {
+    grantShare();
+    return buildShare();
   },
 });

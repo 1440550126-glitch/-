@@ -53,7 +53,10 @@
     ad-theme="white"
   ></ad>
 
-  <button class="btn btn-ghost mt" bindtap="parseAnother">再解析一个</button>
+  <view class="row gap mt">
+    <button class="btn btn-ghost flex1" bindtap="parseAnother">再解析一个</button>
+    <button class="btn btn-ghost flex1" open-type="share">分享得免广告次数</button>
+  </view>
 
   <view class="footnote muted center">
     请仅保存你拥有合法权利的内容，本工具不存储任何作品。

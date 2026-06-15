@@ -11,6 +11,25 @@
 .p-meta { margin-left: 24rpx; }
 .p-name { font-size: 34rpx; font-weight: 700; }
 
+.credits { margin-left: auto; text-align: center; }
+.credits-num { font-size: 44rpx; font-weight: 800; color: var(--brand); }
+.credits-lbl { font-size: 22rpx; color: var(--muted); margin-top: 2rpx; }
+
+.share-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 24rpx;
+  padding: 28rpx 32rpx;
+  text-align: left;
+  background: linear-gradient(135deg, #eef3ff, #f6f9ff);
+  border-radius: 24rpx;
+}
+.share-card::after { border: none; }
+.share-t { font-size: 30rpx; font-weight: 700; }
+.share-s { font-size: 23rpx; margin-top: 8rpx; }
+.share-go { flex: none; color: var(--brand); font-size: 27rpx; font-weight: 600; }
+
 .menu { margin-top: 24rpx; padding: 0 32rpx; }
 .mi {
   display: flex;

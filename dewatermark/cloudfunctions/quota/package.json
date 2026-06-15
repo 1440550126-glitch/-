@@ -1,0 +1,9 @@
+{
+  "name": "quota",
+  "version": "1.0.0",
+  "description": "免广告额度与分享奖励云函数",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

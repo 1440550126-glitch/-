@@ -38,6 +38,7 @@
   color: var(--brand);
 }
 
+.flex1 { flex: 1; }
 .banner { margin-top: 24rpx; border-radius: 16rpx; overflow: hidden; }
 .hint { font-size: 24rpx; }
 .footnote { margin: 36rpx 12rpx; font-size: 22rpx; line-height: 1.6; }

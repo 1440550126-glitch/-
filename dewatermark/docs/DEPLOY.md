@@ -26,7 +26,8 @@
 2. 右键 `cloudfunctions/login` → 同样上传并部署。
 3. 右键 `cloudfunctions/stats` → 同样上传并部署（数据看板用）。
 4. 右键 `cloudfunctions/history` → 同样上传并部署（解析记录云端同步用）。
-5. 部署完成后，「云开发控制台 → 云函数」能看到 `parse`、`login`、`stats`、`history`。
+5. 右键 `cloudfunctions/quota` → 同样上传并部署（免广告额度 / 分享得次数用）。
+6. 部署完成后，「云开发控制台 → 云函数」能看到 `parse`、`login`、`stats`、`history`、`quota`。
 
 ### （可选）云函数环境变量
 
@@ -47,6 +48,17 @@
 
 > 怎么拿自己的 openid：先**不配**该变量，在小程序「我的」页连点版本号 5 次进入数据看板，页面会显示你的 openid，复制后填进 `ADMIN_OPENIDS` 再重试即可。
 
+**quota 云函数**控制免广告额度与分享奖励（不配则用下列默认值）：
+
+| 变量 | 作用 | 默认 |
+| --- | --- | --- |
+| `NEWBIE_FREE` | 新人初始免广告次数 | `3` |
+| `DAILY_FREE` | 每日额外免广告次数 | `0` |
+| `SHARE_REWARD` | 每次分享奖励的免广告次数 | `2` |
+| `SHARE_DAILY_CAP` | 每日可奖励的分享次数上限 | `3` |
+
+> 免广告额度按 openid 存在 `credits` 集合（服务端权威，防本地刷量）；同一微信用户重装也保留。变现与留存的取舍见 [MONETIZE.md](MONETIZE.md)。若 `quota` 云函数未部署，客户端自动降级到 `config.js` 的 `freeDownloadsPerDay` 本地逻辑，不影响使用。
+
 ### 平台说明
 
 - **抖音 / 皮皮虾**（字节系）：内置 H5 解析，最稳定。
@@ -63,6 +75,9 @@
 | `users` | 用户（openid + 首次/最近访问时间） | 仅创建者可读写 |
 | `parse_logs` | 解析量统计（用于数据看板） | 仅创建者可读写 |
 | `histories` | 解析记录云端同步（按 openid 存档） | 仅创建者可读写 |
+| `credits` | 免广告额度 / 分享奖励（按 openid） | 仅创建者可读写 |
+
+> 建议给 `users`、`histories`、`credits` 的 `openid` 字段建**索引**（控制台 → 数据库 → 索引管理），数据量大后查询更快；`credits` 可设为唯一索引，避免极端并发下重复建档。
 
 > 不创建也不会报错（云函数里已 try/catch），但建上能积累统计数据。
 

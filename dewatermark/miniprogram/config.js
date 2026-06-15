@@ -17,9 +17,12 @@ module.exports = {
   interstitialAdUnitId: '',
 
   // —— 业务策略（可按需调整）——
-  // 是否必须看完激励视频才能下载（建议 true，这是广告收入主来源）
+  // 是否必须看完激励视频才能下载（总开关，建议 true，这是广告收入主来源）
   requireAdToDownload: true,
-  // 每日「免费」下载次数（在看广告之外的赠送额度；0 = 每次都要看广告）
+  // 每日「免费」下载次数：仅在 quota 云函数不可用时的本地兜底值。
+  //   新人免广告次数 / 分享得次数 / 每日免费数 的正式配置在 quota 云函数环境变量里：
+  //   NEWBIE_FREE（新人初始，默认 3）/ SHARE_REWARD（每次分享 +，默认 2）/
+  //   SHARE_DAILY_CAP（每日可奖励分享数，默认 3）/ DAILY_FREE（每日免费，默认 0）
   freeDownloadsPerDay: 0,
   // 客服/反馈邮箱（关于页展示）
   contactEmail: 'your@email.com',

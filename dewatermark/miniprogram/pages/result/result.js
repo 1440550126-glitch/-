@@ -1,9 +1,12 @@
 const app = getApp();
-const { showRewarded, preloadRewarded } = require('../../utils/ad');
+const { preloadRewarded } = require('../../utils/ad');
+const { passDownloadGate, refund } = require('../../utils/gate');
+const quota = require('../../utils/quota');
 const { saveMedia } = require('../../utils/save');
 const store = require('../../utils/store');
 const { name } = require('../../utils/platform');
 const { historyAdd } = require('../../utils/cloud');
+const { buildShare, grantShare } = require('../../utils/share');
 
 Page({
   data: {
@@ -12,6 +15,7 @@ Page({
     previewUrl: '',
     bannerUnitId: '',
     saving: false,
+    freeBalance: 0,
     btnText: '看广告 · 保存到相册',
   },
 
@@ -26,17 +30,17 @@ Page({
     const rec = store.add(item);
     historyAdd(rec); // 同步到云端（best-effort，不阻塞）
 
-    const needAd = cfg.requireAdToDownload && (cfg.freeDownloadsPerDay || 0) <= app.globalData.freeUsed;
     this.setData({
       item,
       platformName: name(item.platform),
       // 已转存的视频优先用云存储临时地址预览（直链可能有防盗链，如 B站）
       previewUrl: item.fileID ? '' : item.url || '',
       bannerUnitId: cfg.bannerAdUnitId || '',
-      btnText: needAd ? '看广告 · 保存到相册' : '保存到相册',
+      btnText: cfg.requireAdToDownload ? '看广告 · 保存到相册' : '保存到相册',
     });
 
     preloadRewarded(cfg.rewardedAdUnitId);
+    this.loadQuota();
 
     if (item.fileID) {
       wx.cloud
@@ -60,21 +64,29 @@ Page({
     wx.previewImage({ current: url, urls: this.data.item.images || [] });
   },
 
+  loadQuota() {
+    const cfg = app.globalData.config;
+    if (!cfg.requireAdToDownload) {
+      this.setData({ btnText: '保存到相册', freeBalance: 0 });
+      return;
+    }
+    quota.get().then((q) => {
+      if (!q) return; // 取不到则保持默认"看广告"文案
+      const total = (q.credits || 0) + (q.daily ? q.daily.left : 0);
+      this.setData({
+        freeBalance: total,
+        btnText: total > 0 ? `免广告保存（剩 ${total} 次）` : '看广告 · 保存到相册',
+      });
+    });
+  },
+
   async onSave() {
     const cfg = app.globalData.config;
-    app.resetDailyIfNeeded();
-
-    const freeLeft = (cfg.freeDownloadsPerDay || 0) - app.globalData.freeUsed;
-    const needAd = cfg.requireAdToDownload && freeLeft <= 0;
-
-    if (needAd) {
-      const completed = await showRewarded(cfg.rewardedAdUnitId);
-      if (!completed) {
-        wx.showToast({ title: '看完广告才能保存哦', icon: 'none' });
-        return;
-      }
-    } else if (freeLeft > 0) {
-      app.globalData.freeUsed += 1;
+    const gate = await passDownloadGate(cfg);
+    if (!gate.allowed) {
+      wx.showToast({ title: '看完广告才能保存哦', icon: 'none' });
+      this.loadQuota();
+      return;
     }
 
     this.setData({ saving: true });
@@ -86,10 +98,17 @@ Page({
       this.maybeInterstitial();
     } catch (e) {
       wx.hideLoading();
+      if (gate.free) refund(); // 免广告路径保存失败，退还额度
       wx.showModal({ title: '保存失败', content: (e && e.message) || '请重试', showCancel: false });
     } finally {
       this.setData({ saving: false });
+      this.loadQuota();
     }
+  },
+
+  onShareAppMessage() {
+    grantShare();
+    return buildShare();
   },
 
   maybeInterstitial() {
