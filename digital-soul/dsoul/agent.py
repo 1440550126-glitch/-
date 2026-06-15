@@ -229,6 +229,15 @@ class Agent:
             self._log_journal(who, utterance, reply, "self_learn")
             return result
 
+        # --- 群体模拟预测（"会不会/能成吗/靠谱吗"）：脑中开个小会拿主意 ---
+        if action is None and who.get("obey") and any(
+                k in utterance for k in ("会不会", "能不能成", "成不成", "能成", "成吗", "靠谱吗",
+                                         "可行吗", "行不行", "你觉得会", "预测一下", "猜猜会", "模拟一下")):
+            fc = self.forecast(utterance)
+            result["reply"] = fc
+            self._log_journal(who, utterance, fc, "forecast")
+            return result
+
         # --- 价值抉择（"我该不该…/怎么选"）：据价值观给有立场的建议 ---
         if action is None and who.get("obey") and any(
                 k in utterance for k in ("该不该", "应不应该", "纠结", "怎么选", "选哪个",
@@ -709,6 +718,11 @@ class Agent:
                 mood_char, mood = top, _DESC.get(top)
         return compose_thought(utterance, mood=mood, mood_char=mood_char, assoc=assoc_texts,
                                speaker=who.get("name") if who.get("known") else None)
+
+    def forecast(self, question) -> str:
+        """群体模拟预测：脑中开个小会，多视角各自表态，聚合成一个带比例的预感。"""
+        from .swarm import forecast
+        return forecast(question)["text"]
 
     # ---------- 价值抉择 ----------
     def deliberate(self, text) -> str:
