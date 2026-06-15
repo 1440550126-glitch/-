@@ -30,7 +30,7 @@ class Agent:
     def __init__(self, identity, persona, memory, authority, perception, llm, robot,
                  journal=None, emotions=None, knowledge=None, skills=None, hub=None,
                  tasks=None, reflector=None, planner=None, plan=None, devices=None,
-                 scenes=None, triggers=None) -> None:
+                 scenes=None, triggers=None, sensor_source=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -55,7 +55,8 @@ class Agent:
         self.scenes = scenes         # 场景/例程（回家/睡眠/离家…）
         self.triggers = triggers     # 自动化（定时 + 进门事件）
         self._sun_times = {"sunrise": "06:30", "sunset": "18:30"}  # 日出/日落（可配置）
-        self.sensors = {"temperature": 22}                        # 传感器读数（默认模拟，可接 HA）
+        self.sensors = {"temperature": 22}                        # 模拟读数（无真实传感器时的兜底）
+        self.sensor_source = sensor_source                        # 真实传感器源（如 HA），可为空
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
@@ -602,11 +603,22 @@ class Agent:
                 notices.append(msg)
         return notices
 
+    def read_sensors(self) -> dict:
+        """当前传感器读数：优先真实源（如 HA），失败/未配置则用模拟读数。"""
+        if getattr(self, "sensor_source", None) is not None:
+            try:
+                got = self.sensor_source.read()
+                if got:
+                    return got
+            except Exception:
+                pass
+        return dict(getattr(self, "sensors", {}) or {})
+
     def check_conditions(self, readings=None) -> list:
         """条件触发（如温度低于阈值）。上升沿触发一次，避免反复。由 daemon 定时调用。"""
         if self.triggers is None:
             return []
-        readings = readings if readings is not None else getattr(self, "sensors", {})
+        readings = readings if readings is not None else self.read_sensors()
         notices = []
         for t in self.triggers.cond_triggers():
             sp = t.get("spec", {})

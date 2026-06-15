@@ -222,3 +222,36 @@ def build_device_hub(config=None) -> DeviceHub:
     if ha and ha.get("base_url") and ha.get("token"):
         return DeviceHub(backend=HomeAssistantBackend(ha["base_url"], ha["token"], ha.get("entities", {})))
     return DeviceHub()
+
+
+class HASensors:
+    """从 Home Assistant 读取传感器数值（供温度等条件触发用）。"""
+
+    def __init__(self, base_url, token, entities) -> None:
+        self.base = base_url.rstrip("/")
+        self.token = token
+        self.entities = entities or {}
+
+    def _get(self, entity):
+        req = urllib.request.Request(
+            self.base + f"/api/states/{entity}",
+            headers={"Authorization": f"Bearer {self.token}"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return json.loads(r.read().decode("utf-8"))
+
+    def read(self) -> dict:
+        out = {}
+        for name, entity in self.entities.items():
+            try:
+                out[name] = float(self._get(entity).get("state"))
+            except Exception:
+                pass
+        return out
+
+
+def build_sensor_source(config=None):
+    """配了 home_assistant.sensors 就读真实传感器，否则返回 None（用模拟读数）。"""
+    ha = config.get("home_assistant") if isinstance(config, dict) else None
+    if ha and ha.get("base_url") and ha.get("token") and ha.get("sensors"):
+        return HASensors(ha["base_url"], ha["token"], ha["sensors"])
+    return None

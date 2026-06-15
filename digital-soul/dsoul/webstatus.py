@@ -116,6 +116,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 <div class=card><div class=k>🏠 设备</div><div id=devices></div></div>
 <div class=card><div class=k>🎬 场景</div><div id=scenes></div></div>
 <div class=card><div class=k>⏰ 自动化</div><ul id=triggers></ul>
+  <form id=trigf class=row style="margin:6px 0"><input id=triginput placeholder="如：每天22点提醒锁门" autocomplete=off><button>添加</button></form>
   <button id=clrtrig class=devbtn>清空</button></div>
 <div class=card><div class=k>💞 此刻心情</div><div id=mood>…</div><div id=moodbars></div></div>
 <div class=card><div class=k>🤵 管家</div>
@@ -186,6 +187,7 @@ $('#f').addEventListener('submit',e=>{e.preventDefault();const t=$('#msg').value
 $('#brief').addEventListener('click',()=>ask('简报'));
 $('#diag').addEventListener('click',()=>ask('系统自检'));
 $('#clrtrig').addEventListener('click',()=>ask('清空所有自动化'));
+$('#trigf').addEventListener('submit',e=>{e.preventDefault();const t=$('#triginput').value;$('#triginput').value='';ask(t);});
 $('#retry').addEventListener('click',async()=>{
   const sp=$('#speaker').value; const b=$('#retry'); b.disabled=true;
   try{

@@ -12,3 +12,5 @@
 #     door:    lock.front_door
 #     curtain: cover.living_room
 #     tv:      media_player.tv
+#   sensors:             # 逻辑读数 -> HA 传感器实体（温度等条件触发用）
+#     temperature: sensor.living_room_temperature

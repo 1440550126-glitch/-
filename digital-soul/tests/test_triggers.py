@@ -98,6 +98,18 @@ def test_condition_rising_edge_fires_once():
     assert a.check_conditions({"temperature": 15})               # 再次跌破 → 再触发
 
 
+def test_read_sensors_prefers_source_then_falls_back():
+    a = _agent()
+    a.sensor_source = None
+    a.sensors = {"temperature": 21}
+    assert a.read_sensors() == {"temperature": 21}               # 无真实源 → 模拟
+    a.sensor_source = type("S", (), {"read": lambda self: {"temperature": 9}})()
+    assert a.read_sensors() == {"temperature": 9}                # 有真实源 → 用之
+    # 条件触发默认读 read_sensors（这里真实源报 9 < 18 → 触发）
+    a._trigger_route("张明", "温度低于18就开空调")
+    assert a.check_conditions()
+
+
 if __name__ == "__main__":
     for _n, _f in sorted(globals().items()):
         if _n.startswith("test_") and callable(_f):

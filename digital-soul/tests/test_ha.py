@@ -6,6 +6,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from dsoul.devices import DeviceHub, HomeAssistantBackend, build_device_hub  # noqa: E402
+from dsoul.devices import HASensors, build_sensor_source  # noqa: E402
 
 
 class _Rec(HomeAssistantBackend):
@@ -55,6 +56,21 @@ def test_build_device_hub_selects_backend():
     hub = build_device_hub({"home_assistant": {
         "base_url": "http://h:8123", "token": "t", "entities": {"light": "light.x"}}})
     assert isinstance(hub.backend, HomeAssistantBackend)               # 有配置 → 真机
+
+
+def test_ha_sensors_read():
+    class _S(HASensors):
+        def _get(self, entity):
+            return {"state": "16.5"}
+    s = _S("http://h:8123", "tok", {"temperature": "sensor.t"})
+    assert s.read() == {"temperature": 16.5}
+
+
+def test_build_sensor_source():
+    assert build_sensor_source({}) is None                            # 无传感器配置
+    src = build_sensor_source({"home_assistant": {
+        "base_url": "http://h:8123", "token": "t", "sensors": {"temperature": "sensor.t"}}})
+    assert isinstance(src, HASensors)
 
 
 if __name__ == "__main__":

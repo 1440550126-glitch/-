@@ -9,7 +9,7 @@ import yaml
 from .actions import SimulationRobot
 from .agent import Agent
 from .authority import Authority
-from .devices import build_device_hub
+from .devices import build_device_hub, build_sensor_source
 from .emotions import EmotionState
 from .journal import Journal
 from .knowledge import Knowledge
@@ -75,14 +75,15 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
     reflector = Reflector(memory, journal, emotions=emotions, llm=llm, identity=identity)
     planner = Planner(memory=memory, llm=llm, identity=identity)
     plan = PlanBook(base / "data" / "plan.json")
-    devices = build_device_hub(_load_yaml(base / "config" / "devices.yaml"))
+    devcfg = _load_yaml(base / "config" / "devices.yaml")
+    devices = build_device_hub(devcfg)
     scenes = SceneBook(_load_yaml(base / "config" / "scenes.yaml"))
     triggers = TriggerBook(base / "data" / "triggers.json")
 
     return Agent(identity, persona, memory, authority, perception, llm, robot, journal,
                  emotions=emotions, knowledge=knowledge, skills=skills, hub=hub, tasks=tasks,
                  reflector=reflector, planner=planner, plan=plan, devices=devices, scenes=scenes,
-                 triggers=triggers)
+                 triggers=triggers, sensor_source=build_sensor_source(devcfg))
 
 
 def _seed_memory(base: Path, memory) -> None:
