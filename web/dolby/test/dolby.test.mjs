@@ -75,6 +75,15 @@ ok(presetById('myroom').id === 'myroom', 'registerPreset 注册自定义预设')
 d.setPreset('myroom'); ok(d.presetId === 'myroom', '应用注册的自定义预设');
 d.setPreset({ id: 'inline', p: presetById('music').p }); ok(d.presetId === 'inline', 'setPreset 接受内联预设对象');
 
+// 8b) 多频带压缩 / 人声增强 / 响度对齐
+d.setMultiband(true); ok(d.multiband, '开启三段多频带压缩');
+d.setMultiband(false); ok(!d.multiband, '切回单段压缩');
+d.setVocal(6); ok(true, 'setVocal 人声增强不抛错');
+d.setLoudnessMatch(true); ok(d.loudnessMatch, '开启响度对齐（内部测量回路）');
+d._updateMatch(); ok(true, '响度对齐测量一次不抛错');
+d.setLoudnessMatch(false); ok(!d.loudnessMatch, '关闭响度对齐');
+ok('multiband' in d.state && 'loudnessMatch' in d.state, `state 含新字段：${JSON.stringify(d.state)}`);
+
 // 9) 工厂 + 释放
 const d2 = createDolby({ context: makeCtx(), autoConnect: false });
 ok(d2 instanceof DolbyAudio, 'createDolby 工厂函数');
@@ -89,5 +98,23 @@ const oc = owned.context;
 owned.dispose({ closeContext: true });
 ok(oc.state === 'closed', 'dispose(closeContext) 关闭自建 context');
 delete globalThis.window;
+
+// 10) 持久化助手 dolby-store
+globalThis.localStorage = (() => { let m = {}; return { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); }, removeItem: (k) => { delete m[k]; } }; })();
+const store = await import('../dolby-store.js');
+const p0 = store.loadPrefs();
+ok(p0.preset === 'standard' && p0.spatialMode === 'speakers', 'loadPrefs 无数据时返回默认');
+const sd = createDolby({ context: makeCtx() });
+sd.setPreset('cinema'); sd.setSpatialMode('headphones'); sd.setIntensity(0.6); sd.setMultiband(true);
+ok(store.savePrefs(store.snapshot(sd)), 'savePrefs 写入当前快照');
+const p1 = store.loadPrefs();
+ok(p1.preset === 'cinema' && p1.spatialMode === 'headphones' && Math.abs(p1.intensity - 0.6) < 1e-9 && p1.multiband, `loadPrefs 读回快照：${JSON.stringify(p1)}`);
+const sd2 = createDolby({ context: makeCtx() });
+store.applyPrefs(sd2, p1);
+ok(sd2.presetId === 'cinema' && sd2.spatialMode === 'headphones' && sd2.multiband, 'applyPrefs 套用到新实例');
+store.autosave(sd2, 'dolby:prefs', 40); sd2.setPreset('music');
+await new Promise((r) => setTimeout(r, 80));
+ok(store.loadPrefs().preset === 'music', 'autosave 自动持久化 set* 调用');
+sd.dispose(); sd2.dispose();
 
 console.log(`\n========== dolby-audio：${pass} 项断言全部通过 ✅ ==========`);

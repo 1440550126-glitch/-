@@ -66,6 +66,14 @@
         <div><div style="font-weight:700;font-size:13.5px">耳机环绕（HRTF）</div><div class="label">虚拟前置 + 环绕音箱，戴耳机更沉浸</div></div>
         <div id="hpSwitch" class="switch"></div>
       </div>
+      <div class="row" style="justify-content: space-between; margin-top: 12px">
+        <div><div style="font-weight:700;font-size:13.5px">多频带压缩</div><div class="label">高/中/低三段独立压缩，更扎实更响</div></div>
+        <div id="mbSwitch" class="switch"></div>
+      </div>
+      <div class="row" style="justify-content: space-between; margin-top: 12px">
+        <div><div style="font-weight:700;font-size:13.5px">响度对齐</div><div class="label">处理后≈原声响度，A/B 对比更公平</div></div>
+        <div id="lmSwitch" class="switch"></div>
+      </div>
     </div>
 
     <div class="card">
@@ -74,6 +82,7 @@
       <div class="slider"><span class="label">低音</span><input id="bass" type="range" min="0" max="12" value="5" /><span class="val" id="bassV">+5dB</span></div>
       <div class="slider"><span class="label">空间</span><input id="reverb" type="range" min="0" max="60" value="16" /><span class="val" id="reverbV">16%</span></div>
       <div class="slider"><span class="label">高频</span><input id="air" type="range" min="0" max="12" value="4" /><span class="val" id="airV">+4dB</span></div>
+      <div class="slider"><span class="label">人声</span><input id="vocal" type="range" min="0" max="9" value="2" /><span class="val" id="vocalV">+2dB</span></div>
       <div class="hint">关掉「杜比音效」开关即可与原声直接 A/B 对比。</div>
     </div>
   </div>

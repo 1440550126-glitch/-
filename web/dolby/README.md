@@ -13,12 +13,15 @@
 - 🌐 **声场展宽** — M/S 处理保留并增强**原始立体声**，单声道素材安全不抵消
 - 🎧 **耳机虚拟环绕** — HRTF 双耳渲染，模拟前置 ±30° + 环绕 ±110° 虚拟音箱，戴耳机也有"音箱在房间里"的外置环绕感
 - 🔄 **环绕呼吸** — 缓慢 LFO 调制声场宽度，营造声音流动的包围感
+- 🗣 **人声/对白增强** — 提升中置带通，人声/旁白更清晰突出
 - 🏛 **空间混响** — 实时合成立体声脉冲响应，影院/音乐厅空间感
-- 📊 **动态压缩 + 软削波限制** — 提升响度的同时防止过载失真
+- 📊 **动态压缩 + 软削波限制** — 单段或**三段多频带**压缩，提升响度同时防过载
+- ⚖️ **响度对齐（Volume Leveler）** — 处理后≈原声响度，开关 A/B 不再"一开就变大声"
 - 📈 **输出电平表** — `getLevel()` 实时返回 RMS/峰值/dBFS，驱动电平条或可视化
 - 🎛 **干湿混合** — 强度可调、一键 A/B 旁通（等功率交叉淡化，切换不爆音）
 - 🎚 **5 档预设 + 自定义** — 标准/影院/音乐/夜间/人声，`registerPreset()` 可扩展
-- 🪶 **零依赖 / 零构建** — 单个 ES Module，约 11KB，含 TypeScript 类型定义
+- 💾 **可选偏好持久化** — `dolby-store.js` 助手（引擎本身保持无状态、解耦）
+- 🪶 **零依赖 / 零构建** — 单个 ES Module，含 TypeScript 类型定义
 
 ## 快速开始
 
@@ -67,6 +70,8 @@ dolby.connect(myCtx.destination);   // 或连到你自己的下游节点
 | `autoConnect` | `true` | 自动连到 `context.destination` |
 | `analyser` | `false` | 额外挂 `AnalyserNode`，用 `getAnalyser()` 取出做可视化 |
 | `spatialMode` | `'speakers'` | 声场渲染：`'speakers'` 外放立体声 / `'headphones'` 耳机 HRTF 虚拟环绕 |
+| `multiband` | `false` | 三段多频带压缩（默认单段） |
+| `loudnessMatch` | `false` | 响度对齐：处理后≈原声响度 |
 
 方法：
 
@@ -79,7 +84,9 @@ dolby.connect(myCtx.destination);   // 或连到你自己的下游节点
 | `resume()` | 用户手势后唤醒 AudioContext（返回 Promise） |
 | `setPreset(id\|preset)` / `setIntensity(v)` / `setEnabled(on)` / `bypass(on)` | 实时控制（平滑过渡），`setPreset` 也接受自定义预设对象 |
 | `setSpatialMode('speakers'\|'headphones')` | 切换外放 / 耳机虚拟环绕（交叉淡化无爆音） |
-| `setWidth(mult)` / `setBass(dB)` / `setAir(dB)` / `setReverb(mix)` | 单项微调（覆盖当前预设） |
+| `setMultiband(on)` | 三段多频带压缩 ↔ 单段压缩 |
+| `setLoudnessMatch(on)` | 开/关响度对齐回路 |
+| `setWidth(mult)` / `setBass(dB)` / `setAir(dB)` / `setReverb(mix)` / `setVocal(dB)` | 单项微调（覆盖当前预设） |
 | `getAnalyser()` | 取频谱分析器（需构造时 `analyser:true`） |
 | `getLevel()` | 取输出电平 `{ rms, peak, db }`，做电平表/动效 |
 | `state` / `enabled` / `intensity` / `presetId` / `spatialMode` | 只读状态 |
@@ -131,6 +138,31 @@ function tick() {
   requestAnimationFrame(tick);
 }
 tick();
+```
+
+## 动态、响度与人声
+
+```js
+dolby.setMultiband(true);      // 三段（低<250Hz<中<3.5kHz<高）独立压缩，更扎实
+dolby.setLoudnessMatch(true);  // 响度对齐：处理后≈原声响度，A/B 切换更公平
+dolby.setVocal(6);             // 人声/对白中置提升 +6dB（旁白、播客更清晰）
+```
+
+- **多频带压缩**：用 LR4 分频成低/中/高三段各自压缩再相加，比单段更能"压住"个别频段而不发闷；默认单段，按需打开。
+- **响度对齐**：内部用两个分析器持续测量原声与处理后信号的 RMS，自动微调输出增益使两者响度接近——这样开/关杜比做 A/B 时不会被"变大声"误导成"更好听"。
+- **人声增强**：提升 M/S 中的中置（Mid）带通，对白/主唱位于中央时尤其有效。
+
+## 偏好持久化（可选）
+
+引擎本身**无状态、不碰存储**；需要记住用户选择时用配套的 `dolby-store.js`：
+
+```js
+import { DolbyAudio } from './dolby/dolby-audio.js';
+import { loadPrefs, applyPrefs, autosave } from './dolby/dolby-store.js';
+
+const dolby = new DolbyAudio();
+applyPrefs(dolby, loadPrefs());   // 启动恢复上次设置
+autosave(dolby);                  // 之后任何 set* 调用自动节流保存
 ```
 
 ## 信号链

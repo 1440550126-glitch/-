@@ -7,6 +7,8 @@ export interface DolbyPresetParams {
   bassDrive: { amount: number; mix: number };
   mid: { freq: number; gain: number; q: number };
   air: { freq: number; gain: number };
+  /** 人声/对白中置提升 dB（可选） */
+  vocal?: number;
   width: number;
   motion: { rate: number; depth: number };
   reverb: { mix: number; seconds: number; decay: number };
@@ -31,6 +33,8 @@ export interface DolbyOptions {
   autoConnect?: boolean;
   analyser?: boolean;
   spatialMode?: SpatialMode;
+  multiband?: boolean;
+  loudnessMatch?: boolean;
 }
 
 export interface DolbyState {
@@ -38,6 +42,8 @@ export interface DolbyState {
   preset: string;
   intensity: number;
   spatialMode: SpatialMode;
+  multiband: boolean;
+  loudnessMatch: boolean;
   supported: boolean;
 }
 
@@ -73,6 +79,8 @@ export class DolbyAudio {
 
   setPreset(idOrPreset: string | DolbyPreset | DolbyPresetParams, instant?: boolean): this;
   setSpatialMode(mode: SpatialMode, instant?: boolean): this;
+  setMultiband(on: boolean, instant?: boolean): this;
+  setLoudnessMatch(on: boolean): this;
   setIntensity(v: number, instant?: boolean): this;
   setEnabled(on: boolean, instant?: boolean): this;
   enable(on: boolean): this;
@@ -82,6 +90,7 @@ export class DolbyAudio {
   setBass(dB: number): this;
   setAir(dB: number): this;
   setReverb(mix: number): this;
+  setVocal(dB: number): this;
 
   getAnalyser(): AnalyserNode | null;
   getLevel(): DolbyLevel;
@@ -90,6 +99,8 @@ export class DolbyAudio {
   readonly intensity: number;
   readonly presetId: string;
   readonly spatialMode: SpatialMode;
+  readonly multiband: boolean;
+  readonly loudnessMatch: boolean;
   readonly state: DolbyState;
 
   dispose(opts?: { closeContext?: boolean }): void;

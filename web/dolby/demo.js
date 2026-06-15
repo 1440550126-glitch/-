@@ -105,6 +105,11 @@ hpEl.addEventListener('click', () => {
   dolby.setSpatialMode(on ? 'headphones' : 'speakers');
   hpEl.classList.toggle('on', on);
 });
+// —— 多频带压缩 / 响度对齐 ——
+const mbEl = $('mbSwitch');
+mbEl.addEventListener('click', () => { const on = !dolby.multiband; dolby.setMultiband(on); mbEl.classList.toggle('on', on); });
+const lmEl = $('lmSwitch');
+lmEl.addEventListener('click', () => { const on = !dolby.loudnessMatch; dolby.setLoudnessMatch(on); lmEl.classList.toggle('on', on); });
 
 // —— 预设 ——
 const presetsEl = $('presets');
@@ -121,18 +126,20 @@ DOLBY_PRESETS.forEach((p) => {
 });
 
 // —— 滑杆 ——
-const I = $('intensity'), W = $('width'), B = $('bass'), R = $('reverb'), A = $('air');
+const I = $('intensity'), W = $('width'), B = $('bass'), R = $('reverb'), A = $('air'), V = $('vocal');
 function syncSliders(p) {
   W.value = Math.round(p.width * 100); $('widthV').textContent = (p.width).toFixed(2) + '×';
   B.value = Math.round(p.bass.gain); $('bassV').textContent = `+${Math.round(p.bass.gain)}dB`;
   R.value = Math.round(p.reverb.mix * 100); $('reverbV').textContent = Math.round(p.reverb.mix * 100) + '%';
   A.value = Math.round(p.air.gain); $('airV').textContent = `+${Math.round(p.air.gain)}dB`;
+  V.value = Math.round(p.vocal || 0); $('vocalV').textContent = `+${Math.round(p.vocal || 0)}dB`;
 }
 I.addEventListener('input', () => { dolby.setIntensity(I.value / 100); $('intensityV').textContent = I.value + '%'; });
 W.addEventListener('input', () => { const v = W.value / 100; dolby.setWidth(v); $('widthV').textContent = v.toFixed(2) + '×'; });
 B.addEventListener('input', () => { dolby.setBass(+B.value); $('bassV').textContent = `+${B.value}dB`; });
 R.addEventListener('input', () => { dolby.setReverb(R.value / 100); $('reverbV').textContent = R.value + '%'; });
 A.addEventListener('input', () => { dolby.setAir(+A.value); $('airV').textContent = `+${A.value}dB`; });
+V.addEventListener('input', () => { dolby.setVocal(+V.value); $('vocalV').textContent = `+${V.value}dB`; });
 
 // —— 频谱可视化 + 输出电平表 ——
 const cvs = $('viz'), cc = cvs.getContext('2d'), analyser = dolby.getAnalyser(), meterFill = $('meterFill');
