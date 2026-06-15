@@ -191,21 +191,26 @@ class Agent:
         if hasattr(self.memory, "reinforce"):
             self.memory.reinforce([it["id"] for _, it in recalled])
 
+        # --- 量子纠缠：被想起的记忆"牵动"与之纠缠的记忆（测量其一即影响其二）---
+        assoc = self._entangled_recall(recalled)
+        result["associations"] = [t for _, t in assoc]
+        ctx = mems + [t for _, t in assoc]
+
         # --- 情绪随这句话起伏 ---
         if self.emotions is not None:
             self.emotions.observe(utterance, speaker=who if who.get("known") else None)
 
-        # --- 生成回复（带上情绪 / 学识等提示）---
+        # --- 生成回复（带上情绪 / 学识等提示；上下文含纠缠联想）---
         system = self.persona.system_prompt(
-            speaker=who if who.get("known") else None, memories=mems, hints=self._hints()
+            speaker=who if who.get("known") else None, memories=ctx, hints=self._hints()
         )
         if self.llm.available:
             try:
                 result["reply"] = self.llm.chat(system, utterance)
             except Exception as e:
-                result["reply"] = self._fallback(who, utterance, mems) + f"\n（注：调用本地模型出错：{e}）"
+                result["reply"] = self._fallback(who, utterance, ctx) + f"\n（注：调用本地模型出错：{e}）"
         else:
-            result["reply"] = self._fallback(who, utterance, mems)
+            result["reply"] = self._fallback(who, utterance, ctx)
 
         # --- 写入对话日记（短期记忆，供日后"睡眠巩固"）---
         if self.journal is not None:
@@ -520,6 +525,18 @@ class Agent:
         cand = self.memory.recall(text, k=k * 3)
         ranked = sorted(cand, key=lambda si: -(si[0] * (0.4 + 0.6 * strength(si[1], now))))
         return ranked[:k]
+
+    def _entangled_recall(self, recalled):
+        """对被回忆的记忆做扩散激活，牵动并强化与之纠缠的记忆。返回 [(强度, 文本), …]。"""
+        try:
+            from .entangle import spreading_activation
+            names = [p.get("name") for p in self.authority.people.values()]
+            assoc = spreading_activation([it for _, it in recalled], self.memory.items, names=names, k=2)
+        except Exception:
+            return []
+        if assoc and hasattr(self.memory, "reinforce"):
+            self.memory.reinforce([it["id"] for _, it in assoc])   # 测量牵动 → 强化纠缠伙伴
+        return [(w, it.get("text", "")) for w, it in assoc]
 
     def rescue_fading(self, now=None, threshold: float = 0.35) -> list:
         """温故：抢救"重要但正在淡忘"的记忆（重温即强化），避免遗忘要紧事。"""

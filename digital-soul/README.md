@@ -68,6 +68,7 @@
 | 自主心跳 / 主动性 | 常驻时定期反思+规划+跟进欠账，不用你催 | `dsoul/agent.py`(tick) · `scripts/daemon.py` |
 | 记忆图谱 | 记忆连成"人—事—主题"关系网，可问"关于X/最核心的人" | `dsoul/graph.py` · `scripts/graph.py` |
 | 记忆遗忘曲线 | 记忆随时间淡忘，越重要/越常想起越长久，回忆可唤醒 | `dsoul/forgetting.py` · `scripts/forgetting.py` |
+| 量子纠缠式记忆 | 相关记忆纠缠在一起，回忆其一即牵动其二（扩散激活） | `dsoul/entangle.py` · `scripts/entangle.py` |
 
 ## 架构
 

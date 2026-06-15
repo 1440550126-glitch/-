@@ -112,6 +112,7 @@ flowchart TB
 | `reflect.py` · `planner.py` | 自主反思→领悟；自主规划→今天的计划 |
 | `graph.py` | 记忆图谱：人—事—主题关系网（中心度/实体检索/连接） |
 | `forgetting.py` | 记忆遗忘曲线：强度随时间衰减、被回忆/情感/重要性强化 |
+| `entangle.py` | 量子纠缠式记忆：相关记忆扩散激活，测量其一牵动其二 |
 | `tasks.py` | 派活待办本：成记功、败记账、可跟进重试 |
 | `emotions.py` · `knowledge.py` | 七情六欲随互动起伏；多学科视角调度 |
 | `perception.py` · `perception_opencv.py` · `presence.py` | 人脸认人；树莓派轻量后端；持续感知/进门事件 |
@@ -153,12 +154,12 @@ flowchart TB
 
 ## 6. 测试
 
-20 套单测、约 70+ 用例，纯标准库、零网络即可跑：
+21 套单测、约 75+ 用例，纯标准库、零网络即可跑：
 
 ```bash
 cd digital-soul
-for t in authority memory annotate presence consolidate emotions skills dispatch tasks \
-         reflect plan butler devices orchestrate scenes triggers ha graph voice forgetting; do
+for t in authority memory annotate presence consolidate emotions skills dispatch tasks reflect \
+         plan butler devices orchestrate scenes triggers ha graph voice forgetting entangle; do
   python tests/test_$t.py || break
 done
 ```
