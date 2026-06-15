@@ -42,7 +42,7 @@
 | 通过图片/视频/文档认人 | 人脸识别 + 文档摄取 | `dsoul/perception.py` · `scripts/ingest.py` |
 | 专属"世界大模型"（本地、16G） | 接 Ollama 跑量化小模型当推理引擎 | `dsoul/llm.py` |
 | 接入机器人 | 抽象动作接口（现模拟，后接硬件/ROS） | `dsoul/actions.py` · `dsoul/ros2_robot.py` |
-| 语音交流（听 + 说） | 本地 Whisper 转文字 + 离线 TTS | `dsoul/voice.py` · `scripts/voice_chat.py` |
+| 语音交流（听 + 说） | 本地 Whisper 转文字 + 离线 TTS，语速/音量随七情变化 | `dsoul/voice.py` · `scripts/voice_chat.py` |
 | 情感记忆 / 一生回顾 | 记忆自动打情感标签 + 时间线 | `dsoul/annotate.py` · `scripts/timeline.py` |
 | 持续感知 / 主动打招呼 | 摄像头认人，进画面即主动问候 | `dsoul/presence.py` · `scripts/watch.py` |
 | 贴近本人文风 | QLoRA 本地微调流水线 | `scripts/finetune_*.py` · `docs/finetune.md` |

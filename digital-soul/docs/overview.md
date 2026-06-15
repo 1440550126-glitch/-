@@ -114,7 +114,7 @@ flowchart TB
 | `tasks.py` | 派活待办本：成记功、败记账、可跟进重试 |
 | `emotions.py` · `knowledge.py` | 七情六欲随互动起伏；多学科视角调度 |
 | `perception.py` · `perception_opencv.py` · `presence.py` | 人脸认人；树莓派轻量后端；持续感知/进门事件 |
-| `voice.py` | 本地听（Whisper）+ 说（离线 TTS） |
+| `voice.py` | 本地听（Whisper）+ 说（离线 TTS，语气随七情变化） |
 | `actions.py` · `ros2_robot.py` | 机器人动作接口（模拟 / ROS2） |
 | `llm.py` | 本地大模型（Ollama），未接则优雅降级 |
 | `butler.py` | 贾维斯管家层：态势简报 + 系统自检 |
@@ -151,12 +151,12 @@ flowchart TB
 
 ## 6. 测试
 
-18 套单测、约 60+ 用例，纯标准库、零网络即可跑：
+19 套单测、约 65+ 用例，纯标准库、零网络即可跑：
 
 ```bash
 cd digital-soul
 for t in authority memory annotate presence consolidate emotions skills \
-         dispatch tasks reflect plan butler devices orchestrate scenes triggers ha graph; do
+         dispatch tasks reflect plan butler devices orchestrate scenes triggers ha graph voice; do
   python tests/test_$t.py || break
 done
 ```

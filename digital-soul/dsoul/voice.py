@@ -9,6 +9,22 @@
 
 from __future__ import annotations
 
+# 七情 -> 语音参数（语速 rate / 音量 volume / 语气标签 tone）
+_VOICE = {
+    "喜": {"rate": 225, "volume": 1.0, "tone": "愉悦"},
+    "怒": {"rate": 215, "volume": 1.0, "tone": "不悦"},
+    "哀": {"rate": 165, "volume": 0.8, "tone": "低落"},
+    "惧": {"rate": 185, "volume": 0.75, "tone": "不安"},
+    "爱": {"rate": 190, "volume": 0.95, "tone": "温柔"},
+    "恶": {"rate": 195, "volume": 0.85, "tone": "冷淡"},
+    "欲": {"rate": 180, "volume": 0.9, "tone": "渴望"},
+}
+
+
+def emotion_to_voice(mood) -> dict:
+    """把当前主导情绪映射成语音参数；未知/平静用中性默认。"""
+    return _VOICE.get(mood, {"rate": 200, "volume": 1.0, "tone": ""})
+
 
 class Ears:
     def __init__(self, model_size: str = "base") -> None:
@@ -58,12 +74,20 @@ class Mouth:
     def available(self) -> bool:
         return self.backend is not None
 
-    def speak(self, text: str) -> None:
+    def speak(self, text: str, mood=None) -> None:
+        """播报。传入当前情绪 mood（七情之一）则让语速/音量随之变化。"""
+        v = emotion_to_voice(mood)
         if self.available:
+            try:
+                self._engine.setProperty("rate", v["rate"])
+                self._engine.setProperty("volume", v["volume"])
+            except Exception:
+                pass
             self._engine.say(text)
             self._engine.runAndWait()
         else:
-            print(f"🔊（未装 TTS，用文字代替）{text}")
+            tag = f"（语气：{v['tone']}）" if v["tone"] else ""
+            print(f"🔊（未装 TTS，用文字代替）{tag}{text}")
 
 
 def record_wav(seconds: float = 5, samplerate: int = 16000) -> str | None:
