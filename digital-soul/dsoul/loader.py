@@ -27,6 +27,7 @@ from .scenes import SceneBook
 from .skills import SkillRegistry
 from .tasks import TaskBook
 from .values import load_values
+from .worldmodel import WorldModel
 from .triggers import TriggerBook
 
 
@@ -94,7 +95,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  values=load_values(_load_yaml(base / "config" / "values.yaml"),
                                     state_path=base / "data" / "values_state.json"),
                  values_path=base / "data" / "values_state.json",
-                 curiosity=QuestionLog(base / "data" / "questions.json"))
+                 curiosity=QuestionLog(base / "data" / "questions.json"),
+                 worldmodel=WorldModel(base / "data" / "beliefs.json"))
 
 
 def _seed_memory(base: Path, memory) -> None:

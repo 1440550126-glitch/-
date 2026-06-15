@@ -120,7 +120,14 @@ def _snapshot(agent, monitor) -> dict:
             curiosity_qs = [q["q"] for q in agent.curiosity.open()][:5]
         except Exception:
             curiosity_qs = []
-    if hasattr(agent, "worldview"):
+    world_shaky = []
+    if getattr(agent, "worldmodel", None) is not None:
+        try:
+            worldview = [f"{s}（{int(c * 100)}%）" for c, s in agent.worldmodel.top(6)]
+            world_shaky = [f"{s}（{int(c * 100)}%）" for c, s in agent.worldmodel.shaky(4)]
+        except Exception:
+            worldview, world_shaky = [], []
+    if not worldview and hasattr(agent, "worldview"):
         try:
             worldview = agent.worldview()
         except Exception:
@@ -164,6 +171,7 @@ def _snapshot(agent, monitor) -> dict:
         "thoughts": thoughts,
         "curiosity": curiosity_qs,
         "worldview": worldview,
+        "world_shaky": world_shaky,
         "self_history": selfhist,
         "values": values,
         "decisions": decisions,
@@ -222,6 +230,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 <div class=card><div class=k>💭 内心独白</div><ul id=thoughts></ul></div>
 <div class=card><div class=k>❓ 我好奇的</div><ul id=curiosity></ul></div>
 <div class=card><div class=k>🌍 我眼中的世界</div><ul id=worldview></ul></div>
+<div class=card><div class=k>🤔 我还拿不准的</div><ul id=worldshaky></ul></div>
 <div class=card><div class=k>🪞 此刻的我</div><div id=selfnar style="font-size:14px;line-height:1.6">…</div>
   <div class=k style="margin-top:10px">💎 我珍视的</div><div id=values class=dim></div>
   <div class=k style="margin-top:10px">⚖️ 抉择留痕</div><ul id=decisions></ul>
@@ -291,6 +300,7 @@ async function refresh(){
     $('#thoughts').innerHTML=(s.thoughts&&s.thoughts.length)?li(s.thoughts):'<li class=dim>（还没冒出什么念头）</li>';
     $('#curiosity').innerHTML=(s.curiosity&&s.curiosity.length)?li(s.curiosity):'<li class=dim>暂时没有想问的</li>';
     $('#worldview').innerHTML=(s.worldview&&s.worldview.length)?li(s.worldview):'<li class=dim>还在慢慢了解你的世界</li>';
+    $('#worldshaky').innerHTML=(s.world_shaky&&s.world_shaky.length)?li(s.world_shaky):'<li class=dim>暂时没有动摇的判断</li>';
     $('#selfnar').textContent=s.self||'…';
     $('#selfhist').innerHTML=(s.self_history&&s.self_history.length)?li(s.self_history):'<li class=dim>还没攒下成长史（每天记一版）</li>';
     $('#values').textContent=(s.values&&s.values.length)?s.values.join(' › '):'';

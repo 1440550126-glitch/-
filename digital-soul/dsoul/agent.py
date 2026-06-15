@@ -32,7 +32,7 @@ class Agent:
                  journal=None, emotions=None, knowledge=None, skills=None, hub=None,
                  tasks=None, reflector=None, planner=None, plan=None, devices=None,
                  scenes=None, triggers=None, sensor_source=None, dreams=None, selflog=None,
-                 values=None, values_path=None, curiosity=None) -> None:
+                 values=None, values_path=None, curiosity=None, worldmodel=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -65,6 +65,7 @@ class Agent:
         self.values_path = values_path                            # 演化后的价值权重持久化路径
         self.thoughts: deque = deque(maxlen=12)                   # 内心独白（近期心声）
         self.curiosity = curiosity                                # 好奇心：对陌生事物的疑问本
+        self.worldmodel = worldmodel                              # 世界模型：带置信度的信念，会自我修正
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
@@ -248,6 +249,8 @@ class Agent:
 
         # --- 好奇心：听到陌生事物，心里默默记下"想问问" ---
         self._be_curious(utterance)
+        # --- 世界模型自我修正：听到相反信号就动摇相应信念 ---
+        self._maybe_correct_world(utterance)
 
         # --- 写入对话日记（短期记忆，供日后"睡眠巩固"）---
         if self.journal is not None:
@@ -529,6 +532,12 @@ class Agent:
             got = self.self_learn(max_q=1)
             if got:
                 out["notices"].append("我自己查了查：" + "；".join(f"{t}→{a[:14]}…" for t, a in got))
+        # 9) 更新世界模型（信念随证据增强）
+        if getattr(self, "worldmodel", None) is not None:
+            try:
+                self.update_world()
+            except Exception:
+                pass
         return out
 
     # ---------- 好奇心与世界模型 ----------
@@ -553,7 +562,11 @@ class Agent:
         return q["q"]
 
     def worldview(self, k: int = 6) -> list:
-        """我眼中的世界：从记忆图谱里凝成的几条理解。"""
+        """我眼中的世界：优先用带置信度的世界模型，否则现凑记忆图谱。"""
+        if getattr(self, "worldmodel", None) is not None:
+            top = self.worldmodel.top(k)
+            if top:
+                return [s for _, s in top]
         g = self.memory_graph()
         owner = self._owner_name()
         out = []
@@ -565,6 +578,40 @@ class Agent:
             elif meta.get("kind") == "topic":
                 out.append(f"你常挂念着「{n}」")
         return out[:k]
+
+    def update_world(self) -> None:
+        """从记忆图谱与价值观里印证信念（反复出现 → 越笃定）。"""
+        if self.worldmodel is None:
+            return
+        g = self.memory_graph()
+        owner = self._owner_name()
+        for n, _ in g.central(8):
+            meta = g.meta.get(n, {})
+            if meta.get("kind") == "person" and n != owner:
+                rel = meta.get("relation")
+                self.worldmodel.reinforce(f"person:{n}", f"{n}{('（' + rel + '）') if rel else ''}对你很重要")
+            elif meta.get("kind") == "topic":
+                self.worldmodel.reinforce(f"topic:{n}", f"你很在意「{n}」")
+        if getattr(self, "values", None):
+            for name, v in sorted(self.values.items(), key=lambda kv: -kv[1].get("weight", 0))[:2]:
+                self.worldmodel.reinforce(f"value:{name}", f"你看重「{name}」")
+
+    def _maybe_correct_world(self, utterance) -> None:
+        """听到相反信号（"其实不/不再/变了"…）就动摇相应信念——会改主意。"""
+        if self.worldmodel is None:
+            return
+        neg = ("其实不", "不再", "已经不", "不喜欢", "不想", "不爱了", "变了", "错了", "不重要", "没那么")
+        if not any(w in (utterance or "") for w in neg):
+            return
+        for key, b in list(self.worldmodel.beliefs.items()):
+            topic = key.split(":", 1)[-1]
+            if topic and topic in utterance:
+                self.worldmodel.weaken(key, 2)
+
+    def world_uncertain(self, k: int = 4) -> list:
+        if getattr(self, "worldmodel", None) is None:
+            return []
+        return [s for _, s in self.worldmodel.shaky(k)]
 
     def self_learn(self, max_q: int = 2) -> list:
         """好奇心驱动自学：把疑问交给外部智能体去查，学到的写进记忆、销账。"""

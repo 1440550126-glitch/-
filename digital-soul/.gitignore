@@ -22,6 +22,7 @@ data/dreams.json
 data/self.json
 data/values_state.json
 data/questions.json
+data/beliefs.json
 
 # Python
 __pycache__/
