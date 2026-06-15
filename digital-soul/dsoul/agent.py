@@ -68,6 +68,7 @@ class Agent:
         self.worldmodel = worldmodel                              # 世界模型：带置信度的信念，会自我修正
         self.calib = calib                                        # 预测校准（从"猜对/没猜对"学习）
         self._last_prediction = None                              # 最近一次预感（供你反馈校准）
+        self._pending_offer = None                                # 已主动提出、待你点头的预感
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
@@ -115,6 +116,15 @@ class Agent:
                 self._log_journal(who, utterance, done["reply"], f"dispatch:{done['agent']}")
                 return result
             self._pending_dispatch = None  # 你没接这个茬，作罢
+
+        # --- 主动预感的"接受"：上一轮我主动提了个预感，这一轮你说"好" ---
+        if action is None and getattr(self, "_pending_offer", None) is not None:
+            if who.get("obey") and self._is_affirm(utterance):
+                reply = self._accept_offer(speaker_name)
+                result["reply"] = reply
+                self._log_journal(who, utterance, reply, "accept_offer")
+                return result
+            self._pending_offer = None  # 没接茬，作罢
 
         # --- 贾维斯式管家指令：点名应答 / 态势简报 / 系统自检（仅对听命于我的人）---
         if action is None:
@@ -351,6 +361,11 @@ class Agent:
             if follow:
                 text = f"{text} {follow}"
                 self._await_retry_confirm = True
+        # 主动预感：见到你时，高置信的预感主动提一句
+        if who.get("obey"):
+            po = self.proactive_prediction()
+            if po:
+                text = f"{text} {po}"
         self.robot.say(text)
         return text
 
@@ -572,6 +587,10 @@ class Agent:
                 self.update_world()
             except Exception:
                 pass
+        # 10) 主动预感：高置信预感主动提一句
+        po = self.proactive_prediction()
+        if po:
+            out["notices"].append("（预感）" + po)
         return out
 
     # ---------- 好奇心与世界模型 ----------
@@ -723,6 +742,30 @@ class Agent:
         """群体模拟预测：脑中开个小会，多视角各自表态（有大模型则真展开推理），聚合成预感。"""
         from .swarm import forecast
         return forecast(question, llm=self.llm)["text"]
+
+    def proactive_prediction(self, now=None, min_conf: float = 0.7) -> str:
+        """高置信预感主动提一句（并挂起，等你点头）。已提过未回应则不重复。"""
+        if getattr(self, "_pending_offer", None) is not None:
+            return ""
+        label = self.anticipate(now=now)             # 顺带设好 _last_prediction
+        lp = getattr(self, "_last_prediction", None)
+        if label and lp and lp.get("confidence", 0) >= min_conf:
+            self._pending_offer = lp
+            return label
+        return ""
+
+    def _accept_offer(self, speaker_name) -> str:
+        import re
+        po = self._pending_offer or {}
+        self._pending_offer = None
+        m = re.search(r"「(.+?)」", po.get("label", ""))
+        topic = m.group(1) if m else ""
+        if self.scenes is not None and self.devices is not None and topic:
+            from .scenes import parse_scene
+            sc = parse_scene(topic, self.scenes.names())
+            if sc:
+                return self.run_scene(speaker_name, sc).get("msg", "好的")
+        return f"好，那我留意着「{topic}」，到点提醒你。" if topic else "好，我记着了。"
 
     # ---------- 价值抉择 ----------
     def deliberate(self, text) -> str:
