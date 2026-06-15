@@ -7,7 +7,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+import urllib.request
 
 _DEVICES = {
     "灯": "light", "电灯": "light", "灯光": "light",
@@ -100,6 +102,95 @@ class DeviceHub:
 
     def control(self, device, action, value=None) -> dict:
         return self.backend.apply(device, action, value)
+
+
+# 把 HA 实体状态归一成"开/关"
+_ON_STATES = {"on", "open", "unlocked", "playing", "home", "heat", "cool", "auto"}
+
+
+class HomeAssistantBackend:
+    """对接真实家居：把设备指令翻译成 Home Assistant 的 REST 服务调用。
+
+    需要 base_url（如 http://homeassistant.local:8123）、长期令牌 token，
+    以及逻辑设备→实体的映射 entities（如 {"light":"light.living_room"}）。
+    与 SimDeviceBackend 接口一致，可直接替换。
+    """
+
+    def __init__(self, base_url, token, entities=None) -> None:
+        self.base = base_url.rstrip("/")
+        self.token = token
+        self.entities = entities or {}
+
+    def names(self):
+        return list(self.entities)
+
+    def _request(self, method, path, payload=None):
+        data = json.dumps(payload).encode("utf-8") if payload is not None else None
+        req = urllib.request.Request(
+            self.base + path, data=data, method=method,
+            headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            body = resp.read().decode("utf-8")
+        return json.loads(body) if body else {}
+
+    def _svc(self, domain, service, entity, extra=None):
+        body = {"entity_id": entity}
+        if extra:
+            body.update(extra)
+        return self._request("POST", f"/api/services/{domain}/{service}", body)
+
+    def apply(self, device, action, value=None) -> dict:
+        entity = self.entities.get(device)
+        if not entity:
+            return {"ok": False, "msg": f"未映射设备：{device}"}
+        domain = entity.split(".")[0]
+        label = _LABEL.get(device, device)
+        try:
+            if action == "off":
+                self._svc("lock", "lock", entity) if domain == "lock" else self._svc(domain, "turn_off", entity)
+                msg = "已锁门" if device == "door" else f"已关闭{label}"
+            elif action == "on":
+                if domain == "lock":
+                    self._svc("lock", "unlock", entity)
+                elif domain == "media_player":
+                    self._svc("media_player", "media_play", entity)
+                else:
+                    self._svc(domain, "turn_on", entity)
+                msg = "已开门" if device == "door" else f"已开启{label}"
+            elif action == "set":
+                if domain == "climate":
+                    self._svc("climate", "set_temperature", entity, {"temperature": value})
+                    msg = f"空调已设为 {value} 度"
+                elif domain == "media_player":
+                    self._svc("media_player", "volume_set", entity, {"volume_level": min(1.0, (value or 0) / 100)})
+                    msg = f"音量已设为 {value}"
+                else:
+                    self._svc(domain, "turn_on", entity)
+                    msg = f"{label}已设为 {value}"
+            else:
+                return {"ok": False, "msg": "不支持的操作"}
+        except Exception as e:  # 网络/认证失败兜底，不让分身崩
+            return {"ok": False, "msg": f"调用 Home Assistant 失败：{e}"}
+        return {"ok": True, "device": device, "msg": msg}
+
+    def states(self):
+        out = {}
+        for n, entity in self.entities.items():
+            try:
+                raw = self._request("GET", f"/api/states/{entity}").get("state", "")
+            except Exception:
+                raw = "unknown"
+            out[n] = {"power": "on" if raw in _ON_STATES else "off", "raw": raw}
+        return out
+
+
+def build_device_hub(config=None) -> DeviceHub:
+    """按配置选后端：配了 home_assistant 就接真机，否则用内存模拟。"""
+    ha = config.get("home_assistant") if isinstance(config, dict) else None
+    if ha and ha.get("base_url") and ha.get("token"):
+        return DeviceHub(backend=HomeAssistantBackend(ha["base_url"], ha["token"], ha.get("entities", {})))
+    return DeviceHub()
 
     def describe(self) -> list[str]:
         """人类可读的设备状态，供网页展示。"""

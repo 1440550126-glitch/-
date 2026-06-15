@@ -9,7 +9,7 @@ import yaml
 from .actions import SimulationRobot
 from .agent import Agent
 from .authority import Authority
-from .devices import DeviceHub
+from .devices import build_device_hub
 from .emotions import EmotionState
 from .journal import Journal
 from .knowledge import Knowledge
@@ -75,7 +75,7 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
     reflector = Reflector(memory, journal, emotions=emotions, llm=llm, identity=identity)
     planner = Planner(memory=memory, llm=llm, identity=identity)
     plan = PlanBook(base / "data" / "plan.json")
-    devices = DeviceHub()
+    devices = build_device_hub(_load_yaml(base / "config" / "devices.yaml"))
     scenes = SceneBook(_load_yaml(base / "config" / "scenes.yaml"))
     triggers = TriggerBook(base / "data" / "triggers.json")
 
