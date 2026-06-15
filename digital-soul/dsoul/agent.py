@@ -184,9 +184,12 @@ class Agent:
                 self._log_journal(who, utterance, gret, "graph")
                 return result
 
-        # --- 检索记忆 ---
-        mems = [it["text"] for _, it in self.memory.recall(utterance, k=4)]
+        # --- 检索记忆（被用到的记忆顺便强化，抗遗忘）---
+        recalled = self.memory.recall(utterance, k=4)
+        mems = [it["text"] for _, it in recalled]
         result["memories"] = mems
+        if hasattr(self.memory, "reinforce"):
+            self.memory.reinforce([it["id"] for _, it in recalled])
 
         # --- 情绪随这句话起伏 ---
         if self.emotions is not None:
@@ -499,6 +502,13 @@ class Agent:
         """它最近想明白的事（领悟）。"""
         refl = [it["text"] for it in self.memory.items if "reflection" in (it.get("tags") or [])]
         return refl[-k:][::-1]
+
+    def fading_memories(self, k: int = 5, now=None) -> list[tuple]:
+        """正在淡忘的记忆（强度低、未被巩固的琐事）。返回 [(强度, 文本), …]。"""
+        from .forgetting import strength
+        scored = [(strength(it, now), it.get("text", "")) for it in self.memory.items]
+        scored.sort(key=lambda x: x[0])
+        return [(round(s, 2), t) for s, t in scored[:k] if s < 0.66]
 
     # ---------- 记忆图谱（人—事—主题 关系网）----------
     def memory_graph(self):

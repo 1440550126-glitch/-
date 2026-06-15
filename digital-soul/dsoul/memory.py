@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import re
+import time
 from pathlib import Path
 
 from .annotate import classify_emotion, extract_when
@@ -109,11 +110,25 @@ class Memory:
                 "tags": tags or [],
                 "when": when if when is not None else extract_when(text),
                 "emotion": emotion if emotion is not None else classify_emotion(text)["label"],
+                "created": time.time(),
                 "vec": self.embedder.embed(text),
             }
         )
         self._save()
         return mid
+
+    def reinforce(self, ids, now: float | None = None) -> None:
+        """被回忆即强化：刷新计时（间隔重复）并累计回忆次数，让记忆更难淡忘。"""
+        now = time.time() if now is None else now
+        wanted = set(ids)
+        changed = False
+        for it in self.items:
+            if it["id"] in wanted:
+                it["recalls"] = it.get("recalls", 0) + 1
+                it["last_recall"] = now
+                changed = True
+        if changed:
+            self._save()
 
     def recall(self, query: str, k: int = 4) -> list[tuple[float, dict]]:
         """返回与 query 最相关的 k 条记忆：[(相似度, 记忆), ...]。"""

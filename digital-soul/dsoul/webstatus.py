@@ -82,6 +82,12 @@ def _snapshot(agent, monitor) -> dict:
         timeline = []
     timeline = timeline[:40]
     tl_entities = sorted({p for e in timeline for p in e["people"]})
+    fading = []
+    if hasattr(agent, "fading_memories"):
+        try:
+            fading = [f"{t}（{int(s * 100)}%）" for s, t in agent.fading_memories(5)]
+        except Exception:
+            fading = []
     devices = agent.devices.rows() if getattr(agent, "devices", None) is not None else []
     scenes = agent.scenes.names() if getattr(agent, "scenes", None) is not None else []
     triggers = [t["desc"] for t in agent.triggers.all()] if getattr(agent, "triggers", None) is not None else []
@@ -106,6 +112,7 @@ def _snapshot(agent, monitor) -> dict:
         "graph_viz": graph_viz,
         "timeline": timeline,
         "timeline_entities": tl_entities,
+        "fading": fading,
         "plan": plan_items,
         "devices": devices,
         "scenes": scenes,
@@ -167,6 +174,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 </div>
 <div class=card><div class=k>🗓️ 今天的计划</div><ul id=plan></ul></div>
 <div class=card><div class=k>💡 它最近的领悟</div><ul id=refl></ul></div>
+<div class=card><div class=k>🧠 正在淡忘</div><ul id=fading></ul></div>
 <div class=card><div class=k>🕸️ 关系图谱</div><div id=graph></div><div id=graphtop class=dim></div></div>
 <div class=card><div class=k>📜 一生时间线</div><div id=tlfilters></div><div id=timeline></div></div>
 <div class=card><div class=k>🧩 最近记住</div><ul id=mems></ul></div>
@@ -216,6 +224,7 @@ async function refresh(){
     $('#retry').style.display=op.length?'inline-block':'none';
     $('#plan').innerHTML=li(s.plan||[]);
     $('#refl').innerHTML=li(s.reflections||[]);
+    $('#fading').innerHTML=(s.fading&&s.fading.length)?li(s.fading):'<li class=dim>记忆都还清晰</li>';
     $('#graph').innerHTML=renderGraph(s.graph_viz)||'<span class=dim>记忆还太少，画不出关系网</span>';
     $('#graphtop').textContent=((s.graph&&s.graph.length)?('最核心：'+s.graph.join(' · ')):'')+((s.graph_viz&&s.graph_viz.nodes.length)?'　·　点节点筛选时间线':'');
     _tl=s.timeline||[]; $('#tlfilters').innerHTML=renderTLfilters(s.timeline_entities); drawTL();
