@@ -7,6 +7,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 _DEFAULT_VALUES = {
     "守护至亲": {"weight": 1.0, "keywords": ["安全", "保护", "危险", "守护", "照顾", "生病", "出事", "受伤"]},
     "重视家人": {"weight": 0.9, "keywords": ["家人", "父母", "爸", "妈", "老婆", "妻子", "老公", "孩子", "陪", "陪伴", "团聚", "纪念日", "约会"]},
@@ -26,13 +29,40 @@ _ADVICE = {
 }
 
 
-def load_values(config=None) -> dict:
+def load_values(config=None, state_path=None) -> dict:
     vals = {k: dict(v) for k, v in _DEFAULT_VALUES.items()}
     src = config.get("values") if isinstance(config, dict) else None
     if isinstance(src, dict):
         for k, v in src.items():
             vals[k] = v
+    if state_path and Path(state_path).exists():           # 叠加已演化的权重
+        try:
+            saved = json.loads(Path(state_path).read_text(encoding="utf-8"))
+            for k, w in saved.items():
+                if k in vals and isinstance(w, (int, float)):
+                    vals[k]["weight"] = w
+        except Exception:
+            pass
     return vals
+
+
+def save_state(values, path) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(
+        json.dumps({k: round(v.get("weight", 0.5), 3) for k, v in values.items()},
+                   ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def evolve(values, touched, rate: float = 0.03) -> dict:
+    """价值观随经历缓慢演化：被反复触动的价值权重上移，其余轻微回落（有界）。"""
+    if not touched:
+        return values
+    mx = max(touched.values())
+    for name, v in values.items():
+        signal = (touched.get(name, 0) / mx) if mx else 0.0
+        w = v.get("weight", 0.5) + rate * (signal - 0.4)   # 高于均线则升、低于则微降
+        v["weight"] = max(0.3, min(1.2, round(w, 3)))
+    return values
 
 
 def relevant_values(text: str, values=None):

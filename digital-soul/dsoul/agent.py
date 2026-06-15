@@ -31,7 +31,7 @@ class Agent:
                  journal=None, emotions=None, knowledge=None, skills=None, hub=None,
                  tasks=None, reflector=None, planner=None, plan=None, devices=None,
                  scenes=None, triggers=None, sensor_source=None, dreams=None, selflog=None,
-                 values=None) -> None:
+                 values=None, values_path=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -61,6 +61,7 @@ class Agent:
         self.dreams = dreams                                      # 梦境日志（睡眠时生成）
         self.selflog = selflog                                    # 自我成长史（每日一版）
         self.values = values                                      # 价值观（抉择时据此权衡）
+        self.values_path = values_path                            # 演化后的价值权重持久化路径
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
@@ -498,6 +499,9 @@ class Agent:
         motifs = self.process_dream_influence()
         if motifs:
             out["notices"].append("我最近总梦到「" + "、".join(motifs) + "」，会多上点心。")
+        # 7) 价值观随经历缓慢演化（三观随时间微调）
+        if getattr(self, "values", None):
+            self.evolve_values()
         return out
 
     # ---------- 价值抉择 ----------
@@ -505,6 +509,34 @@ class Agent:
         from .values import deliberate as _deliberate
         return _deliberate(text, values=self.values,
                            guarded=self.authority.guarded_people(), llm=self.llm)
+
+    def evolve_values(self) -> None:
+        """从近期经历里统计各价值被触动的次数，缓慢演化权重并持久化。"""
+        from collections import Counter
+
+        from .values import evolve, relevant_values, save_state
+        texts = []
+        if self.journal is not None:
+            texts += [e.get("utterance", "") for e in self.journal._all()[-30:]]
+        texts += [it.get("text", "") for it in self.memory.items[-20:]]
+        touched: Counter = Counter()
+        for t in texts:
+            for name, _ in relevant_values(t, self.values):
+                touched[name] += 1
+        evolve(self.values, touched)
+        if self.values_path:
+            try:
+                save_state(self.values, self.values_path)
+            except Exception:
+                pass
+
+    def recent_decisions(self, k: int = 5) -> list:
+        """最近的价值抉择留痕：[(问题, 当时的建议), …]，回看"我是如何权衡的"。"""
+        if self.journal is None:
+            return []
+        out = [(e.get("utterance", ""), e.get("reply", ""))
+               for e in self.journal._all() if e.get("executed") == "deliberate"]
+        return out[-k:][::-1]
 
     # ---------- 梦的影响 ----------
     def dream_motifs(self, k: int = 5) -> list:

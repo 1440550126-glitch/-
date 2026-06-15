@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from dsoul.values import deliberate, load_values, relevant_values  # noqa: E402
+from dsoul.values import deliberate, evolve, load_values, relevant_values, save_state  # noqa: E402
 
 
 def test_relevant_values_detects():
@@ -30,6 +30,19 @@ def test_non_dilemma_returns_empty():
 def test_config_override():
     vals = load_values({"values": {"信守原则": {"weight": 0.7, "keywords": ["原则", "底线"]}}})
     assert "信守原则" in vals and "重视家人" in vals             # 覆盖叠加在默认上
+
+
+def test_evolve_and_persist():
+    import tempfile
+    vals = load_values()
+    w0 = vals["成长自我"]["weight"]
+    evolve(vals, {"成长自我": 10, "尽责担当": 1}, rate=0.05)     # 反复触动"成长自我"
+    assert vals["成长自我"]["weight"] > w0                      # 权重上移
+    assert 0.3 <= vals["重视家人"]["weight"] <= 1.2             # 有界
+    p = tempfile.mktemp(suffix=".json")
+    save_state(vals, p)
+    reloaded = load_values(state_path=p)
+    assert abs(reloaded["成长自我"]["weight"] - vals["成长自我"]["weight"]) < 1e-6  # 持久化生效
 
 
 if __name__ == "__main__":

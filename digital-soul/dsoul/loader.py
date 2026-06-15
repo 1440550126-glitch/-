@@ -90,7 +90,9 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  triggers=triggers, sensor_source=build_sensor_source(devcfg),
                  dreams=DreamLog(base / "data" / "dreams.json"),
                  selflog=SelfLog(base / "data" / "self.json"),
-                 values=load_values(_load_yaml(base / "config" / "values.yaml")))
+                 values=load_values(_load_yaml(base / "config" / "values.yaml"),
+                                    state_path=base / "data" / "values_state.json"),
+                 values_path=base / "data" / "values_state.json")
 
 
 def _seed_memory(base: Path, memory) -> None:

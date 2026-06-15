@@ -113,7 +113,15 @@ def _snapshot(agent, monitor) -> dict:
             selfhist = [f'{r["date"]}：{r["text"].split("。")[0]}' for r in agent.selflog.recent(5)]
         except Exception:
             selfhist = []
-    values = list(agent.values) if getattr(agent, "values", None) else []
+    values, decisions = [], []
+    if getattr(agent, "values", None):
+        values = [n for n, _ in sorted(agent.values.items(),
+                                       key=lambda kv: -kv[1].get("weight", 0))]
+    if hasattr(agent, "recent_decisions"):
+        try:
+            decisions = [f'{u} → {r.split("。")[0]}' for u, r in agent.recent_decisions(4)]
+        except Exception:
+            decisions = []
     devices = agent.devices.rows() if getattr(agent, "devices", None) is not None else []
     scenes = agent.scenes.names() if getattr(agent, "scenes", None) is not None else []
     triggers = [t["desc"] for t in agent.triggers.all()] if getattr(agent, "triggers", None) is not None else []
@@ -143,6 +151,7 @@ def _snapshot(agent, monitor) -> dict:
         "self": selfnar,
         "self_history": selfhist,
         "values": values,
+        "decisions": decisions,
         "plan": plan_items,
         "devices": devices,
         "scenes": scenes,
@@ -197,6 +206,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 <div class=card><div class=k>💞 此刻心情</div><div id=mood>…</div><div id=moodbars></div></div>
 <div class=card><div class=k>🪞 此刻的我</div><div id=selfnar style="font-size:14px;line-height:1.6">…</div>
   <div class=k style="margin-top:10px">💎 我珍视的</div><div id=values class=dim></div>
+  <div class=k style="margin-top:10px">⚖️ 抉择留痕</div><ul id=decisions></ul>
   <div class=k style="margin-top:10px">📈 成长史</div><ul id=selfhist></ul></div>
 <div class=card><div class=k>🤵 管家</div>
   <button id=brief>☀️ 要一份简报</button>&nbsp;<button id=diag style="background:#37474f">🩺 系统自检</button></div>
@@ -263,6 +273,7 @@ async function refresh(){
     $('#selfnar').textContent=s.self||'…';
     $('#selfhist').innerHTML=(s.self_history&&s.self_history.length)?li(s.self_history):'<li class=dim>还没攒下成长史（每天记一版）</li>';
     $('#values').textContent=(s.values&&s.values.length)?s.values.join(' › '):'';
+    $('#decisions').innerHTML=(s.decisions&&s.decisions.length)?li(s.decisions):'<li class=dim>还没帮你做过抉择</li>';
     $('#mood').textContent=s.mood?(MOODS[s.mood]||s.mood):'平静';
     $('#moodbars').innerHTML=s.mood_levels?radar(s.mood_levels):'';
     $('#disp').innerHTML=li(s.dispatches||[]);
