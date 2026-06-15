@@ -537,6 +537,8 @@ class Agent:
         text = compose_dream(self.memory.items, mood=mood, names=names, llm=self.llm)
         if text:
             self.dreams.add(text, mood=mood)
+            if self.emotions is not None and mood:
+                self.emotions.feel({mood: 0.12})   # 梦的余韵：醒来还带着那点情绪
         return text
 
     def _entangled_recall(self, recalled):

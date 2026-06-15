@@ -99,7 +99,7 @@ def _snapshot(agent, monitor) -> dict:
     dreams = []
     if getattr(agent, "dreams", None) is not None:
         try:
-            dreams = [r["text"] for r in agent.dreams.recent(3)]
+            dreams = [{"text": r["text"], "mood": r.get("mood")} for r in agent.dreams.recent(3)]
         except Exception:
             dreams = []
     devices = agent.devices.rows() if getattr(agent, "devices", None) is not None else []
@@ -190,7 +190,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 <div class=card><div class=k>🗓️ 今天的计划</div><ul id=plan></ul></div>
 <div class=card><div class=k>💡 它最近的领悟</div><ul id=refl></ul></div>
 <div class=card><div class=k>🧠 正在淡忘</div><ul id=fading></ul></div>
-<div class=card><div class=k>🌙 昨夜的梦</div><ul id=dreams></ul></div>
+<div class=card><div class=k>🌙 昨夜的梦</div><div id=dreams></div></div>
 <div class=card><div class=k>🕸️ 关系图谱</div><div id=graph></div>
   <div class=row style="margin-top:6px"><button id=gplay class=devbtn>▶ 生长</button><input id=gyslider type=range style="flex:1"><span id=gylabel class=dim>全部</span></div>
   <div id=graphtop class=dim></div></div>
@@ -215,6 +215,10 @@ async function scene(n){const sp=$('#speaker').value;try{const r=await (await fe
 let inited=false, soulName="它";
 function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
 function renderTimeline(tl){if(!tl||!tl.length)return '<span class=dim>暂无带年份的记忆</span>';let h='',last=null;tl.forEach(e=>{if(e.year!==last){h+='<div class=tlyear>'+esc(e.year)+'</div>';last=e.year;}h+='<div class=tlitem>'+esc(e.text)+'</div>';});return h;}
+const MCOL={"喜":"#e0b15f","怒":"#c0504d","哀":"#4a6fa5","惧":"#6a5a8a","爱":"#c05a7d","恶":"#5a7a5a","欲":"#7d6a4a"};
+function hashStr(t){let h=0;for(let i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))&0x7fffffff;return h||1;}
+function dreamArt(d){const col=MCOL[d.mood]||'#566';let h=hashStr(d.text||'');const W=300,H=64;let s='<svg width="100%" height="64" viewBox="0 0 '+W+' '+H+'" style="border-radius:8px;background:#0f1115">';for(let i=0;i<7;i++){h=(h*1103515245+12345)&0x7fffffff;const x=h%W,y=(h>>7)%H,r=8+(h>>15)%24;s+='<circle cx='+x+' cy='+y+' r='+r+' fill="'+col+'" fill-opacity="0.16"/>';}return s+'</svg>';}
+function renderDreams(ds){if(!ds||!ds.length)return '<div class=dim>还没做过梦（睡一觉 / sleep 后生成）</div>';return ds.map(d=>'<div style="margin:8px 0">'+dreamArt(d)+'<div class=dim style="font-size:13px;font-style:italic;margin-top:4px">'+esc(d.text)+'</div></div>').join('');}
 let tlFilter=null, _tl=[];
 function setTL(e){tlFilter=e||null;gHi=tlFilter;drawTL();drawGraph();}
 function drawTL(){let tl=_tl;if(tlFilter)tl=tl.filter(x=>(x.people&&x.people.includes(tlFilter))||(x.text&&x.text.indexOf(tlFilter)>=0));$('#timeline').innerHTML=renderTimeline(tl);}
@@ -248,7 +252,7 @@ async function refresh(){
     $('#plan').innerHTML=li(s.plan||[]);
     $('#refl').innerHTML=li(s.reflections||[]);
     $('#fading').innerHTML=(s.fading&&s.fading.length)?li(s.fading):'<li class=dim>记忆都还清晰</li>';
-    $('#dreams').innerHTML=(s.dreams&&s.dreams.length)?li(s.dreams):'<li class=dim>还没做过梦（睡一觉 / sleep 后生成）</li>';
+    $('#dreams').innerHTML=renderDreams(s.dreams);
     _gv=s.graph_viz||{nodes:[],edges:[]};const _yr=gYears(_gv),_sl=$('#gyslider');if(_yr){_sl.min=_yr[0];_sl.max=_yr[1];if(_sl.dataset.init!=='1'){_sl.value=_yr[1];_sl.dataset.init='1';}}drawGraph();
     $('#graphtop').textContent=((s.graph&&s.graph.length)?('最核心：'+s.graph.join(' · ')):'')+((s.graph_viz&&s.graph_viz.nodes.length)?'　·　点节点筛选时间线 / ▶生长看关系网长出来':'');
     _tl=s.timeline||[]; $('#tlfilters').innerHTML=renderTLfilters(s.timeline_entities); drawTL();

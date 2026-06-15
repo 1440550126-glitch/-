@@ -85,6 +85,13 @@ def daily_brief(agent, present=None, addr: str = "您", now=None) -> str:
     refl = agent.recent_reflections(1) if hasattr(agent, "recent_reflections") else []
     if refl:
         lines.append("我最近的一点体会：" + refl[0])
+    if getattr(agent, "dreams", None) is not None:
+        try:
+            dr = agent.dreams.recent(1)
+            if dr:
+                lines.append("对了，我昨晚还做了个梦：" + dr[0]["text"])
+        except Exception:
+            pass
     if len(lines) == 1:
         lines.append("一切如常，没有需要您操心的事。")
     return " ".join(lines)
