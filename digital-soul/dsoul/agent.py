@@ -30,7 +30,7 @@ class Agent:
     def __init__(self, identity, persona, memory, authority, perception, llm, robot,
                  journal=None, emotions=None, knowledge=None, skills=None, hub=None,
                  tasks=None, reflector=None, planner=None, plan=None, devices=None,
-                 scenes=None, triggers=None, sensor_source=None, dreams=None) -> None:
+                 scenes=None, triggers=None, sensor_source=None, dreams=None, selflog=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -58,6 +58,7 @@ class Agent:
         self.sensors = {"temperature": 22}                        # 模拟读数（无真实传感器时的兜底）
         self.sensor_source = sensor_source                        # 真实传感器源（如 HA），可为空
         self.dreams = dreams                                      # 梦境日志（睡眠时生成）
+        self.selflog = selflog                                    # 自我成长史（每日一版）
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
@@ -475,7 +476,42 @@ class Agent:
         rescued = self.rescue_fading()
         if rescued:
             out["notices"].append(f"我又温习了 {len(rescued)} 件要紧事，免得淡忘。")
+        # 5) 记一版"今日之我"（自我成长史）
+        if getattr(self, "selflog", None) is not None:
+            try:
+                self.selflog.record(self.self_narrative())
+            except Exception:
+                pass
+        # 6) 梦的影响：反复梦见的人/事，醒来更上心（强化相关记忆）
+        motifs = self.process_dream_influence()
+        if motifs:
+            out["notices"].append("我最近总梦到「" + "、".join(motifs) + "」，会多上点心。")
         return out
+
+    # ---------- 梦的影响 ----------
+    def dream_motifs(self, k: int = 5) -> list:
+        """近期梦里反复出现的人 / 事（出现在 ≥2 个梦里）。"""
+        if getattr(self, "dreams", None) is None:
+            return []
+        from collections import Counter
+
+        from .reflect import _bigrams
+        names = [p.get("name") for p in self.authority.people.values() if p.get("name")]
+        cnt: Counter = Counter()
+        for r in self.dreams.recent(k):
+            t = r.get("text", "")
+            cnt.update({n for n in names if n and n in t} | set(_bigrams(t)))
+        return [e for e, c in cnt.most_common() if c >= 2 and "梦" not in e and "场景" not in e][:3]
+
+    def process_dream_influence(self) -> list:
+        """反复梦见的，醒来更上心：强化相关记忆。返回这些主题。"""
+        motifs = self.dream_motifs()
+        if motifs and hasattr(self.memory, "reinforce"):
+            ids = [it["id"] for it in self.memory.items
+                   if any(m in it.get("text", "") for m in motifs)]
+            if ids:
+                self.memory.reinforce(ids)
+        return motifs
 
     def _advance_plan(self) -> list:
         notices: list = []

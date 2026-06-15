@@ -7,6 +7,45 @@
 
 from __future__ import annotations
 
+import json
+from datetime import date
+from pathlib import Path
+
+
+class SelfLog:
+    """自我成长史：每天记一版"今日之我"，串成可回看的成长轨迹。"""
+
+    def __init__(self, path) -> None:
+        self.path = Path(path)
+        self.items: list[dict] = []
+        self._load()
+
+    def _load(self) -> None:
+        if self.path.exists():
+            try:
+                self.items = json.loads(self.path.read_text(encoding="utf-8")).get("items", [])
+            except Exception:
+                self.items = []
+
+    def _save(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps({"items": self.items}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def record(self, text: str):
+        if not text:
+            return None
+        today = date.today().isoformat()
+        if self.items and self.items[-1].get("date") == today:
+            self.items[-1]["text"] = text          # 当天更新同一条
+        else:
+            self.items.append({"date": today, "text": text})
+        self.items = self.items[-60:]
+        self._save()
+        return self.items[-1]
+
+    def recent(self, k: int = 5):
+        return self.items[-k:][::-1]
+
 
 def _llm(llm, name, facts) -> str:
     system = ("用第一人称，把下面这些关于'我是谁'的事实，写成一段真诚、克制、有温度的自我认知，"

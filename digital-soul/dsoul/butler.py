@@ -92,6 +92,13 @@ def daily_brief(agent, present=None, addr: str = "您", now=None) -> str:
                 lines.append("对了，我昨晚还做了个梦：" + dr[0]["text"])
         except Exception:
             pass
+    if hasattr(agent, "dream_motifs"):
+        try:
+            mot = agent.dream_motifs()
+            if mot:
+                lines.append("我最近总梦到「" + mot[0] + "」，会多上点心。")
+        except Exception:
+            pass
     if len(lines) == 1:
         lines.append("一切如常，没有需要您操心的事。")
     return " ".join(lines)
