@@ -39,9 +39,10 @@ def test_orchestrate_multi_device():
     assert a.devices.states()["light"]["power"] == "on"
 
 
-def test_single_step_returns_none():
+def test_single_step_returns_none_without_side_effect():
     a = _agent()
     assert orchestrate(a, "张明", "把灯打开", addr="先生") is None   # 单步交回普通流程
+    assert a.devices.states()["light"]["power"] == "off"           # 且判定时不被误执行
 
 
 if __name__ == "__main__":

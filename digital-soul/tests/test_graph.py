@@ -41,6 +41,29 @@ def test_build_from_memory_and_authority():
     assert dict(g.neighbors("张明")).get("小婷")              # 主人—小婷 有连接
 
 
+def test_llm_semantic_edges():
+    class _LLM:
+        available = True
+
+        def chat(self, system, text):
+            if "豆豆" in text:
+                return "豆豆|宠物|张明"
+            if "小婷" in text:
+                return "张明|妻子|小婷"
+            return ""
+
+    rel = {"people": [
+        {"name": "张明", "relation": "本人", "trust": "owner"},
+        {"name": "小婷", "relation": "老婆", "trust": "family"},
+    ]}
+    m = Memory(tempfile.mktemp(suffix=".json"))
+    m.add("我家有只金毛叫豆豆", source="x")
+    m.add("我和小婷结婚了", source="x")
+    g = build_memory_graph(m, Authority(rel), llm=_LLM())
+    assert g.relation("豆豆", "张明") == "宠物"
+    assert g.relation("张明", "小婷") == "妻子"
+
+
 if __name__ == "__main__":
     for _n, _f in sorted(globals().items()):
         if _n.startswith("test_") and callable(_f):

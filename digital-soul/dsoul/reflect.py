@@ -24,12 +24,13 @@ def _bigrams(text: str) -> list[str]:
 
 
 class Reflector:
-    def __init__(self, memory, journal, emotions=None, llm=None, identity=None) -> None:
+    def __init__(self, memory, journal, emotions=None, llm=None, identity=None, authority=None) -> None:
         self.memory = memory
         self.journal = journal
         self.emotions = emotions
         self.llm = llm
         self.identity = identity or {}
+        self.authority = authority
 
     def _recent(self, n: int) -> list[dict]:
         if self.journal is None:
@@ -48,6 +49,9 @@ class Reflector:
             insights = self._llm_insights(rec, max_insights)
         else:
             insights = self._heuristic_insights(rec, max_insights)
+        gi = self._graph_insight()                 # 图谱视角：围绕核心实体的领悟
+        if gi:
+            insights = [gi] + insights
         out: list[str] = []
         for s in insights[:max_insights]:
             s = (s or "").strip()
@@ -85,6 +89,27 @@ class Reflector:
             if cnt >= 2:
                 out.append(f"这些日子我和「{who}」聊得最多，我们之间好像又近了一点。")
         return out[:k]
+
+    # ---------- 图谱视角：围绕核心实体的领悟 ----------
+    def _graph_insight(self):
+        if self.authority is None:
+            return None
+        try:
+            from .graph import build_memory_graph
+            g = build_memory_graph(self.memory, self.authority)
+        except Exception:
+            return None
+        owner = next((p["name"] for p in self.authority.people.values()
+                      if p.get("trust") == "owner"), None)
+        persons = [n for n in g.nodes() if g.meta.get(n, {}).get("kind") == "person" and n != owner]
+        if not persons:
+            return None
+        person = max(persons, key=lambda n: sum(g.adj[n].values()))
+        topics = [n for n, _ in g.neighbors(person) if g.meta.get(n, {}).get("kind") == "topic"][:2]
+        rel = g.meta[person].get("relation")
+        rel_s = f"（{rel}）" if rel else ""
+        tail = f"，常和「{'、'.join(topics)}」连在一起" if topics else ""
+        return f"在我的记忆里，「{person}」{rel_s}始终是核心{tail}——我会更珍惜。"
 
     # ---------- LLM 归纳 ----------
     def _llm_insights(self, rec: list[dict], k: int) -> list[str]:

@@ -77,6 +77,24 @@ def test_tick_reflects_when_due_then_quiet():
     assert out2["reflections"] == []
 
 
+def test_graph_enhanced_reflection():
+    from dsoul.authority import Authority
+    from dsoul.memory import Memory
+    rel = {"people": [
+        {"name": "张明", "relation": "本人", "trust": "owner"},
+        {"name": "小婷", "relation": "老婆", "trust": "family"},
+    ]}
+    m = Memory(tempfile.mktemp(suffix=".json"))
+    for t in ["小婷和张明去打篮球", "小婷陪张明看病", "小婷和张明散步"]:
+        m.add(t, source="x")
+    j = _Journal([{"speaker": "小婷", "utterance": "走啦"},
+                  {"speaker": "小婷", "utterance": "去吧"},
+                  {"speaker": "小婷", "utterance": "好"}])
+    r = Reflector(m, j, identity={"name": "张明"}, authority=Authority(rel))
+    ins = r.reflect()
+    assert any("小婷" in s and "核心" in s for s in ins)     # 图谱视角领悟
+
+
 if __name__ == "__main__":
     for _n, _f in sorted(globals().items()):
         if _n.startswith("test_") and callable(_f):

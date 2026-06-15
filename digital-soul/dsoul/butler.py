@@ -61,6 +61,16 @@ def daily_brief(agent, present=None, addr: str = "您", now=None) -> str:
     lines = [f"{_greeting(now)}，{addr}。"]
     if present:
         lines.append(f"我看到{'、'.join(present)}在身边。")
+    if hasattr(agent, "memory_graph"):
+        try:
+            g = agent.memory_graph()
+            owner = agent._owner_name() if hasattr(agent, "_owner_name") else None
+            core = [n for n, _ in g.central(8)
+                    if g.meta.get(n, {}).get("kind") == "person" and n != owner][:3]
+            if core:
+                lines.append("你最看重的人：" + "、".join(core) + "。")
+        except Exception:
+            pass
     if getattr(agent, "emotions", None) is not None:
         top, val = agent.emotions.mood()   # 情绪按真实时间衰减；now 仅用于问候语
         if val >= agent.emotions.baseline + 0.08:

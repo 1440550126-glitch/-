@@ -2,6 +2,7 @@
 
 import pathlib
 import sys
+import tempfile
 import types
 from datetime import date, datetime
 
@@ -65,6 +66,27 @@ def test_butler_refuses_strangers():
     a = _agent()
     stranger = {"known": False, "name": "路人", "obey": False}
     assert a._butler_route("简报", stranger) is None             # 不对外人汇报（隐私）
+
+
+def test_brief_includes_core_people():
+    from dsoul.authority import Authority
+    from dsoul.memory import Memory
+    a = object.__new__(Agent)
+    a.identity = {"name": "张明"}
+    a.emotions = None
+    a.plan = None
+    a.tasks = None
+    a.recent_reflections = lambda k=1: []
+    a._graph_cache = None
+    m = Memory(tempfile.mktemp(suffix=".json"))
+    for t in ["小婷和张明去打球", "小婷陪张明散步"]:
+        m.add(t, source="x")
+    a.memory = m
+    a.authority = Authority({"people": [
+        {"name": "张明", "relation": "本人", "trust": "owner"},
+        {"name": "小婷", "relation": "老婆", "trust": "family"}]})
+    txt = daily_brief(a, present=["张明"], addr="先生")
+    assert "小婷" in txt                                   # 核心人物进了简报
 
 
 def test_morning_brief_window():

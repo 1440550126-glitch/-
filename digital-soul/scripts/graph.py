@@ -30,8 +30,9 @@ def main() -> None:
     base = _isolated_base()
     try:
         agent = build_agent(base_dir=base)
-        g = build_memory_graph(agent.memory, agent.authority)
-        print(f"🕸️  记忆图谱：{len(g.nodes())} 个实体，来自 {len(agent.memory.items)} 条记忆\n")
+        g = build_memory_graph(agent.memory, agent.authority, llm=agent.llm)
+        print(f"🕸️  记忆图谱：{len(g.nodes())} 个实体，来自 {len(agent.memory.items)} 条记忆"
+              f"{'（含大模型语义关系）' if g.elabels else ''}\n")
 
         print("【最核心的实体（中心度）】")
         for name, score in g.central(8):
@@ -39,6 +40,15 @@ def main() -> None:
             rel = g.meta[name].get("relation")
             tag = f"（{rel}）" if rel else f"（{kind}）"
             print(f"  ● {name}{tag}  关联度 {score}")
+
+        if g.elabels:
+            print("\n【语义关系（大模型抽取）】")
+            seen = set()
+            for (a, b), rel in g.elabels.items():
+                if (b, a) in seen:
+                    continue
+                seen.add((a, b))
+                print(f"  {a} —{rel}→ {b}")
 
         people = [n for n in g.nodes() if g.meta[n].get("kind") == "person"]
         if people:

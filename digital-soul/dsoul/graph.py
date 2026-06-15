@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 
 from .reflect import _bigrams
@@ -20,6 +21,7 @@ class MemoryGraph:
         self.adj: dict[str, dict[str, int]] = {}   # 邻接表（带权）
         self.meta: dict[str, dict] = {}            # 节点元信息
         self.mem: dict[str, list[str]] = {}        # 节点 -> 提到它的记忆
+        self.elabels: dict[tuple, str] = {}        # 边 -> 语义关系标签（LLM 抽取）
 
     def _node(self, name: str, kind: str) -> None:
         self.adj.setdefault(name, {})
@@ -37,6 +39,17 @@ class MemoryGraph:
         self._node(b, "person")
         self.meta[b]["relation"] = label
         self._edge(a, b, 2)
+
+    def add_labeled_edge(self, a: str, rel: str, b: str) -> None:
+        """带语义标签的关系边（如 张明 —妻子→ 小婷）。"""
+        self._node(a, self.meta.get(a, {}).get("kind", "entity"))
+        self._node(b, self.meta.get(b, {}).get("kind", "entity"))
+        self._edge(a, b, 2)
+        self.elabels[(a, b)] = rel
+        self.elabels[(b, a)] = rel
+
+    def relation(self, a: str, b: str):
+        return self.elabels.get((a, b))
 
     def add_memory(self, text: str, entities) -> None:
         seen = []
@@ -77,11 +90,30 @@ def _owner(authority):
     return None
 
 
-def build_memory_graph(memory, authority, topics_per_memory: int = 2, min_topic_df: int = 2) -> MemoryGraph:
+def _llm_triples(llm, text: str):
+    """用大模型从一句话抽取 (实体1, 关系, 实体2) 三元组。"""
+    if not (text or "").strip():
+        return []
+    system = ("从这句话里抽取人物/事物之间的关系三元组，每行一个，格式：实体1|关系|实体2；"
+              "只输出三元组，没有就什么都不输出，不要解释。")
+    try:
+        out = llm.chat(system, text)
+    except Exception:
+        return []
+    triples = []
+    for line in out.splitlines():
+        parts = [p.strip() for p in re.split(r"[|｜，,、]", line) if p.strip()]
+        if len(parts) == 3:
+            triples.append((parts[0], parts[1], parts[2]))
+    return triples
+
+
+def build_memory_graph(memory, authority, topics_per_memory: int = 2, min_topic_df: int = 2,
+                       llm=None) -> MemoryGraph:
     """从记忆库 + 关系图谱构建记忆图谱。
 
-    主题只保留"跨记忆复现"（文档频率 ≥ min_topic_df）的高频二元组，
-    滤掉"叫张""婆小"这类一次性跨词噪声。
+    主题只保留"跨记忆复现"（文档频率 ≥ min_topic_df）的高频二元组，滤掉跨词噪声。
+    传入可用的 llm 时，额外抽取带语义标签的关系边（如 豆豆 —宠物→ 张明）。
     """
     g = MemoryGraph()
     people = [p["name"] for p in authority.people.values() if p.get("name")]
@@ -101,4 +133,8 @@ def build_memory_graph(memory, authority, topics_per_memory: int = 2, min_topic_
         ents += [(t, "topic") for t in topics]
         if ents:
             g.add_memory(text, ents)
+    if llm is not None and getattr(llm, "available", False):   # 语义关系抽取（可选增强）
+        for text in texts[:40]:
+            for a, rel, b in _llm_triples(llm, text):
+                g.add_labeled_edge(a, rel, b)
     return g

@@ -72,7 +72,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
     skills = SkillRegistry()
     hub = AgentHub(_load_yaml(base / "config" / "agents.yaml").get("agents", {}))
     tasks = TaskBook(base / "data" / "tasks.json")
-    reflector = Reflector(memory, journal, emotions=emotions, llm=llm, identity=identity)
+    reflector = Reflector(memory, journal, emotions=emotions, llm=llm, identity=identity,
+                          authority=authority)
     planner = Planner(memory=memory, llm=llm, identity=identity)
     plan = PlanBook(base / "data" / "plan.json")
     devcfg = _load_yaml(base / "config" / "devices.yaml")

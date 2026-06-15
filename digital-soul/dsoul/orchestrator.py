@@ -36,10 +36,13 @@ def _actionable(agent, step: str) -> bool:
 
 
 def orchestrate(agent, speaker, instruction, addr: str = "您"):
-    """多步则执行并汇总；单步（或没有可执行项）返回 None，交回普通流程。"""
-    steps = split_steps(instruction)
-    done = [(s, agent._exec_one_step(speaker, s)) for s in steps if _actionable(agent, s)]
-    if len(done) < 2:
+    """多步则执行并汇总；单步（或没有可执行项）返回 None，交回普通流程。
+
+    先判定可执行步数，确认 ≥2 步才真正执行——避免单步在判定时被误执行。
+    """
+    steps = [s for s in split_steps(instruction) if _actionable(agent, s)]
+    if len(steps) < 2:
         return None
+    done = [(s, agent._exec_one_step(speaker, s)) for s in steps]
     body = "\n".join(f"· {s} → {m}" for s, m in done)
     return f"好的，{addr}，这几件事我都办了：\n{body}"
