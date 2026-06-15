@@ -10,7 +10,8 @@ class Persona:
     def __init__(self, identity: dict) -> None:
         self.id = identity
 
-    def system_prompt(self, speaker: dict | None = None, memories: list[str] | None = None) -> str:
+    def system_prompt(self, speaker: dict | None = None, memories: list[str] | None = None,
+                      hints: list[str] | None = None) -> str:
         idy = self.id
         p = idy.get("personality", {})
         L: list[str] = []
@@ -47,6 +48,10 @@ class Persona:
         if memories:
             joined = "\n".join(f"- {m}" for m in memories)
             L.append("以下是你刚想起来的相关记忆，回答时自然地用上（不要逐条复述）：\n" + joined)
+
+        for h in (hints or []):
+            if h:
+                L.append(h)
 
         L.append("回答要简短、口语化、像真人微信聊天，别像机器人念稿子。")
         return "\n".join(L)

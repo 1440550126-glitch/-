@@ -28,6 +28,8 @@ _CMDS = {
     "ingest": "ingest.py",
     "voice": "voice_chat.py",
     "persona": "persona.py",
+    "worker": "agent_worker.py",
+    "demo-agents": "demo_agents.py",
 }
 
 
@@ -45,6 +47,8 @@ def _usage() -> str:
         "  sleep       睡眠巩固\n"
         "  ingest      导入记忆/文档/人脸\n"
         "  persona     切换人格（套用 examples 模板）\n"
+        "  worker      运行外部智能体 worker（爱马仕/openclaw 参考实现）\n"
+        "  demo-agents 演示隔空指挥外部智能体\n"
         "  doctor      环境自检\n"
     )
 

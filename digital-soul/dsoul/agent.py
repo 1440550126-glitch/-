@@ -13,7 +13,7 @@ from __future__ import annotations
 
 class Agent:
     def __init__(self, identity, persona, memory, authority, perception, llm, robot,
-                 journal=None) -> None:
+                 journal=None, emotions=None, knowledge=None, skills=None, hub=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -22,6 +22,18 @@ class Agent:
         self.llm = llm
         self.robot = robot
         self.journal = journal
+        self.emotions = emotions     # 七情六欲情绪状态
+        self.knowledge = knowledge   # 领域知识调度
+        self.skills = skills         # 技能（做饭/家务…）
+        self.hub = hub               # 外部智能体桥（爱马仕/openclaw…）
+
+    def _hints(self) -> list[str]:
+        out = []
+        if self.emotions is not None:
+            out.append(self.emotions.prompt_hint())
+        if self.knowledge is not None:
+            out.append(self.knowledge.prompt_hint())
+        return [h for h in out if h]
 
     def identify_speaker(self, image_path=None, video_path=None, name=None) -> str | None:
         """优先用人脸认人，认不出再用传入的名字。"""
@@ -54,9 +66,13 @@ class Agent:
         mems = [it["text"] for _, it in self.memory.recall(utterance, k=4)]
         result["memories"] = mems
 
-        # --- 生成回复 ---
+        # --- 情绪随这句话起伏 ---
+        if self.emotions is not None:
+            self.emotions.observe(utterance, speaker=who if who.get("known") else None)
+
+        # --- 生成回复（带上情绪 / 学识等提示）---
         system = self.persona.system_prompt(
-            speaker=who if who.get("known") else None, memories=mems
+            speaker=who if who.get("known") else None, memories=mems, hints=self._hints()
         )
         if self.llm.available:
             try:
@@ -111,7 +127,7 @@ class Agent:
         mems = [it["text"] for _, it in self.memory.recall(person_name or who["relation"], k=2)]
         if self.llm.available:
             system = self.persona.system_prompt(
-                speaker=who if who.get("known") else None, memories=mems
+                speaker=who if who.get("known") else None, memories=mems, hints=self._hints()
             )
             prompt = f"{who['name']} 刚出现在你面前。请主动、自然地跟TA打个招呼，一句话就好。"
             try:
@@ -134,3 +150,32 @@ class Agent:
         if who.get("trust") == "family":
             return f"{name}，你来啦！"
         return f"嘿，{name}，好久不见！"
+
+    # ---------- 技能：做饭 / 家务等（走授权闸门）----------
+    def run_skill(self, speaker_name, skill_name, **params) -> dict:
+        if self.skills is None:
+            return {"ok": False, "msg": "未启用技能模块"}
+        skill = self.skills.get(skill_name)
+        if skill is None:
+            return {"ok": False, "msg": f"没有这个技能：{skill_name}（可用：{', '.join(self.skills.names())}）"}
+        ok, who, reason = self.authority.can(speaker_name, skill.permission)
+        if not ok:
+            return {"ok": False, "msg": reason, "who": who}
+        return {"ok": True, "msg": skill.run(self, **params), "who": who}
+
+    # ---------- 隔空指挥外部智能体（爱马仕 / openclaw…）----------
+    def dispatch_agent(self, speaker_name, agent_name, task, **params) -> dict:
+        ok, _who, reason = self.authority.can(speaker_name, "control_agents")
+        if not ok:
+            return {"ok": False, "error": reason}
+        if self.hub is None:
+            return {"ok": False, "error": "未配置外部智能体（见 config/agents.yaml）"}
+        return self.hub.dispatch(agent_name, task, **params)
+
+    # ---------- 人格热切换（无需重启）----------
+    def switch_persona(self, name, base_dir=None, seed_memory=False) -> dict:
+        from .loader import reload_agent
+        from .personas import apply_persona
+        info = apply_persona(name, base_dir=base_dir, seed_memory=seed_memory)
+        reload_agent(self, base_dir=base_dir)
+        return info

@@ -25,7 +25,7 @@ jobs:
         run: python -m compileall -q dsoul scripts
       - name: Run unit tests
         run: |
-          for t in authority memory annotate presence consolidate; do
+          for t in authority memory annotate presence consolidate emotions skills; do
             echo "== $t =="
             python tests/test_$t.py
           done
