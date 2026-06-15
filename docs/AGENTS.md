@@ -89,6 +89,10 @@ loop (≤ max_rounds):
 | `draft_post` | **站内动作**：把文案存入用户草稿箱（自动配预览卡），审核后可发布 | ✅ |
 | `daily_topic` | **站内动作**：生成「今日话题」选题（标题 + 引导语） | ✅ |
 | `fortune` | **整活**：生成今日运势（纯娱乐向）——运势指数 / 宜忌 / 幸运色与数字，按日期确定性 | ✅ |
+| `summarize` | **数据**：从长文本抽取最具代表性的几句生成摘要（抽取式，词频打分 + 长度归一） | ✅ |
+| `extract` | **数据**：正则抽取邮箱 / 链接 / 电话 / 数字 / 日期 | ✅ |
+| `json_tool` | **数据**：JSON 校验 / 美化 / 按点路径（如 `a.b.0`）取值 | ✅ |
+| `memory` | **状态**：读写团队长期记忆（`get/set/list/delete`，跨运行持久） | ✅ |
 
 扩展：在 `TOOLS` 注册 `{ id, name, icon, desc, params, run(args, ctx) }` 即可，`ctx` 提供 `{ kbIds, userId }`。
 
@@ -135,6 +139,12 @@ curl -X POST https://你的域名/api/public/run \
   -d '{"key":"lk_xxx","task":"给「秋天的第一杯奶茶」写一句文案"}'
 ```
 
+### 团队记忆（变量）
+让团队**跨运行有状态**（对标扣子的变量/数据库，但更轻）：
+- 存储：`team_memory(team_id, key, value)`，按 `(team_id, key)` 唯一，单团队上限 50 条、值 ≤500 字。
+- 成员侧：`memory` 工具 `get/set/list/delete`，运行中按 `ctx.teamId` 作用域读写——团队可"记住"用户偏好、上次结论、风格约定等，下次运行直接复用。
+- 用户侧：团队工作台「🧠 团队记忆」卡片可查看 / 增改 / 删除；`GET/PUT /teams/:id/memory`（仅团队所有者可写）。
+
 ## 8. API 一览（均需登录；前缀 `/api`）
 
 | 方法 | 路径 | 说明 |
@@ -161,6 +171,7 @@ curl -X POST https://你的域名/api/public/run \
 | POST | `/kb/:id/search` | 检索测试（RAG） |
 | POST | `/public/run` | **对外 API（无需登录）**：用团队密钥同步调用，返回最终结果 |
 | POST/DELETE | `/teams/:id/api-key` | 生成（仅返回一次）/ 吊销团队 API 密钥 |
+| GET/PUT | `/teams/:id/memory` | 团队记忆（变量）查看 / 设置（`DELETE /teams/:id/memory/:key` 删除） |
 | GET/DELETE | `/agent-drafts` · `/agent-drafts/:id` | 草稿箱列表 / 丢弃 |
 | GET | `/admin/agents/overview` | 🛠 后台：运行总览 + 最近运行（管理员） |
 | GET | `/admin/agents/runs/:id` | 🛠 后台：任意运行详情 |

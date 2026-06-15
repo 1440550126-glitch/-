@@ -390,3 +390,14 @@ CREATE TABLE IF NOT EXISTS agent_post_drafts (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_drafts_owner ON agent_post_drafts(owner_id, status, created_at DESC);
+
+-- 团队记忆（变量）：让团队跨运行持有状态；成员可用 memory 工具读写，用户可在工作台查看/编辑
+CREATE TABLE IF NOT EXISTS team_memory (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  team_id    INTEGER NOT NULL,
+  key        TEXT NOT NULL,
+  value      TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL,
+  UNIQUE(team_id, key)
+);
+CREATE INDEX IF NOT EXISTS idx_memory_team ON team_memory(team_id, key);

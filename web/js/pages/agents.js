@@ -1,5 +1,5 @@
 // 灵阵 · AI 团队：首页控制台 / 团队工作台 / 作战室实时直播
-import { GET, POST, PATCH, DEL, sse } from '../api.js';
+import { GET, POST, PUT, PATCH, DEL, sse } from '../api.js';
 import { h, toast, sheet, confirmSheet, emptyState, spinner, timeAgo } from '../ui.js';
 import { nav } from '../router.js';
 
@@ -439,6 +439,35 @@ export async function renderTeam(page, { id }) {
     kbBox.append(row);
   }
   renderKbs();
+
+  // 团队记忆（变量）：跨运行持久状态
+  const memBox = h('div', { class: 'glass lz-edit-card' });
+  box.append(memBox);
+  async function loadMemory() {
+    let mem;
+    try { mem = await GET(`/api/teams/${id}/memory`); } catch { memBox.remove(); return; }
+    memBox.innerHTML = '';
+    const addMem = (presetKey, presetVal) => sheet((sb, close) => {
+      const kI = h('input', { class: 'input', maxlength: 60, placeholder: '键名，如 用户偏好 / 上次结论', value: presetKey || '' });
+      const vI = h('textarea', { class: 'input', rows: 3, maxlength: 500, placeholder: '值' }); vI.value = presetVal || '';
+      sb.append(h('h3', {}, '团队记忆'),
+        h('div', { class: 'field' }, h('label', {}, '键'), kI),
+        h('div', { class: 'field' }, h('label', {}, '值'), vI),
+        h('button', { class: 'btn block', onclick: async () => { if (!kI.value.trim()) return toast('填个键名', 'warn'); try { await PUT(`/api/teams/${id}/memory`, { key: kI.value.trim(), value: vI.value }); close(); loadMemory(); toast('已保存'); } catch (e) { toast(e.message, 'warn'); } } }, '保存'));
+    });
+    memBox.append(h('div', { class: 'lz-edit-head' }, h('span', {}, `🧠 团队记忆（${mem.items.length}）`),
+      mem.editable ? h('button', { class: 'btn mini ghost', onclick: () => addMem() }, '+ 新增') : null));
+    memBox.append(h('div', { class: 'lz-tip' }, '团队跨运行记住的变量；带「团队记忆」工具的成员可在运行中读写。'));
+    const list = h('div', { class: 'lz-member-list', style: { marginTop: '8px' } });
+    for (const it of mem.items) {
+      list.append(h('div', { class: 'lz-member-pill', style: { cursor: mem.editable ? 'pointer' : 'default' }, onclick: mem.editable ? () => addMem(it.key, it.value) : null },
+        h('div', { style: { flex: 1, minWidth: 0 } }, h('div', { class: 'lz-mp-name' }, it.key), h('div', { class: 'lz-mp-role', style: { wordBreak: 'break-all' } }, it.value || '(空)')),
+        mem.editable ? h('button', { class: 'lz-mp-x', onclick: async (e) => { e.stopPropagation(); try { await DEL(`/api/teams/${id}/memory/${encodeURIComponent(it.key)}`); loadMemory(); } catch (er) { toast(er.message, 'warn'); } } }, '×') : null));
+    }
+    if (!mem.items.length) list.append(h('div', { class: 'lz-tip' }, '还没有记忆。给团队设个变量，或让带记忆工具的成员去记。'));
+    memBox.append(list);
+  }
+  loadMemory();
 
   // 编排设置（仅自己的团队可编辑）
   if (editable) {

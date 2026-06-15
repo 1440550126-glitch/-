@@ -239,6 +239,34 @@ DEL('/api/teams/:id/api-key', async (ctx) => {
   return { revoked: true };
 }, { auth: true });
 
+// 团队记忆（变量）：跨运行持久状态，成员可用 memory 工具读写，用户可在此查看/编辑
+GET('/api/teams/:id/memory', async (ctx) => {
+  const t = teamRow(ctx.params.id);
+  if (!canUse(t, ctx.user.id)) throw notFound();
+  return { items: q.all('SELECT key, value, updated_at FROM team_memory WHERE team_id = ? ORDER BY key', t.id), editable: t.owner_id === ctx.user.id };
+}, { auth: true });
+
+PUT('/api/teams/:id/memory', async (ctx) => {
+  const t = teamRow(ctx.params.id);
+  if (!t) throw notFound();
+  if (!canEdit(t, ctx.user.id)) throw denied('只能编辑自己团队的记忆');
+  const key = sanitizeText(ctx.body?.key, 60);
+  if (!key) throw bad('记忆需要一个键名');
+  const value = sanitizeText(ctx.body?.value, 500);
+  const exists = q.get('SELECT 1 FROM team_memory WHERE team_id = ? AND key = ?', t.id, key);
+  if (!exists && q.get('SELECT COUNT(*) c FROM team_memory WHERE team_id = ?', t.id).c >= 50) throw bad('团队记忆已满（最多 50 条）');
+  q.run('INSERT INTO team_memory (team_id, key, value, updated_at) VALUES (?,?,?,?) ON CONFLICT(team_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at', t.id, key, value, now());
+  return { key, value };
+}, { auth: true });
+
+DEL('/api/teams/:id/memory/:key', async (ctx) => {
+  const t = teamRow(ctx.params.id);
+  if (!t) throw notFound();
+  if (!canEdit(t, ctx.user.id)) throw denied('无权操作');
+  q.run('DELETE FROM team_memory WHERE team_id = ? AND key = ?', t.id, ctx.params.key);
+  return { deleted: true };
+}, { auth: true });
+
 // ============================================================
 // 运行任务
 // ============================================================
@@ -483,7 +511,8 @@ GET('/api/admin/agents/overview', async () => {
       api_teams: q.get('SELECT COUNT(*) c FROM teams WHERE api_key IS NOT NULL').c,
       triggers: q.get('SELECT COUNT(*) c FROM agent_triggers').c,
       triggers_enabled: q.get('SELECT COUNT(*) c FROM agent_triggers WHERE enabled = 1').c,
-      drafts: q.get("SELECT COUNT(*) c FROM agent_post_drafts WHERE status = 'draft'").c
+      drafts: q.get("SELECT COUNT(*) c FROM agent_post_drafts WHERE status = 'draft'").c,
+      memory: q.get('SELECT COUNT(*) c FROM team_memory').c
     },
     runs: { ...tot, today: q.get('SELECT COUNT(*) c FROM agent_runs WHERE started_at >= ?', start).c },
     cost_today_micro: todayCostMicro('agent_'),

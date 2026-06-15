@@ -2,7 +2,7 @@
 // 每个工具都是确定性的，无需大模型即可真实执行——所以本地引擎模式下团队照样能算数、查知识、抓网页。
 // 工具形态：{ id, name, icon, desc, params, safe, run(args, ctx) -> { ok, result, data? } }
 //   result：给智能体看的「观察」文本；data：可选结构化数据。
-import { searchKnowledge } from './knowledge.js';
+import { searchKnowledge, terms } from './knowledge.js';
 import { buildCard } from '../lib/manifest.js';
 import { q } from '../lib/db.js';
 import { dayCN, now, pick, seededRand, hashCode } from '../lib/util.js';
@@ -271,6 +271,94 @@ export const TOOLS = {
       const result = `🔮 ${who || '你'}的今日运势（${day} · 纯娱乐）\n` +
         `运势：${'★'.repeat(stars)}${'☆'.repeat(5 - stars)}\n宜：${yi}　忌：${ji}\n幸运色：${color}　幸运数字：${num}\n${moods[stars]}`;
       return { ok: true, result, data: { stars, yi, ji, color, num } };
+    }
+  },
+
+  summarize: {
+    id: 'summarize', name: '摘要提炼', icon: '📝', safe: true,
+    desc: '从长文本中抽取最具代表性的几句话生成摘要（抽取式，不改写原文）',
+    params: { text: '要摘要的文本', sentences: '可选，摘要句数，默认 3' },
+    async run({ text, sentences }) {
+      const t = String(text || '').trim();
+      if (!t) return { ok: false, result: '缺少 text 参数' };
+      const sents = t.split(/(?<=[。！？!?\n])/).map((s) => s.trim()).filter((s) => s.length >= 4);
+      if (sents.length <= 1) return { ok: true, result: `摘要：${t.slice(0, 200)}`, data: { summary: t.slice(0, 200) } };
+      const tf = new Map();
+      for (const w of terms(t)) tf.set(w, (tf.get(w) || 0) + 1);
+      const n = Math.min(sents.length, Math.max(1, Number(sentences) || 3));
+      const scored = sents.map((s, i) => {
+        let score = 0; const seen = new Set();
+        for (const w of terms(s)) if (!seen.has(w)) { score += tf.get(w) || 0; seen.add(w); }
+        return { i, s, score: score / Math.sqrt(Math.max(4, s.length)) };   // 轻度长度归一
+      });
+      const top = [...scored].sort((a, b) => b.score - a.score).slice(0, n).sort((a, b) => a.i - b.i).map((x) => x.s);
+      return { ok: true, result: `摘要（${n} / ${sents.length} 句）：\n${top.join('')}`, data: { summary: top.join(''), from_sentences: sents.length } };
+    }
+  },
+
+  extract: {
+    id: 'extract', name: '信息抽取', icon: '🔍', safe: true,
+    desc: '从文本里抽取邮箱 / 链接 / 电话 / 数字 / 日期等结构化信息',
+    params: { text: '源文本', kind: '类型：email | url | phone | number | date | all（默认 all）' },
+    async run({ text, kind }) {
+      const t = String(text || '');
+      if (!t) return { ok: false, result: '缺少 text 参数' };
+      const pats = {
+        email: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
+        url: /https?:\/\/[^\s<>"'，。、；：！？（）()「」【】]+/g,
+        phone: /(?:\+?86)?1[3-9]\d{9}|\d{3,4}-\d{7,8}/g,
+        number: /-?\d+(?:\.\d+)?%?/g,
+        date: /\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?|\d{1,2}[-/月]\d{1,2}日?/g
+      };
+      const keys = pats[kind] ? [kind] : Object.keys(pats);
+      const out = {};
+      for (const key of keys) { const found = [...new Set(t.match(pats[key]) || [])]; if (found.length) out[key] = found; }
+      const total = Object.values(out).reduce((a, b) => a + b.length, 0);
+      if (!total) return { ok: true, result: '未抽取到结构化信息', data: {} };
+      return { ok: true, result: Object.entries(out).map(([key, v]) => `${key}：${v.join('、')}`).join('\n'), data: out };
+    }
+  },
+
+  json_tool: {
+    id: 'json_tool', name: 'JSON 工具', icon: '🧱', safe: true,
+    desc: '校验并美化 JSON；给定 path（点路径如 a.b.0）则取出对应值',
+    params: { json: 'JSON 字符串', path: '可选，点路径取值' },
+    async run({ json, path }) {
+      let obj;
+      try { obj = typeof json === 'string' ? JSON.parse(json) : json; } catch (e) { return { ok: false, result: 'JSON 解析失败：' + e.message }; }
+      if (path) {
+        let cur = obj;
+        for (const seg of String(path).split('.')) { if (cur == null) break; cur = cur[/^\d+$/.test(seg) ? Number(seg) : seg]; }
+        return { ok: true, result: `${path} = ${JSON.stringify(cur)}`, data: { value: cur } };
+      }
+      return { ok: true, result: '✅ 合法 JSON：\n' + JSON.stringify(obj, null, 2).slice(0, 1500), data: { valid: true } };
+    }
+  },
+
+  memory: {
+    id: 'memory', name: '团队记忆', icon: '🧠', safe: true,
+    desc: '读写团队的长期记忆（跨运行持久化）：op=get/set/list/delete',
+    params: { op: 'get | set | list | delete', key: '键（get/set/delete 用）', value: '值（set 用）' },
+    async run({ op, key, value }, ctx = {}) {
+      if (!ctx.teamId) return { ok: true, result: '（当前无团队上下文，记忆不可用）' };
+      const tid = ctx.teamId;
+      op = String(op || 'list');
+      if (op === 'list') {
+        const rows = q.all('SELECT key, value FROM team_memory WHERE team_id = ? ORDER BY key', tid);
+        return { ok: true, result: rows.length ? rows.map((r) => `${r.key} = ${r.value}`).join('\n') : '（团队记忆为空）', data: { items: rows } };
+      }
+      if (!key) return { ok: false, result: '缺少 key' };
+      const k = String(key).slice(0, 60);
+      if (op === 'get') { const r = q.get('SELECT value FROM team_memory WHERE team_id = ? AND key = ?', tid, k); return { ok: true, result: r ? `${k} = ${r.value}` : `（没有记忆：${k}）`, data: { value: r?.value ?? null } }; }
+      if (op === 'delete') { q.run('DELETE FROM team_memory WHERE team_id = ? AND key = ?', tid, k); return { ok: true, result: `已删除记忆：${k}` }; }
+      if (op === 'set') {
+        const exists = q.get('SELECT 1 FROM team_memory WHERE team_id = ? AND key = ?', tid, k);
+        if (!exists && (q.get('SELECT COUNT(*) c FROM team_memory WHERE team_id = ?', tid).c >= 50)) return { ok: false, result: '团队记忆已满（最多 50 条）' };
+        const v = String(value ?? '').slice(0, 500);
+        q.run('INSERT INTO team_memory (team_id, key, value, updated_at) VALUES (?,?,?,?) ON CONFLICT(team_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at', tid, k, v, now());
+        return { ok: true, result: `已记住：${k} = ${v}`, data: { key: k, value: v } };
+      }
+      return { ok: false, result: '未知 op（应为 get/set/list/delete）' };
     }
   }
 };

@@ -104,7 +104,7 @@ async function runToolStep(run, agent, toolId, args, kbIds, observations) {
     title: `调用工具 · ${tool.name}`, tool: toolId, tool_args: JSON.stringify(args), input: JSON.stringify(args)
   });
   let out;
-  try { out = await tool.run(args || {}, { kbIds, userId: run.user_id, runId: run.id }); }
+  try { out = await tool.run(args || {}, { kbIds, userId: run.user_id, runId: run.id, teamId: run.team_id }); }
   catch (e) { out = { ok: false, result: '工具异常：' + e.message }; }
   finishStep(run.id, step, { tool_result: out.result || '', output: out.result || '', status: out.ok ? 'done' : 'failed' });
   observations.push(`【工具 ${tool.name}】入参 ${JSON.stringify(args)} → ${out.result || '(空)'}`);
@@ -211,6 +211,12 @@ async function localProduce(run, agent, item, memo, toolIds, kbIds, observations
       await runToolStep(run, agent, 'daily_topic', { theme: topKeywords(run.task, 1)[0] || '' }, kbIds, observations);
     } else if (toolIds.includes('fortune')) {
       await runToolStep(run, agent, 'fortune', { who: topKeywords(run.task, 1)[0] || '' }, kbIds, observations);
+    } else if (toolIds.includes('summarize')) {
+      await runToolStep(run, agent, 'summarize', { text: memo || run.task }, kbIds, observations);
+    } else if (toolIds.includes('extract')) {
+      await runToolStep(run, agent, 'extract', { text: memo || run.task }, kbIds, observations);
+    } else if (toolIds.includes('memory')) {
+      await runToolStep(run, agent, 'memory', { op: 'list' }, kbIds, observations);
     } else if (toolIds.includes('text_stats') && memo) {
       await runToolStep(run, agent, 'text_stats', { text: memo.slice(0, 500) }, kbIds, observations);
     }

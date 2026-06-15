@@ -545,6 +545,36 @@ try {
   const funFull = await api('GET', `/api/runs/${funR.data.run_id}`, { token: lzTok });
   ok('赛博算命馆掐指一算（fortune）', funFull.data.run.status === 'done' && funFull.data.steps.some((s) => s.tool === 'fortune' && s.status === 'done'));
 
+  // ===== 实用工具：摘要 / 抽取 / JSON / 团队记忆（用独立新游客，避免占用 lzTok 配额） =====
+  const utilTok = (await api('POST', '/api/auth/guest', { body: {} })).data.token;
+  const umeta = await api('GET', '/api/agents/meta', { token: utilTok });
+  ok('实用工具齐备', ['summarize', 'extract', 'json_tool', 'memory'].every((id) => umeta.data.tools.some((t) => t.id === id)));
+  const mkTeam = async (name, tools) => {
+    const ag = (await api('POST', '/api/agents', { token: utilTok, body: { name, tools } })).data.agent;
+    return (await api('POST', '/api/teams', { token: utilTok, body: { name: name + '队', strategy: 'route', member_ids: [ag.id] } })).data.team;
+  };
+  const runTeam = async (teamId, task) => {
+    const rr = await api('POST', `/api/teams/${teamId}/run`, { token: utilTok, body: { task } });
+    const st = sse(`/api/runs/${rr.data.run_id}/events`, utilTok);
+    await st.wait((e) => e.event === 'done' || e.event === 'error', 20000, 'util-run'); st.close();
+    return (await api('GET', `/api/runs/${rr.data.run_id}`, { token: utilTok })).data;
+  };
+  const exRun = await runTeam((await mkTeam('抽取员', ['extract'])).id, '整理一下：邮箱 hi@jvling.app 网址 https://jvling.app 电话 13800138000');
+  const exStep = exRun.steps.find((s) => s.tool === 'extract');
+  ok('抽取工具命中邮箱/链接', !!exStep && /hi@jvling\.app/.test(exStep.tool_result) && /https:\/\/jvling\.app/.test(exStep.tool_result));
+  const sumRun = await runTeam((await mkTeam('摘要员', ['summarize'])).id, '句灵是文案社交圈。用户发一句话生成预览卡。长按让文字活过来。它面向年轻人。配实时合成音效。');
+  ok('摘要工具产出', sumRun.steps.some((s) => s.tool === 'summarize' && s.status === 'done'));
+
+  // 团队记忆（变量）：跨运行持久状态
+  const memTeam = await mkTeam('记忆员', ['memory']);
+  ok('写入团队记忆', (await api('PUT', `/api/teams/${memTeam.id}/memory`, { token: utilTok, body: { key: '品牌调性', value: '真诚有梗不油腻' } })).ok);
+  const memGet = await api('GET', `/api/teams/${memTeam.id}/memory`, { token: utilTok });
+  ok('读取团队记忆', memGet.data.items.length === 1 && memGet.data.items[0].value === '真诚有梗不油腻' && memGet.data.editable === true);
+  const memRun = await runTeam(memTeam.id, '看看我们记住了什么');
+  ok('成员运行中读到团队记忆', memRun.steps.some((s) => s.tool === 'memory' && /品牌调性/.test(s.tool_result || '')));
+  ok('删除团队记忆', (await api('DELETE', `/api/teams/${memTeam.id}/memory/${encodeURIComponent('品牌调性')}`, { token: utilTok })).ok);
+  ok('他人不能写我的团队记忆', (await api('PUT', `/api/teams/${memTeam.id}/memory`, { token: guests[0].token, body: { key: 'x', value: 'y' } })).status === 403);
+
   // 对外 API（可被外部系统 / Webhook 调用）
   const keyRes = await api('POST', `/api/teams/${teamId}/api-key`, { token: lzTok });
   ok('生成对外 API 密钥', keyRes.ok && keyRes.data.api_key.startsWith('lk_'));
