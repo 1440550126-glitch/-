@@ -27,6 +27,7 @@ _CMDS = {
     "watch": "watch.py",
     "ingest": "ingest.py",
     "voice": "voice_chat.py",
+    "persona": "persona.py",
 }
 
 
@@ -43,6 +44,7 @@ def _usage() -> str:
         "  timeline    情感时间线\n"
         "  sleep       睡眠巩固\n"
         "  ingest      导入记忆/文档/人脸\n"
+        "  persona     切换人格（套用 examples 模板）\n"
         "  doctor      环境自检\n"
     )
 
