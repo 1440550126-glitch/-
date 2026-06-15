@@ -182,6 +182,7 @@ const MOODS={"喜":"😄 愉悦","怒":"😠 生气","哀":"😢 低落","惧":"
 const EMO={"喜":"😄","怒":"😠","哀":"😢","惧":"😨","爱":"❤️","恶":"😒","欲":"🥺"};
 const SEVEN=["喜","怒","哀","惧","爱","恶","欲"];
 function bars(lv){return SEVEN.map(e=>{const v=Math.max(0,Math.min(100,Math.round((lv[e]||0)*100)));return '<div class=barrow><span class=barlab title="'+e+'">'+EMO[e]+'</span><span class=bartrk><i style="width:'+v+'%"></i></span></div>';}).join('');}
+function radar(lv){const S=160,c=S/2,R=54,n=SEVEN.length;function pt(i,r){const a=-Math.PI/2+2*Math.PI*i/n;return [c+r*Math.cos(a),c+r*Math.sin(a)];}let s='<svg width="170" height="160" viewBox="0 0 '+S+' '+S+'">';[0.5,1].forEach(g=>{const pts=SEVEN.map((_,i)=>pt(i,R*g).map(v=>v.toFixed(1)).join(',')).join(' ');s+='<polygon points="'+pts+'" fill="none" stroke="#2a2f3a"/>';});SEVEN.forEach((e,i)=>{const[ax,ay]=pt(i,R);s+='<line x1='+c+' y1='+c+' x2='+ax.toFixed(1)+' y2='+ay.toFixed(1)+' stroke="#2a2f3a"/>';const[lx,ly]=pt(i,R+11);s+='<text x='+lx.toFixed(1)+' y='+ly.toFixed(1)+' font-size="11" text-anchor="middle" dominant-baseline="middle">'+EMO[e]+'</text>';});const vp=SEVEN.map((e,i)=>pt(i,R*Math.max(0,Math.min(1,lv[e]||0))).map(v=>v.toFixed(1)).join(',')).join(' ');s+='<polygon points="'+vp+'" fill="#5fdd9d" fill-opacity="0.35" stroke="#5fdd9d"/>';return s+'</svg>';}
 function devRow(d){const st=d.on?('开'+(d.detail?(' '+d.detail):'')):'关';return '<div class=devrow><span class=devname>'+d.label+'</span><span class=devst>'+st+'</span><button class=devbtn onclick="dev(\''+d.key+'\',\'on\')">开</button><button class=devbtn onclick="dev(\''+d.key+'\',\'off\')">关</button></div>';}
 async function dev(k,a){const sp=$('#speaker').value;try{const r=await (await fetch('/api/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device:k,action:a,speaker:sp})})).json();add(soulName,r.reply,'soul');}catch(e){}refresh();}
 async function scene(n){const sp=$('#speaker').value;try{const r=await (await fetch('/api/scene',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scene:n,speaker:sp})})).json();add(soulName,r.reply,'soul');}catch(e){}refresh();}
@@ -190,9 +191,9 @@ function esc(t){const d=document.createElement('div');d.textContent=t;return d.i
 function renderTimeline(tl){if(!tl||!tl.length)return '<span class=dim>暂无带年份的记忆</span>';let h='',last=null;tl.forEach(e=>{if(e.year!==last){h+='<div class=tlyear>'+esc(e.year)+'</div>';last=e.year;}h+='<div class=tlitem>'+esc(e.text)+'</div>';});return h;}
 let tlFilter=null, _tl=[];
 function setTL(e){tlFilter=e||null;drawTL();}
-function drawTL(){let tl=_tl;if(tlFilter)tl=tl.filter(x=>x.people&&x.people.includes(tlFilter));$('#timeline').innerHTML=renderTimeline(tl);}
+function drawTL(){let tl=_tl;if(tlFilter)tl=tl.filter(x=>(x.people&&x.people.includes(tlFilter))||(x.text&&x.text.indexOf(tlFilter)>=0));$('#timeline').innerHTML=renderTimeline(tl);}
 function renderTLfilters(ents){let h='<button class=devbtn style="margin:2px" onclick="setTL(\'\')">全部</button>';(ents||[]).forEach(e=>h+='<button class=devbtn style="margin:2px" onclick="setTL(\''+e+'\')">'+esc(e)+'</button>');return h;}
-function renderGraph(gv){if(!gv||!gv.nodes||!gv.nodes.length)return '';const W=320,H=290,cx=W/2,cy=H/2,R=108;const nodes=gv.nodes;const center=nodes.reduce((a,b)=>b.deg>a.deg?b:a,nodes[0]);const others=nodes.filter(x=>x!==center);const pos={};pos[center.id]={x:cx,y:cy};others.forEach((nd,i)=>{const ang=2*Math.PI*i/others.length;pos[nd.id]={x:cx+R*Math.cos(ang),y:cy+R*Math.sin(ang)};});let s='<svg width="100%" viewBox="0 0 '+W+' '+H+'">';(gv.edges||[]).forEach(e=>{const p=pos[e.a],q=pos[e.b];if(p&&q)s+='<line x1='+p.x.toFixed(1)+' y1='+p.y.toFixed(1)+' x2='+q.x.toFixed(1)+' y2='+q.y.toFixed(1)+' stroke="#2e7d32" stroke-opacity="0.5" stroke-width="'+Math.min(4,e.w)+'"/>';});nodes.forEach(nd=>{const p=pos[nd.id],r=nd.kind==='person'?8:5,col=nd.kind==='person'?'#1565c0':'#5a3a13';s+='<circle cx='+p.x.toFixed(1)+' cy='+p.y.toFixed(1)+' r='+r+' fill="'+col+'"/>';s+='<text x='+p.x.toFixed(1)+' y='+(p.y-r-3).toFixed(1)+' font-size="11" fill="#cbd5e1" text-anchor="middle">'+esc(nd.label)+'</text>';});return s+'</svg>';}
+function renderGraph(gv){if(!gv||!gv.nodes||!gv.nodes.length)return '';const W=320,H=290,cx=W/2,cy=H/2,R=108;const nodes=gv.nodes;const center=nodes.reduce((a,b)=>b.deg>a.deg?b:a,nodes[0]);const others=nodes.filter(x=>x!==center);const pos={};pos[center.id]={x:cx,y:cy};others.forEach((nd,i)=>{const ang=2*Math.PI*i/others.length;pos[nd.id]={x:cx+R*Math.cos(ang),y:cy+R*Math.sin(ang)};});let s='<svg width="100%" viewBox="0 0 '+W+' '+H+'">';(gv.edges||[]).forEach(e=>{const p=pos[e.a],q=pos[e.b];if(p&&q)s+='<line x1='+p.x.toFixed(1)+' y1='+p.y.toFixed(1)+' x2='+q.x.toFixed(1)+' y2='+q.y.toFixed(1)+' stroke="#2e7d32" stroke-opacity="0.5" stroke-width="'+Math.min(4,e.w)+'"/>';});nodes.forEach(nd=>{const p=pos[nd.id],r=nd.kind==='person'?8:5,col=nd.kind==='person'?'#1565c0':'#5a3a13';s+='<g style="cursor:pointer" onclick="setTL(\''+nd.id+'\')">';s+='<circle cx='+p.x.toFixed(1)+' cy='+p.y.toFixed(1)+' r='+r+' fill="'+col+'"/>';s+='<text x='+p.x.toFixed(1)+' y='+(p.y-r-3).toFixed(1)+' font-size="11" fill="#cbd5e1" text-anchor="middle">'+esc(nd.label)+'</text>';s+='</g>';});return s+'</svg>';}
 function li(a){return a.map(x=>'<li>'+esc(x)+'</li>').join('')||'<li class=dim>—</li>';}
 async function refresh(){
   try{
@@ -207,7 +208,7 @@ async function refresh(){
     $('#scenes').innerHTML=(s.scenes&&s.scenes.length)?s.scenes.map(n=>'<button class=devbtn style="margin:3px" onclick="scene(\''+n+'\')">'+n+'</button>').join(''):'<span class=dim>无</span>';
     $('#triggers').innerHTML=li(s.triggers||[]);
     $('#mood').textContent=s.mood?(MOODS[s.mood]||s.mood):'平静';
-    $('#moodbars').innerHTML=s.mood_levels?bars(s.mood_levels):'';
+    $('#moodbars').innerHTML=s.mood_levels?radar(s.mood_levels):'';
     $('#disp').innerHTML=li(s.dispatches||[]);
     const op=s.tasks_open||[];
     $('#taskstat').textContent='· 欠 '+op.length+' 件 · 已办成 '+(s.tasks_done||0)+' 件';
@@ -216,7 +217,7 @@ async function refresh(){
     $('#plan').innerHTML=li(s.plan||[]);
     $('#refl').innerHTML=li(s.reflections||[]);
     $('#graph').innerHTML=renderGraph(s.graph_viz)||'<span class=dim>记忆还太少，画不出关系网</span>';
-    $('#graphtop').textContent=(s.graph&&s.graph.length)?('最核心：'+s.graph.join(' · ')):'';
+    $('#graphtop').textContent=((s.graph&&s.graph.length)?('最核心：'+s.graph.join(' · ')):'')+((s.graph_viz&&s.graph_viz.nodes.length)?'　·　点节点筛选时间线':'');
     _tl=s.timeline||[]; $('#tlfilters').innerHTML=renderTLfilters(s.timeline_entities); drawTL();
     $('#mems').innerHTML=li(s.recent_memories);
     $('#jour').innerHTML=li(s.recent_journal);
