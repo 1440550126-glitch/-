@@ -176,6 +176,14 @@ class Agent:
                 self._log_journal(who, utterance, prop["reply"], f"propose:{prop['agent']}")
                 return result
 
+        # --- 记忆图谱问答（"关于X" / "我的关系网" / "最核心的人"）---
+        if action is None and who.get("obey"):
+            gret = self._graph_route(utterance)
+            if gret is not None:
+                result["reply"] = gret
+                self._log_journal(who, utterance, gret, "graph")
+                return result
+
         # --- 检索记忆 ---
         mems = [it["text"] for _, it in self.memory.recall(utterance, k=4)]
         result["memories"] = mems
@@ -491,6 +499,45 @@ class Agent:
         """它最近想明白的事（领悟）。"""
         refl = [it["text"] for it in self.memory.items if "reflection" in (it.get("tags") or [])]
         return refl[-k:][::-1]
+
+    # ---------- 记忆图谱（人—事—主题 关系网）----------
+    def memory_graph(self):
+        """构建/复用记忆图谱（记忆条数变化时才重建）。"""
+        from .graph import build_memory_graph
+        n = len(self.memory.items)
+        cache = getattr(self, "_graph_cache", None)
+        if cache and cache[0] == n:
+            return cache[1]
+        g = build_memory_graph(self.memory, self.authority)
+        self._graph_cache = (n, g)
+        return g
+
+    def _graph_route(self, utterance):
+        u = utterance or ""
+        central = ("关系图谱", "关系网", "最重要的人", "最核心", "谁对我最重要", "我的人脉")
+        entity = ("关于", "有关", "相关")
+        if not any(k in u for k in central + entity):
+            return None
+        g = self.memory_graph()
+        if any(k in u for k in central):
+            top = [n for n, _ in g.central(5)]
+            return ("在我的记忆里，最核心的是：" + "、".join(top) + "。") if top else "我还没攒够记忆来画关系网。"
+        node = next((n for n in g.nodes() if n and n in u), None)
+        if node:
+            nb = "、".join(n for n, _ in g.neighbors(node, 5))
+            msg = f"关于「{node}」，常和它一起出现的是：{nb or '（暂时还没有）'}。"
+            about = g.about(node, 2)
+            if about:
+                msg += " 我记得：" + "；".join(about)
+            return msg
+        # 没有现成节点：抽取"关于X"的 X，退回实体检索
+        key = u.split("关于", 1)[1] if "关于" in u else ""
+        key = key.strip(" 的事都有还那些哪些什么怎样呢吗？?。.，,！!").strip()
+        if key:
+            hits = [it["text"] for _, it in self.memory.recall(key, k=3)]
+            if hits:
+                return f"关于「{key}」，我记得：" + "；".join(hits)
+        return None
 
     # ---------- 贾维斯式管家层 ----------
     def _addr(self, who) -> str:

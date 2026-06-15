@@ -66,6 +66,7 @@
 | 自主反思 / 成长 | 回看经历→提炼"领悟"→写回记忆，影响日后回应 | `dsoul/reflect.py` |
 | 自主规划 / 推进 | 领悟+欠账→排出今天的计划→逐条推进、销账 | `dsoul/planner.py` |
 | 自主心跳 / 主动性 | 常驻时定期反思+规划+跟进欠账，不用你催 | `dsoul/agent.py`(tick) · `scripts/daemon.py` |
+| 记忆图谱 | 记忆连成"人—事—主题"关系网，可问"关于X/最核心的人" | `dsoul/graph.py` · `scripts/graph.py` |
 
 ## 架构
 

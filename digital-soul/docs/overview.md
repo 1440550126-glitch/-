@@ -110,6 +110,7 @@ flowchart TB
 | `journal.py` · `consolidate.py` | 对话日记 + 睡眠巩固成长期记忆 |
 | `annotate.py` | 给记忆打情感标签、抽取时间 |
 | `reflect.py` · `planner.py` | 自主反思→领悟；自主规划→今天的计划 |
+| `graph.py` | 记忆图谱：人—事—主题关系网（中心度/实体检索/连接） |
 | `tasks.py` | 派活待办本：成记功、败记账、可跟进重试 |
 | `emotions.py` · `knowledge.py` | 七情六欲随互动起伏；多学科视角调度 |
 | `perception.py` · `perception_opencv.py` · `presence.py` | 人脸认人；树莓派轻量后端；持续感知/进门事件 |
@@ -130,6 +131,7 @@ flowchart TB
 | `demo.py` | 30 秒看懂：认人→对话→巩固→次日记得 |
 | `jarvis_demo.py` | 贾维斯语音闭环：唤醒→简报→控家居→编排→场景→自动化→晨报 |
 | `demo_agents.py` | 一条命令跑通"隔空指挥外部智能体" |
+| `graph.py` | 记忆图谱探索器：核心实体 / 关联 / 两人连接 |
 | `daemon.py` | 一键常驻：感知+巩固+自主心跳+自动化（`--voice --wake --web`） |
 | `chat.py` · `desktop.py` · `voice_chat.py` | 终端 / 桌面 GUI / 语音 对话 |
 | `watch.py` | 摄像头持续感知、进画面主动打招呼 |
@@ -149,12 +151,12 @@ flowchart TB
 
 ## 6. 测试
 
-17 套单测、约 50+ 用例，纯标准库、零网络即可跑：
+18 套单测、约 60+ 用例，纯标准库、零网络即可跑：
 
 ```bash
 cd digital-soul
 for t in authority memory annotate presence consolidate emotions skills \
-         dispatch tasks reflect plan butler devices orchestrate scenes triggers ha; do
+         dispatch tasks reflect plan butler devices orchestrate scenes triggers ha graph; do
   python tests/test_$t.py || break
 done
 ```

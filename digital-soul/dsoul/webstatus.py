@@ -50,6 +50,12 @@ def _snapshot(agent, monitor) -> dict:
         ][::-1][:6]
         tasks_done = len(agent.tasks.done())
     reflections = agent.recent_reflections() if hasattr(agent, "recent_reflections") else []
+    graph_top = []
+    if hasattr(agent, "memory_graph"):
+        try:
+            graph_top = [n for n, _ in agent.memory_graph().central(6)]
+        except Exception:
+            graph_top = []
     devices = agent.devices.rows() if getattr(agent, "devices", None) is not None else []
     scenes = agent.scenes.names() if getattr(agent, "scenes", None) is not None else []
     triggers = [t["desc"] for t in agent.triggers.all()] if getattr(agent, "triggers", None) is not None else []
@@ -70,6 +76,7 @@ def _snapshot(agent, monitor) -> dict:
         "tasks_open": tasks_open,
         "tasks_done": tasks_done,
         "reflections": reflections,
+        "graph": graph_top,
         "plan": plan_items,
         "devices": devices,
         "scenes": scenes,
@@ -128,6 +135,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 </div>
 <div class=card><div class=k>🗓️ 今天的计划</div><ul id=plan></ul></div>
 <div class=card><div class=k>💡 它最近的领悟</div><ul id=refl></ul></div>
+<div class=card><div class=k>🕸️ 关系图谱 · 最核心</div><div id=graph class=dim>…</div></div>
 <div class=card><div class=k>🧩 最近记住</div><ul id=mems></ul></div>
 <div class=card><div class=k>🕘 最近对话</div><ul id=jour></ul></div>
 <div class=card><div class=k>🛰️ 最近派活 / 提议</div><ul id=disp></ul></div>
@@ -168,6 +176,7 @@ async function refresh(){
     $('#retry').style.display=op.length?'inline-block':'none';
     $('#plan').innerHTML=li(s.plan||[]);
     $('#refl').innerHTML=li(s.reflections||[]);
+    $('#graph').textContent=(s.graph&&s.graph.length)?s.graph.join('　·　'):'—';
     $('#mems').innerHTML=li(s.recent_memories);
     $('#jour').innerHTML=li(s.recent_journal);
     if(!inited){$('#speaker').innerHTML=s.people.map(p=>'<option'+(p===s.owner?' selected':'')+'>'+esc(p)+'</option>').join('');inited=true;}
