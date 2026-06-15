@@ -30,7 +30,8 @@ class Agent:
     def __init__(self, identity, persona, memory, authority, perception, llm, robot,
                  journal=None, emotions=None, knowledge=None, skills=None, hub=None,
                  tasks=None, reflector=None, planner=None, plan=None, devices=None,
-                 scenes=None, triggers=None, sensor_source=None, dreams=None, selflog=None) -> None:
+                 scenes=None, triggers=None, sensor_source=None, dreams=None, selflog=None,
+                 values=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -59,6 +60,7 @@ class Agent:
         self.sensor_source = sensor_source                        # 真实传感器源（如 HA），可为空
         self.dreams = dreams                                      # 梦境日志（睡眠时生成）
         self.selflog = selflog                                    # 自我成长史（每日一版）
+        self.values = values                                      # 价值观（抉择时据此权衡）
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
@@ -184,6 +186,16 @@ class Agent:
             if gret is not None:
                 result["reply"] = gret
                 self._log_journal(who, utterance, gret, "graph")
+                return result
+
+        # --- 价值抉择（"我该不该…/怎么选"）：据价值观给有立场的建议 ---
+        if action is None and who.get("obey") and any(
+                k in utterance for k in ("该不该", "应不应该", "纠结", "怎么选", "选哪个",
+                                         "值得吗", "值不值", "两难", "该选", "怎么办好")):
+            adv = self.deliberate(utterance)
+            if adv:
+                result["reply"] = adv
+                self._log_journal(who, utterance, adv, "deliberate")
                 return result
 
         # --- 检索记忆（强度感知：淡忘的更难想起；被用到的顺便强化）---
@@ -487,6 +499,12 @@ class Agent:
         if motifs:
             out["notices"].append("我最近总梦到「" + "、".join(motifs) + "」，会多上点心。")
         return out
+
+    # ---------- 价值抉择 ----------
+    def deliberate(self, text) -> str:
+        from .values import deliberate as _deliberate
+        return _deliberate(text, values=self.values,
+                           guarded=self.authority.guarded_people(), llm=self.llm)
 
     # ---------- 梦的影响 ----------
     def dream_motifs(self, k: int = 5) -> list:

@@ -25,6 +25,7 @@ from .selfnarrative import SelfLog
 from .scenes import SceneBook
 from .skills import SkillRegistry
 from .tasks import TaskBook
+from .values import load_values
 from .triggers import TriggerBook
 
 
@@ -88,7 +89,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  reflector=reflector, planner=planner, plan=plan, devices=devices, scenes=scenes,
                  triggers=triggers, sensor_source=build_sensor_source(devcfg),
                  dreams=DreamLog(base / "data" / "dreams.json"),
-                 selflog=SelfLog(base / "data" / "self.json"))
+                 selflog=SelfLog(base / "data" / "self.json"),
+                 values=load_values(_load_yaml(base / "config" / "values.yaml")))
 
 
 def _seed_memory(base: Path, memory) -> None:
