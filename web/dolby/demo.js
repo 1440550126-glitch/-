@@ -1,5 +1,5 @@
 // dolby-audio Demo：内置合成音乐 + 文件 A/B + 频谱可视化 + 均衡曲线
-import { DolbyAudio, DOLBY_PRESETS, presetById } from './dolby-audio.js';
+import { DolbyAudio, DOLBY_PRESETS, presetById, registerPreset } from './dolby-audio.js';
 
 const $ = (id) => document.getElementById(id);
 const clampN = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -171,21 +171,52 @@ function draw() {
 }
 draw();
 
-// —— 均衡曲线（实时反映低音/中频/高频设置） ——
-const eqC = $('eq'), eqCtx = eqC.getContext('2d');
-function resizeEq() { const dpr = Math.min(devicePixelRatio || 1, 2); eqC.width = eqC.clientWidth * dpr; eqC.height = 88 * dpr; eqCtx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+// —— 可拖拽图形均衡 ——
+const eqC = $('eq'), eqCtx = eqC.getContext('2d'), EQH = 120, EQR = 12;
+const LMIN = Math.log10(20), LMAX = Math.log10(20000);
+const xOf = (freq, w) => (Math.log10(freq) - LMIN) / (LMAX - LMIN) * w;
+const yOf = (g, h) => h / 2 - clampN(g, -EQR, EQR) / EQR * (h / 2 - 14);
+function resizeEq() { const dpr = Math.min(devicePixelRatio || 1, 2); eqC.width = eqC.clientWidth * dpr; eqC.height = EQH * dpr; eqCtx.setTransform(dpr, 0, 0, dpr, 0, 0); }
 function drawEq() {
-  const w = eqC.clientWidth, h = 88, range = 12; eqCtx.clearRect(0, 0, w, h);
-  eqCtx.strokeStyle = 'rgba(255,255,255,.15)'; eqCtx.lineWidth = 1;
+  const w = eqC.clientWidth, h = EQH; eqCtx.clearRect(0, 0, w, h);
+  eqCtx.strokeStyle = 'rgba(255,255,255,.14)'; eqCtx.lineWidth = 1;
   eqCtx.beginPath(); eqCtx.moveTo(0, h / 2); eqCtx.lineTo(w, h / 2); eqCtx.stroke();
   const { magDb } = dolby.getFrequencyResponse(), n = magDb.length;
   const grad = eqCtx.createLinearGradient(0, 0, w, 0); grad.addColorStop(0, '#a18bff'); grad.addColorStop(1, '#ff9ec6');
   eqCtx.strokeStyle = grad; eqCtx.lineWidth = 2; eqCtx.beginPath();
-  for (let i = 0; i < n; i++) { const x = i / (n - 1) * w, y = h / 2 - clampN(magDb[i], -range, range) / range * (h / 2 - 4); i ? eqCtx.lineTo(x, y) : eqCtx.moveTo(x, y); }
+  for (let i = 0; i < n; i++) { const x = i / (n - 1) * w, y = yOf(magDb[i], h); i ? eqCtx.lineTo(x, y) : eqCtx.moveTo(x, y); }
   eqCtx.stroke();
+  eqCtx.fillStyle = '#fff';
+  for (const b of dolby.getEQ()) { eqCtx.beginPath(); eqCtx.arc(xOf(b.freq, w), yOf(b.gain, h), 6, 0, Math.PI * 2); eqCtx.fill(); }
 }
 addEventListener('resize', () => { resizeEq(); drawEq(); });
 resizeEq();
+// 拖拽各频段
+let dragIdx = -1;
+const eqPt = (e) => { const r = eqC.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width, h: r.height }; };
+function eqMove(e) {
+  if (dragIdx < 0) return;
+  const p = eqPt(e), g = clampN((p.h / 2 - p.y) / (p.h / 2 - 14) * EQR, -EQR, EQR);
+  dolby.setEQBand(dragIdx, Math.round(g * 10) / 10, true); drawEq();
+}
+eqC.addEventListener('pointerdown', (e) => {
+  const p = eqPt(e); let best = -1, bd = 24;
+  dolby.getEQ().forEach((b, i) => { const dx = Math.abs(xOf(b.freq, p.w) - p.x); if (dx < bd) { bd = dx; best = i; } });
+  if (best >= 0) { dragIdx = best; eqC.setPointerCapture(e.pointerId); e.preventDefault(); eqMove(e); }
+});
+eqC.addEventListener('pointermove', eqMove);
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) eqC.addEventListener(ev, () => { dragIdx = -1; });
+$('eqReset').addEventListener('click', () => { dolby.resetEQ(); drawEq(); });
+let customN = 0;
+$('eqSave').addEventListener('click', () => {
+  customN++;
+  const preset = dolby.snapshotPreset('custom-' + customN, '自定义 ' + customN);
+  registerPreset(preset);
+  const b = document.createElement('button'); b.className = 'chip active'; b.textContent = preset.label; b.title = '我保存的预设';
+  b.addEventListener('click', () => { dolby.setEnabled(true); dolby.setPreset(preset.id); [...presetsEl.children].forEach((c) => c.classList.toggle('active', c === b)); syncSliders(presetById(preset.id).p); refreshState(); drawEq(); });
+  [...presetsEl.children].forEach((c) => c.classList.remove('active'));
+  presetsEl.append(b); refreshState();
+});
 
 refreshState();
 drawEq();

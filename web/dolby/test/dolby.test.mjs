@@ -1,6 +1,6 @@
 // dolby-audio 自测：用模拟 Web Audio API 验证图构建 / 接入 / 控制 / 释放
 // 运行：node web/dolby/test/dolby.test.mjs   （零依赖，失败则退出码非 0）
-import { DolbyAudio, DOLBY_PRESETS, registerPreset, presetById, createDolby, logFreqScale } from '../dolby-audio.js';
+import { DolbyAudio, DOLBY_PRESETS, registerPreset, presetById, createDolby, logFreqScale, EQ_BANDS } from '../dolby-audio.js';
 
 let pass = 0;
 const ok = (cond, msg) => { if (!cond) { console.error('  ❌ ' + msg); throw new Error(msg); } pass++; console.log('  ✅ ' + msg); };
@@ -91,6 +91,19 @@ ok(fr.freqs.length === 64 && fr.magDb.length === 64 && Array.prototype.every.cal
 d.setAir(0); d.setBass(0); const flat = d.getFrequencyResponse(logFreqScale(8)).magDb[0];
 d.setBass(10); const boosted = d.getFrequencyResponse(logFreqScale(8)).magDb[0];
 ok(boosted > flat + 5, `频响随低音增益上升（${flat.toFixed(1)}→${boosted.toFixed(1)}dB）`);
+
+// 7c) 图形均衡（可拖拽 EQ）
+ok(EQ_BANDS.length === d.getEQ().length && d.getEQ().every((b) => b.gain === 0), `图形均衡 ${EQ_BANDS.length} 段，初始全 0dB`);
+const eqFlat = d.getFrequencyResponse(logFreqScale(8)).magDb[3];
+d.setEQBand(0, 9); ok(d.getEQ()[0].gain === 9, 'setEQBand 调节单段');
+ok(d.getFrequencyResponse(logFreqScale(8)).magDb[3] > eqFlat, '频响曲线包含图形均衡');
+d.resetEQ(); ok(d.getEQ().every((b) => b.gain === 0), 'resetEQ 归零');
+d.setEQ([1, 2, 3, 0, -2, -1, 0]); ok(d.getEQ()[2].gain === 3 && d.getEQ()[4].gain === -2, 'setEQ 批量设置');
+const snap = d.snapshotPreset('mysnap', '我的快照');
+ok(snap.id === 'mysnap' && Array.isArray(snap.p.eq) && snap.p.eq[2] === 3, 'snapshotPreset 含当前均衡');
+registerPreset(snap); d.setPreset('standard'); ok(d.getEQ().every((b) => b.gain === 0), 'setPreset（无 eq）复位均衡');
+d.setPreset('mysnap'); ok(d.getEQ()[2].gain === 3, 'setPreset 应用快照预设的均衡');
+d.resetEQ();
 
 // 8) 自定义预设
 registerPreset({ id: 'myroom', label: '我的房间', desc: 't', p: presetById('cinema').p });

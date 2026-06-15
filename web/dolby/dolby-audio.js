@@ -46,6 +46,9 @@ export const DOLBY_PRESETS = [
     comp: { threshold: -22, ratio: 3, knee: 22, attack: 0.01, release: 0.2 }, outGain: 1.08 } }
 ];
 export const presetById = (id) => DOLBY_PRESETS.find((x) => x.id === id) || DOLBY_PRESETS[0];
+
+// 图形均衡频段中心频率（Hz）
+export const EQ_BANDS = [60, 150, 400, 1000, 2500, 6000, 12000];
 /** 注册/覆盖一个自定义预设（按 id 去重），返回该预设 */
 export function registerPreset(preset) {
   if (!preset || !preset.id || !preset.p) throw new Error('preset 需要 { id, p }');
@@ -138,6 +141,10 @@ export class DolbyAudio {
     this.bassLP = Filt(); this.bassLP.type = 'lowpass'; this.bassLP.frequency.value = 130;
     this.bassSat = ctx.createWaveShaper();
     this.bassGain = Gain(); this.bassGain.gain.value = 0;
+    // 用户图形均衡（多段 peaking 串联，默认全 0dB）
+    this.eqBands = EQ_BANDS.map((f) => { const b = Filt(); b.type = 'peaking'; b.frequency.value = f; b.Q.value = 1.0; b.gain.value = 0; return b; });
+    this.eqOut = Gain();
+    this._eqGains = new Array(EQ_BANDS.length).fill(0);
     // M/S 声场展宽
     this.splitter = ctx.createChannelSplitter(2);
     this.merger = ctx.createChannelMerger(2);
@@ -186,8 +193,12 @@ export class DolbyAudio {
     this.input.connect(this.pre);
     this.pre.connect(this.low); this.low.connect(this.midEq); this.midEq.connect(this.high); this.high.connect(this.tone);
     this.pre.connect(this.bassLP); this.bassLP.connect(this.bassSat); this.bassSat.connect(this.bassGain); this.bassGain.connect(this.tone);
+    // 用户图形均衡：tone → eq[0] → … → eq[n-1] → eqOut（其后所有处理基于 eqOut）
+    let _eqPrev = this.tone;
+    for (const b of this.eqBands) { _eqPrev.connect(b); _eqPrev = b; }
+    _eqPrev.connect(this.eqOut);
     // M/S
-    this.tone.connect(this.splitter);
+    this.eqOut.connect(this.splitter);
     this.splitter.connect(this.midL, 0); this.splitter.connect(this.midR, 1);
     this.midL.connect(this.midBus); this.midR.connect(this.midBus);
     this.splitter.connect(this.sideL, 0); this.splitter.connect(this.sideR, 1);
@@ -200,7 +211,7 @@ export class DolbyAudio {
     this.midBus.connect(this.vocalBP); this.vocalBP.connect(this.vocalGain);
     this.vocalGain.connect(this.merger, 0, 0); this.vocalGain.connect(this.merger, 0, 1);
     // 混响
-    this.tone.connect(this.convolver); this.convolver.connect(this.reverbGain);
+    this.eqOut.connect(this.convolver); this.convolver.connect(this.reverbGain);
     // 扬声器路
     this.merger.connect(this.stereoBus); this.reverbGain.connect(this.stereoBus);
     this.stereoBus.connect(this.stereoTap); this.stereoTap.connect(preComp);
@@ -264,7 +275,7 @@ export class DolbyAudio {
     if (typeof idOrPreset === 'string') { const pr = presetById(idOrPreset); p = pr.p; this._presetId = pr.id; }
     else if (idOrPreset && idOrPreset.p) { p = idOrPreset.p; this._presetId = idOrPreset.id || 'custom'; }
     else { p = idOrPreset; this._presetId = 'custom'; }
-    this._p = p;
+    this._p = structuredClone(p);           // 拷贝，避免微调时污染共享预设对象
     const set = (param, v) => param.setTargetAtTime(v, t, tc);
     set(this.pre.gain, p.preGain);
     this.low.frequency.setTargetAtTime(p.bass.freq, t, tc); set(this.low.gain, p.bass.gain);
@@ -282,6 +293,7 @@ export class DolbyAudio {
     this._applyComp(this.compMid, p.comp, 0);
     this._applyComp(this.compHigh, p.comp, 3);   // 高频更轻
     set(this.makeup.gain, p.outGain);
+    this.setEQ(Array.isArray(p.eq) ? p.eq : new Array(this.eqBands.length).fill(0), instant);
     return this;
   }
   _applyComp(node, c, dThresh) {
@@ -343,12 +355,28 @@ export class DolbyAudio {
   enable(on) { return this.setEnabled(on); }
   bypass(on) { return this.setEnabled(!on); }
 
-  // 单项微调
-  setWidth(mult) { this.sideW.gain.setTargetAtTime(mult, this.context.currentTime, 0.05); return this; }
-  setBass(dB) { this.low.gain.setTargetAtTime(dB, this.context.currentTime, 0.05); return this; }
-  setAir(dB) { this.high.gain.setTargetAtTime(dB, this.context.currentTime, 0.05); return this; }
-  setReverb(mix) { this.reverbGain.gain.setTargetAtTime(mix, this.context.currentTime, 0.05); return this; }
-  setVocal(dB) { this.vocalGain.gain.setTargetAtTime(Math.max(0, dbToAmp(dB) - 1), this.context.currentTime, 0.05); return this; }
+  // 单项微调（同时记入当前参数快照，供 snapshotPreset 保存）
+  setWidth(mult) { this.sideW.gain.setTargetAtTime(mult, this.context.currentTime, 0.05); if (this._p) this._p.width = mult; return this; }
+  setBass(dB) { this.low.gain.setTargetAtTime(dB, this.context.currentTime, 0.05); if (this._p) this._p.bass.gain = dB; return this; }
+  setAir(dB) { this.high.gain.setTargetAtTime(dB, this.context.currentTime, 0.05); if (this._p) this._p.air.gain = dB; return this; }
+  setReverb(mix) { this.reverbGain.gain.setTargetAtTime(mix, this.context.currentTime, 0.05); if (this._p) this._p.reverb.mix = mix; return this; }
+  setVocal(dB) { this.vocalGain.gain.setTargetAtTime(Math.max(0, dbToAmp(dB) - 1), this.context.currentTime, 0.05); if (this._p) this._p.vocal = dB; return this; }
+
+  // 图形均衡（用户可拖拽调节的多段 peaking）
+  setEQBand(i, dB, instant = false) {
+    const b = this.eqBands[i]; if (!b) return this;
+    b.gain.setTargetAtTime(dB, this.context.currentTime, instant ? 0.001 : 0.05);
+    this._eqGains[i] = dB; return this;
+  }
+  setEQ(gains, instant = false) { (gains || []).forEach((g, i) => this.setEQBand(i, g, instant)); return this; }
+  getEQ() { return this.eqBands.map((b, i) => ({ freq: EQ_BANDS[i], gain: this._eqGains[i] })); }
+  resetEQ(instant = false) { return this.setEQ(new Array(this.eqBands.length).fill(0), instant); }
+
+  /** 把当前全部设置打包成预设对象（含图形均衡），可交给 registerPreset 保存 */
+  snapshotPreset(id, label, desc = '') {
+    const p = structuredClone(this._p); p.eq = this._eqGains.slice();
+    return { id, label: label || id, desc, p };
+  }
 
   _applyMix(instant = false) {
     const t = this.context.currentTime, tc = instant ? 0.001 : 0.12, wet = this._enabled ? this._intensity : 0;
@@ -366,7 +394,7 @@ export class DolbyAudio {
   getFrequencyResponse(freqs) {
     const f = freqs ? (freqs instanceof Float32Array ? freqs : Float32Array.from(freqs)) : logFreqScale();
     const n = f.length, mag = new Float32Array(n), ph = new Float32Array(n), total = new Float32Array(n).fill(1);
-    for (const filt of [this.low, this.midEq, this.high]) {
+    for (const filt of [this.low, this.midEq, this.high, ...this.eqBands]) {
       filt.getFrequencyResponse(f, mag, ph);
       for (let i = 0; i < n; i++) total[i] *= mag[i];
     }
@@ -397,7 +425,7 @@ export class DolbyAudio {
     try { this.motionLfo.stop(); } catch { /* ok */ }
     if (this._matchTimer) { clearInterval(this._matchTimer); this._matchTimer = null; }
     const nodes = [this.input, this.output, this.pre, this.low, this.midEq, this.high, this.tone,
-      this.bassLP, this.bassSat, this.bassGain, this.splitter, this.merger, this.midL, this.midR,
+      this.bassLP, this.bassSat, this.bassGain, ...this.eqBands, this.eqOut, this.splitter, this.merger, this.midL, this.midR,
       this.midBus, this.sideL, this.sideR, this.sideBus, this.sideW, this.sidePlus, this.sideMinus,
       this.vocalBP, this.vocalGain, this.motionLfo, this.motionDepth, this.convolver, this.reverbGain,
       this.stereoBus, this.stereoTap, this.bSplit, this.bRevSplit, this.panFL, this.panFR, this.panRL,

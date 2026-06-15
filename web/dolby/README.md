@@ -17,6 +17,7 @@
 - 🏛 **空间混响** — 实时合成立体声脉冲响应，影院/音乐厅空间感
 - 📊 **动态压缩 + 软削波限制** — 单段或**三段多频带**压缩，提升响度同时防过载
 - ⚖️ **响度对齐（Volume Leveler）** — 处理后≈原声响度，开关 A/B 不再"一开就变大声"
+- 🎚 **可拖拽图形均衡** — 多段 peaking EQ（`setEQBand/getEQ`），`snapshotPreset()` 一键存为自定义预设
 - 📈 **输出电平表 + 均衡曲线** — `getLevel()` 实时电平、`getFrequencyResponse()` 返回 EQ 频响曲线，驱动电平条/曲线图
 - 🎛 **干湿混合** — 强度可调、一键 A/B 旁通（等功率交叉淡化，切换不爆音）
 - 🎚 **5 档预设 + 自定义** — 标准/影院/音乐/夜间/人声，`registerPreset()` 可扩展
@@ -157,6 +158,29 @@ for (let i = 0; i < magDb.length; i++) {
   // lineTo(x, y) ...
 }
 ```
+
+## 图形均衡（可拖拽）与自定义预设
+
+引擎内置一条多段 peaking 图形均衡（频段见 `EQ_BANDS`，默认 7 段），可用作用户可拖拽 EQ：
+
+```js
+import { EQ_BANDS } from './dolby/dolby-audio.js';
+dolby.setEQBand(0, +6);          // 第 0 段 +6dB
+dolby.setEQ([2, 1, 0, 0, -1, 3, 4]);  // 一次设置全部
+dolby.getEQ();                   // [{ freq, gain }, ...] 画手柄用
+dolby.resetEQ();
+```
+
+调好后一键存成自定义预设（含均衡与全部微调），下次直接选用：
+
+```js
+import { registerPreset } from './dolby/dolby-audio.js';
+const preset = dolby.snapshotPreset('my-room', '我的房间');  // 抓取当前全部设置
+registerPreset(preset);
+dolby.setPreset('my-room');      // 之后随时套用
+```
+
+`demo.html` 的曲线图即是一个可拖拽 EQ：拖圆点调各频段、「重置」「存为预设」一键操作。
 
 ## 动态、响度与人声
 

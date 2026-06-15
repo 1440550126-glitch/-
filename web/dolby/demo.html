@@ -78,8 +78,12 @@
     </div>
 
     <div class="card">
-      <canvas id="eq" style="width:100%;height:88px;display:block;border-radius:12px;background:rgba(0,0,0,.22)"></canvas>
-      <div class="label" style="margin:6px 0 12px">均衡曲线（低音 / 中频 / 高频，纵轴 ±12 dB）</div>
+      <canvas id="eq" style="width:100%;height:120px;display:block;border-radius:12px;background:rgba(0,0,0,.22);touch-action:none"></canvas>
+      <div class="row" style="margin:8px 0 14px;gap:8px;align-items:center">
+        <span class="label" style="flex:1">拖动圆点调节各频段 · 纵轴 ±12 dB</span>
+        <button id="eqReset" style="padding:7px 12px;font-size:12px;border-radius:10px">重置</button>
+        <button id="eqSave" class="primary" style="padding:7px 12px;font-size:12px;border-radius:10px">存为预设</button>
+      </div>
       <div class="slider"><span class="label">强度</span><input id="intensity" type="range" min="0" max="100" value="85" /><span class="val" id="intensityV">85%</span></div>
       <div class="slider"><span class="label">声场宽度</span><input id="width" type="range" min="0" max="220" value="130" /><span class="val" id="widthV">1.30×</span></div>
       <div class="slider"><span class="label">低音</span><input id="bass" type="range" min="0" max="12" value="5" /><span class="val" id="bassV">+5dB</span></div>

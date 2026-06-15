@@ -14,6 +14,13 @@ export interface DolbyPresetParams {
   reverb: { mix: number; seconds: number; decay: number };
   comp: { threshold: number; ratio: number; knee: number; attack: number; release: number };
   outGain: number;
+  /** 图形均衡各频段增益 dB（可选，与 EQ_BANDS 对应） */
+  eq?: number[];
+}
+
+export interface EQBand {
+  freq: number;
+  gain: number;
 }
 
 export interface DolbyPreset {
@@ -64,6 +71,7 @@ export interface DolbyFrequencyResponse {
 }
 
 export const DOLBY_PRESETS: DolbyPreset[];
+export const EQ_BANDS: number[];
 export function presetById(id: string): DolbyPreset;
 export function registerPreset(preset: DolbyPreset): DolbyPreset;
 export function createImpulseResponse(ctx: BaseAudioContext, seconds: number, decay: number): AudioBuffer;
@@ -99,6 +107,11 @@ export class DolbyAudio {
   setAir(dB: number): this;
   setReverb(mix: number): this;
   setVocal(dB: number): this;
+  setEQBand(index: number, dB: number, instant?: boolean): this;
+  setEQ(gains: number[], instant?: boolean): this;
+  getEQ(): EQBand[];
+  resetEQ(instant?: boolean): this;
+  snapshotPreset(id: string, label?: string, desc?: string): DolbyPreset;
 
   getAnalyser(): AnalyserNode | null;
   getLevel(): DolbyLevel;
