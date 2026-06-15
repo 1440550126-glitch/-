@@ -360,3 +360,27 @@ textarea.input { resize: none; line-height: 1.7; }
   display: grid; place-items: center; box-shadow: 0 2px 6px rgba(255, 110, 160, 0.5);
   animation: toastIn 0.4s var(--spring);
 }
+
+/* ===== 一句话变一首歌：播放浮层 ===== */
+.song-overlay {
+  position: fixed; inset: 0; z-index: 260;
+  background: rgba(20, 16, 32, 0.55); backdrop-filter: blur(6px);
+  display: grid; place-items: center; padding: 24px;
+  animation: fadeIn 0.3s ease both;
+}
+.song-card {
+  width: min(420px, 92vw); border-radius: 24px; padding: 20px;
+  background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--shadow);
+  animation: toastIn 0.4s var(--spring) both;
+}
+.song-top { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.song-x { width: 30px; height: 30px; border-radius: 50%; background: rgba(0, 0, 0, 0.05); color: var(--ink-2); font-size: 14px; }
+.song-title { font-size: 20px; font-weight: 800; background: var(--brand-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.song-meta { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+.song-lyric {
+  margin: 18px 0; font-size: 22px; line-height: 1.9; font-weight: 600; letter-spacing: 1px;
+  text-align: center; color: var(--ink-3); min-height: 60px;
+}
+.song-ch { transition: color 0.18s ease, transform 0.18s var(--spring); display: inline-block; }
+.song-ch.on { color: var(--brand); transform: translateY(-3px) scale(1.18); text-shadow: 0 4px 14px rgba(141, 122, 230, 0.45); }
+.song-controls { display: flex; gap: 10px; align-items: center; margin-top: 6px; }

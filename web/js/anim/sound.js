@@ -3,6 +3,8 @@
 let ctx = null;
 let noiseBuf = null;
 
+const midiToFreq = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
 function ac() {
   if (!ctx) {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -208,6 +210,80 @@ export class SoundScape {
     } else if (name === 'wind' || name === 'rain' || name === 'waves' || name === 'night' || name === 'fire') {
       this.ambient(name, vol);     // timeline 里偶尔直接引用环境音名
     }
+  }
+
+  // ---- 一句话变一首歌：演唱 Song Manifest（主旋律 + 和弦铺底） ----
+  // onNote(note,i) 在每个字唱响时回调（用于歌词逐字点亮）；onEnd 在唱完后回调。
+  playMelody(song, { onNote, onEnd } = {}) {
+    const A = ac();
+    const t0 = A.currentTime + 0.15;
+    const spb = 60 / (song.bpm || 90);          // 每拍秒数
+    const inst = song.instrument || 'bell';
+
+    // 和弦柔和铺底
+    for (const ch of song.chords || []) {
+      const when = t0 + ch.t * spb;
+      for (const m of ch.midi || []) this._pad(midiToFreq(m), when, ch.dur * spb, 0.045);
+    }
+
+    // 主旋律"演唱"
+    let lastEnd = t0;
+    (song.melody || []).forEach((note, i) => {
+      const when = t0 + note.t * spb;
+      const dur = Math.max(0.12, note.dur * spb * 0.92);
+      this._voice(midiToFreq(note.midi), when, dur, inst);
+      lastEnd = Math.max(lastEnd, when + dur);
+      if (onNote) this._timer(() => onNote(note, i), Math.max(0, (when - A.currentTime) * 1000));
+    });
+    if (onEnd) this._timer(onEnd, Math.max(0, (lastEnd - A.currentTime) * 1000 + 260));
+    return lastEnd - t0;
+  }
+
+  // 单个"嗓音"音符：双振荡器 + 颤音 + ADSR 包络
+  _voice(freq, when, dur, inst) {
+    const A = ac();
+    const types = { music_box: 'sine', soft_pluck: 'triangle', warm_pad: 'sine', bell: 'triangle' };
+    const o = A.createOscillator(); o.type = types[inst] || 'triangle';
+    const o2 = A.createOscillator(); o2.type = 'sine';        // 叠高八度泛音让音色更暖
+    o.frequency.setValueAtTime(freq, when);
+    o2.frequency.setValueAtTime(freq * 2, when);
+    const o2g = A.createGain(); o2g.gain.value = 0.16;
+    // 颤音（vibrato）：让长音更像"唱"
+    const vib = A.createOscillator(); vib.frequency.value = 5.2;
+    const vibG = A.createGain(); vibG.gain.value = freq * 0.006;
+    vib.connect(vibG); vibG.connect(o.frequency);
+    const g = A.createGain();
+    const peak = 0.2;
+    const atk = inst === 'soft_pluck' || inst === 'bell' ? 0.006 : 0.04;
+    const rel = inst === 'warm_pad' ? 0.4 : 0.18;
+    g.gain.setValueAtTime(0, when);
+    g.gain.linearRampToValueAtTime(peak, when + atk);
+    g.gain.setTargetAtTime(peak * 0.68, when + atk, 0.12);    // decay → sustain
+    g.gain.setTargetAtTime(0.0001, when + dur, rel * 0.4);    // release
+    o.connect(g); o2.connect(o2g); o2g.connect(g); g.connect(this.master);
+    const end = when + dur + rel + 0.1;
+    o.start(when); o2.start(when); vib.start(when);
+    o.stop(end); o2.stop(end); vib.stop(end);
+    this._keep(o, o2, vib, g);
+  }
+
+  // 柔和和弦铺底（低通 + 轻微失谐更厚）
+  _pad(freq, when, dur, vol) {
+    const A = ac();
+    const o = A.createOscillator(); o.type = 'sine';
+    const o2 = A.createOscillator(); o2.type = 'triangle';
+    o.frequency.setValueAtTime(freq, when);
+    o2.frequency.setValueAtTime(freq * 1.005, when);
+    const lp = A.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
+    const g = A.createGain();
+    g.gain.setValueAtTime(0, when);
+    g.gain.linearRampToValueAtTime(vol, when + 0.25);
+    g.gain.setTargetAtTime(0.0001, when + Math.max(0.2, dur - 0.2), 0.18);
+    o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(this.master);
+    const end = when + dur + 0.3;
+    o.start(when); o2.start(when);
+    o.stop(end); o2.stop(end);
+    this._keep(o, o2, g);
   }
 
   stop() {

@@ -161,6 +161,24 @@ try {
   ok('免费配额 3 次/日用尽后拦截', !mQuota.ok && mQuota.quota_exceeded === true, JSON.stringify(mQuota));
   await api('POST', `/api/posts/${post1.id}/play`, { token: guests[0].token });
 
+  console.log('\n== 一句话变一首歌（程序化作曲） ==');
+  const sp = await api('POST', '/api/ai/song-preview', { token: u1.token, body: { content: '我在等风，也在等你。' } });
+  ok('旋律预览（零成本规则作曲）', sp.ok && sp.data.song.v === 1 && sp.data.song.melody.length > 0, JSON.stringify(sp).slice(0, 160));
+  ok('Song 含调式/BPM/和弦/逐字歌词', !!(sp.ok && sp.data.song.mode && sp.data.song.bpm && sp.data.song.chords.length && sp.data.song.melody[0].lyric));
+  ok('音符音高落在可唱音域', sp.data.song.melody.every((n) => n.midi >= 36 && n.midi <= 96));
+  const spHi = await api('POST', '/api/ai/song-preview', { token: u1.token, body: { content: '冲冲冲！今天也要赢，少年加油！' } });
+  const spLo = await api('POST', '/api/ai/song-preview', { token: u1.token, body: { content: '算了，眼泪散了，再见。' } });
+  ok('热血更快、难过更慢（BPM 跟随情绪）', spHi.data.song.bpm > spLo.data.song.bpm, `${spHi.data.song.bpm} vs ${spLo.data.song.bpm}`);
+  ok('难过文案走小调', spLo.data.song.mode.includes('minor'), spLo.data.song.mode);
+  const spRe = await api('POST', '/api/ai/song-preview', { token: u1.token, body: { content: '我在等风，也在等你。' } });
+  ok('同一文案作曲可复现', JSON.stringify(sp.data.song.melody) === JSON.stringify(spRe.data.song.melody));
+  const sGuest = (await api('POST', '/api/auth/guest', { body: {} })).data;
+  const sg1 = await api('POST', `/api/posts/${post1.id}/song`, { token: sGuest.token });
+  ok('免费用户为帖子生成旋律', sg1.ok && sg1.data.song.melody.length > 0, JSON.stringify(sg1).slice(0, 140));
+  await api('POST', `/api/posts/${post1.id}/song`, { token: sGuest.token });
+  const sg3 = await api('POST', `/api/posts/${post1.id}/song`, { token: sGuest.token });
+  ok('免费旋律配额 2 次/日用尽后拦截', !sg3.ok && sg3.quota_exceeded === true, JSON.stringify(sg3));
+
   console.log('\n== 商业化（沙盒支付） ==');
   const ord = await api('POST', '/api/shop/orders', { token: guests[0].token, body: { kind: 'member', item_id: 'm1' } });
   ok('创建会员订单 ¥9.9', ord.ok && ord.data.order.amount_fen === 990);

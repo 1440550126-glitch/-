@@ -3,6 +3,7 @@ import { q, tx } from '../lib/db.js';
 import { jparse, now } from '../lib/util.js';
 import { isMember } from '../lib/auth.js';
 import { buildCard, buildManifest, buildManifestEnhanced, ANIM_STYLES } from '../lib/manifest.js';
+import { buildSong, buildSongEnhanced } from '../lib/song.js';
 import { useQuota, quotaUsed, logUsage } from '../lib/llm.js';
 import { QUOTA } from '../lib/catalog.js';
 
@@ -11,6 +12,41 @@ POST('/api/ai/preview', async (ctx) => {
   const content = String(ctx.body.content || '').slice(0, 300);
   if (!content.trim()) throw bad('先写点什么');
   return { card: buildCard(content, String(ctx.user.id)) };
+}, { auth: true });
+
+// 发布前实时旋律预览（纯本地规则，零成本）
+POST('/api/ai/song-preview', async (ctx) => {
+  const content = String(ctx.body.content || '').slice(0, 300);
+  if (!content.trim()) throw bad('先写点什么');
+  return { song: buildSong(content) };
+}, { auth: true });
+
+/**
+ * 一句话变一首歌（程序化作曲）——服务端"作曲导演"输出 Song Manifest，前端 Web Audio 演唱。
+ * 免费用户：每日 FREE_SONG_PER_DAY 次，纯规则引擎（零成本）。
+ * 会员：每日 MEMBER_SONG_PER_DAY 次，由大模型担任作曲导演（决定调式/BPM/和弦/旋律轮廓）。
+ */
+POST('/api/posts/:id/song', async (ctx) => {
+  const post = q.get("SELECT * FROM posts WHERE id = ? AND status = 'active'", Number(ctx.params.id));
+  if (!post) throw notFound();
+  const member = isMember(ctx.user);
+  const user = ctx.user;
+
+  const limit = member ? QUOTA.MEMBER_SONG_PER_DAY : QUOTA.FREE_SONG_PER_DAY;
+  if (!useQuota(user.id, 'song', limit)) {
+    throw denied(
+      member ? '今日生成旋律次数已达上限，明天再来～' : `每天可免费把 ${QUOTA.FREE_SONG_PER_DAY} 句话变成旋律，开通会员解锁更多次数和 AI 作曲～`,
+      { need_member: !member, quota_exceeded: true }
+    );
+  }
+
+  const song = member
+    ? await buildSongEnhanced(post.content, { userId: user.id, premium: false })
+    : buildSong(post.content);
+  if (!member) logUsage({ userId: user.id, feature: 'song', provider: 'local' });
+
+  const left = Math.max(0, limit - quotaUsed(user.id, 'song'));
+  return { song, quota_left: left, member };
 }, { auth: true });
 
 // 可用动画风格 + 我的额度状态

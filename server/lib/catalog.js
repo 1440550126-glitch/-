@@ -27,6 +27,8 @@ export const QUOTA = {
   MEMBER_ANIM_PER_DAY: 100,    // 会员每日上限（防刷）
   PREMIUM_CREDIT_COST: 10,     // 高级风格每次消耗额度
   MEMBER_PREMIUM_COST: 8,      // 会员折扣价
+  FREE_SONG_PER_DAY: 2,        // 免费用户每日"一句话变一首歌"次数
+  MEMBER_SONG_PER_DAY: 30,     // 会员每日上限（含 AI 作曲导演）
   POST_PER_DAY: 30,            // 每日发帖上限（防刷）
   COMMENT_PER_DAY: 200
 };

@@ -4,6 +4,7 @@ import { h, toast, avatarEl, aiBadge, timeAgo, emptyState } from '../ui.js';
 import { store } from '../store.js';
 import { postCardEl, reportSheet } from './feed.js';
 import { openAnimPlayer } from '../anim/player.js';
+import { openSongPlayer } from '../anim/song.js';
 
 export async function renderPost(page, params) {
   let post;
@@ -79,8 +80,10 @@ export async function renderPost(page, params) {
       h('div', { class: 'spacer' })
     ),
     postCardEl(post, { onRemoved: () => history.back() }),
-    h('button', { class: 'btn block gold', style: { marginBottom: '16px' }, onclick: () => openAnimPlayer(post) },
-      '✨ 让这句话活过来'),
+    h('div', { style: { display: 'flex', gap: '10px', marginBottom: '16px' } },
+      h('button', { class: 'btn block gold', onclick: () => openAnimPlayer(post) }, '✨ 让它活过来'),
+      h('button', { class: 'btn block', onclick: () => openSongPlayer(post) }, '🎵 听这句话')
+    ),
     h('div', { class: 'glass card' },
       h('div', { style: { fontWeight: 700, fontSize: '14px', marginBottom: '4px' } }, `评论 ${post.comment_count || ''}`),
       commentList,
