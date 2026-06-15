@@ -21,7 +21,7 @@ _NEG = ("累", "险", "风险", "亏", "难", "怕", "担心", "危险", "熬夜
 _RISK = ("险", "危险", "熬夜", "透支", "健康", "身体", "压力", "拼命")
 
 
-def forecast(question: str) -> dict:
+def _heuristic_panel(question: str):
     q = question or ""
     pos = sum(1 for w in _POS if w in q)
     neg = sum(1 for w in _NEG if w in q)
@@ -33,12 +33,34 @@ def forecast(question: str) -> dict:
             base = -1
         lean = max(-1, min(1, base + nudge))
         panel.append((name, lean, reason))
+    return panel
+
+
+def _llm_panel(question: str, llm):
+    """让每个'我'用本地大模型真正展开表态（更接近多智能体模拟）。"""
+    system = ("你脑中有六个不同性情的'我'：乐观派、谨慎派、务实派、重情派、守护派、理性派。"
+              "针对问题，让每个'我'用一行表态，严格格式：视角名|会/悬/观望|一句理由。只输出六行，别的不要。")
+    try:
+        out = llm.chat(system, question)
+    except Exception:
+        return None
+    panel = []
+    for ln in (out or "").splitlines():
+        parts = [p.strip() for p in ln.split("|")]
+        if len(parts) >= 3 and parts[0]:
+            stance = parts[1]
+            lean = 1 if "会" in stance else (-1 if ("悬" in stance or "不" in stance) else 0)
+            panel.append((parts[0], lean, "|".join(parts[2:]).strip()))
+    return panel if len(panel) >= 3 else None
+
+
+def _aggregate(panel) -> dict:
     yes = sum(1 for _, l, _ in panel if l > 0)
     no = sum(1 for _, l, _ in panel if l < 0)
     neu = len(panel) - yes - no
     p = yes / (yes + no) if (yes + no) else 0.5
-    say = [f"{n}说「{r}」" for n, l, r in panel if l > 0][:1] + \
-          [f"{n}说「{r}」" for n, l, r in panel if l < 0][:1]
+    say = [f"{n}说「{r}」" for n, l, r in panel if l > 0 and r][:1] + \
+          [f"{n}说「{r}」" for n, l, r in panel if l < 0 and r][:1]
     text = (f"我在心里开了个小会（{len(panel)} 个不同的我）：{yes} 个倾向「会」、"
             f"{no} 个倾向「悬」、{neu} 个观望。综合看，大概 {int(round(p * 100))}% 能成。")
     if say:
@@ -46,3 +68,12 @@ def forecast(question: str) -> dict:
     text += "（最终还是你定。）"
     return {"p": round(p, 2), "yes": yes, "no": no, "neutral": neu, "panel": panel,
             "reasons": say, "text": text}
+
+
+def forecast(question: str, llm=None) -> dict:
+    panel = None
+    if llm is not None and getattr(llm, "available", False):
+        panel = _llm_panel(question, llm)
+    if not panel:
+        panel = _heuristic_panel(question)
+    return _aggregate(panel)

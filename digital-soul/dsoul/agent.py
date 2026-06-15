@@ -720,9 +720,9 @@ class Agent:
                                speaker=who.get("name") if who.get("known") else None)
 
     def forecast(self, question) -> str:
-        """群体模拟预测：脑中开个小会，多视角各自表态，聚合成一个带比例的预感。"""
+        """群体模拟预测：脑中开个小会，多视角各自表态（有大模型则真展开推理），聚合成预感。"""
         from .swarm import forecast
-        return forecast(question)["text"]
+        return forecast(question, llm=self.llm)["text"]
 
     # ---------- 价值抉择 ----------
     def deliberate(self, text) -> str:

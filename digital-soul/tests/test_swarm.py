@@ -24,6 +24,19 @@ def test_report_has_panel_and_reasons():
     assert f["yes"] + f["no"] + f["neutral"] == len(f["panel"])
 
 
+def test_llm_panel_when_available():
+    class _LLM:
+        available = True
+
+        def chat(self, system, q):
+            return ("乐观派|会|机会好\n谨慎派|悬|有风险\n务实派|会|划算\n"
+                    "重情派|观望|看情况\n守护派|悬|太累\n理性派|会|长远看不错")
+
+    f = forecast("能成吗", llm=_LLM())
+    assert f["yes"] == 3 and f["no"] == 2 and f["neutral"] == 1
+    assert "机会好" in f["text"]                            # 用了大模型给的理由
+
+
 if __name__ == "__main__":
     for _n, _f in sorted(globals().items()):
         if _n.startswith("test_") and callable(_f):
