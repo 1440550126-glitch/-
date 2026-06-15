@@ -208,13 +208,13 @@ let inited=false, soulName="它";
 function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
 function renderTimeline(tl){if(!tl||!tl.length)return '<span class=dim>暂无带年份的记忆</span>';let h='',last=null;tl.forEach(e=>{if(e.year!==last){h+='<div class=tlyear>'+esc(e.year)+'</div>';last=e.year;}h+='<div class=tlitem>'+esc(e.text)+'</div>';});return h;}
 let tlFilter=null, _tl=[];
-function setTL(e){tlFilter=e||null;drawTL();}
+function setTL(e){tlFilter=e||null;gHi=tlFilter;drawTL();drawGraph();}
 function drawTL(){let tl=_tl;if(tlFilter)tl=tl.filter(x=>(x.people&&x.people.includes(tlFilter))||(x.text&&x.text.indexOf(tlFilter)>=0));$('#timeline').innerHTML=renderTimeline(tl);}
 function renderTLfilters(ents){let h='<button class=devbtn style="margin:2px" onclick="setTL(\'\')">全部</button>';(ents||[]).forEach(e=>h+='<button class=devbtn style="margin:2px" onclick="setTL(\''+e+'\')">'+esc(e)+'</button>');return h;}
-function renderGraph(gv,maxYear){if(!gv||!gv.nodes||!gv.nodes.length)return '';let nodes=gv.nodes;if(maxYear)nodes=nodes.filter(n=>!n.year||n.year<=maxYear);if(!nodes.length)return '';const ids=new Set(nodes.map(n=>n.id));const edges=(gv.edges||[]).filter(e=>ids.has(e.a)&&ids.has(e.b));const W=320,H=290,cx=W/2,cy=H/2,R=108;const center=nodes.reduce((a,b)=>b.deg>a.deg?b:a,nodes[0]);const others=nodes.filter(x=>x!==center);const pos={};pos[center.id]={x:cx,y:cy};others.forEach((nd,i)=>{const ang=2*Math.PI*i/others.length;pos[nd.id]={x:cx+R*Math.cos(ang),y:cy+R*Math.sin(ang)};});let s='<svg width="100%" viewBox="0 0 '+W+' '+H+'">';edges.forEach(e=>{const p=pos[e.a],q=pos[e.b];if(p&&q)s+='<line x1='+p.x.toFixed(1)+' y1='+p.y.toFixed(1)+' x2='+q.x.toFixed(1)+' y2='+q.y.toFixed(1)+' stroke="#2e7d32" stroke-opacity="0.5" stroke-width="'+Math.min(4,e.w)+'"/>';});nodes.forEach(nd=>{const p=pos[nd.id],r=nd.kind==='person'?8:5,col=nd.kind==='person'?'#1565c0':'#5a3a13';s+='<g style="cursor:pointer" onclick="setTL(\''+nd.id+'\')">';s+='<circle cx='+p.x.toFixed(1)+' cy='+p.y.toFixed(1)+' r='+r+' fill="'+col+'"/>';s+='<text x='+p.x.toFixed(1)+' y='+(p.y-r-3).toFixed(1)+' font-size="11" fill="#cbd5e1" text-anchor="middle">'+esc(nd.label)+'</text>';s+='</g>';});return s+'</svg>';}
-let _gv={nodes:[],edges:[]},gYear=null,_play=null;
+function renderGraph(gv,maxYear,hi){if(!gv||!gv.nodes||!gv.nodes.length)return '';let nodes=gv.nodes;if(maxYear)nodes=nodes.filter(n=>!n.year||n.year<=maxYear);if(!nodes.length)return '';const ids=new Set(nodes.map(n=>n.id));const edges=(gv.edges||[]).filter(e=>ids.has(e.a)&&ids.has(e.b));const nbr=new Set();if(hi){edges.forEach(e=>{if(e.a===hi)nbr.add(e.b);if(e.b===hi)nbr.add(e.a);});}const W=320,H=290,cx=W/2,cy=H/2,R=108;const center=nodes.reduce((a,b)=>b.deg>a.deg?b:a,nodes[0]);const others=nodes.filter(x=>x!==center);const pos={};pos[center.id]={x:cx,y:cy};others.forEach((nd,i)=>{const ang=2*Math.PI*i/others.length;pos[nd.id]={x:cx+R*Math.cos(ang),y:cy+R*Math.sin(ang)};});let s='<svg width="100%" viewBox="0 0 '+W+' '+H+'">';edges.forEach(e=>{const p=pos[e.a],q=pos[e.b];if(!p||!q)return;const on=hi&&(e.a===hi||e.b===hi);const col=on?'#5fdd9d':'#2e7d32';const op=hi?(on?0.95:0.12):0.5;const wd=on?Math.min(5,e.w+1.5):Math.min(4,e.w);s+='<line x1='+p.x.toFixed(1)+' y1='+p.y.toFixed(1)+' x2='+q.x.toFixed(1)+' y2='+q.y.toFixed(1)+' stroke="'+col+'" stroke-opacity="'+op+'" stroke-width="'+wd+'"'+(on?' stroke-dasharray="2 2"':'')+'/>';});nodes.forEach(nd=>{const p=pos[nd.id],r=nd.kind==='person'?8:5,col=nd.kind==='person'?'#1565c0':'#5a3a13';const dim=hi&&nd.id!==hi&&!nbr.has(nd.id);s+='<g style="cursor:pointer" opacity="'+(dim?0.28:1)+'" onclick="setTL(\''+nd.id+'\')">';s+='<circle cx='+p.x.toFixed(1)+' cy='+p.y.toFixed(1)+' r='+(nd.id===hi?r+2:r)+' fill="'+col+'"/>';s+='<text x='+p.x.toFixed(1)+' y='+(p.y-r-3).toFixed(1)+' font-size="11" fill="#cbd5e1" text-anchor="middle">'+esc(nd.label)+'</text>';s+='</g>';});return s+'</svg>';}
+let _gv={nodes:[],edges:[]},gYear=null,gHi=null,_play=null;
 function gYears(gv){const ys=(gv.nodes||[]).map(n=>n.year).filter(y=>y);return ys.length?[Math.min.apply(0,ys),Math.max.apply(0,ys)]:null;}
-function drawGraph(){$('#graph').innerHTML=renderGraph(_gv,gYear)||'<span class=dim>记忆还太少，画不出关系网</span>';}
+function drawGraph(){$('#graph').innerHTML=renderGraph(_gv,gYear,gHi)||'<span class=dim>记忆还太少，画不出关系网</span>';}
 function setGY(v){gYear=v?parseInt(v):null;$('#gylabel').textContent=gYear?('截至 '+gYear):'全部';drawGraph();}
 function playGraph(){const r=gYears(_gv);if(!r){return;}if(_play){clearInterval(_play);_play=null;return;}let y=r[0];const sl=$('#gyslider');_play=setInterval(()=>{setGY(y);if(sl)sl.value=y;if(y>=r[1]){clearInterval(_play);_play=null;}y++;},800);}
 function li(a){return a.map(x=>'<li>'+esc(x)+'</li>').join('')||'<li class=dim>—</li>';}
@@ -255,6 +255,7 @@ async function ask(t){
   try{
     const r=await (await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t,speaker:sp})})).json();
     add(soulName, r.reply, 'soul');
+    if(r.associations&&r.associations.length){const c=$('#chat');const d=document.createElement('div');d.className='msg soul';d.style.opacity='0.7';d.style.fontSize='12px';d.textContent='💭 这让我想起：'+r.associations.join('；');c.appendChild(d);c.scrollTop=c.scrollHeight;}
   }catch(e){ add(soulName,'（网络出错）','soul'); }
   refresh();
 }
@@ -326,8 +327,10 @@ def start_web(agent, monitor=None, port: int = 8765):
                 return
             if self.path.startswith("/api/chat"):
                 text = (data.get("text") or "").strip()
-                reply = agent.handle(speaker, text)["reply"] if text else ""
-                body = json.dumps({"speaker": speaker, "reply": reply}, ensure_ascii=False).encode("utf-8")
+                res = agent.handle(speaker, text) if text else {"reply": "", "associations": []}
+                body = json.dumps({"speaker": speaker, "reply": res.get("reply", ""),
+                                   "associations": res.get("associations", [])},
+                                  ensure_ascii=False).encode("utf-8")
                 self._send(body, "application/json; charset=utf-8")
                 return
             self._send(b"{}", "application/json; charset=utf-8")
