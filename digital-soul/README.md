@@ -214,7 +214,7 @@ docker build -t digital-soul . && docker run --rm -e DSOUL_LLM_HOST=http://192.1
 python scripts/demo_agents.py            # 本地起两个 worker，一条命令跑通整条链路
 # 真机：在那两台机器各跑 digital-soul worker --name openclaw --port 9302
 ```
-端点配置见 `config/agents.yaml`；任何监听 `POST /task` 的智能体都能接。它是机器人，却能隔空驱动主机上的智能体干活、再把结果带回来。
+端点配置见 `config/agents.yaml`；任何监听 `POST /task` 的智能体都能接。它是机器人，却能隔空驱动主机上的智能体干活、再把结果带回来。**直接用大白话**就行：对它说「让 openclaw 把这周代码打个包」，它会自动选中 openclaw、派活、并把结果回话给你（仍受 `control_agents` 授权约束）。
 
 **🎭 人格热切换 + 七情六欲** —— 运行时一键换"灵魂"，且情绪会随相处起伏。
 ```bash
@@ -222,7 +222,7 @@ digital-soul persona flirty-girlfriend --seed-memory   # 换人格(连"我们的
 ```
 对话中它的喜怒哀惧爱恶欲会变化并自然流露；还会用心理/哲学/医学等多学科视角帮你。
 
-**📱 手机网页状态页 + 远程对话** —— 常驻时随手看它"看到谁 / 记了什么"，还能**在手机上直接跟它聊天**。
+**📱 手机网页状态页 + 远程对话** —— 常驻时随手看它"看到谁 / 此刻心情 / 记了什么"，还能**在手机上直接跟它聊天**。
 ```bash
 python scripts/daemon.py --web        # 浏览器打开 http://<树莓派IP>:8765/
 ```

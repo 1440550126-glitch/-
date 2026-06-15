@@ -37,6 +37,7 @@ def _snapshot(agent, monitor) -> dict:
         "present": present,
         "recent_memories": mems,
         "recent_journal": journal,
+        "mood": agent.emotions.mood()[0] if getattr(agent, "emotions", None) else None,
         "people": [p["name"] for p in agent.authority.people.values()],
         "owner": _owner(agent),
     }
@@ -67,6 +68,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 <h1 id=title>🧠 数字分身</h1>
 <div class=card><span id=llm class="badge off">…</span>&nbsp;&nbsp;<span id=memc>记忆 …</span></div>
 <div class=card><div class=k>👁️ 现在看到谁</div><div id=present>…</div></div>
+<div class=card><div class=k>💞 此刻心情</div><div id=mood>…</div></div>
 <div class=card><div class=k>💬 跟 TA 聊聊</div>
   <div class=row><span class=dim>身份：</span><select id=speaker></select></div>
   <div id=chat class=chat></div>
@@ -78,6 +80,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 </div>
 <script>
 const $=s=>document.querySelector(s);
+const MOODS={"喜":"😄 愉悦","怒":"😠 生气","哀":"😢 低落","惧":"😨 不安","爱":"❤️ 满心欢喜","恶":"😒 有点反感","欲":"🥺 渴望陪伴"};
 let inited=false, soulName="它";
 function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
 function li(a){return a.map(x=>'<li>'+esc(x)+'</li>').join('')||'<li class=dim>—</li>';}
@@ -90,6 +93,7 @@ async function refresh(){
     $('#llm').className='badge '+(s.llm?'on':'off');
     $('#memc').textContent='记忆 '+s.memory_count+' 条';
     $('#present').textContent=s.present.length?s.present.join('、'):'暂时没看到人';
+    $('#mood').textContent=s.mood?(MOODS[s.mood]||s.mood):'平静';
     $('#mems').innerHTML=li(s.recent_memories);
     $('#jour').innerHTML=li(s.recent_journal);
     if(!inited){$('#speaker').innerHTML=s.people.map(p=>'<option'+(p===s.owner?' selected':'')+'>'+esc(p)+'</option>').join('');inited=true;}

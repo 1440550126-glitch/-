@@ -62,6 +62,20 @@ class Agent:
             self._execute(action, who)
             result["executed"] = action
 
+        # --- 自然语言派活（如"让 openclaw 把代码打包"）---
+        if action is None and self.hub is not None:
+            disp = self.nl_dispatch(speaker_name, utterance)
+            if disp is not None:
+                result["reply"] = disp["reply"]
+                result["dispatch"] = disp
+                if self.journal is not None:
+                    self.journal.append({
+                        "speaker": who.get("name"), "speaker_relation": who.get("relation"),
+                        "utterance": utterance, "reply": disp["reply"],
+                        "executed": f"dispatch:{disp['agent']}",
+                    })
+                return result
+
         # --- 检索记忆 ---
         mems = [it["text"] for _, it in self.memory.recall(utterance, k=4)]
         result["memories"] = mems
@@ -171,6 +185,25 @@ class Agent:
         if self.hub is None:
             return {"ok": False, "error": "未配置外部智能体（见 config/agents.yaml）"}
         return self.hub.dispatch(agent_name, task, **params)
+
+    # ---------- 自然语言派活（"让 openclaw 把代码打包"）----------
+    def nl_dispatch(self, speaker_name, utterance) -> dict | None:
+        """识别并执行"派活给外部智能体"的自然语言。不是派活则返回 None。"""
+        if self.hub is None:
+            return None
+        from .remote_agents import parse_dispatch
+        name = parse_dispatch(utterance, self.hub.names())
+        if not name:
+            return None
+        ok, _who, reason = self.authority.can(speaker_name, "control_agents")
+        if not ok:
+            return {"dispatched": False, "agent": name, "reply": reason}
+        res = self.hub.dispatch(name, "nl", instruction=utterance)
+        if res.get("ok"):
+            reply = f"好的，已经让「{name}」去办了。它回话：{res.get('result', '（无返回）')}"
+        else:
+            reply = f"我想交给「{name}」办，但没联系上它（{str(res.get('error', ''))[:30]}）。"
+        return {"dispatched": bool(res.get("ok")), "agent": name, "result": res, "reply": reply}
 
     # ---------- 人格热切换（无需重启）----------
     def switch_persona(self, name, base_dir=None, seed_memory=False) -> dict:

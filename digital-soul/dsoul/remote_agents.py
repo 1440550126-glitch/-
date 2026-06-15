@@ -12,6 +12,27 @@ import os
 import urllib.request
 
 
+DISPATCH_VERBS = (
+    "让", "叫", "请", "帮", "派", "用", "去", "干", "处理", "打包",
+    "整理", "跑", "执行", "查", "下载", "发送", "搞定", "安排", "生成",
+)
+
+
+def parse_dispatch(text: str, names) -> str | None:
+    """从自然语言里识别"派活给某个外部智能体"。
+
+    需同时命中（① 提到某个智能体名字 ② 含派活动词），否则视为普通聊天返回 None。
+    例：「让 openclaw 把代码打包」→ "openclaw"；「openclaw 是什么」→ None。
+    """
+    text = text or ""
+    hit = next((n for n in names if n and n in text), None)
+    if not hit:
+        return None
+    if not any(v in text for v in DISPATCH_VERBS):
+        return None
+    return hit
+
+
 class RemoteAgent:
     def __init__(self, name: str, endpoint: str, timeout: float = 30.0) -> None:
         self.name = name

@@ -22,6 +22,8 @@ def execute(name: str, task: str, params: dict) -> dict:
         return {"result": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     if task == "add":
         return {"result": float(params.get("a", 0)) + float(params.get("b", 0))}
+    if task == "nl":  # 自然语言指令
+        return {"result": f"[{name}] 收到并执行：{params.get('instruction', '')}"}
     return {"result": f"[{name}] 已（模拟）执行：{task}，参数={params}"}
 
 
