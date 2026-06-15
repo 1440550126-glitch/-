@@ -12,4 +12,26 @@ function callParse(text) {
   });
 }
 
-module.exports = { callParse };
+// —— 解析记录云端同步（history 云函数）——
+function historyAdd(record) {
+  return wx.cloud
+    .callFunction({ name: 'history', data: { action: 'add', record } })
+    .then((r) => !!(r && r.result && r.result.ok))
+    .catch(() => false);
+}
+
+function historyList(limit = 100) {
+  return wx.cloud
+    .callFunction({ name: 'history', data: { action: 'list', limit } })
+    .then((r) => (r && r.result && r.result.list) || [])
+    .catch(() => []);
+}
+
+function historyClear() {
+  return wx.cloud
+    .callFunction({ name: 'history', data: { action: 'clear' } })
+    .then((r) => !!(r && r.result && r.result.ok))
+    .catch(() => false);
+}
+
+module.exports = { callParse, historyAdd, historyList, historyClear };

@@ -12,7 +12,7 @@ const ok = (name) => {
 
 // 1) 链接提取与平台识别
 (() => {
-  const { detect, extractUrl } = R('miniprogram/utils/link');
+  const { detect, extractUrl, extractAll } = R('miniprogram/utils/link');
   const dy = detect('7.88 复制打开抖音，看看【作品】https://v.douyin.com/abc123/ 很棒');
   assert.strictEqual(dy.platform, 'douyin');
   assert.strictEqual(dy.url, 'https://v.douyin.com/abc123/');
@@ -26,7 +26,12 @@ const ok = (name) => {
   assert.strictEqual(detect('随便一句话没有链接').url, '');
   assert.strictEqual(detect('https://example.com/x').supported, false);
   assert.strictEqual(extractUrl('xx https://v.douyin.com/q/）'), 'https://v.douyin.com/q/');
-  ok('link.detect / extractUrl');
+  // 批量提取：去重 + 保序
+  assert.deepStrictEqual(
+    extractAll('a https://v.douyin.com/a/ b https://v.douyin.com/a/ c https://kuaishou.com/x'),
+    ['https://v.douyin.com/a/', 'https://kuaishou.com/x']
+  );
+  ok('link.detect / extractUrl / extractAll');
 })();
 
 // 2) 平台调度
@@ -182,6 +187,37 @@ const ok = (name) => {
   assert.strictEqual(name('whatever'), '素材');
   assert.strictEqual(NAMES.pipixia, '皮皮虾');
   ok('extract helpers + platform names');
+})();
+
+// 8) 本地历史缓存：add 生成 rid，merge 按 rid 去重并按时间倒序
+(() => {
+  const mem = {};
+  global.wx = {
+    getStorageSync: (k) => mem[k],
+    setStorageSync: (k, v) => {
+      mem[k] = v;
+    },
+    removeStorageSync: (k) => {
+      delete mem[k];
+    },
+  };
+  const store = R('miniprogram/utils/store');
+  store.clear();
+  const a = store.add({ type: 'video', platform: 'douyin', url: 'u1', title: 'A' });
+  assert.ok(a.rid, 'rid generated');
+  assert.strictEqual(store.list().length, 1);
+
+  const merged = store.merge([
+    { ...a }, // 重复（rid 相同）应被去重
+    { rid: 'x2', type: 'video', platform: 'kuaishou', url: 'u2', at: a.at + 1 },
+  ]);
+  assert.strictEqual(merged.length, 2);
+  assert.strictEqual(merged[0].rid, 'x2'); // 时间更晚的在前
+
+  store.clear();
+  assert.strictEqual(store.list().length, 0);
+  delete global.wx;
+  ok('store: add rid / merge dedup / clear');
 })();
 
 console.log(`\n全部通过：${n} 组用例 ✅`);

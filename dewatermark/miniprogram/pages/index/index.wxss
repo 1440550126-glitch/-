@@ -30,6 +30,13 @@
 .flex2 { flex: 2; }
 .btn-ghost.flex1 { margin-right: 4rpx; }
 
+.batch-link {
+  margin-top: 22rpx;
+  text-align: center;
+  font-size: 25rpx;
+  color: var(--brand);
+}
+
 .banner { margin-top: 24rpx; border-radius: 16rpx; overflow: hidden; }
 
 .block-title { font-weight: 700; font-size: 30rpx; margin-bottom: 16rpx; }

@@ -32,6 +32,8 @@
         disabled="{{parsing}}"
       >立即去水印</button>
     </view>
+
+    <view class="batch-link" bindtap="goBatch">有多个链接？批量解析一次搞定 ›</view>
   </view>
 
   <ad

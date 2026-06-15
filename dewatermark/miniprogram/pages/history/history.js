@@ -1,6 +1,7 @@
 const app = getApp();
 const store = require('../../utils/store');
 const { NAMES } = require('../../utils/platform');
+const { historyList, historyClear } = require('../../utils/cloud');
 
 function fmt(ts) {
   const d = new Date(ts);
@@ -13,6 +14,17 @@ Page({
 
   onShow() {
     this.refresh();
+    this.sync();
+  },
+
+  // 拉取云端记录并合并到本地缓存
+  sync() {
+    historyList().then((listFromCloud) => {
+      if (listFromCloud && listFromCloud.length) {
+        store.merge(listFromCloud);
+        this.refresh();
+      }
+    });
   },
 
   refresh() {
@@ -39,6 +51,7 @@ Page({
       success: (r) => {
         if (r.confirm) {
           store.clear();
+          historyClear(); // 同步清空云端
           this.refresh();
           wx.showToast({ title: '已清空', icon: 'none' });
         }

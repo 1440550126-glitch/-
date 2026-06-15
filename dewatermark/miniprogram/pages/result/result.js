@@ -3,6 +3,7 @@ const { showRewarded, preloadRewarded } = require('../../utils/ad');
 const { saveMedia } = require('../../utils/save');
 const store = require('../../utils/store');
 const { name } = require('../../utils/platform');
+const { historyAdd } = require('../../utils/cloud');
 
 Page({
   data: {
@@ -22,7 +23,8 @@ Page({
       return;
     }
     const cfg = app.globalData.config;
-    store.add(item);
+    const rec = store.add(item);
+    historyAdd(rec); // 同步到云端（best-effort，不阻塞）
 
     const needAd = cfg.requireAdToDownload && (cfg.freeDownloadsPerDay || 0) <= app.globalData.freeUsed;
     this.setData({

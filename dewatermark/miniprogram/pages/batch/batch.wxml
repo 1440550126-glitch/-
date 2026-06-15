@@ -1,0 +1,47 @@
+<view class="wrap">
+  <view class="card">
+    <textarea
+      class="input"
+      placeholder="一次粘贴多条分享文案/链接（每行一个，最多 20 个）…"
+      placeholder-class="ph"
+      value="{{input}}"
+      bindinput="onInput"
+      maxlength="8000"
+      auto-height
+    />
+    <view class="row gap mt">
+      <button class="btn btn-ghost flex1" bindtap="paste">粘贴</button>
+      <button class="btn btn-primary flex2" bindtap="start" loading="{{running}}" disabled="{{running}}">
+        {{running ? '解析中…' : '开始批量解析'}}
+      </button>
+    </view>
+  </view>
+
+  <view wx:if="{{total}}" class="row spread bar">
+    <text class="muted">进度 {{doneCount}} / {{total}}</text>
+    <button class="mini" bindtap="saveAll" loading="{{savingAll}}" disabled="{{savingAll || running}}">看广告 · 全部保存</button>
+  </view>
+
+  <view class="list">
+    <view class="item" wx:for="{{items}}" wx:key="url">
+      <image wx:if="{{item.cover}}" class="thumb" src="{{item.cover}}" mode="aspectFill"></image>
+      <view wx:else class="thumb thumb-empty">{{item.status === 'failed' ? '✕' : '…'}}</view>
+
+      <view class="meta">
+        <view class="t">{{item.title || item.url}}</view>
+        <view class="s">
+          <text wx:if="{{item.status === 'pending'}}" class="muted">等待中</text>
+          <text wx:elif="{{item.status === 'parsing'}}" class="muted">解析中…</text>
+          <text wx:elif="{{item.status === 'done'}}" class="ok">{{item.name}} · 已就绪</text>
+          <text wx:elif="{{item.status === 'failed'}}" class="err">失败：{{item.error}}</text>
+        </view>
+      </view>
+
+      <button wx:if="{{item.status === 'done'}}" class="mini" data-idx="{{index}}" bindtap="saveOne">保存</button>
+    </view>
+  </view>
+
+  <view wx:if="{{total}}" class="footnote muted center">
+    「全部保存」看一次广告即可解锁本批全部下载。
+  </view>
+</view>

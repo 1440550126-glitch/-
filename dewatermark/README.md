@@ -21,18 +21,20 @@ dewatermark/
 │   ├── pages/
 │   │   ├── index/    首页：粘贴链接 → 识别平台 → 解析
 │   │   ├── result/   结果页：预览 +「看广告解锁下载」(变现核心)
-│   │   ├── history/  历史记录（仅存本机）
+│   │   ├── batch/    批量解析：多链接并发解析，看一次广告全部保存
+│   │   ├── history/  历史记录（本地缓存 + 云端同步）
 │   │   ├── about/    我的：协议 / 隐私 / 版权 / 反馈
 │   │   ├── doc/      协议文档承载页
 │   │   └── admin/    数据看板（连点版本号进入，按 openid 鉴权）
-│   └── utils/        cloud / ad(激励视频) / link(识别) / save(存相册) / store / platform(平台名)
+│   └── utils/        cloud / ad(激励视频) / link(识别) / save(存相册) / store(缓存+合并) / platform
 ├── cloudfunctions/
 │   ├── parse/        核心解析云函数
 │   │   ├── parsers/  douyin / kuaishou / xiaohongshu / weibo / bilibili / pipixia + 调度
 │   │   ├── lib/      http(零依赖) / result(结构) / thirdparty(第三方兜底) / extract(直链抽取)
 │   │   └── index.js  入口：内置解析 → 第三方兜底 →(可选)转存云存储 → 统计
 │   ├── login/        静默登录 + 用户统计
-│   └── stats/        数据看板聚合（按 ADMIN_OPENIDS 鉴权）
+│   ├── stats/        数据看板聚合（按 ADMIN_OPENIDS 鉴权）
+│   └── history/      解析记录云端同步（add/list/clear，按 openid）
 ├── scripts/test.js   离线逻辑自测（不联网）
 └── docs/             DEPLOY 部署 / REVIEW 上架避坑 / MONETIZE 变现配置
 ```
@@ -42,8 +44,8 @@ dewatermark/
 1. **导入项目**：微信开发者工具 → 导入 → 选择 `dewatermark/` 目录，填入你的小程序 AppID。
 2. **开通云开发**：工具顶部「云开发」→ 开通 → 新建环境，复制**环境 ID**。
 3. **填配置**：把环境 ID 和广告位 ID 填进 `miniprogram/config.js`。
-4. **部署云函数**：右键 `cloudfunctions/parse`、`login`、`stats` → 上传并部署（云端安装依赖）。
-5. **建数据库集合**：云开发控制台新建集合 `users`、`parse_logs`（权限选「仅创建者可读写」即可）。
+4. **部署云函数**：右键 `cloudfunctions/parse`、`login`、`stats`、`history` → 上传并部署（云端安装依赖）。
+5. **建数据库集合**：云开发控制台新建集合 `users`、`parse_logs`、`histories`（权限选「仅创建者可读写」即可）。
 6. 真机预览，粘贴一条抖音分享链接测试。
 
 详细步骤见 **[docs/DEPLOY.md](docs/DEPLOY.md)**。
@@ -69,6 +71,11 @@ cd dewatermark && npm test
 在「我的」页**连点版本号 5 次**进入数据看板，看：累计/今日/近 7 日解析量、各平台占比、解析来源（内置 vs 第三方）、总用户/新增/活跃/复访率。
 
 权限由 `stats` 云函数按 **openid 白名单**校验：在 `stats` 云函数环境变量 `ADMIN_OPENIDS`（逗号分隔）里填入管理员 openid 即可。未配置时，看板会显示你当前的 openid 方便复制填入。
+
+## 批量解析与云端同步
+
+- **批量解析**（首页「批量解析一次搞定」入口）：一次粘贴多条链接（≤ 20），并发解析（并发 2，避免压垮平台），逐条显示状态；「全部保存」看**一次**激励视频即可解锁本批全部下载。
+- **云端同步**：解析记录除本地缓存外，会通过 `history` 云函数按 openid 存到 `histories` 集合；历史页打开时拉取云端并与本地**合并去重**，换设备 / 重装也不丢。清空会同时清云端。
 
 ## ⚠️ 上架风险必读
 

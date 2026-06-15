@@ -2,6 +2,7 @@
   "pages": [
     "pages/index/index",
     "pages/result/result",
+    "pages/batch/batch",
     "pages/history/history",
     "pages/about/about",
     "pages/doc/doc",

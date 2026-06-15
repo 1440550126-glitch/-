@@ -71,4 +71,8 @@ Page({
   goHistory() {
     wx.switchTab({ url: '/pages/history/history' });
   },
+
+  goBatch() {
+    wx.navigateTo({ url: '/pages/batch/batch' });
+  },
 });

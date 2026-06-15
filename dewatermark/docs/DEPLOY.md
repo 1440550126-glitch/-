@@ -25,7 +25,8 @@
 1. 右键 `cloudfunctions/parse` → **上传并部署：云端安装依赖**。
 2. 右键 `cloudfunctions/login` → 同样上传并部署。
 3. 右键 `cloudfunctions/stats` → 同样上传并部署（数据看板用）。
-4. 部署完成后，「云开发控制台 → 云函数」能看到 `parse`、`login`、`stats`。
+4. 右键 `cloudfunctions/history` → 同样上传并部署（解析记录云端同步用）。
+5. 部署完成后，「云开发控制台 → 云函数」能看到 `parse`、`login`、`stats`、`history`。
 
 ### （可选）云函数环境变量
 
@@ -60,7 +61,8 @@
 | 集合 | 用途 | 权限 |
 | --- | --- | --- |
 | `users` | 用户（openid + 首次/最近访问时间） | 仅创建者可读写 |
-| `parse_logs` | 解析记录（用于后台看量） | 仅创建者可读写 |
+| `parse_logs` | 解析量统计（用于数据看板） | 仅创建者可读写 |
+| `histories` | 解析记录云端同步（按 openid 存档） | 仅创建者可读写 |
 
 > 不创建也不会报错（云函数里已 try/catch），但建上能积累统计数据。
 

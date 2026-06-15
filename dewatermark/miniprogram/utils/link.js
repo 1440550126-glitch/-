@@ -13,6 +13,22 @@ function extractUrl(text) {
   return m ? m[0].replace(/[)）】\]]+$/, '') : '';
 }
 
+// 从文本里提取所有链接（去重，保持出现顺序），用于批量解析
+function extractAll(text) {
+  const re = /https?:\/\/[^\s，。、）)】\]"']+/gi;
+  const seen = new Set();
+  const out = [];
+  let m;
+  while ((m = re.exec(String(text || '')))) {
+    const u = m[0].replace(/[)）】\]]+$/, '');
+    if (!seen.has(u)) {
+      seen.add(u);
+      out.push(u);
+    }
+  }
+  return out;
+}
+
 function detect(text) {
   const url = extractUrl(text);
   const r = url ? RULES.find((x) => x.test.test(url)) : null;
@@ -24,4 +40,4 @@ function detect(text) {
   };
 }
 
-module.exports = { extractUrl, detect, RULES };
+module.exports = { extractUrl, extractAll, detect, RULES };
