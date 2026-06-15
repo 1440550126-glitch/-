@@ -21,6 +21,7 @@ data/triggers.json
 data/dreams.json
 data/self.json
 data/values_state.json
+data/questions.json
 
 # Python
 __pycache__/

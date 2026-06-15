@@ -99,6 +99,13 @@ def daily_brief(agent, present=None, addr: str = "您", now=None) -> str:
                 lines.append("我最近总梦到「" + mot[0] + "」，会多上点心。")
         except Exception:
             pass
+    if hasattr(agent, "wonder"):
+        try:
+            w = agent.wonder()
+            if w:
+                lines.append(w)
+        except Exception:
+            pass
     if len(lines) == 1:
         lines.append("一切如常，没有需要您操心的事。")
     return " ".join(lines)

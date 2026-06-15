@@ -116,7 +116,8 @@ flowchart TB
 | `dream.py` | 梦境生成：睡眠时重组记忆碎片+情绪+纠缠联想成超现实叙事 |
 | `selfnarrative.py` | 自我意识叙事：把身份/关系/情绪/领悟/梦织成第一人称自我认知（含成长史 SelfLog） |
 | `values.py` | 价值观与抉择：据守护/家人/健康…权衡两难；价值随经历自演化 |
-| `monologue.py` | 内心独白：每次互动冒出一句私密心声（情绪/联想/犹豫） |
+| `monologue.py` | 内心独白：每次互动冒出一句私密心声（随七情变味、会入梦） |
+| `curiosity.py` | 好奇心与世界模型：遇陌生事物发问、攒疑问、问回来；凝成"我眼中的世界" |
 | `tasks.py` | 派活待办本：成记功、败记账、可跟进重试 |
 | `emotions.py` · `knowledge.py` | 七情六欲随互动起伏；多学科视角调度 |
 | `perception.py` · `perception_opencv.py` · `presence.py` | 人脸认人；树莓派轻量后端；持续感知/进门事件 |
@@ -158,12 +159,12 @@ flowchart TB
 
 ## 6. 测试
 
-25 套单测、约 95+ 用例，纯标准库、零网络即可跑：
+26 套单测、约 100+ 用例，纯标准库、零网络即可跑：
 
 ```bash
 cd digital-soul
-for t in authority memory annotate presence consolidate emotions skills dispatch tasks reflect plan butler \
-         devices orchestrate scenes triggers ha graph voice forgetting entangle dream selfnarrative values monologue; do
+for t in authority memory annotate presence consolidate emotions skills dispatch tasks reflect plan butler devices \
+         orchestrate scenes triggers ha graph voice forgetting entangle dream selfnarrative values monologue curiosity; do
   python tests/test_$t.py || break
 done
 ```

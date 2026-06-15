@@ -9,6 +9,7 @@ import yaml
 from .actions import SimulationRobot
 from .agent import Agent
 from .authority import Authority
+from .curiosity import QuestionLog
 from .devices import build_device_hub, build_sensor_source
 from .dream import DreamLog
 from .emotions import EmotionState
@@ -92,7 +93,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  selflog=SelfLog(base / "data" / "self.json"),
                  values=load_values(_load_yaml(base / "config" / "values.yaml"),
                                     state_path=base / "data" / "values_state.json"),
-                 values_path=base / "data" / "values_state.json")
+                 values_path=base / "data" / "values_state.json",
+                 curiosity=QuestionLog(base / "data" / "questions.json"))
 
 
 def _seed_memory(base: Path, memory) -> None:

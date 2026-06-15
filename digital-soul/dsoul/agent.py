@@ -32,7 +32,7 @@ class Agent:
                  journal=None, emotions=None, knowledge=None, skills=None, hub=None,
                  tasks=None, reflector=None, planner=None, plan=None, devices=None,
                  scenes=None, triggers=None, sensor_source=None, dreams=None, selflog=None,
-                 values=None, values_path=None) -> None:
+                 values=None, values_path=None, curiosity=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -64,6 +64,7 @@ class Agent:
         self.values = values                                      # 价值观（抉择时据此权衡）
         self.values_path = values_path                            # 演化后的价值权重持久化路径
         self.thoughts: deque = deque(maxlen=12)                   # 内心独白（近期心声）
+        self.curiosity = curiosity                                # 好奇心：对陌生事物的疑问本
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
@@ -233,6 +234,9 @@ class Agent:
         thought = self._inner_thought(utterance, who, result.get("associations", []))
         result["thought"] = thought
         self.thoughts.append(thought)
+
+        # --- 好奇心：听到陌生事物，心里默默记下"想问问" ---
+        self._be_curious(utterance)
 
         # --- 写入对话日记（短期记忆，供日后"睡眠巩固"）---
         if self.journal is not None:
@@ -510,6 +514,41 @@ class Agent:
         if getattr(self, "values", None):
             self.evolve_values()
         return out
+
+    # ---------- 好奇心与世界模型 ----------
+    def _be_curious(self, utterance) -> None:
+        if self.curiosity is None:
+            return
+        from .curiosity import form_questions
+        known = " ".join(it.get("text", "") for it in self.memory.items)
+        for q, term in form_questions(utterance, known):
+            self.curiosity.add(term, q)
+        self.curiosity.resolve_known(known)          # 学到了的就销账
+
+    def wonder(self) -> str:
+        """挑一个还没问过的好奇，问回来（问完即标记已问）。没有则空。"""
+        if self.curiosity is None:
+            return ""
+        op = self.curiosity.open()
+        if not op:
+            return ""
+        q = op[0]
+        self.curiosity.mark_asked(q["id"])
+        return q["q"]
+
+    def worldview(self, k: int = 6) -> list:
+        """我眼中的世界：从记忆图谱里凝成的几条理解。"""
+        g = self.memory_graph()
+        owner = self._owner_name()
+        out = []
+        for n, _ in g.central(10):
+            meta = g.meta.get(n, {})
+            if meta.get("kind") == "person" and n != owner:
+                rel = meta.get("relation")
+                out.append(f"{n}{('（' + rel + '）') if rel else ''}对你很重要")
+            elif meta.get("kind") == "topic":
+                out.append(f"你常挂念着「{n}」")
+        return out[:k]
 
     # ---------- 内心独白 ----------
     def _inner_thought(self, utterance, who, assoc_texts) -> str:
