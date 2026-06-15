@@ -25,7 +25,7 @@
 - 🎧 **开箱即用播放器层** — `dolby-player.js`：`<audio>`+引擎+播放列表（上下一首/进度/音量/循环/随机/事件）
 - 🔒 **锁屏/通知栏控制** — 自动接入 Media Session（封面/曲目信息 + 上一首/下一首/进度），移动端体验到位
 - 🆎 **A/B 盲测打分** — `dolby-abtest.js`：盲听对比并统计偏好率，客观验证调音
-- 🌀 **音频湍流可视化** — `dolby-visualizer.js`：跟随节奏流动、随频谱/封面变色的流体视觉冲击
+- 🌀 **音频湍流可视化** — WebGL fbm 流体着色器（不支持自动回退 Canvas2D）：跟随节奏翻涌、随频谱/封面变色的视觉冲击
 - 📤 **预设导入/导出 + 封面取色** — 自定义预设转 JSON 分享/备份；从封面取主色为播放器换肤
 - 🪶 **零依赖 / 零构建** — ES Module，含 TypeScript 类型定义
 
@@ -198,16 +198,23 @@ importPresets(json).forEach(registerPreset);                    // ← 文本恢
 
 ## 音频湍流可视化
 
-`dolby-visualizer.js` 把声音化成一团跟随节奏流动、随频谱变色的"湍流"，做沉浸视觉背景：
+把声音化成一团跟随节奏流动、随频谱变色的"湍流"，做沉浸视觉背景。有两种渲染器：
+
+- **WebGL（`dolby-visualizer-gl.js`）** — 域扭曲 fbm 流体星云着色器，质感最强；
+- **Canvas2D（`dolby-visualizer.js`）** — 流场粒子 + 节拍冲击环，零依赖、最稳。
+
+推荐用工厂 `createVisualizer`：**优先 WebGL，遇不支持/编译失败自动回退 Canvas2D**：
 
 ```js
-import { DolbyVisualizer } from './dolby/dolby-visualizer.js';
+import { createVisualizer } from './dolby/dolby-visualizer-gl.js';
 const dolby = new DolbyAudio({ analyser: true });   // 需要 analyser
 dolby.attachMedia(audioEl);
-const viz = new DolbyVisualizer(canvas, { dolby, particles: 120 });
-viz.start();                       // 低频/能量→翻涌，频谱→色相，节拍→冲击环
+const viz = createVisualizer(canvas, { dolby });    // 低频/能量→翻涌，频谱→色相，节拍→爆闪
+viz.start();
+// 强制：{ renderer: 'webgl' }（失败抛错）或 { renderer: 'canvas' }
 ```
 
+两种渲染器接口一致：`start/stop/dispose/setBaseHue/analyze/resize`。
 也可直接传 `{ analyser }` 或 `{ node, context }`。`viz.analyze()` 返回
 `{ bass, mid, treble, energy, beat }` 可自行驱动其它动效。
 

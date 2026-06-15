@@ -235,4 +235,14 @@ ok(badThrew, 'importPreset 校验非法结构');
 const jsonAll = store.exportPresets([{ id: 'a', p: {} }, { id: 'b', p: {} }]);
 ok(store.importPresets(jsonAll).length === 2, 'exportPresets/importPresets 往返');
 
+// 16) WebGL 可视化工厂：无 WebGL 时自动回退
+const { createVisualizer } = await import('../dolby-visualizer-gl.js');
+const mkAn = () => ({ fftSize: 1024, frequencyBinCount: 128, getByteFrequencyData(a) { a.fill(0); } });
+const glCanvas = { clientWidth: 320, clientHeight: 200, width: 0, height: 0, getContext: (ty) => ty === '2d' ? ({ setTransform() {} }) : null };
+const vAuto = createVisualizer(glCanvas, { analyser: mkAn(), particles: 8 });
+ok(vAuto instanceof DolbyVisualizer, '无 WebGL 时 createVisualizer 回退到 Canvas2D');
+let glThrew = false; try { createVisualizer(glCanvas, { renderer: 'webgl', analyser: mkAn() }); } catch { glThrew = true; }
+ok(glThrew, "renderer:'webgl' 在无 WebGL 时抛错（不静默降级）");
+vAuto.dispose();
+
 console.log(`\n========== dolby-audio：${pass} 项断言全部通过 ✅ ==========`);

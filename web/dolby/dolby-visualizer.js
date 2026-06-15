@@ -15,7 +15,7 @@
 
 const DPR = () => Math.min(globalThis.devicePixelRatio || 1, 2);
 
-function resolveAnalyser(o) {
+export function resolveAnalyser(o) {
   if (o.analyser) return o.analyser;
   if (o.dolby) {
     const a = o.dolby.getAnalyser();
@@ -23,7 +23,24 @@ function resolveAnalyser(o) {
     const an = o.dolby.context.createAnalyser(); o.dolby.output.connect(an); return an;
   }
   if (o.node && o.context) { const an = o.context.createAnalyser(); o.node.connect(an); return an; }
-  throw new Error('DolbyVisualizer 需要 analyser / dolby / {node,context} 之一');
+  throw new Error('可视化需要 analyser / dolby / {node,context} 之一');
+}
+
+// 频谱分析 + 节拍检测（Canvas 与 WebGL 渲染器共用）
+export class AudioReactor {
+  constructor(analyser) { this.analyser = analyser; this.data = new Uint8Array(analyser.frequencyBinCount); this._bassEMA = 0; }
+  read() {
+    const d = this.data; this.analyser.getByteFrequencyData(d);
+    const n = d.length;
+    const band = (a, b) => { let s = 0; for (let i = a; i < b; i++) s += d[i]; return (b > a) ? s / ((b - a) * 255) : 0; };
+    const bass = band(0, Math.max(1, n * 0.08 | 0));
+    const mid = band(n * 0.08 | 0, n * 0.4 | 0);
+    const treble = band(n * 0.4 | 0, n);
+    const energy = (bass * 1.4 + mid + treble * 0.7) / 3.1;
+    const beat = bass > this._bassEMA * 1.35 && bass > 0.22;
+    this._bassEMA = this._bassEMA * 0.92 + bass * 0.08;
+    return { bass, mid, treble, energy, beat };
+  }
 }
 
 export class DolbyVisualizer {
@@ -37,13 +54,13 @@ export class DolbyVisualizer {
     this.ctx = canvas.getContext('2d');
     this.analyser = resolveAnalyser(options);
     this.analyser.fftSize = options.fftSize || 1024;
-    this.data = new Uint8Array(this.analyser.frequencyBinCount);
+    this.reactor = new AudioReactor(this.analyser);
     this.baseHue = options.baseHue ?? 270;
     this.hueRange = options.hueRange ?? 80;
     this.particleCount = options.particles ?? 90;
     this.bg = options.background ?? [10, 8, 18];
     this.particles = []; this.rings = [];
-    this._bassEMA = 0; this._t = 0; this._raf = 0; this._running = false; this._hue = this.baseHue;
+    this._t = 0; this._raf = 0; this._running = false; this._hue = this.baseHue;
     this._onResize = () => this.resize();
     if (typeof addEventListener === 'function') addEventListener('resize', this._onResize);
     this.resize();
@@ -77,18 +94,7 @@ export class DolbyVisualizer {
   get running() { return this._running; }
 
   /** 取一帧的频谱特征：低/中/高频能量、总能量、是否节拍 */
-  analyze() {
-    const d = this.data; this.analyser.getByteFrequencyData(d);
-    const n = d.length;
-    const band = (a, b) => { let s = 0; for (let i = a; i < b; i++) s += d[i]; return (b > a) ? s / ((b - a) * 255) : 0; };
-    const bass = band(0, Math.max(1, n * 0.08 | 0));
-    const mid = band(n * 0.08 | 0, n * 0.4 | 0);
-    const treble = band(n * 0.4 | 0, n);
-    const energy = (bass * 1.4 + mid + treble * 0.7) / 3.1;
-    const beat = bass > this._bassEMA * 1.35 && bass > 0.22;   // 与运行均值比较
-    this._bassEMA = this._bassEMA * 0.92 + bass * 0.08;
-    return { bass, mid, treble, energy, beat };
-  }
+  analyze() { return this.reactor.read(); }
 
   _frame() {
     const { bass, mid, treble, energy, beat } = this.analyze();

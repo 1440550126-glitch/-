@@ -1,7 +1,8 @@
 // dolby-player Demo：播放列表 / 传输控制 / 进度 / 杜比音效 / 湍流可视化
 import { DolbyPlayer } from './dolby-player.js';
 import { DOLBY_PRESETS, presetById } from './dolby-audio.js';
-import { DolbyVisualizer, coverColor } from './dolby-visualizer.js';
+import { coverColor } from './dolby-visualizer.js';
+import { createVisualizer } from './dolby-visualizer-gl.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -16,8 +17,8 @@ const player = new DolbyPlayer({
 });
 const dolby = player.dolby;
 
-// —— 湍流可视化背景（跟随节奏流动 + 随频谱/封面变色） ——
-const viz = new DolbyVisualizer($('viz'), { dolby, particles: 120 });
+// —— 湍流可视化背景（WebGL 流体优先，失败回退 Canvas2D；跟随节奏 + 随频谱/封面变色） ——
+const viz = createVisualizer($('viz'), { dolby, particles: 120 });
 let vizStarted = false;
 const HUES = [275, 205, 330, 150];
 function applyTheme(track, index) {
