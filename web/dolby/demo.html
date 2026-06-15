@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>dolby-audio · 杜比风格沉浸音效引擎 Demo</title>
+  <style>
+    :root { --grad: linear-gradient(135deg, #a18bff 0%, #ff9ec6 100%); --card: rgba(255,255,255,.05); }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body { font-family: "PingFang SC", system-ui, -apple-system, sans-serif; color: #ece9ff;
+      background: radial-gradient(120% 120% at 50% 0%, #241d3b 0%, #14101f 60%); min-height: 100vh; padding: 28px 18px 60px; }
+    .wrap { max-width: 560px; margin: 0 auto; }
+    h1 { font-size: 22px; font-weight: 800; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .sub { color: rgba(255,255,255,.5); font-size: 12.5px; margin: 6px 0 22px; line-height: 1.7; }
+    canvas { width: 100%; height: 120px; display: block; border-radius: 16px; background: rgba(0,0,0,.28); margin-bottom: 18px; }
+    .card { background: var(--card); border: 1px solid rgba(255,255,255,.08); border-radius: 18px; padding: 16px; margin-bottom: 14px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .label { font-size: 12px; color: rgba(255,255,255,.55); }
+    button { font-family: inherit; border: 0; cursor: pointer; color: #fff; border-radius: 14px; font-size: 14px; font-weight: 700; padding: 12px 18px; background: rgba(255,255,255,.12); transition: transform .2s, background .25s, box-shadow .25s; }
+    button:active { transform: scale(.94); }
+    button.primary { background: var(--grad); box-shadow: 0 8px 22px rgba(160,120,230,.4); }
+    button.big { flex: 1; min-width: 130px; }
+    .chip { padding: 8px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: rgba(255,255,255,.1); }
+    .chip.active { background: var(--grad); box-shadow: 0 4px 14px rgba(160,120,230,.4); }
+    .switch { width: 52px; height: 30px; border-radius: 99px; background: rgba(255,255,255,.18); position: relative; flex-shrink: 0; transition: background .3s; }
+    .switch::after { content: ''; position: absolute; width: 24px; height: 24px; border-radius: 50%; background: #fff; top: 3px; left: 3px; transition: transform .3s cubic-bezier(.34,1.45,.42,1); }
+    .switch.on { background: var(--grad); } .switch.on::after { transform: translateX(22px); }
+    .slider { display: grid; grid-template-columns: 64px 1fr 46px; align-items: center; gap: 10px; margin: 12px 0; }
+    .slider .val { font-size: 12px; text-align: right; color: rgba(255,255,255,.85); font-variant-numeric: tabular-nums; }
+    input[type=range] { -webkit-appearance: none; appearance: none; height: 5px; border-radius: 99px; background: rgba(255,255,255,.18); outline: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.4); cursor: pointer; }
+    input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border: 0; border-radius: 50%; background: #fff; cursor: pointer; }
+    .hint { font-size: 11px; color: rgba(255,255,255,.4); margin-top: 8px; line-height: 1.6; }
+    .file { display: inline-block; }
+    .file input { display: none; }
+    .file span { display: inline-block; padding: 12px 18px; border-radius: 14px; background: rgba(255,255,255,.12); font-size: 14px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🎚 dolby-audio</h1>
+    <div class="sub">独立、零依赖的杜比风格沉浸音效引擎。下面用内置合成音乐试听，也可以载入你自己的音频文件 A/B 对比。</div>
+
+    <canvas id="viz"></canvas>
+
+    <div class="card">
+      <div class="row">
+        <button id="play" class="primary big">▶ 试听合成音乐</button>
+        <label class="file"><input id="file" type="file" accept="audio/*" /><span>📂 载入你的音乐</span></label>
+      </div>
+      <div class="hint" id="srcHint">点击播放即开始（浏览器要求用户手势后才能出声）。</div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content: space-between">
+        <div><div style="font-weight:800;font-size:15px">杜比音效</div><div class="label" id="dolbyState">已开启 · 标准增强</div></div>
+        <div id="dolbySwitch" class="switch on"></div>
+      </div>
+      <div class="row" id="presets" style="margin-top:14px"></div>
+    </div>
+
+    <div class="card">
+      <div class="slider"><span class="label">强度</span><input id="intensity" type="range" min="0" max="100" value="85" /><span class="val" id="intensityV">85%</span></div>
+      <div class="slider"><span class="label">声场宽度</span><input id="width" type="range" min="0" max="220" value="130" /><span class="val" id="widthV">1.30×</span></div>
+      <div class="slider"><span class="label">低音</span><input id="bass" type="range" min="0" max="12" value="5" /><span class="val" id="bassV">+5dB</span></div>
+      <div class="slider"><span class="label">空间</span><input id="reverb" type="range" min="0" max="60" value="16" /><span class="val" id="reverbV">16%</span></div>
+      <div class="slider"><span class="label">高频</span><input id="air" type="range" min="0" max="12" value="4" /><span class="val" id="airV">+4dB</span></div>
+      <div class="hint">关掉「杜比音效」开关即可与原声直接 A/B 对比。</div>
+    </div>
+  </div>
+  <script type="module" src="./demo.js"></script>
+</body>
+</html>

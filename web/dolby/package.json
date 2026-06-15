@@ -1,0 +1,32 @@
+{
+  "name": "dolby-audio",
+  "version": "1.0.0",
+  "description": "独立、零依赖的杜比风格沉浸音效引擎（纯 Web Audio）：低频增强 / 立体声声场展宽 / 空间混响 / 响度优化。可挂在 <audio>/<video> 或任意 AudioNode 后端。",
+  "type": "module",
+  "main": "dolby-audio.js",
+  "module": "dolby-audio.js",
+  "exports": {
+    ".": "./dolby-audio.js"
+  },
+  "files": [
+    "dolby-audio.js",
+    "demo.html",
+    "demo.js",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "web-audio",
+    "audio",
+    "dsp",
+    "dolby",
+    "immersive",
+    "spatial-audio",
+    "surround",
+    "stereo-widener",
+    "reverb",
+    "bass-boost",
+    "audio-effects"
+  ],
+  "license": "MIT"
+}

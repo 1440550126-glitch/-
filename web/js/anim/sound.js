@@ -1,7 +1,5 @@
 // 声音引擎：Web Audio 实时合成（无音频文件依赖）
 // 环境音（风/雨/海浪/夜/火）+ 单发音效（钟音/嗖/心跳/碎裂/脚步/呼噜…）
-// 总线经杜比风格母带处理器（虚拟环绕/低频增强/空间混响）后输出
-import { DolbyProcessor } from './dolby.js';
 let ctx = null;
 let noiseBuf = null;
 
@@ -28,27 +26,10 @@ export class SoundScape {
   constructor() {
     this.master = ac().createGain();
     this.master.gain.value = 0.6;
-    // 总线 → 杜比母带处理 → 输出（处理器内部可一键旁通，故始终串入）
-    try {
-      this.dolby = new DolbyProcessor(ac());
-      this.master.connect(this.dolby.input);
-      this.dolby.connect(ac().destination);
-    } catch {
-      this.dolby = null;          // 不支持时回落到直连
-      this.master.connect(ac().destination);
-    }
+    this.master.connect(ac().destination);
     this.live = [];       // 活动节点（stop 时统一断开）
     this.timers = [];
     this.muted = false;
-  }
-  // ---- 杜比音效控制（委托给母带处理器，偏好自动持久化） ----
-  setDolby(on) { this.dolby?.setEnabled(on); return !!this.dolby?.enabled; }
-  setDolbyPreset(id) { this.dolby?.applyPreset(id); }
-  setDolbyIntensity(v) { this.dolby?.setIntensity(v); }
-  get dolbyState() {
-    return this.dolby
-      ? { on: this.dolby.enabled, preset: this.dolby.presetId, intensity: this.dolby.intensity, supported: true }
-      : { on: false, preset: 'standard', intensity: 0, supported: false };
   }
   setVolume(v) { this.master.gain.setTargetAtTime(this.muted ? 0 : v, ac().currentTime, 0.2); this._vol = v; }
   toggleMute() {
@@ -237,7 +218,6 @@ export class SoundScape {
     setTimeout(() => {
       for (const n of this.live) { try { n.stop?.(); } catch { /* ok */ } try { n.disconnect?.(); } catch { /* ok */ } }
       try { this.master.disconnect(); } catch { /* ok */ }
-      try { this.dolby?.dispose(); } catch { /* ok */ }
       this.live = [];
     }, 600);
   }
