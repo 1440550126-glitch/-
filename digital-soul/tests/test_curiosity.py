@@ -18,8 +18,8 @@ def test_novel_terms_only_unknown():
 
 def test_form_questions_makes_curious_asks():
     qs = form_questions("我开始学陶艺了", "我喜欢打篮球")
-    assert qs and "陶艺" in qs[0][0]                       # 把陌生事物变成提问
-    assert qs[0][1]                                        # 带回对应的词
+    assert "陶艺" in [t for _, t in qs]                    # 把陌生事物变成提问
+    assert any("陶艺" in q for q, _ in qs)                 # 提问里带上那个词
 
 
 def test_questionlog_lifecycle():

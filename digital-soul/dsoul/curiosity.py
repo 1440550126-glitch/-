@@ -17,13 +17,17 @@ from .reflect import _bigrams
 _TEMPLATES = ["你说的「{t}」，是什么呀？我有点好奇。",
               "「{t}」是怎么回事？我还不太懂。",
               "你为什么会提到「{t}」呢？背后有故事吗？"]
+# 没信息量的常见二元组，不值得好奇
+_COMMON = {"最近", "今天", "昨天", "明天", "现在", "有点", "觉得", "非常", "真的", "什么",
+           "这个", "那个", "一个", "一下", "知道", "可能", "应该", "还是", "已经", "时候",
+           "迷上", "开始", "打算", "喜欢", "想要"}
 
 
 def novel_terms(text: str, known_blob: str):
     """text 里出现、但已知记忆里从没见过的显著二元组（=陌生的事物）。"""
     out = []
-    for w in set(_bigrams(text or "")):
-        if w not in (known_blob or "") and w not in out:
+    for w in sorted(set(_bigrams(text or ""))):          # 排序保证确定性
+        if w not in (known_blob or "") and w not in _COMMON and w not in out:
             out.append(w)
     return out[:3]
 

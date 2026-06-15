@@ -192,6 +192,17 @@ class Agent:
                 self._log_journal(who, utterance, gret, "graph")
                 return result
 
+        # --- 好奇心自学（"去查一下/满足你的好奇"）：交给外部智能体学回来 ---
+        if action is None and who.get("obey") and any(
+                k in utterance for k in ("解答你的好奇", "去自学", "自己学一下", "查查你不懂",
+                                         "满足你的好奇", "去查一下你")):
+            got = self.self_learn()
+            reply = ("我去查了查，学到：" + "；".join(f"{t}——{a[:24]}" for t, a in got)) if got \
+                else "暂时没什么要查的，或者没联系上能帮我查资料的伙伴。"
+            result["reply"] = reply
+            self._log_journal(who, utterance, reply, "self_learn")
+            return result
+
         # --- 价值抉择（"我该不该…/怎么选"）：据价值观给有立场的建议 ---
         if action is None and who.get("obey") and any(
                 k in utterance for k in ("该不该", "应不应该", "纠结", "怎么选", "选哪个",
@@ -513,6 +524,11 @@ class Agent:
         # 7) 价值观随经历缓慢演化（三观随时间微调）
         if getattr(self, "values", None):
             self.evolve_values()
+        # 8) 好奇心自学：把疑问交给外部智能体查一查
+        if getattr(self, "curiosity", None) is not None and self.hub is not None:
+            got = self.self_learn(max_q=1)
+            if got:
+                out["notices"].append("我自己查了查：" + "；".join(f"{t}→{a[:14]}…" for t, a in got))
         return out
 
     # ---------- 好奇心与世界模型 ----------
@@ -549,6 +565,27 @@ class Agent:
             elif meta.get("kind") == "topic":
                 out.append(f"你常挂念着「{n}」")
         return out[:k]
+
+    def self_learn(self, max_q: int = 2) -> list:
+        """好奇心驱动自学：把疑问交给外部智能体去查，学到的写进记忆、销账。"""
+        if self.curiosity is None or self.hub is None:
+            return []
+        names = self.hub.names()
+        owner = self._owner_name()
+        if not names or not owner or not self.authority.can(owner, "control_agents")[0]:
+            return []
+        learned = []
+        for q in self.curiosity.open()[:max_q]:
+            res = self.hub.dispatch(names[0], "nl", instruction="查一下并简短回答：" + q["q"])
+            self.curiosity.mark_asked(q["id"])              # 问过即不反复（成败都标记）
+            self._record_task(names[0], "查：" + q["term"], res)
+            if res.get("ok"):
+                ans = str(res.get("result", ""))[:120]
+                self.memory.add(f"（学到）{q['term']}：{ans}", source="learned", tags=["learned"])
+                learned.append((q["term"], ans))
+        if learned:
+            self.curiosity.resolve_known(" ".join(it.get("text", "") for it in self.memory.items))
+        return learned
 
     # ---------- 内心独白 ----------
     def _inner_thought(self, utterance, who, assoc_texts) -> str:
