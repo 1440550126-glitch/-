@@ -49,6 +49,7 @@ def _snapshot(agent, monitor) -> dict:
             for t in agent.tasks.open()
         ][::-1][:6]
         tasks_done = len(agent.tasks.done())
+    reflections = agent.recent_reflections() if hasattr(agent, "recent_reflections") else []
     return {
         "name": agent.identity.get("name", "我"),
         "llm": bool(agent.llm.available),
@@ -59,6 +60,7 @@ def _snapshot(agent, monitor) -> dict:
         "dispatches": dispatches,
         "tasks_open": tasks_open,
         "tasks_done": tasks_done,
+        "reflections": reflections,
         "mood": mood_char,
         "mood_levels": mood_levels,
         "people": [p["name"] for p in agent.authority.people.values()],
@@ -101,6 +103,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
   <div id=chat class=chat></div>
   <form id=f class=row><input id=msg placeholder="说点什么…" autocomplete=off><button>发送</button></form>
 </div>
+<div class=card><div class=k>💡 它最近的领悟</div><ul id=refl></ul></div>
 <div class=card><div class=k>🧩 最近记住</div><ul id=mems></ul></div>
 <div class=card><div class=k>🕘 最近对话</div><ul id=jour></ul></div>
 <div class=card><div class=k>🛰️ 最近派活 / 提议</div><ul id=disp></ul></div>
@@ -133,6 +136,7 @@ async function refresh(){
     $('#taskstat').textContent='· 欠 '+op.length+' 件 · 已办成 '+(s.tasks_done||0)+' 件';
     $('#tasks').innerHTML=op.length?li(op):'<li class=dim>都办妥啦 🎉</li>';
     $('#retry').style.display=op.length?'inline-block':'none';
+    $('#refl').innerHTML=li(s.reflections||[]);
     $('#mems').innerHTML=li(s.recent_memories);
     $('#jour').innerHTML=li(s.recent_journal);
     if(!inited){$('#speaker').innerHTML=s.people.map(p=>'<option'+(p===s.owner?' selected':'')+'>'+esc(p)+'</option>').join('');inited=true;}

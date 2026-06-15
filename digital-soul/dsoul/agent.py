@@ -23,7 +23,7 @@ _AGENT_HINTS = {"代码": "openclaw", "打包": "openclaw", "部署": "openclaw"
 class Agent:
     def __init__(self, identity, persona, memory, authority, perception, llm, robot,
                  journal=None, emotions=None, knowledge=None, skills=None, hub=None,
-                 tasks=None) -> None:
+                 tasks=None, reflector=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -39,6 +39,9 @@ class Agent:
         self.tasks = tasks           # 派活待办本（成/败都记，可主动跟进/重试）
         self._pending_dispatch = None  # 待你点头的"主动派活"提议
         self._await_retry_confirm = False  # 刚跟进过没办成的事，等你说"好"重试
+        self.reflector = reflector   # 自主反思（记忆流 → 领悟）
+        self._reflect_every = 8      # 每积累 8 条新经历自主反思一次
+        self._last_reflect_len = len(journal._all()) if journal is not None else 0
 
     def _hints(self) -> list[str]:
         out = []
@@ -338,14 +341,14 @@ class Agent:
         return (f"对了，上次想让「{t['agent']}」办的「{t['instruction']}」还没办成"
                 f"（试了 {t['attempts']} 次），要我再试一次吗？")
 
-    def retry_open(self, speaker_name) -> dict:
-        """重试所有没办成的待办（走 control_agents 授权）。"""
+    def retry_open(self, speaker_name, cap: int = 99) -> dict:
+        """重试没办成的待办（走 control_agents 授权）。cap：跳过尝试过多次的，避免死磕。"""
         if self.tasks is None or self.hub is None:
             return {"retried": 0, "ok": 0, "reply": "现在没有可重试的待办。"}
         allowed, _who, reason = self.authority.can(speaker_name, "control_agents")
         if not allowed:
             return {"retried": 0, "ok": 0, "reply": reason}
-        op = list(self.tasks.open())
+        op = [t for t in self.tasks.open() if t.get("attempts", 1) < cap]
         if not op:
             return {"retried": 0, "ok": 0, "reply": "没有没办成的事，都办妥啦。"}
         done = 0
@@ -362,6 +365,39 @@ class Agent:
         else:
             reply = f"重试了 {len(op)} 件，还是没联系上，我先记着，过会儿再试。"
         return {"retried": len(op), "ok": done, "reply": reply}
+
+    # ---------- 自主心跳：到点就反思、顺手把欠账补一补（由 daemon 定期调用）----------
+    def tick(self, now=None) -> dict:
+        out: dict = {"reflections": [], "retried": None, "notices": []}
+        # 1) 自主反思（攒够新经历才反思，免得话痨）
+        if self.reflector is not None and self.journal is not None:
+            total = len(self.journal._all())
+            if total - self._last_reflect_len >= self._reflect_every:
+                self._last_reflect_len = total
+                ref = self.reflector.reflect()
+                if ref:
+                    out["reflections"] = ref
+                    out["notices"].append("我刚回想了一下，想明白几件事：" + "；".join(ref))
+        # 2) 自主补欠账（以主人身份、带重试上限，避免对掉线的智能体死磕）
+        if self.tasks is not None and self.hub is not None and self.tasks.open():
+            owner = self._owner_name()
+            if owner and any(t.get("attempts", 1) < 6 for t in self.tasks.open()):
+                rr = self.retry_open(owner, cap=6)
+                out["retried"] = rr
+                if rr.get("ok"):
+                    out["notices"].append(f"趁这会儿空，我把 {rr['ok']} 件欠着的事补上了。")
+        return out
+
+    def _owner_name(self):
+        for p in self.authority.people.values():
+            if p.get("trust") == "owner":
+                return p["name"]
+        return None
+
+    def recent_reflections(self, k: int = 5) -> list[str]:
+        """它最近想明白的事（领悟）。"""
+        refl = [it["text"] for it in self.memory.items if "reflection" in (it.get("tags") or [])]
+        return refl[-k:][::-1]
 
     # ---------- 人格热切换（无需重启）----------
     def switch_persona(self, name, base_dir=None, seed_memory=False) -> dict:

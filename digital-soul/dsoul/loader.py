@@ -16,6 +16,7 @@ from .llm import LLM
 from .memory import Memory
 from .perception import build_perception
 from .persona import Persona
+from .reflect import Reflector
 from .remote_agents import AgentHub
 from .skills import SkillRegistry
 from .tasks import TaskBook
@@ -67,9 +68,11 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
     skills = SkillRegistry()
     hub = AgentHub(_load_yaml(base / "config" / "agents.yaml").get("agents", {}))
     tasks = TaskBook(base / "data" / "tasks.json")
+    reflector = Reflector(memory, journal, emotions=emotions, llm=llm, identity=identity)
 
     return Agent(identity, persona, memory, authority, perception, llm, robot, journal,
-                 emotions=emotions, knowledge=knowledge, skills=skills, hub=hub, tasks=tasks)
+                 emotions=emotions, knowledge=knowledge, skills=skills, hub=hub, tasks=tasks,
+                 reflector=reflector)
 
 
 def _seed_memory(base: Path, memory) -> None:

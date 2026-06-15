@@ -81,9 +81,23 @@ def sleep_loop(agent, hours: float) -> None:
         print(f"[睡眠] 巩固 {rep['processed']} 条 → 新增 {len(rep['learned'])} 条记忆", flush=True)
 
 
+def think_loop(agent, minutes: float) -> None:
+    """自主心跳：定期反思 + 跟进欠账。"""
+    while True:
+        time.sleep(minutes * 60)
+        try:
+            out = agent.tick()
+        except Exception as e:
+            print(f"[自主] tick 出错：{e}", flush=True)
+            continue
+        for notice in out.get("notices", []):
+            print(f"[自主] {notice}", flush=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sleep-every", type=float, default=8.0, help="每 N 小时巩固一次")
+    ap.add_argument("--think-every", type=float, default=30.0, help="每 N 分钟自主反思/跟进一次")
     ap.add_argument("--no-vision", action="store_true", help="不启用摄像头感知")
     ap.add_argument("--robot", choices=["sim", "ros2"], default="sim", help="动作执行后端")
     ap.add_argument("--voice", action="store_true", help="启用语音对话（听 + 说）")
@@ -115,7 +129,9 @@ def main() -> None:
         print(f"🌐 网页状态页：http://<本机IP>:{args.web}/ （手机同一局域网可访问）", flush=True)
 
     threading.Thread(target=sleep_loop, args=(agent, args.sleep_every), daemon=True).start()
-    print(f"🌙 每 {args.sleep_every} 小时自动巩固一次。Ctrl+C 退出。", flush=True)
+    print(f"🌙 每 {args.sleep_every} 小时自动巩固一次。", flush=True)
+    threading.Thread(target=think_loop, args=(agent, args.think_every), daemon=True).start()
+    print(f"🧠 每 {args.think_every} 分钟自主反思 / 跟进一次。Ctrl+C 退出。", flush=True)
 
     try:
         if args.voice:
