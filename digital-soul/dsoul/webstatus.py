@@ -102,6 +102,12 @@ def _snapshot(agent, monitor) -> dict:
             dreams = [{"text": r["text"], "mood": r.get("mood")} for r in agent.dreams.recent(3)]
         except Exception:
             dreams = []
+    selfnar = ""
+    if hasattr(agent, "self_narrative"):
+        try:
+            selfnar = agent.self_narrative()
+        except Exception:
+            selfnar = ""
     devices = agent.devices.rows() if getattr(agent, "devices", None) is not None else []
     scenes = agent.scenes.names() if getattr(agent, "scenes", None) is not None else []
     triggers = [t["desc"] for t in agent.triggers.all()] if getattr(agent, "triggers", None) is not None else []
@@ -128,6 +134,7 @@ def _snapshot(agent, monitor) -> dict:
         "timeline_entities": tl_entities,
         "fading": fading,
         "dreams": dreams,
+        "self": selfnar,
         "plan": plan_items,
         "devices": devices,
         "scenes": scenes,
@@ -180,6 +187,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
   <form id=trigf class=row style="margin:6px 0"><input id=triginput placeholder="如：每天22点提醒锁门" autocomplete=off><button>添加</button></form>
   <button id=clrtrig class=devbtn>清空</button></div>
 <div class=card><div class=k>💞 此刻心情</div><div id=mood>…</div><div id=moodbars></div></div>
+<div class=card><div class=k>🪞 此刻的我</div><div id=selfnar style="font-size:14px;line-height:1.6">…</div></div>
 <div class=card><div class=k>🤵 管家</div>
   <button id=brief>☀️ 要一份简报</button>&nbsp;<button id=diag style="background:#37474f">🩺 系统自检</button></div>
 <div class=card><div class=k>💬 跟 TA 聊聊</div>
@@ -242,6 +250,7 @@ async function refresh(){
     $('#devices').innerHTML=(s.devices&&s.devices.length)?s.devices.map(devRow).join(''):'<span class=dim>无设备</span>';
     $('#scenes').innerHTML=(s.scenes&&s.scenes.length)?s.scenes.map(n=>'<button class=devbtn style="margin:3px" onclick="scene(\''+n+'\')">'+n+'</button>').join(''):'<span class=dim>无</span>';
     $('#triggers').innerHTML=li(s.triggers||[]);
+    $('#selfnar').textContent=s.self||'…';
     $('#mood').textContent=s.mood?(MOODS[s.mood]||s.mood):'平静';
     $('#moodbars').innerHTML=s.mood_levels?radar(s.mood_levels):'';
     $('#disp').innerHTML=li(s.dispatches||[]);

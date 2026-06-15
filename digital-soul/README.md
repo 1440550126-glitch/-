@@ -70,6 +70,7 @@
 | 记忆遗忘曲线 | 记忆随时间淡忘，越重要/越常想起越长久，回忆可唤醒 | `dsoul/forgetting.py` · `scripts/forgetting.py` |
 | 量子纠缠式记忆 | 相关记忆纠缠在一起，回忆其一即牵动其二（扩散激活） | `dsoul/entangle.py` · `scripts/entangle.py` |
 | 梦境生成 | 睡眠时把记忆碎片+情绪+纠缠联想重组成一段梦 | `dsoul/dream.py` |
+| 自我意识叙事 | 第一人称讲"我是谁、在乎谁、明白了什么、怕忘什么" | `dsoul/selfnarrative.py` |
 
 ## 架构
 

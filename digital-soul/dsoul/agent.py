@@ -564,7 +564,35 @@ class Agent:
             self.memory.reinforce(ids, now=now)
         return ids
 
-    # ---------- 记忆图谱（人—事—主题 关系网）----------
+    # ---------- 记忆图谱（人—事—主题 关系网）+ 自我意识叙事 ----------
+    def self_narrative(self) -> str:
+        """第一人称自我认知：身份 + 在乎的人 + 心情 + 领悟 + 怕忘的事 + 梦。"""
+        from .forgetting import importance, strength
+        from .selfnarrative import compose_self_narrative
+        name = self.identity.get("name", "我")
+        traits = "、".join((self.identity.get("personality", {}).get("traits") or [])[:3]) or None
+        g = self.memory_graph()
+        owner = self._owner_name()
+        core = [n for n, _ in g.central(8)
+                if g.meta.get(n, {}).get("kind") == "person" and n != owner][:3]
+        mood_desc = None
+        if self.emotions is not None:
+            from .emotions import _DESC
+            top, val = self.emotions.mood()
+            if val >= self.emotions.baseline + 0.08:
+                mood_desc = _DESC.get(top)
+        refl = self.recent_reflections(1)
+        imp_fading = sorted((it for it in self.memory.items if importance(it) >= 0.6),
+                            key=lambda it: strength(it))
+        cherished = imp_fading[0]["text"] if imp_fading and strength(imp_fading[0]) < 0.66 else None
+        dream = None
+        if getattr(self, "dreams", None) is not None:
+            dr = self.dreams.recent(1)
+            dream = dr[0]["text"] if dr else None
+        return compose_self_narrative(name, core_people=core, mood_desc=mood_desc,
+                                      insight=refl[0] if refl else None, cherished=cherished,
+                                      dream=dream, traits=traits, llm=self.llm)
+
     def memory_graph(self):
         """构建/复用记忆图谱（记忆条数变化时才重建）。"""
         from .graph import build_memory_graph
@@ -620,6 +648,9 @@ class Agent:
             return None  # 不对不听命于我的人汇报状态（隐私）
         low = u.lower()
         is_wake = ("贾维斯" in u) or ("jarvis" in low)
+        if any(k in u for k in ("你是谁", "你是什么", "介绍一下你自己", "介绍下你自己",
+                                "你眼中的自己", "认识一下自己", "你是怎样的存在", "你是个怎样")):
+            return self.self_narrative()
         if any(k in u for k in _DIAG_KW):
             from .butler import diagnostics_text
             return diagnostics_text(self, self._addr(who))
