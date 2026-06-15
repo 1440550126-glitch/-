@@ -1,0 +1,61 @@
+<view class="wrap" wx:if="{{item}}">
+  <view class="card">
+    <view class="row spread">
+      <text class="tag">{{item.platform === 'douyin' ? '抖音' : item.platform === 'kuaishou' ? '快手' : item.platform === 'xiaohongshu' ? '小红书' : '已解析'}}</text>
+      <text class="tag" style="background:rgba(0,180,120,.12);color:#0a8a5c">无水印</text>
+    </view>
+
+    <!-- 视频预览 -->
+    <video
+      wx:if="{{item.type === 'video' && previewUrl}}"
+      class="player"
+      src="{{previewUrl}}"
+      poster="{{item.cover}}"
+      object-fit="contain"
+      show-center-play-btn
+      enable-play-gesture
+    ></video>
+
+    <!-- 图集预览 -->
+    <view wx:if="{{item.type === 'image'}}" class="grid">
+      <image
+        wx:for="{{item.images}}"
+        wx:key="*this"
+        wx:for-item="img"
+        class="grid-img"
+        src="{{img}}"
+        mode="aspectFill"
+        data-url="{{img}}"
+        bindtap="previewImage"
+      ></image>
+    </view>
+
+    <view class="title" wx:if="{{item.title}}">
+      <text class="title-text">{{item.title}}</text>
+      <text class="copy" bindtap="copyTitle">复制文案</text>
+    </view>
+
+    <button
+      class="btn btn-primary mt"
+      bindtap="onSave"
+      loading="{{saving}}"
+      disabled="{{saving}}"
+    >{{btnText}}</button>
+
+    <view class="hint muted center mt-s" wx:if="{{item.type === 'image'}}">将逐张保存到相册</view>
+  </view>
+
+  <ad
+    wx:if="{{bannerUnitId}}"
+    class="banner"
+    unit-id="{{bannerUnitId}}"
+    ad-type="banner"
+    ad-theme="white"
+  ></ad>
+
+  <button class="btn btn-ghost mt" bindtap="parseAnother">再解析一个</button>
+
+  <view class="footnote muted center">
+    请仅保存你拥有合法权利的内容，本工具不存储任何作品。
+  </view>
+</view>

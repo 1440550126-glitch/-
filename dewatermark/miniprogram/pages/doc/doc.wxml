@@ -1,0 +1,8 @@
+<scroll-view scroll-y class="doc">
+  <view class="doc-title">{{title}}</view>
+  <view class="doc-updated muted">更新日期：{{updated}}</view>
+  <view class="para" wx:for="{{paras}}" wx:key="index">
+    <view wx:if="{{item.h}}" class="para-h">{{item.h}}</view>
+    <view wx:if="{{item.p}}" class="para-p">{{item.p}}</view>
+  </view>
+</scroll-view>

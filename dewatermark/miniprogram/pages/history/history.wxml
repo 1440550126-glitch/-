@@ -1,0 +1,35 @@
+<view class="wrap">
+  <view wx:if="{{items.length}}">
+    <view class="row spread" style="margin: 4rpx 8rpx 20rpx">
+      <text class="muted">共 {{items.length}} 条记录</text>
+      <text class="link" bindtap="clearAll">清空</text>
+    </view>
+
+    <view class="list">
+      <view
+        class="item"
+        wx:for="{{items}}"
+        wx:key="at"
+        data-idx="{{index}}"
+        bindtap="open"
+      >
+        <image class="cover" src="{{item.cover}}" mode="aspectFill"></image>
+        <view class="meta">
+          <view class="meta-title">{{item.title || (item.name + '作品')}}</view>
+          <view class="row gap mt-s">
+            <text class="tag">{{item.name}}</text>
+            <text class="muted">{{item.type === 'image' ? item.count + ' 张图' : '视频'}}</text>
+          </view>
+          <view class="muted time">{{item.time}}</view>
+        </view>
+        <text class="arrow">›</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:else class="empty">
+    <view class="empty-emoji">🗂️</view>
+    <view class="empty-text muted">还没有解析记录</view>
+    <button class="btn btn-primary empty-btn" bindtap="goIndex">去解析一个</button>
+  </view>
+</view>

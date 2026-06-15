@@ -1,0 +1,34 @@
+<view class="wrap">
+  <view class="profile card">
+    <view class="logo">去</view>
+    <view class="p-meta">
+      <view class="p-name">极速去水印</view>
+      <view class="muted">无水印素材提取助手 · v{{version}}</view>
+    </view>
+  </view>
+
+  <view class="menu card">
+    <view class="mi" bindtap="goHistory">
+      <text>我的解析记录</text><text class="arrow">›</text>
+    </view>
+    <view class="mi" data-type="agreement" bindtap="openDoc">
+      <text>用户协议</text><text class="arrow">›</text>
+    </view>
+    <view class="mi" data-type="privacy" bindtap="openDoc">
+      <text>隐私政策</text><text class="arrow">›</text>
+    </view>
+    <view class="mi" data-type="copyright" bindtap="openDoc">
+      <text>版权与免责声明</text><text class="arrow">›</text>
+    </view>
+    <button class="mi mi-btn" open-type="feedback">
+      <text>意见反馈</text><text class="arrow">›</text>
+    </button>
+    <view class="mi no-line" bindtap="copyEmail" wx:if="{{email}}">
+      <text>联系客服</text><text class="muted">{{email}}</text>
+    </view>
+  </view>
+
+  <view class="footnote muted center">
+    本工具仅为方便用户提取自有素材，不提供任何作品的存储与传播服务。
+  </view>
+</view>

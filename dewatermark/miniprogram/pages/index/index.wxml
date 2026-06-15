@@ -1,0 +1,61 @@
+<view class="wrap">
+  <view class="hero">
+    <view class="hero-title">极速去水印</view>
+    <view class="hero-sub">粘贴分享链接，一键提取无水印视频 / 图片</view>
+  </view>
+
+  <view class="card">
+    <textarea
+      class="input"
+      placeholder="把抖音 / 快手 / 小红书的分享文案粘贴到这里…"
+      placeholder-class="ph"
+      value="{{input}}"
+      bindinput="onInput"
+      maxlength="2000"
+      auto-height
+    />
+
+    <view class="row spread mt-s" wx:if="{{detected}}">
+      <view class="row gap">
+        <text class="tag" wx:if="{{detected.supported}}">已识别 · {{detected.name}}</text>
+        <text class="tag tag-warn" wx:else>暂不支持的链接</text>
+      </view>
+      <text class="link muted" bindtap="clearInput">清空</text>
+    </view>
+
+    <view class="row gap mt">
+      <button class="btn btn-ghost flex1" bindtap="paste">粘贴链接</button>
+      <button
+        class="btn btn-primary flex2"
+        bindtap="onParse"
+        loading="{{parsing}}"
+        disabled="{{parsing}}"
+      >立即去水印</button>
+    </view>
+  </view>
+
+  <ad
+    wx:if="{{bannerUnitId}}"
+    class="banner"
+    unit-id="{{bannerUnitId}}"
+    ad-type="banner"
+    ad-theme="white"
+  ></ad>
+
+  <view class="card mt">
+    <view class="block-title">支持平台</view>
+    <view class="chips">
+      <text class="chip" wx:for="{{platforms}}" wx:key="*this">{{item}}</text>
+    </view>
+    <view class="block-title mt">使用步骤</view>
+    <view class="steps">
+      <view class="step"><text class="step-n">1</text>在抖音等 App 点「分享 → 复制链接」</view>
+      <view class="step"><text class="step-n">2</text>回到本程序，点「粘贴链接」</view>
+      <view class="step"><text class="step-n">3</text>点「立即去水印」，看完广告即可保存</view>
+    </view>
+  </view>
+
+  <view class="footnote muted center">
+    本工具仅用于提取你有权使用的素材，请勿用于侵权用途。
+  </view>
+</view>

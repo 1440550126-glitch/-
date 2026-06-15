@@ -1,0 +1,32 @@
+.list { display: flex; flex-direction: column; gap: 16rpx; }
+.item {
+  display: flex;
+  align-items: center;
+  background: var(--card);
+  border-radius: 20rpx;
+  padding: 20rpx;
+  box-shadow: 0 4rpx 18rpx rgba(20, 24, 40, 0.04);
+}
+.cover {
+  flex: none;
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 14rpx;
+  background: #eef0f5;
+}
+.meta { flex: 1; margin-left: 20rpx; overflow: hidden; }
+.meta-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.time { font-size: 22rpx; margin-top: 8rpx; }
+.arrow { flex: none; color: #c4c9d4; font-size: 44rpx; padding-left: 8rpx; }
+.link { color: var(--brand); font-size: 26rpx; }
+
+.empty { padding: 180rpx 0; text-align: center; }
+.empty-emoji { font-size: 96rpx; }
+.empty-text { margin-top: 20rpx; }
+.empty-btn { width: 60%; margin: 40rpx auto 0; }

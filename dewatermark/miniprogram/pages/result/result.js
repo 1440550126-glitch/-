@@ -1,0 +1,102 @@
+const app = getApp();
+const { showRewarded, preloadRewarded } = require('../../utils/ad');
+const { saveMedia } = require('../../utils/save');
+const store = require('../../utils/store');
+
+Page({
+  data: {
+    item: null,
+    previewUrl: '',
+    bannerUnitId: '',
+    saving: false,
+    btnText: '看广告 · 保存到相册',
+  },
+
+  onLoad() {
+    const item = app.globalData.lastResult;
+    if (!item) {
+      wx.showToast({ title: '数据已失效，请重新解析', icon: 'none' });
+      setTimeout(() => wx.navigateBack(), 900);
+      return;
+    }
+    const cfg = app.globalData.config;
+    store.add(item);
+
+    const needAd = cfg.requireAdToDownload && (cfg.freeDownloadsPerDay || 0) <= app.globalData.freeUsed;
+    this.setData({
+      item,
+      previewUrl: item.url || '',
+      bannerUnitId: cfg.bannerAdUnitId || '',
+      btnText: needAd ? '看广告 · 保存到相册' : '保存到相册',
+    });
+
+    preloadRewarded(cfg.rewardedAdUnitId);
+
+    // 转存到云存储的视频，取临时地址用于预览
+    if (!item.url && item.fileID) {
+      wx.cloud
+        .getTempFileURL({ fileList: [item.fileID] })
+        .then((r) => {
+          const f = r.fileList && r.fileList[0];
+          if (f && f.tempFileURL) this.setData({ previewUrl: f.tempFileURL });
+        })
+        .catch(() => {});
+    }
+  },
+
+  copyTitle() {
+    const t = (this.data.item && this.data.item.title) || '';
+    if (!t) return;
+    wx.setClipboardData({ data: t, success: () => wx.showToast({ title: '文案已复制', icon: 'none' }) });
+  },
+
+  previewImage(e) {
+    const url = e.currentTarget.dataset.url;
+    wx.previewImage({ current: url, urls: this.data.item.images || [] });
+  },
+
+  async onSave() {
+    const cfg = app.globalData.config;
+    app.resetDailyIfNeeded();
+
+    const freeLeft = (cfg.freeDownloadsPerDay || 0) - app.globalData.freeUsed;
+    const needAd = cfg.requireAdToDownload && freeLeft <= 0;
+
+    if (needAd) {
+      const completed = await showRewarded(cfg.rewardedAdUnitId);
+      if (!completed) {
+        wx.showToast({ title: '看完广告才能保存哦', icon: 'none' });
+        return;
+      }
+    } else if (freeLeft > 0) {
+      app.globalData.freeUsed += 1;
+    }
+
+    this.setData({ saving: true });
+    wx.showLoading({ title: '保存中…', mask: true });
+    try {
+      await saveMedia(this.data.item);
+      wx.hideLoading();
+      wx.showToast({ title: '已保存到相册', icon: 'success' });
+      this.maybeInterstitial();
+    } catch (e) {
+      wx.hideLoading();
+      wx.showModal({ title: '保存失败', content: (e && e.message) || '请重试', showCancel: false });
+    } finally {
+      this.setData({ saving: false });
+    }
+  },
+
+  maybeInterstitial() {
+    const id = app.globalData.config.interstitialAdUnitId;
+    if (!id || !wx.createInterstitialAd) return;
+    try {
+      const ad = wx.createInterstitialAd({ adUnitId: id });
+      ad.show().catch(() => {});
+    } catch (e) {}
+  },
+
+  parseAnother() {
+    wx.navigateBack();
+  },
+});

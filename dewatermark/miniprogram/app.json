@@ -1,0 +1,33 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/result/result",
+    "pages/history/history",
+    "pages/about/about",
+    "pages/doc/doc"
+  ],
+  "window": {
+    "navigationBarTitleText": "极速去水印",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f3f4f6"
+  },
+  "tabBar": {
+    "color": "#9aa0a6",
+    "selectedColor": "#3b6cff",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/index/index", "text": "去水印" },
+      { "pagePath": "pages/history/history", "text": "历史" },
+      { "pagePath": "pages/about/about", "text": "我的" }
+    ]
+  },
+  "permission": {
+    "scope.writePhotosAlbum": {
+      "desc": "用于把解析后的无水印视频/图片保存到你的相册"
+    }
+  },
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}
