@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from datetime import date, datetime
 
 # 主动派活用的词表
@@ -62,6 +63,7 @@ class Agent:
         self.selflog = selflog                                    # 自我成长史（每日一版）
         self.values = values                                      # 价值观（抉择时据此权衡）
         self.values_path = values_path                            # 演化后的价值权重持久化路径
+        self.thoughts: deque = deque(maxlen=12)                   # 内心独白（近期心声）
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
@@ -226,6 +228,11 @@ class Agent:
                 result["reply"] = self._fallback(who, utterance, ctx) + f"\n（注：调用本地模型出错：{e}）"
         else:
             result["reply"] = self._fallback(who, utterance, ctx)
+
+        # --- 内心独白：一闪而过的私密念头 ---
+        thought = self._inner_thought(utterance, who, result.get("associations", []))
+        result["thought"] = thought
+        self.thoughts.append(thought)
 
         # --- 写入对话日记（短期记忆，供日后"睡眠巩固"）---
         if self.journal is not None:
@@ -503,6 +510,18 @@ class Agent:
         if getattr(self, "values", None):
             self.evolve_values()
         return out
+
+    # ---------- 内心独白 ----------
+    def _inner_thought(self, utterance, who, assoc_texts) -> str:
+        from .monologue import compose_thought
+        mood = None
+        if self.emotions is not None:
+            from .emotions import _DESC
+            top, val = self.emotions.mood()
+            if val >= self.emotions.baseline + 0.08:
+                mood = _DESC.get(top)
+        return compose_thought(utterance, mood=mood, assoc=assoc_texts,
+                               speaker=who.get("name") if who.get("known") else None)
 
     # ---------- 价值抉择 ----------
     def deliberate(self, text) -> str:

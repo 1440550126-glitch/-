@@ -113,6 +113,7 @@ def _snapshot(agent, monitor) -> dict:
             selfhist = [f'{r["date"]}：{r["text"].split("。")[0]}' for r in agent.selflog.recent(5)]
         except Exception:
             selfhist = []
+    thoughts = list(getattr(agent, "thoughts", []) or [])[-8:][::-1]
     values, decisions = [], []
     if getattr(agent, "values", None):
         values = [n for n, _ in sorted(agent.values.items(),
@@ -149,6 +150,7 @@ def _snapshot(agent, monitor) -> dict:
         "fading": fading,
         "dreams": dreams,
         "self": selfnar,
+        "thoughts": thoughts,
         "self_history": selfhist,
         "values": values,
         "decisions": decisions,
@@ -204,6 +206,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
   <form id=trigf class=row style="margin:6px 0"><input id=triginput placeholder="如：每天22点提醒锁门" autocomplete=off><button>添加</button></form>
   <button id=clrtrig class=devbtn>清空</button></div>
 <div class=card><div class=k>💞 此刻心情</div><div id=mood>…</div><div id=moodbars></div></div>
+<div class=card><div class=k>💭 内心独白</div><ul id=thoughts></ul></div>
 <div class=card><div class=k>🪞 此刻的我</div><div id=selfnar style="font-size:14px;line-height:1.6">…</div>
   <div class=k style="margin-top:10px">💎 我珍视的</div><div id=values class=dim></div>
   <div class=k style="margin-top:10px">⚖️ 抉择留痕</div><ul id=decisions></ul>
@@ -270,6 +273,7 @@ async function refresh(){
     $('#devices').innerHTML=(s.devices&&s.devices.length)?s.devices.map(devRow).join(''):'<span class=dim>无设备</span>';
     $('#scenes').innerHTML=(s.scenes&&s.scenes.length)?s.scenes.map(n=>'<button class=devbtn style="margin:3px" onclick="scene(\''+n+'\')">'+n+'</button>').join(''):'<span class=dim>无</span>';
     $('#triggers').innerHTML=li(s.triggers||[]);
+    $('#thoughts').innerHTML=(s.thoughts&&s.thoughts.length)?li(s.thoughts):'<li class=dim>（还没冒出什么念头）</li>';
     $('#selfnar').textContent=s.self||'…';
     $('#selfhist').innerHTML=(s.self_history&&s.self_history.length)?li(s.self_history):'<li class=dim>还没攒下成长史（每天记一版）</li>';
     $('#values').textContent=(s.values&&s.values.length)?s.values.join(' › '):'';
