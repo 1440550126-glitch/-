@@ -58,8 +58,16 @@ def _snapshot(agent, monitor) -> dict:
             deg = {n: sum(w.values()) for n, w in g.adj.items()}
             top = [n for n, _ in sorted(deg.items(), key=lambda x: -x[1])[:12]]
             idx = set(top)
+            when_of = {it["text"]: int(it["when"]) for it in agent.memory.items
+                       if str(it.get("when") or "").isdigit()}
+
+            def _nyear(n):
+                ys = [when_of[t] for t in g.mem.get(n, []) if t in when_of]
+                return min(ys) if ys else None
+
             graph_viz["nodes"] = [
-                {"id": n, "label": n, "kind": g.meta.get(n, {}).get("kind", "topic"), "deg": deg[n]}
+                {"id": n, "label": n, "kind": g.meta.get(n, {}).get("kind", "topic"),
+                 "deg": deg[n], "year": _nyear(n)}
                 for n in top]
             seen = set()
             for a in top:
@@ -175,7 +183,9 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 <div class=card><div class=k>🗓️ 今天的计划</div><ul id=plan></ul></div>
 <div class=card><div class=k>💡 它最近的领悟</div><ul id=refl></ul></div>
 <div class=card><div class=k>🧠 正在淡忘</div><ul id=fading></ul></div>
-<div class=card><div class=k>🕸️ 关系图谱</div><div id=graph></div><div id=graphtop class=dim></div></div>
+<div class=card><div class=k>🕸️ 关系图谱</div><div id=graph></div>
+  <div class=row style="margin-top:6px"><button id=gplay class=devbtn>▶ 生长</button><input id=gyslider type=range style="flex:1"><span id=gylabel class=dim>全部</span></div>
+  <div id=graphtop class=dim></div></div>
 <div class=card><div class=k>📜 一生时间线</div><div id=tlfilters></div><div id=timeline></div></div>
 <div class=card><div class=k>🧩 最近记住</div><ul id=mems></ul></div>
 <div class=card><div class=k>🕘 最近对话</div><ul id=jour></ul></div>
@@ -201,7 +211,12 @@ let tlFilter=null, _tl=[];
 function setTL(e){tlFilter=e||null;drawTL();}
 function drawTL(){let tl=_tl;if(tlFilter)tl=tl.filter(x=>(x.people&&x.people.includes(tlFilter))||(x.text&&x.text.indexOf(tlFilter)>=0));$('#timeline').innerHTML=renderTimeline(tl);}
 function renderTLfilters(ents){let h='<button class=devbtn style="margin:2px" onclick="setTL(\'\')">全部</button>';(ents||[]).forEach(e=>h+='<button class=devbtn style="margin:2px" onclick="setTL(\''+e+'\')">'+esc(e)+'</button>');return h;}
-function renderGraph(gv){if(!gv||!gv.nodes||!gv.nodes.length)return '';const W=320,H=290,cx=W/2,cy=H/2,R=108;const nodes=gv.nodes;const center=nodes.reduce((a,b)=>b.deg>a.deg?b:a,nodes[0]);const others=nodes.filter(x=>x!==center);const pos={};pos[center.id]={x:cx,y:cy};others.forEach((nd,i)=>{const ang=2*Math.PI*i/others.length;pos[nd.id]={x:cx+R*Math.cos(ang),y:cy+R*Math.sin(ang)};});let s='<svg width="100%" viewBox="0 0 '+W+' '+H+'">';(gv.edges||[]).forEach(e=>{const p=pos[e.a],q=pos[e.b];if(p&&q)s+='<line x1='+p.x.toFixed(1)+' y1='+p.y.toFixed(1)+' x2='+q.x.toFixed(1)+' y2='+q.y.toFixed(1)+' stroke="#2e7d32" stroke-opacity="0.5" stroke-width="'+Math.min(4,e.w)+'"/>';});nodes.forEach(nd=>{const p=pos[nd.id],r=nd.kind==='person'?8:5,col=nd.kind==='person'?'#1565c0':'#5a3a13';s+='<g style="cursor:pointer" onclick="setTL(\''+nd.id+'\')">';s+='<circle cx='+p.x.toFixed(1)+' cy='+p.y.toFixed(1)+' r='+r+' fill="'+col+'"/>';s+='<text x='+p.x.toFixed(1)+' y='+(p.y-r-3).toFixed(1)+' font-size="11" fill="#cbd5e1" text-anchor="middle">'+esc(nd.label)+'</text>';s+='</g>';});return s+'</svg>';}
+function renderGraph(gv,maxYear){if(!gv||!gv.nodes||!gv.nodes.length)return '';let nodes=gv.nodes;if(maxYear)nodes=nodes.filter(n=>!n.year||n.year<=maxYear);if(!nodes.length)return '';const ids=new Set(nodes.map(n=>n.id));const edges=(gv.edges||[]).filter(e=>ids.has(e.a)&&ids.has(e.b));const W=320,H=290,cx=W/2,cy=H/2,R=108;const center=nodes.reduce((a,b)=>b.deg>a.deg?b:a,nodes[0]);const others=nodes.filter(x=>x!==center);const pos={};pos[center.id]={x:cx,y:cy};others.forEach((nd,i)=>{const ang=2*Math.PI*i/others.length;pos[nd.id]={x:cx+R*Math.cos(ang),y:cy+R*Math.sin(ang)};});let s='<svg width="100%" viewBox="0 0 '+W+' '+H+'">';edges.forEach(e=>{const p=pos[e.a],q=pos[e.b];if(p&&q)s+='<line x1='+p.x.toFixed(1)+' y1='+p.y.toFixed(1)+' x2='+q.x.toFixed(1)+' y2='+q.y.toFixed(1)+' stroke="#2e7d32" stroke-opacity="0.5" stroke-width="'+Math.min(4,e.w)+'"/>';});nodes.forEach(nd=>{const p=pos[nd.id],r=nd.kind==='person'?8:5,col=nd.kind==='person'?'#1565c0':'#5a3a13';s+='<g style="cursor:pointer" onclick="setTL(\''+nd.id+'\')">';s+='<circle cx='+p.x.toFixed(1)+' cy='+p.y.toFixed(1)+' r='+r+' fill="'+col+'"/>';s+='<text x='+p.x.toFixed(1)+' y='+(p.y-r-3).toFixed(1)+' font-size="11" fill="#cbd5e1" text-anchor="middle">'+esc(nd.label)+'</text>';s+='</g>';});return s+'</svg>';}
+let _gv={nodes:[],edges:[]},gYear=null,_play=null;
+function gYears(gv){const ys=(gv.nodes||[]).map(n=>n.year).filter(y=>y);return ys.length?[Math.min.apply(0,ys),Math.max.apply(0,ys)]:null;}
+function drawGraph(){$('#graph').innerHTML=renderGraph(_gv,gYear)||'<span class=dim>记忆还太少，画不出关系网</span>';}
+function setGY(v){gYear=v?parseInt(v):null;$('#gylabel').textContent=gYear?('截至 '+gYear):'全部';drawGraph();}
+function playGraph(){const r=gYears(_gv);if(!r){return;}if(_play){clearInterval(_play);_play=null;return;}let y=r[0];const sl=$('#gyslider');_play=setInterval(()=>{setGY(y);if(sl)sl.value=y;if(y>=r[1]){clearInterval(_play);_play=null;}y++;},800);}
 function li(a){return a.map(x=>'<li>'+esc(x)+'</li>').join('')||'<li class=dim>—</li>';}
 async function refresh(){
   try{
@@ -225,8 +240,8 @@ async function refresh(){
     $('#plan').innerHTML=li(s.plan||[]);
     $('#refl').innerHTML=li(s.reflections||[]);
     $('#fading').innerHTML=(s.fading&&s.fading.length)?li(s.fading):'<li class=dim>记忆都还清晰</li>';
-    $('#graph').innerHTML=renderGraph(s.graph_viz)||'<span class=dim>记忆还太少，画不出关系网</span>';
-    $('#graphtop').textContent=((s.graph&&s.graph.length)?('最核心：'+s.graph.join(' · ')):'')+((s.graph_viz&&s.graph_viz.nodes.length)?'　·　点节点筛选时间线':'');
+    _gv=s.graph_viz||{nodes:[],edges:[]};const _yr=gYears(_gv),_sl=$('#gyslider');if(_yr){_sl.min=_yr[0];_sl.max=_yr[1];if(_sl.dataset.init!=='1'){_sl.value=_yr[1];_sl.dataset.init='1';}}drawGraph();
+    $('#graphtop').textContent=((s.graph&&s.graph.length)?('最核心：'+s.graph.join(' · ')):'')+((s.graph_viz&&s.graph_viz.nodes.length)?'　·　点节点筛选时间线 / ▶生长看关系网长出来':'');
     _tl=s.timeline||[]; $('#tlfilters').innerHTML=renderTLfilters(s.timeline_entities); drawTL();
     $('#mems').innerHTML=li(s.recent_memories);
     $('#jour').innerHTML=li(s.recent_journal);
@@ -248,6 +263,8 @@ $('#brief').addEventListener('click',()=>ask('简报'));
 $('#diag').addEventListener('click',()=>ask('系统自检'));
 $('#clrtrig').addEventListener('click',()=>ask('清空所有自动化'));
 $('#trigf').addEventListener('submit',e=>{e.preventDefault();const t=$('#triginput').value;$('#triginput').value='';ask(t);});
+$('#gplay').addEventListener('click',playGraph);
+$('#gyslider').addEventListener('input',e=>setGY(e.target.value));
 $('#retry').addEventListener('click',async()=>{
   const sp=$('#speaker').value; const b=$('#retry'); b.disabled=true;
   try{
