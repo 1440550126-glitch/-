@@ -24,6 +24,7 @@
 - 💾 **可选偏好持久化** — `dolby-store.js` 助手（引擎本身保持无状态、解耦）
 - 🎧 **开箱即用播放器层** — `dolby-player.js`：`<audio>`+引擎+播放列表（上下一首/进度/音量/循环/随机/事件）
 - 🔒 **锁屏/通知栏控制** — 自动接入 Media Session（封面/曲目信息 + 上一首/下一首/进度），移动端体验到位
+- 🆎 **A/B 盲测打分** — `dolby-abtest.js`：盲听对比并统计偏好率，客观验证调音
 - 🪶 **零依赖 / 零构建** — ES Module，含 TypeScript 类型定义
 
 ## 快速开始
@@ -260,6 +261,25 @@ player.dolby.setSpatialMode('headphones'); // 引擎全部能力仍可用
 ```
 
 用 `player.setMediaSession(false)` 可关闭。
+
+## A/B 盲测打分
+
+想客观验证"杜比增强到底有没有更好听"？用 `dolby-abtest.js`：把增强随机藏在 A/B 两边，
+盲听后选更喜欢的，多轮统计"偏好增强率"，避免"开了就觉得好"的心理暗示。
+
+```js
+import { DolbyABTest } from './dolby/dolby-abtest.js';
+const ab = new DolbyABTest(dolby);
+ab.newRound();                       // 随机把增强藏到 A 或 B
+btnA.onclick = () => ab.audition('A');   // 盲听 A
+btnB.onclick = () => ab.audition('B');   // 盲听 B
+pickA.onclick = () => {
+  const r = ab.choose('A');          // 选 A → 揭晓
+  console.log(r.pickedEnhanced, r.enhancedSlot, ab.stats.rate);   // 偏好率 0..1
+};
+```
+
+`demo.html` 底部已内置该盲测。
 
 ## 集成注意事项
 

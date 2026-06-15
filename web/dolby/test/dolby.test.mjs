@@ -197,4 +197,21 @@ mp.dispose();
 if (navDesc) Object.defineProperty(globalThis, 'navigator', navDesc); else delete globalThis.navigator;
 delete globalThis.MediaMetadata;
 
+// 13) A/B 盲测打分
+const { DolbyABTest, createABTest } = await import('../dolby-abtest.js');
+const abDolby = new DolbyAudio({ context: makeCtx(), autoConnect: false });
+const ab = new DolbyABTest(abDolby, { random: () => 0.2 });   // <0.5 → 'A'
+ab.newRound();
+ok(ab.enhancedSlot === null, '盲态不泄露增强位置');
+ab.audition('A'); ok(abDolby.enabled === true, '试听增强位（A）→ 开启杜比');
+ab.audition('B'); ok(abDolby.enabled === false, '试听另一位（B）→ 原声');
+const r1 = ab.choose('A');
+ok(r1.pickedEnhanced && r1.enhancedSlot === 'A' && ab.enhancedSlot === 'A', '选中增强：记录并揭晓');
+ok(ab.stats.rounds === 1 && ab.stats.preferEnhanced === 1 && ab.stats.rate === 1, '统计：1 轮全偏好增强');
+ab.newRound('B'); ab.choose('A');
+ok(ab.stats.rounds === 2 && ab.stats.preferEnhanced === 1 && Math.abs(ab.stats.rate - 0.5) < 1e-9, '第二轮选错：偏好率降到 50%');
+ab.reset(); ok(ab.stats.rounds === 0 && ab.enhancedSlot === null, 'reset 清零');
+ok(createABTest(abDolby) instanceof DolbyABTest, 'createABTest 工厂函数');
+abDolby.dispose();
+
 console.log(`\n========== dolby-audio：${pass} 项断言全部通过 ✅ ==========`);

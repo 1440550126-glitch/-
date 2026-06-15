@@ -1,5 +1,6 @@
 // dolby-audio Demo：内置合成音乐 + 文件 A/B + 频谱可视化 + 均衡曲线
 import { DolbyAudio, DOLBY_PRESETS, presetById, registerPreset } from './dolby-audio.js';
+import { DolbyABTest } from './dolby-abtest.js';
 
 const $ = (id) => document.getElementById(id);
 const clampN = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -220,3 +221,19 @@ $('eqSave').addEventListener('click', () => {
 
 refreshState();
 drawEq();
+
+// —— A/B 盲测打分 ——
+const ab = new DolbyABTest(dolby); ab.newRound();
+const abResult = $('abResult'), abStats = $('abStats');
+function abShowStats() { const s = ab.stats; abStats.textContent = s.rounds ? `已 ${s.rounds} 轮 · 偏好增强 ${Math.round(s.rate * 100)}%（${s.preferEnhanced}/${s.rounds}）` : '还没有数据'; }
+$('abA').addEventListener('click', () => { ab.audition('A'); abResult.textContent = '🔊 正在听 A…（再点「听 B」对比）'; });
+$('abB').addEventListener('click', () => { ab.audition('B'); abResult.textContent = '🔊 正在听 B…'; });
+function abPick(slot) {
+  const r = ab.choose(slot);
+  abResult.textContent = `你选了 ${slot}，增强其实在 ${r.enhancedSlot} —— ${r.pickedEnhanced ? '✅ 你更喜欢杜比增强' : '🅰 你更喜欢原声'}`;
+  abShowStats(); refreshState(); ab.newRound();
+}
+$('abPickA').addEventListener('click', () => abPick('A'));
+$('abPickB').addEventListener('click', () => abPick('B'));
+$('abNext').addEventListener('click', () => { ab.newRound(); abResult.textContent = '新一轮：先听听 A 和 B'; });
+abShowStats();

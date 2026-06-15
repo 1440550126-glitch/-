@@ -90,7 +90,15 @@
       <div class="slider"><span class="label">空间</span><input id="reverb" type="range" min="0" max="60" value="16" /><span class="val" id="reverbV">16%</span></div>
       <div class="slider"><span class="label">高频</span><input id="air" type="range" min="0" max="12" value="4" /><span class="val" id="airV">+4dB</span></div>
       <div class="slider"><span class="label">人声</span><input id="vocal" type="range" min="0" max="9" value="2" /><span class="val" id="vocalV">+2dB</span></div>
-      <div class="hint">关掉「杜比音效」开关即可与原声直接 A/B 对比。</div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:800;font-size:15px">🎧 A/B 盲测</div>
+      <div class="label" style="margin:6px 0 12px">「增强」被随机藏在 A 或 B。先各听一遍，再选你更喜欢的——多轮后看偏好率，客观检验调音。</div>
+      <div class="row" style="gap:10px"><button id="abA" class="big">听 A</button><button id="abB" class="big">听 B</button></div>
+      <div class="row" style="gap:10px;margin-top:10px"><button id="abPickA" class="big">更喜欢 A</button><button id="abPickB" class="big">更喜欢 B</button></div>
+      <div id="abResult" class="label" style="margin-top:12px;min-height:18px;color:#ece9ff"></div>
+      <div class="row between" style="margin-top:6px"><span id="abStats" class="label"></span><button id="abNext" style="padding:7px 12px;font-size:12px;border-radius:10px">下一轮</button></div>
     </div>
   </div>
   <script type="module" src="./demo.js"></script>
