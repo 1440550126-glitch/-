@@ -1,0 +1,55 @@
+<view class="wrap">
+  <view wx:if="{{loading}}" class="center muted" style="padding:120rpx 0">加载中…</view>
+
+  <!-- 无权限 / 未配置管理员 -->
+  <view wx:elif="{{denied}}" class="card">
+    <view class="block-title">无法查看</view>
+    <view class="muted" style="line-height:1.7">{{hint}}</view>
+    <view wx:if="{{myOpenid}}" class="openid-box mt">
+      <text class="openid">{{myOpenid}}</text>
+      <text class="copy" bindtap="copyOpenid">复制</text>
+    </view>
+  </view>
+
+  <!-- 看板 -->
+  <block wx:else>
+    <view class="sec-title">解析量</view>
+    <view class="grid">
+      <view class="stat"><view class="num">{{s.parse.total}}</view><view class="lbl">累计解析</view></view>
+      <view class="stat"><view class="num">{{s.parse.today}}</view><view class="lbl">今日</view></view>
+      <view class="stat"><view class="num">{{s.parse.last7}}</view><view class="lbl">近 7 日</view></view>
+    </view>
+
+    <view class="sec-title">用户</view>
+    <view class="grid">
+      <view class="stat"><view class="num">{{s.user.total}}</view><view class="lbl">总用户</view></view>
+      <view class="stat"><view class="num">{{s.user.newToday}}</view><view class="lbl">今日新增</view></view>
+      <view class="stat"><view class="num">{{s.user.activeToday}}</view><view class="lbl">今日活跃</view></view>
+      <view class="stat"><view class="num">{{s.user.active7}}</view><view class="lbl">7 日活跃</view></view>
+      <view class="stat" wx:if="{{s.user.returnRate !== null}}">
+        <view class="num">{{s.user.returnRate}}%</view><view class="lbl">复访率</view>
+      </view>
+    </view>
+
+    <view class="card mt" wx:if="{{platformBars.length}}">
+      <view class="block-title">各平台解析占比</view>
+      <view class="bar-row" wx:for="{{platformBars}}" wx:key="name">
+        <text class="bar-name">{{item.name}}</text>
+        <view class="bar-track"><view class="bar-fill" style="width:{{item.pct}}%"></view></view>
+        <text class="bar-num">{{item.n}}</text>
+      </view>
+    </view>
+
+    <view class="card mt" wx:if="{{viaList.length}}">
+      <view class="block-title">解析来源</view>
+      <view class="row spread via" wx:for="{{viaList}}" wx:key="name">
+        <text>{{item.name}}</text><text class="muted">{{item.n}}</text>
+      </view>
+    </view>
+
+    <view class="row spread mt">
+      <text class="muted" style="font-size:22rpx">数据更新于 {{updated}}</text>
+      <text class="link" bindtap="refresh">刷新</text>
+    </view>
+  </block>
+</view>

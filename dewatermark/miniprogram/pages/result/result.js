@@ -2,10 +2,12 @@ const app = getApp();
 const { showRewarded, preloadRewarded } = require('../../utils/ad');
 const { saveMedia } = require('../../utils/save');
 const store = require('../../utils/store');
+const { name } = require('../../utils/platform');
 
 Page({
   data: {
     item: null,
+    platformName: '',
     previewUrl: '',
     bannerUnitId: '',
     saving: false,
@@ -25,15 +27,16 @@ Page({
     const needAd = cfg.requireAdToDownload && (cfg.freeDownloadsPerDay || 0) <= app.globalData.freeUsed;
     this.setData({
       item,
-      previewUrl: item.url || '',
+      platformName: name(item.platform),
+      // 已转存的视频优先用云存储临时地址预览（直链可能有防盗链，如 B站）
+      previewUrl: item.fileID ? '' : item.url || '',
       bannerUnitId: cfg.bannerAdUnitId || '',
       btnText: needAd ? '看广告 · 保存到相册' : '保存到相册',
     });
 
     preloadRewarded(cfg.rewardedAdUnitId);
 
-    // 转存到云存储的视频，取临时地址用于预览
-    if (!item.url && item.fileID) {
+    if (item.fileID) {
       wx.cloud
         .getTempFileURL({ fileList: [item.fileID] })
         .then((r) => {

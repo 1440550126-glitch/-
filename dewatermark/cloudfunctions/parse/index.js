@@ -60,17 +60,18 @@ exports.main = async (event) => {
 
   // 3) 可选：转存云存储（解决短视频 CDN 直链无法加入 downloadFile 白名单的问题）
   //    云存储域名 *.tcb.qcloud.la 自动在白名单内，保存更稳，但产生存储/流量费用。
+  const dlHeaders = result.downloadHeaders || {}; // 防盗链来源（如 B站）需带 Referer
   if (PROXY_TO_STORAGE) {
     const stamp = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     try {
       if (result.type === 'video' && result.url) {
-        const buf = await downloadBuffer(result.url);
+        const buf = await downloadBuffer(result.url, dlHeaders);
         const up = await cloud.uploadFile({ cloudPath: `videos/${stamp()}.mp4`, fileContent: buf });
         result.fileID = up.fileID;
       } else if (result.type === 'image' && Array.isArray(result.images) && result.images.length) {
         result.imageFileIDs = await Promise.all(
           result.images.map(async (u, i) => {
-            const buf = await downloadBuffer(u);
+            const buf = await downloadBuffer(u, dlHeaders);
             const up = await cloud.uploadFile({ cloudPath: `images/${stamp()}-${i}.jpg`, fileContent: buf });
             return up.fileID;
           })
@@ -80,6 +81,8 @@ exports.main = async (event) => {
       // 转存失败则保留直链
     }
   }
+
+  delete result.downloadHeaders; // 内部字段不返回给客户端
 
   await logParse(result.platform, via, result.type);
   return { ok: true, via, data: result };

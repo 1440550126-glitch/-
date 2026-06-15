@@ -3,7 +3,7 @@
     <view class="logo">去</view>
     <view class="p-meta">
       <view class="p-name">极速去水印</view>
-      <view class="muted">无水印素材提取助手 · v{{version}}</view>
+      <view class="muted" bindtap="tapVersion">无水印素材提取助手 · v{{version}}</view>
     </view>
   </view>
 

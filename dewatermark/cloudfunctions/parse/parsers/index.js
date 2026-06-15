@@ -2,8 +2,11 @@
 const douyin = require('./douyin');
 const kuaishou = require('./kuaishou');
 const xiaohongshu = require('./xiaohongshu');
+const weibo = require('./weibo');
+const bilibili = require('./bilibili');
+const pipixia = require('./pipixia');
 
-const REGISTRY = [douyin, kuaishou, xiaohongshu];
+const REGISTRY = [douyin, kuaishou, xiaohongshu, weibo, bilibili, pipixia];
 
 function findParser(url) {
   const u = String(url || '').toLowerCase();

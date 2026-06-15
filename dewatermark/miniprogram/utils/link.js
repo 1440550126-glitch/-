@@ -3,6 +3,9 @@ const RULES = [
   { platform: 'douyin', name: '抖音', test: /douyin\.com|iesdouyin/i },
   { platform: 'kuaishou', name: '快手', test: /kuaishou|kwai|chenzhongtech|gifshow/i },
   { platform: 'xiaohongshu', name: '小红书', test: /xhslink|xiaohongshu/i },
+  { platform: 'weibo', name: '微博', test: /weibo\.(com|cn)|video\.weibo|t\.cn|miaopai/i },
+  { platform: 'bilibili', name: 'B站', test: /bilibili\.com|b23\.tv|acg\.tv/i },
+  { platform: 'pipixia', name: '皮皮虾', test: /pipix\.com|pipixia/i },
 ];
 
 function extractUrl(text) {

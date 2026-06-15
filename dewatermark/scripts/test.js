@@ -20,6 +20,9 @@ const ok = (name) => {
 
   assert.strictEqual(detect('https://www.kuaishou.com/f/xYz').platform, 'kuaishou');
   assert.strictEqual(detect('看笔记 http://xhslink.com/aB12cd').platform, 'xiaohongshu');
+  assert.strictEqual(detect('https://weibo.com/tv/show/123').platform, 'weibo');
+  assert.strictEqual(detect('https://b23.tv/aBcDeF').platform, 'bilibili');
+  assert.strictEqual(detect('https://h5.pipix.com/s/xxxx').platform, 'pipixia');
   assert.strictEqual(detect('随便一句话没有链接').url, '');
   assert.strictEqual(detect('https://example.com/x').supported, false);
   assert.strictEqual(extractUrl('xx https://v.douyin.com/q/）'), 'https://v.douyin.com/q/');
@@ -32,8 +35,15 @@ const ok = (name) => {
   assert.strictEqual(parsers.detectPlatform('https://v.douyin.com/x'), 'douyin');
   assert.strictEqual(parsers.detectPlatform('https://kuaishou.com/x'), 'kuaishou');
   assert.strictEqual(parsers.detectPlatform('https://xiaohongshu.com/x'), 'xiaohongshu');
+  assert.strictEqual(parsers.detectPlatform('https://weibo.com/x'), 'weibo');
+  assert.strictEqual(parsers.detectPlatform('https://www.bilibili.com/video/BV1xx'), 'bilibili');
+  assert.strictEqual(parsers.detectPlatform('https://www.pipix.com/item/123'), 'pipixia');
   assert.strictEqual(parsers.detectPlatform('https://youtube.com/x'), 'unknown');
-  ok('parsers.detectPlatform');
+  // 每个解析器都应有 platform/match/parse
+  parsers.REGISTRY.forEach((p) => {
+    assert.ok(p.platform && typeof p.match === 'function' && typeof p.parse === 'function');
+  });
+  ok('parsers.detectPlatform / registry shape');
 })();
 
 // 3) 抖音内部解析逻辑（合成 _ROUTER_DATA 固件）
@@ -141,6 +151,37 @@ const ok = (name) => {
   assert.deepStrictEqual(im.images, ['a', 'b']);
   assert.strictEqual(im.cover, 'a');
   ok('result shapes');
+})();
+
+// 7) extract 工具（处理转义直链）+ 平台名映射
+(() => {
+  const { unescapeUrl, firstMp4, firstFieldUrl, firstUrlList } = R('cloudfunctions/parse/lib/extract');
+  assert.strictEqual(unescapeUrl('http:\\u002F\\u002Fa.com\\u002Fb?x=1\\u00262'), 'http://a.com/b?x=1&2');
+  // 转义形式的 mp4 直链
+  assert.strictEqual(
+    firstMp4('xx "https:\\u002F\\u002Fv.com\\u002Fx.mp4?a=1" yy'),
+    'https://v.com/x.mp4?a=1'
+  );
+  // 普通形式
+  assert.strictEqual(firstMp4('a https://v/b.mp4 c'), 'https://v/b.mp4');
+  // 字段值为转义 URL（开头紧跟转义斜杠）
+  assert.strictEqual(
+    firstFieldUrl('{"stream_url":"https:\\u002F\\u002Fv\\u002Fa.mp4"}', ['x', 'stream_url']),
+    'https://v/a.mp4'
+  );
+  assert.strictEqual(firstFieldUrl('{"a":"noturl"}', ['a']), '');
+  // url_list 首个
+  assert.strictEqual(
+    firstUrlList('..."url_list":["https:\\u002F\\u002Fcdn\\u002Fv.mp4","x"]...'),
+    'https://cdn/v.mp4'
+  );
+
+  const { name, NAMES } = R('miniprogram/utils/platform');
+  assert.strictEqual(name('bilibili'), 'B站');
+  assert.strictEqual(name('weibo'), '微博');
+  assert.strictEqual(name('whatever'), '素材');
+  assert.strictEqual(NAMES.pipixia, '皮皮虾');
+  ok('extract helpers + platform names');
 })();
 
 console.log(`\n全部通过：${n} 组用例 ✅`);

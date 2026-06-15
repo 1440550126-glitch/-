@@ -4,7 +4,8 @@
     "pages/result/result",
     "pages/history/history",
     "pages/about/about",
-    "pages/doc/doc"
+    "pages/doc/doc",
+    "pages/admin/admin"
   ],
   "window": {
     "navigationBarTitleText": "极速去水印",

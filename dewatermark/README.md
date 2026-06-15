@@ -1,6 +1,6 @@
 # 极速去水印 · 微信小程序
 
-粘贴抖音 / 快手 / 小红书的分享链接，一键提取**无水印**视频或图片并保存到相册。**靠广告变现**：保存前看一条激励视频广告，配合 Banner / 插屏广告，对接微信「流量主」即可产生收入。
+粘贴抖音 / 快手 / 小红书 / 微博 / B站 / 皮皮虾 的分享链接，一键提取**无水印**视频或图片并保存到相册。**靠广告变现**：保存前看一条激励视频广告，配合 Banner / 插屏广告，对接微信「流量主」即可产生收入。内置一个按 openid 鉴权的**数据看板**看解析量与留存。
 
 > 这是一个独立项目，位于本仓库的 `dewatermark/` 目录，与仓库里的「AI句灵」社交项目互不相干。
 
@@ -23,14 +23,16 @@ dewatermark/
 │   │   ├── result/   结果页：预览 +「看广告解锁下载」(变现核心)
 │   │   ├── history/  历史记录（仅存本机）
 │   │   ├── about/    我的：协议 / 隐私 / 版权 / 反馈
-│   │   └── doc/      协议文档承载页
-│   └── utils/        cloud(调云函数) / ad(激励视频) / link(链接识别) / save(存相册) / store(本地历史)
+│   │   ├── doc/      协议文档承载页
+│   │   └── admin/    数据看板（连点版本号进入，按 openid 鉴权）
+│   └── utils/        cloud / ad(激励视频) / link(识别) / save(存相册) / store / platform(平台名)
 ├── cloudfunctions/
 │   ├── parse/        核心解析云函数
-│   │   ├── parsers/  douyin / kuaishou / xiaohongshu + 调度
-│   │   ├── lib/      http(零依赖) / result(结构) / thirdparty(第三方兜底)
+│   │   ├── parsers/  douyin / kuaishou / xiaohongshu / weibo / bilibili / pipixia + 调度
+│   │   ├── lib/      http(零依赖) / result(结构) / thirdparty(第三方兜底) / extract(直链抽取)
 │   │   └── index.js  入口：内置解析 → 第三方兜底 →(可选)转存云存储 → 统计
-│   └── login/        静默登录 + 用户统计
+│   ├── login/        静默登录 + 用户统计
+│   └── stats/        数据看板聚合（按 ADMIN_OPENIDS 鉴权）
 ├── scripts/test.js   离线逻辑自测（不联网）
 └── docs/             DEPLOY 部署 / REVIEW 上架避坑 / MONETIZE 变现配置
 ```
@@ -40,7 +42,7 @@ dewatermark/
 1. **导入项目**：微信开发者工具 → 导入 → 选择 `dewatermark/` 目录，填入你的小程序 AppID。
 2. **开通云开发**：工具顶部「云开发」→ 开通 → 新建环境，复制**环境 ID**。
 3. **填配置**：把环境 ID 和广告位 ID 填进 `miniprogram/config.js`。
-4. **部署云函数**：右键 `cloudfunctions/parse` 和 `cloudfunctions/login` → 上传并部署（云端安装依赖）。
+4. **部署云函数**：右键 `cloudfunctions/parse`、`login`、`stats` → 上传并部署（云端安装依赖）。
 5. **建数据库集合**：云开发控制台新建集合 `users`、`parse_logs`（权限选「仅创建者可读写」即可）。
 6. 真机预览，粘贴一条抖音分享链接测试。
 
@@ -61,6 +63,12 @@ cd dewatermark && npm test
 - **插屏**：保存成功后偶发弹出（可在 `config.js` 留空关闭）。
 
 开通「流量主」需要小程序**累计独立访客 ≥ 1000**且类目合规。广告位创建、收益预估、策略调优见 **[docs/MONETIZE.md](docs/MONETIZE.md)**。
+
+## 数据看板
+
+在「我的」页**连点版本号 5 次**进入数据看板，看：累计/今日/近 7 日解析量、各平台占比、解析来源（内置 vs 第三方）、总用户/新增/活跃/复访率。
+
+权限由 `stats` 云函数按 **openid 白名单**校验：在 `stats` 云函数环境变量 `ADMIN_OPENIDS`（逗号分隔）里填入管理员 openid 即可。未配置时，看板会显示你当前的 openid 方便复制填入。
 
 ## ⚠️ 上架风险必读
 

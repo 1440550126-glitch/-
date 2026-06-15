@@ -1,7 +1,7 @@
 <view class="wrap" wx:if="{{item}}">
   <view class="card">
     <view class="row spread">
-      <text class="tag">{{item.platform === 'douyin' ? '抖音' : item.platform === 'kuaishou' ? '快手' : item.platform === 'xiaohongshu' ? '小红书' : '已解析'}}</text>
+      <text class="tag">{{platformName}}</text>
       <text class="tag" style="background:rgba(0,180,120,.12);color:#0a8a5c">无水印</text>
     </view>
 

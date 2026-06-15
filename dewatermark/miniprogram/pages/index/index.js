@@ -8,7 +8,7 @@ Page({
     detected: null, // { name, supported }
     parsing: false,
     bannerUnitId: '',
-    platforms: ['抖音', '快手', '小红书'],
+    platforms: ['抖音', '快手', '小红书', '微博', 'B站', '皮皮虾'],
   },
 
   onLoad() {

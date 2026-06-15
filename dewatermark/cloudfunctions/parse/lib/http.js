@@ -65,8 +65,8 @@ async function resolveRedirect(url) {
   return cur;
 }
 
-async function downloadBuffer(url) {
-  const r = await request(url, { method: 'GET' });
+async function downloadBuffer(url, headers = {}) {
+  const r = await request(url, { method: 'GET', headers });
   return r.buffer;
 }
 

@@ -24,7 +24,8 @@
 
 1. 右键 `cloudfunctions/parse` → **上传并部署：云端安装依赖**。
 2. 右键 `cloudfunctions/login` → 同样上传并部署。
-3. 部署完成后，「云开发控制台 → 云函数」能看到 `parse`、`login`。
+3. 右键 `cloudfunctions/stats` → 同样上传并部署（数据看板用）。
+4. 部署完成后，「云开发控制台 → 云函数」能看到 `parse`、`login`、`stats`。
 
 ### （可选）云函数环境变量
 
@@ -36,6 +37,21 @@
 | `THIRDPARTY_API` | 第三方去水印聚合接口地址，内置解析失败时兜底 | `https://api.xxx.com/parse?key=KEY&url=` |
 
 > 配置 `THIRDPARTY_API` 后，若内置解析失败会自动调用它。不同服务返回结构不同，按需在 `cloudfunctions/parse/lib/thirdparty.js` 的 `mapResult` 里适配字段。
+
+**stats 云函数**还需配置管理员白名单（数据看板鉴权）：
+
+| 变量 | 作用 | 示例 |
+| --- | --- | --- |
+| `ADMIN_OPENIDS` | 可查看数据看板的 openid，逗号分隔 | `oABC123...,oDEF456...` |
+
+> 怎么拿自己的 openid：先**不配**该变量，在小程序「我的」页连点版本号 5 次进入数据看板，页面会显示你的 openid，复制后填进 `ADMIN_OPENIDS` 再重试即可。
+
+### 平台说明
+
+- **抖音 / 皮皮虾**（字节系）：内置 H5 解析，最稳定。
+- **快手 / 小红书 / 微博**：基于分享页 og 标签与内联直链的 best-effort，平台改版可能失效。
+- **B站**：走官方 view/playurl(html5) 取免登录 360p mp4；B站 CDN 有 **Referer 防盗链**，直链通常无法直接预览/保存，**需开启 `PROXY_TO_STORAGE=1`**（云函数已带 Referer 转存，详见第 6 节）。
+- 任何平台失效时，配置 `THIRDPARTY_API` 即可兜底。
 
 ## 4. 创建数据库集合
 

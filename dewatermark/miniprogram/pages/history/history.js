@@ -1,7 +1,6 @@
 const app = getApp();
 const store = require('../../utils/store');
-
-const NAMES = { douyin: '抖音', kuaishou: '快手', xiaohongshu: '小红书' };
+const { NAMES } = require('../../utils/platform');
 
 function fmt(ts) {
   const d = new Date(ts);

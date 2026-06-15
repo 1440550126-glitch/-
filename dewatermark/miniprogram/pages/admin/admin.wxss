@@ -1,0 +1,33 @@
+.sec-title { font-weight: 700; font-size: 28rpx; margin: 24rpx 8rpx 14rpx; color: #4a5160; }
+
+.grid { display: flex; flex-wrap: wrap; gap: 16rpx; }
+.stat {
+  flex: 1 1 calc((100% - 32rpx) / 3);
+  min-width: calc((100% - 32rpx) / 3);
+  background: var(--card);
+  border-radius: 20rpx;
+  padding: 28rpx 20rpx;
+  box-shadow: 0 4rpx 18rpx rgba(20, 24, 40, 0.04);
+}
+.num { font-size: 44rpx; font-weight: 800; }
+.lbl { margin-top: 6rpx; color: var(--muted); font-size: 24rpx; }
+
+.block-title { font-weight: 700; font-size: 30rpx; margin-bottom: 18rpx; }
+
+.bar-row { display: flex; align-items: center; margin-top: 16rpx; }
+.bar-name { width: 120rpx; font-size: 26rpx; }
+.bar-track { flex: 1; height: 20rpx; background: #eef0f5; border-radius: 10rpx; overflow: hidden; }
+.bar-fill { height: 100%; background: linear-gradient(90deg, #3b6cff, #5b8cff); border-radius: 10rpx; }
+.bar-num { width: 90rpx; text-align: right; font-size: 26rpx; color: #4a5160; }
+
+.via { padding: 16rpx 0; border-bottom: 1rpx solid var(--line); }
+.via:last-child { border-bottom: none; }
+
+.link { color: var(--brand); font-size: 26rpx; }
+
+.openid-box {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #f1f3f8; border-radius: 14rpx; padding: 20rpx; gap: 16rpx;
+}
+.openid { font-size: 24rpx; word-break: break-all; flex: 1; color: #3a4150; }
+.copy { flex: none; color: var(--brand); font-size: 26rpx; }
