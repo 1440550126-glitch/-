@@ -17,7 +17,7 @@
 - 🏛 **空间混响** — 实时合成立体声脉冲响应，影院/音乐厅空间感
 - 📊 **动态压缩 + 软削波限制** — 单段或**三段多频带**压缩，提升响度同时防过载
 - ⚖️ **响度对齐（Volume Leveler）** — 处理后≈原声响度，开关 A/B 不再"一开就变大声"
-- 📈 **输出电平表** — `getLevel()` 实时返回 RMS/峰值/dBFS，驱动电平条或可视化
+- 📈 **输出电平表 + 均衡曲线** — `getLevel()` 实时电平、`getFrequencyResponse()` 返回 EQ 频响曲线，驱动电平条/曲线图
 - 🎛 **干湿混合** — 强度可调、一键 A/B 旁通（等功率交叉淡化，切换不爆音）
 - 🎚 **5 档预设 + 自定义** — 标准/影院/音乐/夜间/人声，`registerPreset()` 可扩展
 - 💾 **可选偏好持久化** — `dolby-store.js` 助手（引擎本身保持无状态、解耦）
@@ -89,10 +89,11 @@ dolby.connect(myCtx.destination);   // 或连到你自己的下游节点
 | `setWidth(mult)` / `setBass(dB)` / `setAir(dB)` / `setReverb(mix)` / `setVocal(dB)` | 单项微调（覆盖当前预设） |
 | `getAnalyser()` | 取频谱分析器（需构造时 `analyser:true`） |
 | `getLevel()` | 取输出电平 `{ rms, peak, db }`，做电平表/动效 |
+| `getFrequencyResponse(freqs?)` | 取均衡频响曲线 `{ freqs, magDb }`，画 EQ 曲线图 |
 | `state` / `enabled` / `intensity` / `presetId` / `spatialMode` | 只读状态 |
 | `dispose({closeContext})` | 释放节点；自建 context 可选关闭 |
 
-顶层还导出 `registerPreset(preset)` 注册自定义预设、`presetById(id)`、`createImpulseResponse(ctx, seconds, decay)`。
+顶层还导出 `registerPreset(preset)` 注册自定义预设、`presetById(id)`、`createImpulseResponse(ctx, seconds, decay)`、`logFreqScale(n, min, max)`（对数频率刻度）。
 
 属性 `input` / `output` 暴露入口/出口节点，便于手动接线。
 
@@ -138,6 +139,21 @@ function tick() {
   requestAnimationFrame(tick);
 }
 tick();
+```
+
+## 均衡曲线可视化
+
+`getFrequencyResponse()` 返回当前均衡（低架·中频·高架串联）的频响曲线，随 `setBass/setAir`
+或预设实时变化，可直接画成 EQ 曲线图：
+
+```js
+const { freqs, magDb } = dolby.getFrequencyResponse();   // 默认对数 20–20kHz 200 点
+// 也可自定义频点：dolby.getFrequencyResponse(logFreqScale(64, 30, 16000))
+for (let i = 0; i < magDb.length; i++) {
+  const x = i / (magDb.length - 1) * W;          // 频率（对数轴）
+  const y = H / 2 - magDb[i] / 12 * (H / 2);      // 增益 ±12dB → 纵轴
+  // lineTo(x, y) ...
+}
 ```
 
 ## 动态、响度与人声
@@ -194,7 +210,8 @@ npm start            # 启动本仓库服务
 ```
 
 Demo 内置一段合成音乐可直接试听，也能载入你自己的音频做 A/B 对比，带实时频谱、
-输出电平表、预设/强度/宽度/低音/空间/高频滑杆，以及「耳机环绕」开关。
+均衡曲线图、输出电平表、「按住听原声」即时对比按钮，预设/强度/宽度/低音/空间/高频/人声
+滑杆，以及「耳机环绕 / 多频带压缩 / 响度对齐」开关。
 独立使用时用任意静态服务器即可（如 `npx serve web/dolby`）——注意 ES Module 需经
 `http(s)` 加载，直接 `file://` 双击可能被浏览器的模块 CORS 策略拦截。
 

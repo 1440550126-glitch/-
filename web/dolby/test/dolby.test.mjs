@@ -1,6 +1,6 @@
 // dolby-audio 自测：用模拟 Web Audio API 验证图构建 / 接入 / 控制 / 释放
 // 运行：node web/dolby/test/dolby.test.mjs   （零依赖，失败则退出码非 0）
-import { DolbyAudio, DOLBY_PRESETS, registerPreset, presetById, createDolby } from '../dolby-audio.js';
+import { DolbyAudio, DOLBY_PRESETS, registerPreset, presetById, createDolby, logFreqScale } from '../dolby-audio.js';
 
 let pass = 0;
 const ok = (cond, msg) => { if (!cond) { console.error('  ❌ ' + msg); throw new Error(msg); } pass++; console.log('  ✅ ' + msg); };
@@ -15,7 +15,7 @@ function makeCtx() {
     resume() { this.state = 'running'; return Promise.resolve(); },
     close() { this.state = 'closed'; return Promise.resolve(); },
     createGain: () => node({ gain: Param(1) }),
-    createBiquadFilter: () => node({ type: '', frequency: Param(1000), Q: Param(1), gain: Param(0), detune: Param(0) }),
+    createBiquadFilter: () => { const f = node({ type: '', frequency: Param(1000), Q: Param(1), gain: Param(0), detune: Param(0) }); f.getFrequencyResponse = (freqs, mag) => { const a = Math.pow(10, f.gain.value / 20); for (let i = 0; i < mag.length; i++) mag[i] = a; }; return f; },
     createWaveShaper: () => node({ curve: null, oversample: 'none' }),
     createChannelSplitter: () => node(),
     createChannelMerger: () => node(),
@@ -68,6 +68,15 @@ ok(true, '单项微调 setWidth/Bass/Air/Reverb 不抛错');
 // 7) 电平表
 const lvl = d.getLevel();
 ok(typeof lvl.rms === 'number' && typeof lvl.peak === 'number' && typeof lvl.db === 'number', `getLevel 返回 ${JSON.stringify({ rms: +lvl.rms.toFixed(3), peak: lvl.peak, db: +lvl.db.toFixed(1) })}`);
+
+// 7b) 频响曲线
+const fs = logFreqScale(64);
+ok(fs.length === 64 && fs[0] >= 20 && fs[fs.length - 1] <= 20000, `logFreqScale 生成对数频率刻度 [${fs[0].toFixed(0)}..${fs[fs.length - 1].toFixed(0)}Hz]`);
+const fr = d.getFrequencyResponse(fs);
+ok(fr.freqs.length === 64 && fr.magDb.length === 64 && Array.prototype.every.call(fr.magDb, Number.isFinite), 'getFrequencyResponse 返回有限 dB 曲线');
+d.setAir(0); d.setBass(0); const flat = d.getFrequencyResponse(logFreqScale(8)).magDb[0];
+d.setBass(10); const boosted = d.getFrequencyResponse(logFreqScale(8)).magDb[0];
+ok(boosted > flat + 5, `频响随低音增益上升（${flat.toFixed(1)}→${boosted.toFixed(1)}dB）`);
 
 // 8) 自定义预设
 registerPreset({ id: 'myroom', label: '我的房间', desc: 't', p: presetById('cinema').p });

@@ -1,7 +1,8 @@
-// dolby-audio Demo：内置合成音乐 + 文件 A/B + 频谱可视化
+// dolby-audio Demo：内置合成音乐 + 文件 A/B + 频谱可视化 + 均衡曲线
 import { DolbyAudio, DOLBY_PRESETS, presetById } from './dolby-audio.js';
 
 const $ = (id) => document.getElementById(id);
+const clampN = (v, a, b) => Math.min(b, Math.max(a, v));
 
 // —— 引擎（带分析器，懒唤醒；先建好以便调参与可视化）——
 const dolby = new DolbyAudio({ analyser: true, preset: 'standard', intensity: 0.85 });
@@ -111,6 +112,13 @@ mbEl.addEventListener('click', () => { const on = !dolby.multiband; dolby.setMul
 const lmEl = $('lmSwitch');
 lmEl.addEventListener('click', () => { const on = !dolby.loudnessMatch; dolby.setLoudnessMatch(on); lmEl.classList.toggle('on', on); });
 
+// —— 按住听原声（A/B 即时对比） ——
+const abEl = $('abHold'); let abPrev = null;
+const abDown = (e) => { e.preventDefault(); abPrev = dolby.enabled; dolby.setEnabled(false); abEl.classList.add('primary'); abEl.textContent = '正在听原声…松开恢复'; };
+const abUp = () => { if (abPrev === null) return; dolby.setEnabled(abPrev); abPrev = null; abEl.classList.remove('primary'); abEl.textContent = '按住听原声 (A/B)'; refreshState(); };
+abEl.addEventListener('pointerdown', abDown);
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) abEl.addEventListener(ev, abUp);
+
 // —— 预设 ——
 const presetsEl = $('presets');
 DOLBY_PRESETS.forEach((p) => {
@@ -120,7 +128,7 @@ DOLBY_PRESETS.forEach((p) => {
   b.addEventListener('click', () => {
     dolby.setEnabled(true); dolby.setPreset(p.id);
     [...presetsEl.children].forEach((c) => c.classList.toggle('active', c === b));
-    syncSliders(p.p); refreshState();
+    syncSliders(p.p); refreshState(); drawEq();
   });
   presetsEl.append(b);
 });
@@ -136,9 +144,9 @@ function syncSliders(p) {
 }
 I.addEventListener('input', () => { dolby.setIntensity(I.value / 100); $('intensityV').textContent = I.value + '%'; });
 W.addEventListener('input', () => { const v = W.value / 100; dolby.setWidth(v); $('widthV').textContent = v.toFixed(2) + '×'; });
-B.addEventListener('input', () => { dolby.setBass(+B.value); $('bassV').textContent = `+${B.value}dB`; });
+B.addEventListener('input', () => { dolby.setBass(+B.value); $('bassV').textContent = `+${B.value}dB`; drawEq(); });
 R.addEventListener('input', () => { dolby.setReverb(R.value / 100); $('reverbV').textContent = R.value + '%'; });
-A.addEventListener('input', () => { dolby.setAir(+A.value); $('airV').textContent = `+${A.value}dB`; });
+A.addEventListener('input', () => { dolby.setAir(+A.value); $('airV').textContent = `+${A.value}dB`; drawEq(); });
 V.addEventListener('input', () => { dolby.setVocal(+V.value); $('vocalV').textContent = `+${V.value}dB`; });
 
 // —— 频谱可视化 + 输出电平表 ——
@@ -162,4 +170,22 @@ function draw() {
   meterFill.style.width = Math.min(100, dolby.getLevel().peak * 130) + '%';
 }
 draw();
+
+// —— 均衡曲线（实时反映低音/中频/高频设置） ——
+const eqC = $('eq'), eqCtx = eqC.getContext('2d');
+function resizeEq() { const dpr = Math.min(devicePixelRatio || 1, 2); eqC.width = eqC.clientWidth * dpr; eqC.height = 88 * dpr; eqCtx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+function drawEq() {
+  const w = eqC.clientWidth, h = 88, range = 12; eqCtx.clearRect(0, 0, w, h);
+  eqCtx.strokeStyle = 'rgba(255,255,255,.15)'; eqCtx.lineWidth = 1;
+  eqCtx.beginPath(); eqCtx.moveTo(0, h / 2); eqCtx.lineTo(w, h / 2); eqCtx.stroke();
+  const { magDb } = dolby.getFrequencyResponse(), n = magDb.length;
+  const grad = eqCtx.createLinearGradient(0, 0, w, 0); grad.addColorStop(0, '#a18bff'); grad.addColorStop(1, '#ff9ec6');
+  eqCtx.strokeStyle = grad; eqCtx.lineWidth = 2; eqCtx.beginPath();
+  for (let i = 0; i < n; i++) { const x = i / (n - 1) * w, y = h / 2 - clampN(magDb[i], -range, range) / range * (h / 2 - 4); i ? eqCtx.lineTo(x, y) : eqCtx.moveTo(x, y); }
+  eqCtx.stroke();
+}
+addEventListener('resize', () => { resizeEq(); drawEq(); });
+resizeEq();
+
 refreshState();
+drawEq();

@@ -57,6 +57,13 @@ export function registerPreset(preset) {
 const dbToAmp = (db) => Math.pow(10, db / 20);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
+/** 生成对数分布的频率刻度（Hz），用于画频响曲线 */
+export function logFreqScale(n = 200, min = 20, max = 20000) {
+  const f = new Float32Array(n), lmin = Math.log10(min), lmax = Math.log10(max);
+  for (let i = 0; i < n; i++) f[i] = Math.pow(10, lmin + (lmax - lmin) * (i / (n - 1)));
+  return f;
+}
+
 // 软饱和/限制曲线（tanh 形）
 function shaperCurve(k, n = 2048) {
   const c = new Float32Array(n);
@@ -350,6 +357,24 @@ export class DolbyAudio {
   }
 
   getAnalyser() { return this.analyser || null; }
+
+  /**
+   * 当前均衡（低架·中频·高架串联）的频响曲线，反映实时 bass/mid/air 设置。
+   * @param {Float32Array|number[]} [freqs] 频率点（Hz），默认对数 20–20kHz 200 点
+   * @returns {{ freqs: Float32Array, magDb: Float32Array }} 各频点的增益（dB）
+   */
+  getFrequencyResponse(freqs) {
+    const f = freqs ? (freqs instanceof Float32Array ? freqs : Float32Array.from(freqs)) : logFreqScale();
+    const n = f.length, mag = new Float32Array(n), ph = new Float32Array(n), total = new Float32Array(n).fill(1);
+    for (const filt of [this.low, this.midEq, this.high]) {
+      filt.getFrequencyResponse(f, mag, ph);
+      for (let i = 0; i < n; i++) total[i] *= mag[i];
+    }
+    const magDb = new Float32Array(n);
+    for (let i = 0; i < n; i++) magDb[i] = 20 * Math.log10(total[i] || 1e-6);
+    return { freqs: f, magDb };
+  }
+
   getLevel() {
     if (!this._meterBuf) this._meterBuf = new Float32Array(this._meter.fftSize);
     const buf = this._meterBuf;

@@ -56,10 +56,18 @@ export interface DolbyLevel {
   db: number;
 }
 
+export interface DolbyFrequencyResponse {
+  /** 频率点（Hz） */
+  freqs: Float32Array;
+  /** 各频点的增益（dB） */
+  magDb: Float32Array;
+}
+
 export const DOLBY_PRESETS: DolbyPreset[];
 export function presetById(id: string): DolbyPreset;
 export function registerPreset(preset: DolbyPreset): DolbyPreset;
 export function createImpulseResponse(ctx: BaseAudioContext, seconds: number, decay: number): AudioBuffer;
+export function logFreqScale(n?: number, min?: number, max?: number): Float32Array;
 export function createDolby(options?: DolbyOptions): DolbyAudio;
 
 export class DolbyAudio {
@@ -94,6 +102,7 @@ export class DolbyAudio {
 
   getAnalyser(): AnalyserNode | null;
   getLevel(): DolbyLevel;
+  getFrequencyResponse(freqs?: Float32Array | number[]): DolbyFrequencyResponse;
 
   readonly enabled: boolean;
   readonly intensity: number;
