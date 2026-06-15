@@ -105,6 +105,8 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 <div class=card><span id=llm class="badge off">…</span>&nbsp;&nbsp;<span id=memc>记忆 …</span></div>
 <div class=card><div class=k>👁️ 现在看到谁</div><div id=present>…</div></div>
 <div class=card><div class=k>💞 此刻心情</div><div id=mood>…</div><div id=moodbars></div></div>
+<div class=card><div class=k>🤵 管家</div>
+  <button id=brief>☀️ 要一份简报</button>&nbsp;<button id=diag style="background:#37474f">🩺 系统自检</button></div>
 <div class=card><div class=k>💬 跟 TA 聊聊</div>
   <div class=row><span class=dim>身份：</span><select id=speaker></select></div>
   <div id=chat class=chat></div>
@@ -152,16 +154,18 @@ async function refresh(){
   }catch(e){}
 }
 function add(who,text,cls){const c=$('#chat');const d=document.createElement('div');d.className='msg '+cls;d.textContent=(who?who+'：':'')+text;c.appendChild(d);c.scrollTop=c.scrollHeight;}
-$('#f').addEventListener('submit',async e=>{
-  e.preventDefault();
-  const t=$('#msg').value.trim(); if(!t)return;
-  const sp=$('#speaker').value; add(sp,t,'me'); $('#msg').value='';
+async function ask(t){
+  t=(t||'').trim(); if(!t)return;
+  const sp=$('#speaker').value; add(sp,t,'me');
   try{
     const r=await (await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t,speaker:sp})})).json();
     add(soulName, r.reply, 'soul');
   }catch(e){ add(soulName,'（网络出错）','soul'); }
   refresh();
-});
+}
+$('#f').addEventListener('submit',e=>{e.preventDefault();const t=$('#msg').value;$('#msg').value='';ask(t);});
+$('#brief').addEventListener('click',()=>ask('简报'));
+$('#diag').addEventListener('click',()=>ask('系统自检'));
 $('#retry').addEventListener('click',async()=>{
   const sp=$('#speaker').value; const b=$('#retry'); b.disabled=true;
   try{

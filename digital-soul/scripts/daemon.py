@@ -51,11 +51,15 @@ def _owner(agent) -> str:
     return agent.identity.get("name", "我")
 
 
-def voice_loop(agent, ears, mouth, monitor) -> None:
-    """持续聆听：听到话 → 结合"当前画面里的人"判断说话人 → 回应并播报。"""
+def voice_loop(agent, ears, mouth, monitor, wake=None) -> None:
+    """持续聆听：听到话 → 结合"当前画面里的人"判断说话人 → 回应并播报。
+
+    设了唤醒词（如"贾维斯"）则只在被点名时回应，更像贴身管家。
+    """
     me = agent.identity.get("name", "我")
     owner = _owner(agent)
-    print("[语音] 持续聆听已启动（对着麦克风说话）。", flush=True)
+    tip = f"（说「{wake}」唤醒）" if wake else ""
+    print(f"[语音] 持续聆听已启动{tip}。", flush=True)
     while True:
         wav = record_wav(5)
         if wav is None:
@@ -64,6 +68,13 @@ def voice_loop(agent, ears, mouth, monitor) -> None:
         text = ears.transcribe(wav)
         if not text:
             continue
+        if wake:  # 只在被点名时回应
+            if wake not in text:
+                continue
+            text = text.replace(wake, "", 1).strip("，,。.!！?？、 ")
+            if not text:
+                mouth.speak(f"在的，有什么吩咐？")
+                continue
         speaker = (monitor.current_speaker() if monitor else None) or owner
         print(f"[语音] {speaker}: {text}", flush=True)
         res = agent.handle(speaker, text)
@@ -101,6 +112,7 @@ def main() -> None:
     ap.add_argument("--no-vision", action="store_true", help="不启用摄像头感知")
     ap.add_argument("--robot", choices=["sim", "ros2"], default="sim", help="动作执行后端")
     ap.add_argument("--voice", action="store_true", help="启用语音对话（听 + 说）")
+    ap.add_argument("--wake", default=None, help="唤醒词（如 贾维斯）；设置后只在被点名时回应")
     ap.add_argument("--web", nargs="?", const=8765, type=int, default=None,
                     help="开启网页状态页（可指定端口，默认 8765）")
     args = ap.parse_args()
@@ -138,7 +150,7 @@ def main() -> None:
             ears, mouth = Ears(), Mouth()
             print(f"[语音] 听:{ears.backend or '无'} ｜ 说:{mouth.backend or '无(打印)'}", flush=True)
             if ears.available:
-                voice_loop(agent, ears, mouth, monitor)
+                voice_loop(agent, ears, mouth, monitor, wake=args.wake)
             else:
                 print("[语音] 未装语音转文字(faster-whisper)，无法聆听；保留感知+巩固。", flush=True)
                 while True:

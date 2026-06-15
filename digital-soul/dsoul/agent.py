@@ -18,6 +18,10 @@ _UNDONE = ("还没", "没弄", "没做", "还得", "还要", "忘了", "没空",
 _AGENT_HINTS = {"代码": "openclaw", "打包": "openclaw", "部署": "openclaw", "备份": "openclaw",
                 "编译": "openclaw", "周报": "爱马仕", "报告": "爱马仕", "文档": "爱马仕",
                 "整理": "爱马仕", "邮件": "爱马仕", "表格": "爱马仕"}
+# 贾维斯式管家指令词
+_BRIEF_KW = ("简报", "汇报", "报一下", "什么情况", "近况", "今天怎么安排", "今天的安排",
+             "状态怎么样", "汇报一下", "brief")
+_DIAG_KW = ("自检", "系统状态", "运行状况", "诊断", "各系统", "系统自检", "体检", "diagnostic", "status")
 
 
 class Agent:
@@ -90,6 +94,14 @@ class Agent:
                 self._log_journal(who, utterance, done["reply"], f"dispatch:{done['agent']}")
                 return result
             self._pending_dispatch = None  # 你没接这个茬，作罢
+
+        # --- 贾维斯式管家指令：点名应答 / 态势简报 / 系统自检（仅对听命于我的人）---
+        if action is None:
+            bret = self._butler_route(utterance, who)
+            if bret is not None:
+                result["reply"] = bret
+                self._log_journal(who, utterance, bret, "butler")
+                return result
 
         # --- 重试没办成的待办（"再试一次"，或刚跟进过你说"好"）---
         if action is None and self.tasks is not None and self.tasks.open():
@@ -431,6 +443,38 @@ class Agent:
         """它最近想明白的事（领悟）。"""
         refl = [it["text"] for it in self.memory.items if "reflection" in (it.get("tags") or [])]
         return refl[-k:][::-1]
+
+    # ---------- 贾维斯式管家层 ----------
+    def _addr(self, who) -> str:
+        """称呼：优先 identity.assistant.address（如"先生"），否则用对方名字。"""
+        a = (self.identity.get("assistant") or {}).get("address")
+        if a:
+            return a
+        if who and who.get("known"):
+            return who.get("name", "您")
+        return "您"
+
+    def _butler_route(self, utterance, who):
+        """识别管家指令：点名 / 简报 / 自检。不是则返回 None。仅服务于听命于我的人。"""
+        u = utterance or ""
+        if not who.get("obey"):
+            return None  # 不对不听命于我的人汇报状态（隐私）
+        low = u.lower()
+        is_wake = ("贾维斯" in u) or ("jarvis" in low)
+        if any(k in u for k in _DIAG_KW):
+            from .butler import diagnostics_text
+            return diagnostics_text(self, self._addr(who))
+        if any(k in u for k in _BRIEF_KW):
+            from .butler import daily_brief
+            present = [who["name"]] if who.get("known") else None
+            return daily_brief(self, present=present, addr=self._addr(who))
+        if is_wake:  # 点名但没具体吩咐 → 应答待命
+            core = u.replace("贾维斯", "")
+            for w in ("jarvis", "Jarvis", "JARVIS"):
+                core = core.replace(w, "")
+            if not core.strip("，,。.!！?？、 你好在吗不在呢啊呀嗨hi"):
+                return f"在的，{self._addr(who)}。有什么吩咐？"
+        return None
 
     # ---------- 人格热切换（无需重启）----------
     def switch_persona(self, name, base_dir=None, seed_memory=False) -> dict:
