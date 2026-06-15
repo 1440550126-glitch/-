@@ -34,6 +34,10 @@ def start_vision(agent, mouth=None) -> bool:
         print(f"[感知] {name} 进入画面 → {me}: {text}", flush=True)
         if mouth is not None:
             mouth.speak(text)
+        for n in agent.fire_event("enter", name):   # 进门自动化（"我一进门就开灯"）
+            print(f"[自动化] {n}", flush=True)
+            if mouth is not None:
+                mouth.speak(n)
 
     def on_leave(name: str) -> None:
         print(f"[感知] {name} 离开画面", flush=True)
@@ -95,6 +99,21 @@ def sleep_loop(agent, hours: float) -> None:
         print(f"[睡眠] 巩固 {rep['processed']} 条 → 新增 {len(rep['learned'])} 条记忆", flush=True)
 
 
+def trigger_loop(agent, mouth=None) -> None:
+    """每 30 秒检查一次定时自动化（如"每天22点提醒锁门"）。"""
+    while True:
+        time.sleep(30)
+        try:
+            notices = agent.check_time_triggers()
+        except Exception as e:
+            print(f"[自动化] 出错：{e}", flush=True)
+            continue
+        for n in notices:
+            print(f"[自动化] {n}", flush=True)
+            if mouth is not None:
+                mouth.speak(n)
+
+
 def think_loop(agent, minutes: float) -> None:
     """自主心跳：定期反思 + 跟进欠账。"""
     while True:
@@ -147,7 +166,9 @@ def main() -> None:
     threading.Thread(target=sleep_loop, args=(agent, args.sleep_every), daemon=True).start()
     print(f"🌙 每 {args.sleep_every} 小时自动巩固一次。", flush=True)
     threading.Thread(target=think_loop, args=(agent, args.think_every), daemon=True).start()
-    print(f"🧠 每 {args.think_every} 分钟自主反思 / 跟进一次。Ctrl+C 退出。", flush=True)
+    print(f"🧠 每 {args.think_every} 分钟自主反思 / 跟进一次。", flush=True)
+    threading.Thread(target=trigger_loop, args=(agent, mouth), daemon=True).start()
+    print("⏰ 定时自动化已启用（每 30 秒检查）。Ctrl+C 退出。", flush=True)
 
     try:
         if args.voice:

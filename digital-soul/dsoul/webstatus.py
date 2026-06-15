@@ -52,6 +52,7 @@ def _snapshot(agent, monitor) -> dict:
     reflections = agent.recent_reflections() if hasattr(agent, "recent_reflections") else []
     devices = agent.devices.rows() if getattr(agent, "devices", None) is not None else []
     scenes = agent.scenes.names() if getattr(agent, "scenes", None) is not None else []
+    triggers = [t["desc"] for t in agent.triggers.all()] if getattr(agent, "triggers", None) is not None else []
     plan_items = []
     if getattr(agent, "plan", None) is not None:
         plan_items = [
@@ -72,6 +73,7 @@ def _snapshot(agent, monitor) -> dict:
         "plan": plan_items,
         "devices": devices,
         "scenes": scenes,
+        "triggers": triggers,
         "mood": mood_char,
         "mood_levels": mood_levels,
         "people": [p["name"] for p in agent.authority.people.values()],
@@ -113,6 +115,8 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 <div class=card><div class=k>👁️ 现在看到谁</div><div id=present>…</div></div>
 <div class=card><div class=k>🏠 设备</div><div id=devices></div></div>
 <div class=card><div class=k>🎬 场景</div><div id=scenes></div></div>
+<div class=card><div class=k>⏰ 自动化</div><ul id=triggers></ul>
+  <button id=clrtrig class=devbtn>清空</button></div>
 <div class=card><div class=k>💞 此刻心情</div><div id=mood>…</div><div id=moodbars></div></div>
 <div class=card><div class=k>🤵 管家</div>
   <button id=brief>☀️ 要一份简报</button>&nbsp;<button id=diag style="background:#37474f">🩺 系统自检</button></div>
@@ -153,6 +157,7 @@ async function refresh(){
     $('#present').textContent=s.present.length?s.present.join('、'):'暂时没看到人';
     $('#devices').innerHTML=(s.devices&&s.devices.length)?s.devices.map(devRow).join(''):'<span class=dim>无设备</span>';
     $('#scenes').innerHTML=(s.scenes&&s.scenes.length)?s.scenes.map(n=>'<button class=devbtn style="margin:3px" onclick="scene(\''+n+'\')">'+n+'</button>').join(''):'<span class=dim>无</span>';
+    $('#triggers').innerHTML=li(s.triggers||[]);
     $('#mood').textContent=s.mood?(MOODS[s.mood]||s.mood):'平静';
     $('#moodbars').innerHTML=s.mood_levels?bars(s.mood_levels):'';
     $('#disp').innerHTML=li(s.dispatches||[]);
@@ -180,6 +185,7 @@ async function ask(t){
 $('#f').addEventListener('submit',e=>{e.preventDefault();const t=$('#msg').value;$('#msg').value='';ask(t);});
 $('#brief').addEventListener('click',()=>ask('简报'));
 $('#diag').addEventListener('click',()=>ask('系统自检'));
+$('#clrtrig').addEventListener('click',()=>ask('清空所有自动化'));
 $('#retry').addEventListener('click',async()=>{
   const sp=$('#speaker').value; const b=$('#retry'); b.disabled=true;
   try{

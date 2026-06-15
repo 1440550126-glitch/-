@@ -1,0 +1,70 @@
+"""自动化触发测试。可直接运行：python tests/test_triggers.py"""
+
+import pathlib
+import sys
+import tempfile
+from datetime import datetime
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+
+from dsoul.agent import Agent  # noqa: E402
+from dsoul.authority import Authority  # noqa: E402
+from dsoul.devices import DeviceHub  # noqa: E402
+from dsoul.scenes import SceneBook  # noqa: E402
+from dsoul.triggers import TriggerBook, parse_trigger  # noqa: E402
+
+
+def test_parse_time_and_event():
+    t1 = parse_trigger("每天22点提醒锁门", [])
+    assert t1["kind"] == "time" and t1["spec"] == "22:00" and t1["action"]["type"] == "remind"
+    t2 = parse_trigger("我一进门就开灯", [])
+    assert t2["kind"] == "event" and t2["spec"] == "enter" and t2["action"]["type"] == "device"
+    t3 = parse_trigger("每天18:30启动回家模式", ["回家模式"])
+    assert t3["kind"] == "time" and t3["spec"] == "18:30" and t3["action"]["type"] == "scene"
+    assert parse_trigger("今天天气不错", []) is None
+
+
+def test_triggerbook_add_clear_persist():
+    p = tempfile.mktemp(suffix=".json")
+    tb = TriggerBook(p)
+    tb.add(parse_trigger("每天22点提醒锁门", []))
+    assert len(TriggerBook(p).all()) == 1          # 持久化
+    assert tb.clear() == 1 and tb.all() == []
+
+
+def _agent():
+    rel = {"permissions": {"owner": ["*"], "stranger": []},
+           "people": [{"name": "张明", "relation": "本人", "trust": "owner"},
+                      {"name": "路人", "relation": "陌生人", "trust": "stranger"}]}
+    a = object.__new__(Agent)
+    a.authority = Authority(rel)
+    a.devices = DeviceHub()
+    a.scenes = SceneBook()
+    a.triggers = TriggerBook(tempfile.mktemp(suffix=".json"))
+    return a
+
+
+def test_time_trigger_fires_once_per_day():
+    a = _agent()
+    a._trigger_route("张明", "每天22点开灯")
+    assert a.check_time_triggers(datetime(2026, 1, 1, 21, 0)) == []     # 没到点
+    fired = a.check_time_triggers(datetime(2026, 1, 1, 22, 0))
+    assert fired and a.devices.states()["light"]["power"] == "on"
+    assert a.check_time_triggers(datetime(2026, 1, 1, 22, 0)) == []     # 当天只触发一次
+
+
+def test_event_trigger_on_enter_and_auth():
+    a = _agent()
+    a._trigger_route("张明", "我一进门就开灯")
+    assert a.fire_event("enter", "张明")                                # 进门 → 开灯
+    assert a.devices.states()["light"]["power"] == "on"
+    # 陌生人不能设定自动化
+    assert "不会听" in a._trigger_route("路人", "每天22点开灯")
+
+
+if __name__ == "__main__":
+    for _n, _f in sorted(globals().items()):
+        if _n.startswith("test_") and callable(_f):
+            _f()
+            print("PASS", _n)
+    print("✅ triggers: all tests passed")

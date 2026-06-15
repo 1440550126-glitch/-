@@ -30,7 +30,7 @@ class Agent:
     def __init__(self, identity, persona, memory, authority, perception, llm, robot,
                  journal=None, emotions=None, knowledge=None, skills=None, hub=None,
                  tasks=None, reflector=None, planner=None, plan=None, devices=None,
-                 scenes=None) -> None:
+                 scenes=None, triggers=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -53,6 +53,7 @@ class Agent:
         self.plan = plan             # 当天计划（持久化）
         self.devices = devices       # 设备/家居控制（灯/空调/音乐…）
         self.scenes = scenes         # 场景/例程（回家/睡眠/离家…）
+        self.triggers = triggers     # 自动化（定时 + 进门事件）
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
@@ -107,6 +108,14 @@ class Agent:
             if bret is not None:
                 result["reply"] = bret
                 self._log_journal(who, utterance, bret, "butler")
+                return result
+
+        # --- 自动化设定（"每天22点提醒锁门" / "我一进门就开灯"）---
+        if action is None and who.get("obey") and self.triggers is not None:
+            tret = self._trigger_route(speaker_name, utterance)
+            if tret is not None:
+                result["reply"] = tret
+                self._log_journal(who, utterance, tret, "trigger")
                 return result
 
         # --- 场景 / 例程（"回家模式" / "我回来了"）---
@@ -538,6 +547,62 @@ class Agent:
         if not ok:
             return reason
         return self.devices.control(*cmd).get("msg", "好的")
+
+    # ---------- 自动化（定时 + 进门事件）----------
+    def _trigger_route(self, speaker_name, utterance):
+        u = utterance or ""
+        if any(w in u for w in ("取消所有自动化", "清空自动化", "取消所有提醒", "清空提醒", "清空所有自动化")):
+            ok, _who, reason = self.authority.can(speaker_name, "control_devices")
+            if not ok:
+                return reason
+            return f"好的，已清空 {self.triggers.clear()} 条自动化。"
+        from .triggers import parse_trigger
+        scene_names = self.scenes.names() if self.scenes is not None else []
+        trig = parse_trigger(u, scene_names)
+        if not trig:
+            return None
+        ok, _who, reason = self.authority.can(speaker_name, "control_devices")
+        if not ok:
+            return reason
+        self.triggers.add(trig)
+        return f"好的，已设定自动化：{trig['desc']}。"
+
+    def _fire_action(self, action) -> str:
+        t = action.get("type")
+        if t == "device" and self.devices is not None:
+            return self.devices.control(action["device"], action["act"], action.get("val")).get("msg", "")
+        if t == "scene" and self.scenes is not None and self.devices is not None:
+            self.scenes.run(action["name"], self.devices)
+            return f"已启动「{action['name']}」"
+        if t == "remind":
+            return f"提醒：{action['text']}"
+        return ""
+
+    def check_time_triggers(self, now=None) -> list:
+        """到点的定时触发（每条每天只触发一次）。由 daemon 定时调用。"""
+        if self.triggers is None:
+            return []
+        now = now or datetime.now()
+        hhmm, today = now.strftime("%H:%M"), date.today().isoformat()
+        notices = []
+        for t in self.triggers.time_triggers():
+            if t.get("spec") == hhmm and t.get("last_fired") != today:
+                self.triggers.mark_fired(t["id"], today)
+                msg = self._fire_action(t.get("action", {}))
+                if msg:
+                    notices.append(msg)
+        return notices
+
+    def fire_event(self, event, who=None) -> list:
+        """条件触发（如进门）。由 presence 进门回调调用。"""
+        if self.triggers is None:
+            return []
+        notices = []
+        for t in self.triggers.event_triggers(event):
+            msg = self._fire_action(t.get("action", {}))
+            if msg:
+                notices.append(msg)
+        return notices
 
     # ---------- 场景 / 例程 ----------
     def run_scene(self, speaker_name, name) -> dict:

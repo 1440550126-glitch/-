@@ -23,6 +23,7 @@ from .remote_agents import AgentHub
 from .scenes import SceneBook
 from .skills import SkillRegistry
 from .tasks import TaskBook
+from .triggers import TriggerBook
 
 
 def _load_yaml(path: Path) -> dict:
@@ -76,10 +77,12 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
     plan = PlanBook(base / "data" / "plan.json")
     devices = DeviceHub()
     scenes = SceneBook(_load_yaml(base / "config" / "scenes.yaml"))
+    triggers = TriggerBook(base / "data" / "triggers.json")
 
     return Agent(identity, persona, memory, authority, perception, llm, robot, journal,
                  emotions=emotions, knowledge=knowledge, skills=skills, hub=hub, tasks=tasks,
-                 reflector=reflector, planner=planner, plan=plan, devices=devices, scenes=scenes)
+                 reflector=reflector, planner=planner, plan=plan, devices=devices, scenes=scenes,
+                 triggers=triggers)
 
 
 def _seed_memory(base: Path, memory) -> None:
