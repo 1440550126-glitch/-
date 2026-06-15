@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>dolby-player · 杜比音效播放器 Demo</title>
+  <style>
+    :root { --grad: linear-gradient(135deg, #a18bff 0%, #ff9ec6 100%); }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body { font-family: "PingFang SC", system-ui, -apple-system, sans-serif; color: #ece9ff;
+      background: radial-gradient(120% 120% at 50% 0%, #241d3b 0%, #14101f 60%); min-height: 100vh; padding: 28px 18px 60px; }
+    .wrap { max-width: 560px; margin: 0 auto; }
+    h1 { font-size: 22px; font-weight: 800; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .sub { color: rgba(255,255,255,.5); font-size: 12.5px; margin: 6px 0 20px; line-height: 1.7; }
+    .card { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 18px; padding: 16px; margin-bottom: 14px; }
+    .now-title { font-size: 17px; font-weight: 800; }
+    .now-artist { font-size: 12px; color: rgba(255,255,255,.5); margin-top: 2px; }
+    .row { display: flex; gap: 10px; align-items: center; }
+    .between { justify-content: space-between; }
+    button { font-family: inherit; border: 0; cursor: pointer; color: #fff; background: rgba(255,255,255,.12); border-radius: 14px; font-size: 14px; font-weight: 700; padding: 10px 14px; transition: transform .15s, background .25s; }
+    button:active { transform: scale(.92); }
+    button.round { width: 52px; height: 52px; border-radius: 50%; font-size: 20px; display: grid; place-items: center; }
+    button.play { background: var(--grad); box-shadow: 0 8px 22px rgba(160,120,230,.4); width: 60px; height: 60px; font-size: 24px; }
+    button.on { background: var(--grad); }
+    .time { font-size: 11px; color: rgba(255,255,255,.6); font-variant-numeric: tabular-nums; width: 40px; }
+    .chip { padding: 7px 13px; border-radius: 999px; font-size: 12px; font-weight: 600; background: rgba(255,255,255,.1); }
+    .chip.active { background: var(--grad); }
+    .switch { width: 50px; height: 29px; border-radius: 99px; background: rgba(255,255,255,.18); position: relative; flex-shrink: 0; transition: background .3s; }
+    .switch::after { content: ''; position: absolute; width: 23px; height: 23px; border-radius: 50%; background: #fff; top: 3px; left: 3px; transition: transform .3s cubic-bezier(.34,1.45,.42,1); }
+    .switch.on { background: var(--grad); } .switch.on::after { transform: translateX(21px); }
+    input[type=range] { -webkit-appearance: none; appearance: none; height: 5px; border-radius: 99px; background: rgba(255,255,255,.18); outline: none; flex: 1; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; cursor: pointer; }
+    input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #fff; cursor: pointer; }
+    .pl-item { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 12px; cursor: pointer; font-size: 13.5px; }
+    .pl-item:hover { background: rgba(255,255,255,.06); }
+    .pl-item.active { background: rgba(161,139,255,.18); color: #fff; }
+    .pl-item .idx { width: 18px; color: rgba(255,255,255,.4); font-size: 12px; }
+    .pl-item .ar { font-size: 11px; color: rgba(255,255,255,.45); }
+    .hint { font-size: 11px; color: rgba(255,255,255,.4); margin-top: 10px; line-height: 1.6; }
+    .file span { display: inline-block; padding: 9px 14px; border-radius: 12px; background: rgba(255,255,255,.12); font-size: 13px; font-weight: 700; }
+    .file input { display: none; }
+    .label { font-size: 12px; color: rgba(255,255,255,.55); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🎧 dolby-player</h1>
+    <div class="sub">在杜比引擎之上的播放器层：播放列表 · 上下一首 · 进度 · 音量 · 循环/随机 · 事件，全程经沉浸音效处理。</div>
+
+    <div class="card">
+      <div class="now-title" id="title">—</div>
+      <div class="now-artist" id="artist"></div>
+      <div class="row" style="margin:14px 0 6px">
+        <span class="time" id="cur">0:00</span>
+        <input id="seek" type="range" min="0" max="1000" value="0" />
+        <span class="time" id="dur" style="text-align:right">0:00</span>
+      </div>
+      <div class="row between" style="margin-top:8px">
+        <button id="shuffle" class="round" title="随机">🔀</button>
+        <button id="prev" class="round" title="上一首">⏮</button>
+        <button id="play" class="play" title="播放/暂停">▶</button>
+        <button id="next" class="round" title="下一首">⏭</button>
+        <button id="repeat" class="round" title="循环">🔁</button>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <span class="label">音量</span><input id="vol" type="range" min="0" max="100" value="100" />
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row between" style="margin-bottom:8px">
+        <div style="font-weight:800;font-size:15px">播放列表</div>
+        <label class="file"><input id="file" type="file" accept="audio/*" multiple /><span>＋ 添加本地文件</span></label>
+      </div>
+      <div id="playlist"></div>
+      <div class="hint" id="plHint">内置两段合成片段。本仓库严格 CSP 下「添加本地文件」可能无法播放（需站点允许 blob: 媒体或独立托管）。</div>
+    </div>
+
+    <div class="card">
+      <div class="row between">
+        <div><div style="font-weight:800;font-size:15px">杜比音效</div><div class="label" id="dolbyState">已开启 · 音乐厅</div></div>
+        <div id="dolbySwitch" class="switch on"></div>
+      </div>
+      <div class="row" id="presets" style="margin-top:14px;flex-wrap:wrap"></div>
+      <div class="row between" style="margin-top:14px">
+        <div style="font-weight:700;font-size:13.5px">耳机环绕（HRTF）</div>
+        <div id="hpSwitch" class="switch"></div>
+      </div>
+      <div class="row" style="margin-top:14px"><span class="label">强度</span><input id="intensity" type="range" min="0" max="100" value="85" /></div>
+    </div>
+  </div>
+  <script type="module" src="./player.js"></script>
+</body>
+</html>

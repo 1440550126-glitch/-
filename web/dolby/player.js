@@ -1,0 +1,86 @@
+// dolby-player Demo：播放列表 / 传输控制 / 进度 / 杜比音效
+import { DolbyPlayer } from './dolby-player.js';
+import { DOLBY_PRESETS, presetById } from './dolby-audio.js';
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+const fmt = (s) => { if (!isFinite(s) || s < 0) return '0:00'; s = Math.floor(s); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+const player = new DolbyPlayer({
+  tracks: [
+    { src: 'demo-assets/track-1.wav', title: '潮汐 · Am–F–C–G', artist: 'dolby-audio demo' },
+    { src: 'demo-assets/track-2.wav', title: '夜行 · Dm–B♭–F–C', artist: 'dolby-audio demo' }
+  ],
+  dolby: { preset: 'music' }
+});
+const dolby = player.dolby;
+
+// —— 现在播放 + 进度 ——
+const seek = $('seek'); let seeking = false;
+player.on('track', ({ track }) => { $('title').textContent = track.title || track.src; $('artist').textContent = track.artist || ''; renderList(); });
+player.on('time', ({ currentTime, duration }) => {
+  $('cur').textContent = fmt(currentTime); $('dur').textContent = fmt(duration);
+  if (!seeking && duration) seek.value = Math.round(currentTime / duration * 1000);
+});
+player.on('loaded', ({ duration }) => { $('dur').textContent = fmt(duration); });
+player.on('play', () => { $('play').textContent = '⏸'; });
+player.on('pause', () => { $('play').textContent = '▶'; });
+player.on('error', () => { $('plHint').textContent = '该音频无法播放（可能是浏览器 CSP 限制了 blob: 媒体）。'; });
+
+seek.addEventListener('input', () => { seeking = true; });
+seek.addEventListener('change', () => { const d = player.duration; if (d) player.seek(seek.value / 1000 * d); seeking = false; });
+
+// —— 传输 ——
+$('play').addEventListener('click', () => player.toggle());
+$('prev').addEventListener('click', () => player.prev(player.playing));
+$('next').addEventListener('click', () => player.next(player.playing));
+const shuffleBtn = $('shuffle');
+shuffleBtn.addEventListener('click', () => { player.setShuffle(!player.shuffle); shuffleBtn.classList.toggle('on', player.shuffle); });
+const repeatBtn = $('repeat'), REPEAT = ['off', 'all', 'one'], ICON = { off: '🔁', all: '🔁', one: '🔂' };
+repeatBtn.addEventListener('click', () => {
+  player.setRepeat(REPEAT[(REPEAT.indexOf(player.repeat) + 1) % REPEAT.length]);
+  repeatBtn.textContent = ICON[player.repeat]; repeatBtn.classList.toggle('on', player.repeat !== 'off');
+});
+$('vol').addEventListener('input', () => player.setVolume($('vol').value / 100));
+
+// —— 播放列表 ——
+function renderList() {
+  const pl = $('playlist'); pl.innerHTML = '';
+  player.tracks.forEach((t, i) => {
+    const title = typeof t === 'string' ? t : (t.title || t.src);
+    const artist = typeof t === 'string' ? '' : (t.artist || '');
+    const box = el('div'); box.style.flex = '1'; box.append(el('div', '', title));
+    if (artist) box.append(el('div', 'ar', artist));
+    const item = el('div', 'pl-item' + (i === player.index ? ' active' : ''));
+    item.append(el('span', 'idx', String(i + 1)), box);
+    item.addEventListener('click', () => player.load(i, true));
+    pl.append(item);
+  });
+}
+$('file').addEventListener('change', (e) => {
+  const files = [...e.target.files];
+  for (const f of files) player.add({ src: URL.createObjectURL(f), title: f.name, artist: '本地文件' });
+  renderList();
+  if (files.length) $('plHint').textContent = `已添加 ${files.length} 个本地文件到列表末尾，点击即可播放。`;
+});
+
+// —— 杜比音效 ——
+const swEl = $('dolbySwitch'), stateEl = $('dolbyState');
+function refreshDolby() { stateEl.textContent = `${dolby.enabled ? '已开启' : '已关闭（原声）'} · ${presetById(dolby.presetId).label}`; swEl.classList.toggle('on', dolby.enabled); }
+swEl.addEventListener('click', () => { dolby.setEnabled(!dolby.enabled); refreshDolby(); });
+const presetsEl = $('presets');
+DOLBY_PRESETS.forEach((p) => {
+  const b = el('button', 'chip' + (p.id === dolby.presetId ? ' active' : ''), p.label); b.title = p.desc;
+  b.addEventListener('click', () => { dolby.setEnabled(true); dolby.setPreset(p.id); [...presetsEl.children].forEach((c) => c.classList.toggle('active', c === b)); refreshDolby(); });
+  presetsEl.append(b);
+});
+const hpEl = $('hpSwitch');
+hpEl.addEventListener('click', () => { const on = dolby.spatialMode !== 'headphones'; dolby.setSpatialMode(on ? 'headphones' : 'speakers'); hpEl.classList.toggle('on', on); });
+$('intensity').addEventListener('input', () => dolby.setIntensity($('intensity').value / 100));
+
+// —— 初始化 UI ——
+renderList();
+const cur = player.current;
+$('title').textContent = cur ? (cur.title || cur.src) : '—';
+$('artist').textContent = cur ? (cur.artist || '') : '';
+refreshDolby();

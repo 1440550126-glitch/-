@@ -30,6 +30,20 @@ function makeCtx() {
   };
 }
 
+function makeAudio() {
+  const L = {};
+  return {
+    paused: true, currentTime: 0, duration: 120, volume: 1, src: '', crossOrigin: null, preload: '', error: null,
+    addEventListener(ev, fn) { (L[ev] || (L[ev] = [])).push(fn); },
+    removeEventListener(ev, fn) { L[ev] = (L[ev] || []).filter((f) => f !== fn); },
+    play() { this.paused = false; this._fire('play'); return Promise.resolve(); },
+    pause() { this.paused = true; this._fire('pause'); },
+    load() {},
+    _fire(ev) { for (const f of (L[ev] || []).slice()) f(); },
+    _count(ev) { return (L[ev] || []).length; }
+  };
+}
+
 console.log('dolby-audio 自测');
 
 // 1) 构建
@@ -125,5 +139,29 @@ store.autosave(sd2, 'dolby:prefs', 40); sd2.setPreset('music');
 await new Promise((r) => setTimeout(r, 80));
 ok(store.loadPrefs().preset === 'music', 'autosave 自动持久化 set* 调用');
 sd.dispose(); sd2.dispose();
+
+// 11) DolbyPlayer 播放器层
+const { DolbyPlayer, createPlayer } = await import('../dolby-player.js');
+const audio = makeAudio();
+const pdolby = new DolbyAudio({ context: makeCtx(), autoConnect: false });
+const player = new DolbyPlayer({ audio, dolby: pdolby, tracks: [{ src: 'a.mp3', title: 'A' }, 'b.mp3', { src: 'c.mp3' }] });
+ok(player.dolby === pdolby, 'DolbyPlayer 复用传入的引擎实例');
+ok(player.index === 0 && audio.src === 'a.mp3', 'autoload 载入第 0 首');
+let trackEv = null; player.on('track', (e) => { trackEv = e; });
+player.load(1); ok(player.index === 1 && audio.src === 'b.mp3' && trackEv.index === 1, 'load 切歌并触发 track 事件（支持字符串轨）');
+await player.play(); ok(player.playing, 'play 播放');
+player.pause(); ok(!player.playing, 'pause 暂停');
+player.next(false); ok(player.index === 2, 'next 下一首');
+player.next(false); ok(player.index === 0, 'next 末尾回环到第 0 首');
+player.prev(false); ok(player.index === 2, 'prev 上一首回环');
+audio.currentTime = 5; player.prev(false); ok(player.index === 2 && audio.currentTime === 0, 'prev 播过 3s 回到本曲开头');
+player.setRepeat('one'); player.load(1); audio.currentTime = 10; audio._fire('ended');
+ok(player.index === 1 && audio.currentTime === 0, 'repeat=one 结束后重播本曲');
+player.setRepeat('all'); player.load(2); audio._fire('ended'); ok(player.index === 0, 'repeat=all 末尾结束回到第 0 首');
+player.setVolume(0.5); ok(audio.volume === 0.5, 'setVolume 生效');
+player.add('d.mp3'); ok(player.tracks.length === 4, 'add 追加曲目');
+player.dispose(); ok(audio._count('play') === 0, 'dispose 解绑音频事件');
+const p2 = createPlayer({ audio: makeAudio(), dolby: new DolbyAudio({ context: makeCtx(), autoConnect: false }) });
+ok(p2 instanceof DolbyPlayer, 'createPlayer 工厂函数'); p2.dispose();
 
 console.log(`\n========== dolby-audio：${pass} 项断言全部通过 ✅ ==========`);

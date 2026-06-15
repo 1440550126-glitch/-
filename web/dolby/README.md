@@ -21,7 +21,8 @@
 - 🎛 **干湿混合** — 强度可调、一键 A/B 旁通（等功率交叉淡化，切换不爆音）
 - 🎚 **5 档预设 + 自定义** — 标准/影院/音乐/夜间/人声，`registerPreset()` 可扩展
 - 💾 **可选偏好持久化** — `dolby-store.js` 助手（引擎本身保持无状态、解耦）
-- 🪶 **零依赖 / 零构建** — 单个 ES Module，含 TypeScript 类型定义
+- 🎧 **开箱即用播放器层** — `dolby-player.js`：`<audio>`+引擎+播放列表（上下一首/进度/音量/循环/随机/事件）
+- 🪶 **零依赖 / 零构建** — ES Module，含 TypeScript 类型定义
 
 ## 快速开始
 
@@ -193,6 +194,38 @@ autosave(dolby);                  // 之后任何 set* 调用自动节流保存
                                                   动态压缩→软限幅→补偿→湿声┘→ 输出 → 扬声器
 ```
 
+## 播放器层（DolbyPlayer）
+
+想要"开箱即用"的播放器（而不只是音效处理器）时，用 `dolby-player.js`：它把
+`<audio>` + 杜比引擎 + 播放列表打包好，自动处理切歌、循环、随机与自动播放策略。
+
+```js
+import { DolbyPlayer } from './dolby/dolby-player.js';
+
+const player = new DolbyPlayer({
+  tracks: [
+    { src: '/music/a.mp3', title: '歌名 A', artist: '歌手' },
+    '/music/b.mp3',                                  // 也可只给字符串
+  ],
+  dolby: { preset: 'music' },     // 传 options 自建引擎，或传现成 DolbyAudio 实例
+  repeat: 'all', shuffle: false, volume: 0.9
+});
+
+player.on('track', ({ index, track }) => updateNowPlaying(track));
+player.on('time', ({ currentTime, duration }) => updateProgress(currentTime, duration));
+
+playBtn.onclick = () => player.toggle();   // 用户手势里调用（内部会 resume 引擎）
+nextBtn.onclick = () => player.next();
+player.dolby.setSpatialMode('headphones'); // 引擎全部能力仍可用
+```
+
+控制：`play() pause() toggle() stop() seek(s) setVolume(v) next() prev() load(i)`、
+`setRepeat('off'|'one'|'all')`、`setShuffle(on)`、`setPlaylist(tracks)`、`add(track)`；
+便捷代理 `setPreset/setIntensity/setEnabled/setSpatialMode`，完整能力见 `player.dolby`。
+
+事件：`track` / `play` / `pause` / `ended` / `time` / `loaded` / `error` / `volume` / `playlist`
+（`on(ev, fn)` / `off` / `once`）。
+
 ## 集成注意事项
 
 - **自动播放策略**：所有浏览器都要求用户手势（点击/触摸）后才能发声。请在用户交互的事件里调用 `resume()`。
@@ -206,12 +239,17 @@ autosave(dolby);                  // 之后任何 set* 调用自动节流保存
 
 ```
 npm start            # 启动本仓库服务
-# 浏览器打开 http://localhost:3000/dolby/demo.html
+# 音效处理器：  http://localhost:3000/dolby/demo.html
+# 播放器层：    http://localhost:3000/dolby/player.html
 ```
 
 Demo 内置一段合成音乐可直接试听，也能载入你自己的音频做 A/B 对比，带实时频谱、
 均衡曲线图、输出电平表、「按住听原声」即时对比按钮，预设/强度/宽度/低音/空间/高频/人声
 滑杆，以及「耳机环绕 / 多频带压缩 / 响度对齐」开关。
+`player.html` 演示播放器层，内置两段同源 WAV 片段（`demo-assets/`，由
+`tools/make-demo-tracks.mjs` 可复现生成）；可用「添加本地文件」把自己的歌加入列表
+（站点 CSP 需允许 `blob:` 媒体）。
+
 独立使用时用任意静态服务器即可（如 `npx serve web/dolby`）——注意 ES Module 需经
 `http(s)` 加载，直接 `file://` 双击可能被浏览器的模块 CORS 策略拦截。
 

@@ -1,7 +1,7 @@
 {
   "name": "dolby-audio",
-  "version": "1.3.0",
-  "description": "独立、零依赖的杜比风格沉浸音效引擎（纯 Web Audio）：低频增强 / 立体声声场展宽 / 耳机 HRTF 虚拟环绕 / 空间混响 / 多频带压缩 / 响度对齐 / 人声增强。可挂在 <audio>/<video> 或任意 AudioNode 后端。",
+  "version": "1.4.0",
+  "description": "独立、零依赖的杜比风格沉浸音效引擎与播放器（纯 Web Audio）：低频增强 / 立体声声场展宽 / 耳机 HRTF 虚拟环绕 / 空间混响 / 多频带压缩 / 响度对齐 / 人声增强 / EQ 曲线 / 播放列表播放器。可挂在 <audio>/<video> 或任意 AudioNode 后端。",
   "type": "module",
   "main": "dolby-audio.js",
   "module": "dolby-audio.js",
@@ -14,6 +14,10 @@
     "./store": {
       "types": "./dolby-store.d.ts",
       "default": "./dolby-store.js"
+    },
+    "./player": {
+      "types": "./dolby-player.d.ts",
+      "default": "./dolby-player.js"
     }
   },
   "files": [
@@ -21,8 +25,12 @@
     "dolby-audio.d.ts",
     "dolby-store.js",
     "dolby-store.d.ts",
+    "dolby-player.js",
+    "dolby-player.d.ts",
     "demo.html",
     "demo.js",
+    "player.html",
+    "player.js",
     "README.md"
   ],
   "scripts": {
