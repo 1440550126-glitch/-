@@ -50,21 +50,38 @@ def _snapshot(agent, monitor) -> dict:
         ][::-1][:6]
         tasks_done = len(agent.tasks.done())
     reflections = agent.recent_reflections() if hasattr(agent, "recent_reflections") else []
-    graph_top = []
+    graph_top, graph_viz = [], {"nodes": [], "edges": []}
     if hasattr(agent, "memory_graph"):
         try:
-            graph_top = [n for n, _ in agent.memory_graph().central(6)]
+            g = agent.memory_graph()
+            graph_top = [n for n, _ in g.central(6)]
+            deg = {n: sum(w.values()) for n, w in g.adj.items()}
+            top = [n for n, _ in sorted(deg.items(), key=lambda x: -x[1])[:12]]
+            idx = set(top)
+            graph_viz["nodes"] = [
+                {"id": n, "label": n, "kind": g.meta.get(n, {}).get("kind", "topic"), "deg": deg[n]}
+                for n in top]
+            seen = set()
+            for a in top:
+                for b, w in g.adj.get(a, {}).items():
+                    if b in idx and (b, a) not in seen:
+                        seen.add((a, b))
+                        graph_viz["edges"].append({"a": a, "b": b, "w": w})
         except Exception:
-            graph_top = []
+            pass
+    people_names = [p["name"] for p in agent.authority.people.values() if p.get("name")]
     timeline = []
     try:
         for it in agent.memory.timeline():
             w = it.get("when")
             if w and str(w).isdigit():
-                timeline.append({"year": str(w), "text": it["text"]})
+                text = it["text"]
+                timeline.append({"year": str(w), "text": text,
+                                 "people": [n for n in people_names if n and n in text]})
     except Exception:
         timeline = []
     timeline = timeline[:40]
+    tl_entities = sorted({p for e in timeline for p in e["people"]})
     devices = agent.devices.rows() if getattr(agent, "devices", None) is not None else []
     scenes = agent.scenes.names() if getattr(agent, "scenes", None) is not None else []
     triggers = [t["desc"] for t in agent.triggers.all()] if getattr(agent, "triggers", None) is not None else []
@@ -86,7 +103,9 @@ def _snapshot(agent, monitor) -> dict:
         "tasks_done": tasks_done,
         "reflections": reflections,
         "graph": graph_top,
+        "graph_viz": graph_viz,
         "timeline": timeline,
+        "timeline_entities": tl_entities,
         "plan": plan_items,
         "devices": devices,
         "scenes": scenes,
@@ -148,8 +167,8 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 </div>
 <div class=card><div class=k>🗓️ 今天的计划</div><ul id=plan></ul></div>
 <div class=card><div class=k>💡 它最近的领悟</div><ul id=refl></ul></div>
-<div class=card><div class=k>🕸️ 关系图谱 · 最核心</div><div id=graph class=dim>…</div></div>
-<div class=card><div class=k>📜 一生时间线</div><div id=timeline></div></div>
+<div class=card><div class=k>🕸️ 关系图谱</div><div id=graph></div><div id=graphtop class=dim></div></div>
+<div class=card><div class=k>📜 一生时间线</div><div id=tlfilters></div><div id=timeline></div></div>
 <div class=card><div class=k>🧩 最近记住</div><ul id=mems></ul></div>
 <div class=card><div class=k>🕘 最近对话</div><ul id=jour></ul></div>
 <div class=card><div class=k>🛰️ 最近派活 / 提议</div><ul id=disp></ul></div>
@@ -169,6 +188,11 @@ async function scene(n){const sp=$('#speaker').value;try{const r=await (await fe
 let inited=false, soulName="它";
 function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
 function renderTimeline(tl){if(!tl||!tl.length)return '<span class=dim>暂无带年份的记忆</span>';let h='',last=null;tl.forEach(e=>{if(e.year!==last){h+='<div class=tlyear>'+esc(e.year)+'</div>';last=e.year;}h+='<div class=tlitem>'+esc(e.text)+'</div>';});return h;}
+let tlFilter=null, _tl=[];
+function setTL(e){tlFilter=e||null;drawTL();}
+function drawTL(){let tl=_tl;if(tlFilter)tl=tl.filter(x=>x.people&&x.people.includes(tlFilter));$('#timeline').innerHTML=renderTimeline(tl);}
+function renderTLfilters(ents){let h='<button class=devbtn style="margin:2px" onclick="setTL(\'\')">全部</button>';(ents||[]).forEach(e=>h+='<button class=devbtn style="margin:2px" onclick="setTL(\''+e+'\')">'+esc(e)+'</button>');return h;}
+function renderGraph(gv){if(!gv||!gv.nodes||!gv.nodes.length)return '';const W=320,H=290,cx=W/2,cy=H/2,R=108;const nodes=gv.nodes;const center=nodes.reduce((a,b)=>b.deg>a.deg?b:a,nodes[0]);const others=nodes.filter(x=>x!==center);const pos={};pos[center.id]={x:cx,y:cy};others.forEach((nd,i)=>{const ang=2*Math.PI*i/others.length;pos[nd.id]={x:cx+R*Math.cos(ang),y:cy+R*Math.sin(ang)};});let s='<svg width="100%" viewBox="0 0 '+W+' '+H+'">';(gv.edges||[]).forEach(e=>{const p=pos[e.a],q=pos[e.b];if(p&&q)s+='<line x1='+p.x.toFixed(1)+' y1='+p.y.toFixed(1)+' x2='+q.x.toFixed(1)+' y2='+q.y.toFixed(1)+' stroke="#2e7d32" stroke-opacity="0.5" stroke-width="'+Math.min(4,e.w)+'"/>';});nodes.forEach(nd=>{const p=pos[nd.id],r=nd.kind==='person'?8:5,col=nd.kind==='person'?'#1565c0':'#5a3a13';s+='<circle cx='+p.x.toFixed(1)+' cy='+p.y.toFixed(1)+' r='+r+' fill="'+col+'"/>';s+='<text x='+p.x.toFixed(1)+' y='+(p.y-r-3).toFixed(1)+' font-size="11" fill="#cbd5e1" text-anchor="middle">'+esc(nd.label)+'</text>';});return s+'</svg>';}
 function li(a){return a.map(x=>'<li>'+esc(x)+'</li>').join('')||'<li class=dim>—</li>';}
 async function refresh(){
   try{
@@ -191,8 +215,9 @@ async function refresh(){
     $('#retry').style.display=op.length?'inline-block':'none';
     $('#plan').innerHTML=li(s.plan||[]);
     $('#refl').innerHTML=li(s.reflections||[]);
-    $('#graph').textContent=(s.graph&&s.graph.length)?s.graph.join('　·　'):'—';
-    $('#timeline').innerHTML=renderTimeline(s.timeline);
+    $('#graph').innerHTML=renderGraph(s.graph_viz)||'<span class=dim>记忆还太少，画不出关系网</span>';
+    $('#graphtop').textContent=(s.graph&&s.graph.length)?('最核心：'+s.graph.join(' · ')):'';
+    _tl=s.timeline||[]; $('#tlfilters').innerHTML=renderTLfilters(s.timeline_entities); drawTL();
     $('#mems').innerHTML=li(s.recent_memories);
     $('#jour').innerHTML=li(s.recent_journal);
     if(!inited){$('#speaker').innerHTML=s.people.map(p=>'<option'+(p===s.owner?' selected':'')+'>'+esc(p)+'</option>').join('');inited=true;}
