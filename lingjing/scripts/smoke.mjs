@@ -145,6 +145,10 @@ try {
   ok(prof.characters.some((c) => c.ready && c.portrait === upC.url), '已生成定妆照写进角色记忆（portrait）');
   ok(/全片总控|铁律/.test(prof.master_control || '') && Array.isArray(prof.forbidden_rules) && prof.forbidden_rules.length >= 8, '角色记忆含总控提示词 + 全部禁止项');
   ok(/画风铁律|切换画风/.test(prof.master_control || ''), '画风锚定：总控含"全片只用一种画风"铁律（防日漫↔2D跳风）');
+  ok(prof.forbidden_rules.some((r) => /三只手|多指|多出的手/.test(r)) && prof.forbidden_rules.some((r) => /身高|头身比/.test(r)), '禁止项含"多手/三只手"与"身高头身比突变"');
+  ok(prof.characters.every((c) => /身高体型|体型比例/.test(c.lock)), '角色锁定档案含身高体型固定（防一米五变一米七）');
+  const setChain = (await api('GET', '/api/settings')).data.video_chain;
+  ok(setChain === true, '视频接龙默认开启（上段尾帧→下段首帧）');
   const agentTools = (await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools;
   ok(agentTools.some((t) => t.name === 'check_consistency'), 'Agent 开放 check_consistency 工具');
   ok(agentTools.some((t) => t.name === 'get_character_profile'), 'Agent 开放 get_character_profile 工具（角色记忆）');
@@ -342,7 +346,7 @@ try {
   ok(wfDone.status === 'succeeded', `工作流完成（${wfDone.status}）`);
   const stepMap = Object.fromEntries(wfDone.steps.map((s) => [s.name, s]));
   ok(stepMap.script.status === 'done' && stepMap.parse.status === 'done' && stepMap.images.status === 'done', '剧本/解析/出图步骤完成');
-  ok(stepMap.videos.status === 'done' && /完成 \d+\/\d+/.test(stepMap.videos.detail), `视频步骤：${stepMap.videos.detail}`);
+  ok(stepMap.videos.status === 'done' && /(完成|接龙) \d+\/\d+/.test(stepMap.videos.detail), `视频步骤：${stepMap.videos.detail}`);
   ok(stepMap.dub.status === 'skipped' && stepMap.export.status === 'skipped', 'TTS/ffmpeg 未配置步骤自动跳过');
   ok(stepMap.qc && stepMap.qc.status === 'done' && /质检/.test(stepMap.qc.detail), `AIQC 质检步骤执行（${stepMap.qc.detail}）`);
   const qcRep = (await api('GET', `/api/projects/${p9.id}/qc`)).data;

@@ -255,7 +255,7 @@ GET('/api/settings', async () => {
       autofix: getSetting('qc_autofix', true) !== false,
       min_score: Number(getSetting('qc_min_score', 75))
     },
-    video_chain: getSetting('video_chain', false) === true,
+    video_chain: getSetting('video_chain', true) !== false,
     auto_expressions: getSetting('auto_expressions', false) === true,
     agent: {
       temperature: Number(getSetting('agent_temperature', 0.5)),

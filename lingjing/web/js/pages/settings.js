@@ -18,7 +18,7 @@ export async function renderSettings(page) {
   const qcEnSel = h('select', { class: 'select' }, [['true', '开启'], ['false', '关闭']].map(([v, l]) => h('option', { value: v, selected: String(qc.enabled !== false) === v }, l)));
   const qcFixSel = h('select', { class: 'select' }, [['true', '自动改正后复检'], ['false', '只记录不改']].map(([v, l]) => h('option', { value: v, selected: String(qc.autofix !== false) === v }, l)));
   const qcScoreIn = h('input', { class: 'input', type: 'number', min: 50, max: 95, step: 5, value: qc.min_score ?? 75, style: { width: '80px' } });
-  const chainSel = h('select', { class: 'select' }, [['false', '并行（快，各镜独立首帧）'], ['true', '接龙（连贯，上段尾帧→下段首帧，需 ffmpeg）']].map(([v, l]) => h('option', { value: v, selected: String(!!s.video_chain) === v }, l)));
+  const chainSel = h('select', { class: 'select' }, [['true', '接龙（推荐·连贯，上段尾帧→下段首帧，同场景衔接，需 ffmpeg）'], ['false', '并行（快，各镜独立首帧，不连贯）']].map(([v, l]) => h('option', { value: v, selected: String(s.video_chain !== false) === v }, l)));
   const exprSel = h('select', { class: 'select' }, [['false', '关闭'], ['true', '开启（全流程为主要角色生成表情库）']].map(([v, l]) => h('option', { value: v, selected: String(!!s.auto_expressions) === v }, l)));
   const nameIn = h('input', { class: 'input', value: s.user_name });
   const p1 = h('input', { class: 'input', type: 'number', step: '0.0001', value: s.price_chat_in });

@@ -64,14 +64,16 @@ export function lockStyle(sb, styleName) {
 export const FORBIDDEN_RULES = [
   '角色身体埋进地面或墙体（穿模）', '只显示头部、其余身体缺失', '角色悬空漂浮',
   '脚底穿过地面、双脚悬在地面下', '人物重心/碰撞中心错误导致姿态失衡', '身体各部位缩放比例异常、头身比失调',
-  '人物下沉、半身陷入地面', '肢体残缺/多余、上下半身错位分离、面部扭曲畸形/恐怖谷'
+  '人物下沉、半身陷入地面', '肢体残缺/多余、上下半身错位分离、面部扭曲畸形/恐怖谷',
+  '多出的手·手臂·手指（如三只手、六根手指）、手部结构错乱', '同一角色身高·体型·头身比在镜头间突变',
+  '笑容或表情狰狞凶恶、儿童面容诡异老成（儿童须自然童真、笑容温和）'
 ];
-const NEG_TAIL = `【禁止出现】${FORBIDDEN_RULES.join('；')}。要求：人物完整、双脚稳踏地面、解剖正确、比例协调、与地面关系合理。`;
+const NEG_TAIL = `【禁止出现】${FORBIDDEN_RULES.join('；')}。要求：人物完整、双脚稳踏地面、双手结构正确（每只手五根手指、不多手不畸形）、解剖正确、比例协调、表情自然真实、与地面关系合理。`;
 // 视频额外禁止项（动画/一致性）：
-const VIDEO_NEG = `【视频禁止】角色播放中下沉/陷地/穿模/漂浮；改变角色外观·服装·武器·发型·身材比例；中途换成另一个人。要求：全程锁定同一角色形象，双脚始终踏实地面，物理稳定。`;
+const VIDEO_NEG = `【视频禁止】角色播放中下沉/陷地/穿模/漂浮；改变角色外观·服装·武器·发型·身材比例；身高/头身比突变；出现多手多指或手部畸形；表情变狰狞；中途换成另一个人。要求：全程锁定同一角色形象与身高体型，双脚始终踏实地面，手部正常，表情自然，物理稳定。`;
 function framingGuide(kind, shotType = '') {
   if (kind === 'character') {
-    return `，单人定妆照，正面或四分之三侧面，五官清晰对称、面部完整、表情自然不诡异（避免恐怖谷），外貌特征鲜明、辨识度高（与其他角色明显区分、不撞脸），标准半身像（头部到腰部，约占画面 70%），人物居中、姿态自然挺立，背景简洁虚化。${NEG_TAIL}`;
+    return `，单人定妆照，正面或四分之三侧面，五官清晰对称、面部完整、表情自然不诡异（避免恐怖谷、笑容温和不狰狞），双手自然展示且结构正确（五指、不多手不畸形），外貌特征鲜明、辨识度高（与其他角色明显区分、不撞脸），标准半身像（头部到腰部，约占画面 70%），人物居中、姿态自然挺立、身高体型符合设定，背景简洁虚化。${NEG_TAIL}`;
   }
   if (kind === 'scene') {
     return `，场景空镜，无人物出现，环境陈设完整，层次分明，电影级布光与大气透视。`;
@@ -275,9 +277,11 @@ function reclassifyProps(sb) {
     const desc = String(c.desc || '');
     // 用户已确认为角色的名字 → 权威保留，不受启发式干扰（Agent 已"学会"）
     if (learnedTypeOf(name) === 'character') { keep.push(c); continue; }
-    // 物体名词结尾且不含人名特征 → 强判道具；或中部含物件词且无人物线索
-    const isProp = (STRONG_OBJECT.test(name) && !PERSON_NAME.test(name))
-      || (PROP_RE.test(name) && !c.gender && !PERSON_HINT.test(desc) && !PERSON_HINT.test(name));
+    // 描述里有"性格/眼神/穿着/发型/身材/职业"等真人线索才算真人（性别字段易被大模型瞎填，不作准）
+    const personDesc = PERSON_HINT.test(desc);
+    // 名字以物体名词结尾 → 强判道具（无视瞎填的性别与姓氏子串）；或中部含物件词且无任何人物线索
+    const isProp = (STRONG_OBJECT.test(name) && !personDesc)
+      || (PROP_RE.test(name) && !c.gender && !personDesc && !PERSON_HINT.test(name));
     if (isProp) {
       if (!propNames.has(name)) {
         (sb.props ||= []).push({ key: c.key, name, desc: desc || c.image_prompt || '', image_prompt: c.image_prompt || '' });
@@ -353,6 +357,17 @@ function normalizeStoryboard(sb) {
 
 const cleanDesc = (s) => String(s || '').replace(/\s+/g, '').replace(/^[，,。.；;、]+|[，,。.；;、]+$/g, '');
 const ageTag = (d) => /老|年迈|苍老|花甲|白发|爷|奶/.test(d) ? '老年' : /少年|少女|小孩|儿童|孩子/.test(d) ? '少年' : /中年|大叔|大妈/.test(d) ? '中年' : '青年';
+// 从描述里抽身高（"一米五/1.5米/150cm/身高158"），锁进档案防镜头间忽高忽低
+const HEIGHT_RE = /((?:[一二三四五六七八九两]米[一二三四五六七八九半]?)|(?:\d(?:\.\d{1,2})?\s*米\d?)|(?:1[.．]\d{1,2}\s*[mM])|(?:\d{2,3}\s*(?:cm|CM|公分|厘米)))/;
+/** 身高/体型锁定文案：显式身高 + 儿童头身比，全片逐字复用 */
+function bodyLock(desc, age) {
+  const m = desc.match(HEIGHT_RE);
+  const parts = [];
+  if (m) parts.push(`身高${m[1].replace(/\s+/g, '')}`);
+  if (age === '少年') parts.push('儿童头身比例·身量矮小·童颜');
+  else if (age === '老年') parts.push('年长体态');
+  return parts.join('、');
+}
 
 /** 为每个角色/场景/道具建【完整锁定档案】——全片每处逐字复用同一段，保证细节一致 */
 function buildLocks(sb) {
@@ -360,8 +375,10 @@ function buildLocks(sb) {
   for (const c of sb.characters) {
     const d = cleanDesc(c.desc).slice(0, 110);
     const g = c.gender === '男' ? '男性' : c.gender === '女' ? '女性' : '';
-    // 角色锁定档案：性别+年龄+完整外貌/服装/特征，固定不变
-    c.lock = `${c.name}（${g}${ageTag(d)}/${c.role}：${d}，五官发型服装固定不变）`;
+    const age = ageTag(d);
+    const body = bodyLock(d, age);
+    // 角色锁定档案：性别+年龄+完整外貌/服装/身高体型/特征，固定不变
+    c.lock = `${c.name}（${g}${age}/${c.role}：${d}${body ? '，' + body : ''}，五官·发型·服装·身高体型比例全程固定不变）`;
     // 定妆照提示词与锁定档案一致（定义图＝首帧引用的同一形象）
     c.image_prompt = `${style} ｜ 单人定妆照 ｜ ${c.lock}`;
   }

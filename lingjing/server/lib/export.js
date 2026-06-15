@@ -22,7 +22,8 @@ export function ffmpegPath() {
 export function extractLastFrame(videoUrl) {
   const ff = ffmpegPath();
   if (!ff) return '';
-  const f = localFile(videoUrl);
+  // 本地文件优先；若仍是远端地址（落盘失败时），让 ffmpeg 直接读 http(s) 兜底
+  const f = localFile(videoUrl) || (/^https?:\/\//i.test(videoUrl || '') ? videoUrl : null);
   if (!f) return '';
   const outName = `${uid('lf')}.png`;
   const outFile = path.join(UPLOAD_DIR, outName);

@@ -177,35 +177,41 @@ async function execStep(name, wf, cancelled) {
     }
     case 'videos': {
       const { getSetting } = await import('./db.js');
-      const chain = getSetting('video_chain', false) === true;   // 接龙模式：上段尾帧→下段首帧
+      const chain = getSetting('video_chain', true) !== false;   // 接龙模式：上段尾帧→下段首帧（默认开）
       const p = project();
       const c = getCanvas(p.canvas_id);
       const todo = epShots(c).filter((n) => !n.data.video).sort((a, b) => (a.data.order || 0) - (b.data.order || 0));
       if (!todo.length) return '已全部出片（无需生成）';
 
       if (chain) {
-        // 顺序生成：每段等完成→抽尾帧→作为下一段首帧（画面连续）
+        // 严格顺序：一段一段来，每段等完成→抽尾帧→作为下一段首帧。
+        // 仅在【同场景且顺序相邻】时接龙（连续动作）；换场/跳镜则回到本镜定妆首帧，避免把上一场景画面带进新场景。
         const { extractLastFrame } = await import('./export.js');
-        let prevFrame = '';
-        let okC = 0, failC = 0;
+        const hasFF = !!ffmpegPath();
+        let prevFrame = '', prevScene = '', prevOrder = -999;
+        let okC = 0, failC = 0, chained = 0;
         for (const n of todo) {
           if (cancelled()) break;
-          const firstFrame = prevFrame || n.data.image;
+          const continuous = !!prevFrame && n.data.scene === prevScene && (n.data.order || 0) === prevOrder + 1;
+          const firstFrame = continuous ? prevFrame : (n.data.image || '');
+          prevScene = n.data.scene; prevOrder = n.data.order || 0;
+          if (!firstFrame) { failC++; prevFrame = ''; console.warn('[workflow] 跳过无首帧分镜：', n.data.name); continue; }
           let r;
           try {
             r = await createVideoTask({
-              prompt: n.data.video_prompt || n.data.action || n.data.name, imageUrl: firstFrame,
-              duration: n.data.duration, projectId, nodeId: n.id, name: n.data.name, order: n.data.order
+              prompt: (n.data.video_prompt || n.data.action || n.data.name) + (continuous ? '，紧接上一镜，画面与角色无缝衔接、外观身高一致' : ''),
+              imageUrl: firstFrame, duration: n.data.duration, projectId, nodeId: n.id, name: n.data.name, order: n.data.order
             });
-          } catch (e) { failC++; if (!okC && todo.indexOf(n) === 0) throw bad(e.message); continue; }
-          // 等这一段完成
-          const deadline = now() + 6 * 60_000;
+          } catch (e) { failC++; prevFrame = ''; if (!okC && todo.indexOf(n) === 0) throw bad(e.message); continue; }
+          if (continuous) chained++;
+          // 阻塞等这一段真正完成，才能抽它的尾帧给下一段（这就是"一步一步"）
+          const deadline = now() + 8 * 60_000;
           let t = await pollTask(r.taskId);
           while (t.status !== 'succeeded' && t.status !== 'failed' && now() < deadline && !cancelled()) { await sleep(2500); t = await pollTask(r.taskId); }
-          if (t.status === 'succeeded') { okC++; prevFrame = extractLastFrame(t.result?.url) || n.data.image; }
-          else { failC++; prevFrame = n.data.image; }   // 失败则重置接龙锚点
+          if (t.status === 'succeeded') { okC++; prevFrame = hasFF ? extractLastFrame(t.result?.url) : ''; }
+          else { failC++; prevFrame = ''; }   // 失败/超时 → 断开接龙，下一段用自己的首帧
         }
-        return `接龙完成 ${okC}/${todo.length}${failC ? `（失败 ${failC}）` : ''}${ffmpegPath() ? '' : '（无 ffmpeg，退化为各自首帧）'}`;
+        return `顺序接龙 ${okC}/${todo.length}（尾帧衔接 ${chained} 处）${failC ? `，失败/跳过 ${failC}` : ''}${hasFF ? '' : '；未装 ffmpeg 无法抽尾帧，已退化为各镜独立首帧'}`;
       }
 
       // 并行模式（默认）
