@@ -62,7 +62,7 @@ def daily_brief(agent, present=None, addr: str = "您", now=None) -> str:
     if present:
         lines.append(f"我看到{'、'.join(present)}在身边。")
     if getattr(agent, "emotions", None) is not None:
-        top, val = agent.emotions.mood(now)
+        top, val = agent.emotions.mood()   # 情绪按真实时间衰减；now 仅用于问候语
         if val >= agent.emotions.baseline + 0.08:
             lines.append(f"此刻我{_MOOD.get(top, top)}。")
     plan_open = [it.get("text", "") for it in agent.plan.open()] if getattr(agent, "plan", None) else []
