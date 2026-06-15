@@ -104,7 +104,8 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 <div class=card><div class=k>🧩 最近记住</div><ul id=mems></ul></div>
 <div class=card><div class=k>🕘 最近对话</div><ul id=jour></ul></div>
 <div class=card><div class=k>🛰️ 最近派活 / 提议</div><ul id=disp></ul></div>
-<div class=card><div class=k>📋 待办看板 <span id=taskstat class=dim></span></div><ul id=tasks></ul></div>
+<div class=card><div class=k>📋 待办看板 <span id=taskstat class=dim></span></div><ul id=tasks></ul>
+  <button id=retry style="display:none;margin-top:8px;background:#5a3a13">↻ 重试全部待办</button></div>
 <p class=dim style="text-align:center">状态每 3 秒自动刷新 · /api/status 提供 JSON</p>
 </div>
 <script>
@@ -131,6 +132,7 @@ async function refresh(){
     const op=s.tasks_open||[];
     $('#taskstat').textContent='· 欠 '+op.length+' 件 · 已办成 '+(s.tasks_done||0)+' 件';
     $('#tasks').innerHTML=op.length?li(op):'<li class=dim>都办妥啦 🎉</li>';
+    $('#retry').style.display=op.length?'inline-block':'none';
     $('#mems').innerHTML=li(s.recent_memories);
     $('#jour').innerHTML=li(s.recent_journal);
     if(!inited){$('#speaker').innerHTML=s.people.map(p=>'<option'+(p===s.owner?' selected':'')+'>'+esc(p)+'</option>').join('');inited=true;}
@@ -146,6 +148,14 @@ $('#f').addEventListener('submit',async e=>{
     add(soulName, r.reply, 'soul');
   }catch(e){ add(soulName,'（网络出错）','soul'); }
   refresh();
+});
+$('#retry').addEventListener('click',async()=>{
+  const sp=$('#speaker').value; const b=$('#retry'); b.disabled=true;
+  try{
+    const r=await (await fetch('/api/retry',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({speaker:sp})})).json();
+    add(soulName, r.reply||'（已重试）','soul');
+  }catch(e){ add(soulName,'（网络出错）','soul'); }
+  b.disabled=false; refresh();
 });
 refresh(); setInterval(refresh,3000);
 </script>
@@ -174,19 +184,24 @@ def start_web(agent, monitor=None, port: int = 8765):
                 self._send(PAGE.encode("utf-8"), "text/html; charset=utf-8")
 
         def do_POST(self):
-            if not self.path.startswith("/api/chat"):
-                self._send(b"{}", "application/json; charset=utf-8")
-                return
             n = int(self.headers.get("Content-Length", "0") or 0)
             try:
                 data = json.loads(self.rfile.read(n) or b"{}")
             except Exception:
                 data = {}
-            text = (data.get("text") or "").strip()
             speaker = (data.get("speaker") or _owner(agent)).strip()
-            reply = agent.handle(speaker, text)["reply"] if text else ""
-            body = json.dumps({"speaker": speaker, "reply": reply}, ensure_ascii=False).encode("utf-8")
-            self._send(body, "application/json; charset=utf-8")
+            if self.path.startswith("/api/retry"):
+                res = agent.retry_open(speaker) if hasattr(agent, "retry_open") else {"reply": "暂不支持重试"}
+                body = json.dumps({"speaker": speaker, "reply": res.get("reply", "")}, ensure_ascii=False).encode("utf-8")
+                self._send(body, "application/json; charset=utf-8")
+                return
+            if self.path.startswith("/api/chat"):
+                text = (data.get("text") or "").strip()
+                reply = agent.handle(speaker, text)["reply"] if text else ""
+                body = json.dumps({"speaker": speaker, "reply": reply}, ensure_ascii=False).encode("utf-8")
+                self._send(body, "application/json; charset=utf-8")
+                return
+            self._send(b"{}", "application/json; charset=utf-8")
 
     srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
