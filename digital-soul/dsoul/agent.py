@@ -628,6 +628,13 @@ class Agent:
             return []
         return [s for _, s in self.worldmodel.shaky(k)]
 
+    def anticipate(self, now=None) -> str:
+        """情景预测：从日记规律预感这个点你可能想做什么。"""
+        if self.journal is None:
+            return ""
+        from .anticipate import predict
+        return predict(self.journal._all()[-200:], now=now)
+
     def explain_beliefs(self, k: int = 3) -> str:
         """说出"我怎么看你"，并给出依据（举出支持的记忆）。"""
         if getattr(self, "worldmodel", None) is None:

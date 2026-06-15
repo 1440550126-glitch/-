@@ -114,6 +114,12 @@ def _snapshot(agent, monitor) -> dict:
         except Exception:
             selfhist = []
     thoughts = list(getattr(agent, "thoughts", []) or [])[-8:][::-1]
+    anticipation = ""
+    if hasattr(agent, "anticipate"):
+        try:
+            anticipation = agent.anticipate()
+        except Exception:
+            anticipation = ""
     curiosity_qs, worldview = [], []
     if getattr(agent, "curiosity", None) is not None:
         try:
@@ -169,6 +175,7 @@ def _snapshot(agent, monitor) -> dict:
         "dreams": dreams,
         "self": selfnar,
         "thoughts": thoughts,
+        "anticipation": anticipation,
         "curiosity": curiosity_qs,
         "worldview": worldview,
         "world_shaky": world_shaky,
@@ -228,6 +235,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
   <button id=clrtrig class=devbtn>清空</button></div>
 <div class=card><div class=k>💞 此刻心情</div><div id=mood>…</div><div id=moodbars></div></div>
 <div class=card><div class=k>💭 内心独白</div><ul id=thoughts></ul></div>
+<div class=card><div class=k>🔮 我预感</div><div id=anticipation class=dim>…</div></div>
 <div class=card><div class=k>❓ 我好奇的</div><ul id=curiosity></ul></div>
 <div class=card><div class=k>🌍 我眼中的世界</div><ul id=worldview></ul></div>
 <div class=card><div class=k>🤔 我还拿不准的</div><ul id=worldshaky></ul></div>
@@ -298,6 +306,7 @@ async function refresh(){
     $('#scenes').innerHTML=(s.scenes&&s.scenes.length)?s.scenes.map(n=>'<button class=devbtn style="margin:3px" onclick="scene(\''+n+'\')">'+n+'</button>').join(''):'<span class=dim>无</span>';
     $('#triggers').innerHTML=li(s.triggers||[]);
     $('#thoughts').innerHTML=(s.thoughts&&s.thoughts.length)?li(s.thoughts):'<li class=dim>（还没冒出什么念头）</li>';
+    $('#anticipation').textContent=s.anticipation||'还没看出规律';
     $('#curiosity').innerHTML=(s.curiosity&&s.curiosity.length)?li(s.curiosity):'<li class=dim>暂时没有想问的</li>';
     $('#worldview').innerHTML=(s.worldview&&s.worldview.length)?li(s.worldview):'<li class=dim>还在慢慢了解你的世界</li>';
     $('#worldshaky').innerHTML=(s.world_shaky&&s.world_shaky.length)?li(s.world_shaky):'<li class=dim>暂时没有动摇的判断</li>';

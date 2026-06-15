@@ -119,6 +119,7 @@ flowchart TB
 | `monologue.py` | 内心独白：每次互动冒出一句私密心声（随七情变味、会入梦） |
 | `curiosity.py` | 好奇心 / 自学：遇陌生事物发问、攒疑问、问回来，或交给外部智能体查回来学到 |
 | `worldmodel.py` | 世界模型：带置信度的信念，随证据增减、遇相反信号自我修正（会改主意） |
+| `anticipate.py` | 情景预测：把日记按时段聚合，预感"这个点你常想做什么"，提前一步 |
 | `tasks.py` | 派活待办本：成记功、败记账、可跟进重试 |
 | `emotions.py` · `knowledge.py` | 七情六欲随互动起伏；多学科视角调度 |
 | `perception.py` · `perception_opencv.py` · `presence.py` | 人脸认人；树莓派轻量后端；持续感知/进门事件 |
@@ -160,12 +161,12 @@ flowchart TB
 
 ## 6. 测试
 
-27 套单测、约 105+ 用例，纯标准库、零网络即可跑：
+28 套单测、约 110+ 用例，纯标准库、零网络即可跑：
 
 ```bash
 cd digital-soul
-for t in authority memory annotate presence consolidate emotions skills dispatch tasks reflect plan butler devices \
-         orchestrate scenes triggers ha graph voice forgetting entangle dream selfnarrative values monologue curiosity worldmodel; do
+for t in authority memory annotate presence consolidate emotions skills dispatch tasks reflect plan butler devices orchestrate \
+         scenes triggers ha graph voice forgetting entangle dream selfnarrative values monologue curiosity worldmodel anticipate; do
   python tests/test_$t.py || break
 done
 ```
