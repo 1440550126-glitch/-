@@ -14,6 +14,9 @@ data/finetune/lora-adapter/
 data/journal/*.jsonl
 data/journal/*.state.json
 
+# 派活待办本（含个人事项，不入库）
+data/tasks.json
+
 # Python
 __pycache__/
 *.pyc

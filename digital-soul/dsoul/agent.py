@@ -22,7 +22,8 @@ _AGENT_HINTS = {"代码": "openclaw", "打包": "openclaw", "部署": "openclaw"
 
 class Agent:
     def __init__(self, identity, persona, memory, authority, perception, llm, robot,
-                 journal=None, emotions=None, knowledge=None, skills=None, hub=None) -> None:
+                 journal=None, emotions=None, knowledge=None, skills=None, hub=None,
+                 tasks=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -35,7 +36,9 @@ class Agent:
         self.knowledge = knowledge   # 领域知识调度
         self.skills = skills         # 技能（做饭/家务…）
         self.hub = hub               # 外部智能体桥（爱马仕/openclaw…）
+        self.tasks = tasks           # 派活待办本（成/败都记，可主动跟进/重试）
         self._pending_dispatch = None  # 待你点头的"主动派活"提议
+        self._await_retry_confirm = False  # 刚跟进过没办成的事，等你说"好"重试
 
     def _hints(self) -> list[str]:
         out = []
@@ -82,6 +85,18 @@ class Agent:
                 self._log_journal(who, utterance, done["reply"], f"dispatch:{done['agent']}")
                 return result
             self._pending_dispatch = None  # 你没接这个茬，作罢
+
+        # --- 重试没办成的待办（"再试一次"，或刚跟进过你说"好"）---
+        if action is None and self.tasks is not None and self.tasks.open():
+            awaiting = self._await_retry_confirm
+            self._await_retry_confirm = False
+            kw = any(w in utterance for w in ("重试", "再试", "再来一次", "再弄一次", "再办一次"))
+            if kw or (awaiting and self._is_affirm(utterance)):
+                rr = self.retry_open(speaker_name)
+                result["reply"] = rr["reply"]
+                result["retry"] = rr
+                self._log_journal(who, utterance, rr["reply"], "retry")
+                return result
 
         # --- 自然语言派活（如"让 openclaw 把代码打包"）---
         if action is None and self.hub is not None:
@@ -175,6 +190,12 @@ class Agent:
                 text = self._fallback_greet(who)
         else:
             text = self._fallback_greet(who)
+        # 主动跟进：见到能指挥智能体的人，顺口提一句没办成的事
+        if self.authority.can(person_name, "control_agents")[0]:
+            follow = self.follow_up_line()
+            if follow:
+                text = f"{text} {follow}"
+                self._await_retry_confirm = True
         self.robot.say(text)
         return text
 
@@ -224,6 +245,7 @@ class Agent:
         if not ok:
             return {"dispatched": False, "agent": name, "reply": reason}
         res = self.hub.dispatch(name, "nl", instruction=utterance)
+        self._record_task(name, utterance, res)
         if res.get("ok"):
             self._remember_deed(name, utterance, res.get("result"))
             reply = f"好的，已经让「{name}」去办了。它回话：{res.get('result', '（无返回）')}"
@@ -250,6 +272,7 @@ class Agent:
         self._pending_dispatch = None
         name, instr = pd.get("agent"), pd.get("instruction", "")
         res = self.hub.dispatch(name, "nl", instruction=instr)
+        self._record_task(name, instr, res)
         if res.get("ok"):
             self._remember_deed(name, instr, res.get("result"))
             reply = f"好嘞，已经让「{name}」去办「{instr}」了。它回话：{res.get('result', '（无返回）')}"
@@ -293,6 +316,52 @@ class Agent:
         """最近办成的事（供回顾 / 主动跟进）。"""
         deeds = [it["text"] for it in self.memory.items if "deed" in (it.get("tags") or [])]
         return deeds[-k:][::-1]
+
+    def _record_task(self, agent_name, instruction, res) -> None:
+        """把派活结果记进待办本：成功→关闭，失败→留作待办。"""
+        if self.tasks is None:
+            return
+        detail = str(res.get("result") or res.get("error") or "")[:80]
+        try:
+            self.tasks.record(agent_name, instruction, bool(res.get("ok")), detail)
+        except Exception:
+            pass
+
+    def follow_up_line(self) -> str:
+        """一句"主动跟进"：提一件没办成的待办。没有就返回空串。"""
+        if self.tasks is None:
+            return ""
+        op = self.tasks.open()
+        if not op:
+            return ""
+        t = op[-1]
+        return (f"对了，上次想让「{t['agent']}」办的「{t['instruction']}」还没办成"
+                f"（试了 {t['attempts']} 次），要我再试一次吗？")
+
+    def retry_open(self, speaker_name) -> dict:
+        """重试所有没办成的待办（走 control_agents 授权）。"""
+        if self.tasks is None or self.hub is None:
+            return {"retried": 0, "ok": 0, "reply": "现在没有可重试的待办。"}
+        allowed, _who, reason = self.authority.can(speaker_name, "control_agents")
+        if not allowed:
+            return {"retried": 0, "ok": 0, "reply": reason}
+        op = list(self.tasks.open())
+        if not op:
+            return {"retried": 0, "ok": 0, "reply": "没有没办成的事，都办妥啦。"}
+        done = 0
+        for t in op:
+            res = self.hub.dispatch(t["agent"], "nl", instruction=t["instruction"])
+            self._record_task(t["agent"], t["instruction"], res)  # 成功会就地关闭
+            if res.get("ok"):
+                self._remember_deed(t["agent"], t["instruction"], res.get("result"))
+                done += 1
+        if done == len(op):
+            reply = f"都补上了：{done} 件待办全办成了。"
+        elif done:
+            reply = f"重试了 {len(op)} 件，办成 {done} 件，剩下的回头我再试。"
+        else:
+            reply = f"重试了 {len(op)} 件，还是没联系上，我先记着，过会儿再试。"
+        return {"retried": len(op), "ok": done, "reply": reply}
 
     # ---------- 人格热切换（无需重启）----------
     def switch_persona(self, name, base_dir=None, seed_memory=False) -> dict:

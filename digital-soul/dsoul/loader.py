@@ -18,6 +18,7 @@ from .perception import build_perception
 from .persona import Persona
 from .remote_agents import AgentHub
 from .skills import SkillRegistry
+from .tasks import TaskBook
 
 
 def _load_yaml(path: Path) -> dict:
@@ -65,9 +66,10 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
     knowledge = Knowledge()
     skills = SkillRegistry()
     hub = AgentHub(_load_yaml(base / "config" / "agents.yaml").get("agents", {}))
+    tasks = TaskBook(base / "data" / "tasks.json")
 
     return Agent(identity, persona, memory, authority, perception, llm, robot, journal,
-                 emotions=emotions, knowledge=knowledge, skills=skills, hub=hub)
+                 emotions=emotions, knowledge=knowledge, skills=skills, hub=hub, tasks=tasks)
 
 
 def _seed_memory(base: Path, memory) -> None:
