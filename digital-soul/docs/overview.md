@@ -122,7 +122,7 @@ flowchart TB
 | `scenes.py` · `triggers.py` | 场景/例程；定时·日落·温度·进门自动化 |
 | `orchestrator.py` | 多步任务拆解与路由汇总 |
 | `remote_agents.py` | 隔空指挥外部智能体（爱马仕/openclaw…） |
-| `webstatus.py` | 手机网页状态页 + 远程对话 + 设备/场景/简报按钮 |
+| `webstatus.py` | 手机网页：状态/对话/设备/场景/自动化 + 关系图谱·一生时间线 |
 
 ## 4. 脚本地图（`scripts/`）
 

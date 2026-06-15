@@ -56,6 +56,15 @@ def _snapshot(agent, monitor) -> dict:
             graph_top = [n for n, _ in agent.memory_graph().central(6)]
         except Exception:
             graph_top = []
+    timeline = []
+    try:
+        for it in agent.memory.timeline():
+            w = it.get("when")
+            if w and str(w).isdigit():
+                timeline.append({"year": str(w), "text": it["text"]})
+    except Exception:
+        timeline = []
+    timeline = timeline[:40]
     devices = agent.devices.rows() if getattr(agent, "devices", None) is not None else []
     scenes = agent.scenes.names() if getattr(agent, "scenes", None) is not None else []
     triggers = [t["desc"] for t in agent.triggers.all()] if getattr(agent, "triggers", None) is not None else []
@@ -77,6 +86,7 @@ def _snapshot(agent, monitor) -> dict:
         "tasks_done": tasks_done,
         "reflections": reflections,
         "graph": graph_top,
+        "timeline": timeline,
         "plan": plan_items,
         "devices": devices,
         "scenes": scenes,
@@ -115,6 +125,9 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 .devrow{display:flex;align-items:center;gap:8px;margin:5px 0}
 .devname{width:46px} .devst{flex:1;color:#8aa0c0;font-size:13px}
 .devbtn{padding:3px 12px;font-size:13px;background:#2a2f3a;border:1px solid #3a4150;color:#e6e6e6;border-radius:8px}
+.tlyear{color:#5fdd9d;font-weight:600;margin:8px 0 2px;border-left:3px solid #2e7d32;padding-left:8px}
+.tlitem{color:#cbd5e1;font-size:13px;margin:2px 0 2px 16px;position:relative}
+.tlitem:before{content:"•";color:#2e7d32;position:absolute;left:-10px}
 </style></head>
 <body><div class=wrap>
 <h1 id=title>🧠 数字分身</h1>
@@ -136,6 +149,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 <div class=card><div class=k>🗓️ 今天的计划</div><ul id=plan></ul></div>
 <div class=card><div class=k>💡 它最近的领悟</div><ul id=refl></ul></div>
 <div class=card><div class=k>🕸️ 关系图谱 · 最核心</div><div id=graph class=dim>…</div></div>
+<div class=card><div class=k>📜 一生时间线</div><div id=timeline></div></div>
 <div class=card><div class=k>🧩 最近记住</div><ul id=mems></ul></div>
 <div class=card><div class=k>🕘 最近对话</div><ul id=jour></ul></div>
 <div class=card><div class=k>🛰️ 最近派活 / 提议</div><ul id=disp></ul></div>
@@ -154,6 +168,7 @@ async function dev(k,a){const sp=$('#speaker').value;try{const r=await (await fe
 async function scene(n){const sp=$('#speaker').value;try{const r=await (await fetch('/api/scene',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scene:n,speaker:sp})})).json();add(soulName,r.reply,'soul');}catch(e){}refresh();}
 let inited=false, soulName="它";
 function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
+function renderTimeline(tl){if(!tl||!tl.length)return '<span class=dim>暂无带年份的记忆</span>';let h='',last=null;tl.forEach(e=>{if(e.year!==last){h+='<div class=tlyear>'+esc(e.year)+'</div>';last=e.year;}h+='<div class=tlitem>'+esc(e.text)+'</div>';});return h;}
 function li(a){return a.map(x=>'<li>'+esc(x)+'</li>').join('')||'<li class=dim>—</li>';}
 async function refresh(){
   try{
@@ -177,6 +192,7 @@ async function refresh(){
     $('#plan').innerHTML=li(s.plan||[]);
     $('#refl').innerHTML=li(s.reflections||[]);
     $('#graph').textContent=(s.graph&&s.graph.length)?s.graph.join('　·　'):'—';
+    $('#timeline').innerHTML=renderTimeline(s.timeline);
     $('#mems').innerHTML=li(s.recent_memories);
     $('#jour').innerHTML=li(s.recent_journal);
     if(!inited){$('#speaker').innerHTML=s.people.map(p=>'<option'+(p===s.owner?' selected':'')+'>'+esc(p)+'</option>').join('');inited=true;}
