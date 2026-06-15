@@ -19,6 +19,15 @@ export interface AudioFrame {
   treble: number;
   energy: number;
   beat: boolean;
+  /** 估计的每分钟节拍数（0 表示尚不确定） */
+  bpm: number;
+}
+
+export class AudioReactor {
+  constructor(analyser: AnalyserNode);
+  readonly analyser: AnalyserNode;
+  readonly data: Uint8Array;
+  read(now?: number): AudioFrame;
 }
 
 export interface CoverColor {
@@ -40,10 +49,12 @@ export class DolbyVisualizer {
   start(): this;
   stop(): this;
   readonly running: boolean;
+  readonly last: AudioFrame;
   analyze(): AudioFrame;
   dispose(): void;
 }
 
+export function resolveAnalyser(options: VisualizerOptions): AnalyserNode;
 export function coverColor(img: CanvasImageSource): CoverColor;
 export function createVisualizer(canvas: HTMLCanvasElement, options?: VisualizerOptions): DolbyVisualizer;
 export default DolbyVisualizer;

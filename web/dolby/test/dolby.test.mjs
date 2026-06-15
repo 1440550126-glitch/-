@@ -225,6 +225,10 @@ for (let i = 0; i < 20; i++) vAn._v[i] = 250; const a1 = viz.analyze();
 ok(a1.bass > 0.5 && a1.beat, '强低频：触发节拍');
 viz.setBaseHue(200); ok(viz.baseHue === 200, 'setBaseHue');
 viz.start(); viz.stop(); viz.dispose(); ok(!viz.running, 'start/stop/dispose（无 rAF 环境）不抛错');
+const { AudioReactor } = await import('../dolby-visualizer.js');
+const rb = new AudioReactor(vAn);                 // vAn 低频仍强（前面已填 250）
+let bpmV = 0; for (const tm of [1000, 1500, 2000, 2500]) bpmV = rb.read(tm).bpm;   // 每 500ms 一拍 → 120
+ok(bpmV === 120, `AudioReactor BPM 估计=${bpmV}`);
 
 // 15) 预设导入/导出
 const jsonP = store.exportPreset({ id: 'x', label: 'X', p: { bass: { gain: 6 } } });

@@ -1,6 +1,6 @@
 {
   "name": "dolby-audio",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "独立、零依赖的杜比风格沉浸音效引擎、播放器与音频可视化（纯 Web Audio + Canvas）：低频增强 / 声场展宽 / 耳机 HRTF 虚拟环绕 / 空间混响 / 多频带压缩 / 响度对齐 / 人声增强 / 图形均衡 / 播放列表 / 锁屏控制 / A/B 盲测 / 湍流可视化。可挂在 <audio>/<video> 或任意 AudioNode 后端。",
   "type": "module",
   "main": "dolby-audio.js",

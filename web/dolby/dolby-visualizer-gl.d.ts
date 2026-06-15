@@ -22,6 +22,7 @@ export class DolbyVisualizerGL {
   start(): this;
   stop(): this;
   readonly running: boolean;
+  readonly last: AudioFrame;
   dispose(): void;
 }
 

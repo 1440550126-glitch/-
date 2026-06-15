@@ -214,9 +214,12 @@ viz.start();
 // 强制：{ renderer: 'webgl' }（失败抛错）或 { renderer: 'canvas' }
 ```
 
-两种渲染器接口一致：`start/stop/dispose/setBaseHue/analyze/resize`。
-也可直接传 `{ analyser }` 或 `{ node, context }`。`viz.analyze()` 返回
-`{ bass, mid, treble, energy, beat }` 可自行驱动其它动效。
+两种渲染器都带：**径向频段光柱**（按频谱外扩）、**粒子拖尾辉光**、**随节拍的镜头脉冲/缩放**
+（WebGL 还有缓慢镜头旋转）。接口一致：`start/stop/dispose/setBaseHue/analyze/resize`，
+`viz.last` 取最近一帧分析（避免重复采样）。
+
+也可直接传 `{ analyser }` 或 `{ node, context }`。`viz.analyze()`（或 `viz.last`）返回
+`{ bass, mid, treble, energy, beat, bpm }`——含**估计的 BPM**，可驱动你自己的动效。
 
 **封面取色换肤**：`coverColor(img)` 从封面取主色，喂给 `viz.setBaseHue()` 让整片视觉随专辑变色：
 

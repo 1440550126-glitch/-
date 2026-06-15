@@ -26,10 +26,10 @@ export function resolveAnalyser(o) {
   throw new Error('可视化需要 analyser / dolby / {node,context} 之一');
 }
 
-// 频谱分析 + 节拍检测（Canvas 与 WebGL 渲染器共用）
+// 频谱分析 + 节拍检测 + BPM 估计（Canvas 与 WebGL 渲染器共用）
 export class AudioReactor {
-  constructor(analyser) { this.analyser = analyser; this.data = new Uint8Array(analyser.frequencyBinCount); this._bassEMA = 0; }
-  read() {
+  constructor(analyser) { this.analyser = analyser; this.data = new Uint8Array(analyser.frequencyBinCount); this._bassEMA = 0; this._intervals = []; this._lastBeat = 0; }
+  read(now = (globalThis.performance && globalThis.performance.now ? globalThis.performance.now() : Date.now())) {
     const d = this.data; this.analyser.getByteFrequencyData(d);
     const n = d.length;
     const band = (a, b) => { let s = 0; for (let i = a; i < b; i++) s += d[i]; return (b > a) ? s / ((b - a) * 255) : 0; };
@@ -39,7 +39,13 @@ export class AudioReactor {
     const energy = (bass * 1.4 + mid + treble * 0.7) / 3.1;
     const beat = bass > this._bassEMA * 1.35 && bass > 0.22;
     this._bassEMA = this._bassEMA * 0.92 + bass * 0.08;
-    return { bass, mid, treble, energy, beat };
+    if (beat) {
+      if (this._lastBeat) { const dt = now - this._lastBeat; if (dt > 250 && dt < 2000) { this._intervals.push(dt); if (this._intervals.length > 8) this._intervals.shift(); } }
+      this._lastBeat = now;
+    }
+    let bpm = 0;
+    if (this._intervals.length) { const s = [...this._intervals].sort((a, b) => a - b); bpm = Math.round(60000 / s[s.length >> 1]); }
+    return { bass, mid, treble, energy, beat, bpm };
   }
 }
 
@@ -60,7 +66,7 @@ export class DolbyVisualizer {
     this.particleCount = options.particles ?? 90;
     this.bg = options.background ?? [10, 8, 18];
     this.particles = []; this.rings = [];
-    this._t = 0; this._raf = 0; this._running = false; this._hue = this.baseHue;
+    this._t = 0; this._raf = 0; this._running = false; this._hue = this.baseHue; this._pulse = 0;
     this._onResize = () => this.resize();
     if (typeof addEventListener === 'function') addEventListener('resize', this._onResize);
     this.resize();
@@ -96,30 +102,40 @@ export class DolbyVisualizer {
   /** 取一帧的频谱特征：低/中/高频能量、总能量、是否节拍 */
   analyze() { return this.reactor.read(); }
 
+  get last() { return this._last || { bass: 0, mid: 0, treble: 0, energy: 0, beat: false, bpm: 0 }; }
   _frame() {
-    const { bass, mid, treble, energy, beat } = this.analyze();
-    const ctx = this.ctx, w = this.w, h = this.h, t = (this._t += 0.016);
+    const f = this._last = this.analyze();
+    const { bass, mid, treble, energy, beat } = f;
+    this._pulse = Math.max(this._pulse * 0.9, beat ? 1 : 0);
+    const ctx = this.ctx, w = this.w, h = this.h, t = (this._t += 0.016), pulse = this._pulse;
     // 半透明拖尾
     ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = `rgba(${this.bg[0]},${this.bg[1]},${this.bg[2]},0.16)`;
+    ctx.fillStyle = `rgba(${this.bg[0]},${this.bg[1]},${this.bg[2]},0.18)`;
     ctx.fillRect(0, 0, w, h);
     // 色相随频谱倾斜 + 缓慢漂移，节拍时多偏一点
     const tilt = treble - bass;
-    const targetHue = this.baseHue + tilt * this.hueRange + t * 6 + (beat ? 18 : 0);
-    this._hue += (targetHue - this._hue) * 0.05;
-    if (beat) this.rings.push({ x: w / 2 + (Math.random() - 0.5) * w * 0.3, y: h / 2 + (Math.random() - 0.5) * h * 0.3, r: 4, a: 0.7 });
-    // 湍流粒子（流场平流，强度随低频/能量）
+    this._hue += ((this.baseHue + tilt * this.hueRange + t * 6 + (beat ? 18 : 0)) - this._hue) * 0.05;
+    if (beat) this.rings.push({ x: w / 2, y: h / 2, r: 4, a: 0.6 });
+    // 镜头脉冲：以中心随节拍缩放整幅
+    ctx.save();
+    ctx.translate(w / 2, h / 2); const z = 1 + pulse * 0.06; ctx.scale(z, z); ctx.translate(-w / 2, -h / 2);
     ctx.globalCompositeOperation = 'lighter';
+    // 湍流粒子（流场平流 + 拖尾辉光）
     const turb = 0.6 + bass * 2.4, speed = 0.5 + energy * 3.5;
     const light = Math.min(80, 45 + energy * 40 + (beat ? 15 : 0)), size = 1.5 + bass * 6 + (beat ? 2 : 0);
+    ctx.shadowBlur = 6 + bass * 22;
     for (const p of this.particles) {
       const ang = (Math.sin(p.x * 0.003 + t * 0.3) + Math.sin(p.y * 0.0034 - t * 0.25) + Math.sin((p.x + p.y) * 0.002 + t * 0.2)) * Math.PI * turb;
       p.x += Math.cos(ang) * speed; p.y += Math.sin(ang) * speed;
       if (p.x < 0) p.x += w; else if (p.x > w) p.x -= w;
       if (p.y < 0) p.y += h; else if (p.y > h) p.y -= h;
-      ctx.fillStyle = `hsla(${(this._hue + p.hueOff) % 360}, 90%, ${light}%, 0.5)`;
+      const hue = (this._hue + p.hueOff) % 360;
+      ctx.shadowColor = `hsl(${hue},90%,60%)`;
+      ctx.fillStyle = `hsla(${hue}, 90%, ${light}%, 0.5)`;
       ctx.beginPath(); ctx.arc(p.x, p.y, size, 0, Math.PI * 2); ctx.fill();
     }
+    ctx.shadowBlur = 0;
+    this._drawBars(ctx, w, h, energy);            // 频段光柱
     // 节拍冲击环
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const r = this.rings[i]; r.r += 6 + energy * 8; r.a *= 0.92;
@@ -127,7 +143,23 @@ export class DolbyVisualizer {
       ctx.strokeStyle = `hsla(${this._hue % 360},90%,65%,${r.a})`; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2); ctx.stroke();
     }
+    ctx.restore();
     ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // 径向频段光柱：从中心向外按频谱画一圈光柱
+  _drawBars(ctx, w, h, energy) {
+    const d = this.reactor.data, n = d.length, N = 64, cx = w / 2, cy = h / 2;
+    const r0 = Math.min(w, h) * 0.18, len = Math.min(w, h) * 0.16;
+    ctx.lineWidth = Math.max(2, (w / N) * 0.4);
+    for (let k = 0; k < N; k++) {
+      const mag = d[(k * n / N) | 0] / 255;
+      if (mag < 0.04) continue;
+      const ang = (k / N) * Math.PI * 2 - Math.PI / 2, c = Math.cos(ang), s = Math.sin(ang);
+      const r1 = r0 + mag * len * (1.4 + energy);
+      ctx.strokeStyle = `hsla(${(this._hue + k * 3) % 360}, 90%, ${50 + mag * 30}%, ${0.4 + mag * 0.5})`;
+      ctx.beginPath(); ctx.moveTo(cx + c * r0, cy + s * r0); ctx.lineTo(cx + c * r1, cy + s * r1); ctx.stroke();
+    }
   }
 
   dispose() { this.stop(); if (typeof removeEventListener === 'function') removeEventListener('resize', this._onResize); }

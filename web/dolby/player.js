@@ -98,3 +98,4 @@ $('title').textContent = cur ? (cur.title || cur.src) : '—';
 $('artist').textContent = cur ? (cur.artist || '') : '';
 refreshDolby();
 applyTheme(cur, Math.max(0, player.index));
+setInterval(() => { const b = viz.last.bpm; $('bpm').textContent = b ? `· ${b} BPM` : ''; }, 400);
