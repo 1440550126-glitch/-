@@ -118,6 +118,9 @@ def _snapshot(agent, monitor) -> dict:
     if hasattr(agent, "anticipate"):
         try:
             anticipation = agent.anticipate()
+            lp = getattr(agent, "_last_prediction", None)
+            if anticipation and lp:
+                anticipation += f"（{int(lp['confidence'] * 100)}% · {lp['source']}）"
         except Exception:
             anticipation = ""
     curiosity_qs, worldview = [], []

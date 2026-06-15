@@ -23,6 +23,7 @@ data/self.json
 data/values_state.json
 data/questions.json
 data/beliefs.json
+data/calibration.json
 
 # Python
 __pycache__/

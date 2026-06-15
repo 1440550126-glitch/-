@@ -18,6 +18,7 @@ from .knowledge import Knowledge
 from .llm import LLM
 from .memory import Memory
 from .perception import build_perception
+from .predict import Calibration
 from .persona import Persona
 from .planner import Planner, PlanBook
 from .reflect import Reflector
@@ -96,7 +97,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                                     state_path=base / "data" / "values_state.json"),
                  values_path=base / "data" / "values_state.json",
                  curiosity=QuestionLog(base / "data" / "questions.json"),
-                 worldmodel=WorldModel(base / "data" / "beliefs.json"))
+                 worldmodel=WorldModel(base / "data" / "beliefs.json"),
+                 calib=Calibration(base / "data" / "calibration.json"))
 
 
 def _seed_memory(base: Path, memory) -> None:

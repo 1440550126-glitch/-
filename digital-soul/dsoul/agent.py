@@ -32,7 +32,7 @@ class Agent:
                  journal=None, emotions=None, knowledge=None, skills=None, hub=None,
                  tasks=None, reflector=None, planner=None, plan=None, devices=None,
                  scenes=None, triggers=None, sensor_source=None, dreams=None, selflog=None,
-                 values=None, values_path=None, curiosity=None, worldmodel=None) -> None:
+                 values=None, values_path=None, curiosity=None, worldmodel=None, calib=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -66,6 +66,8 @@ class Agent:
         self.thoughts: deque = deque(maxlen=12)                   # 内心独白（近期心声）
         self.curiosity = curiosity                                # 好奇心：对陌生事物的疑问本
         self.worldmodel = worldmodel                              # 世界模型：带置信度的信念，会自我修正
+        self.calib = calib                                        # 预测校准（从"猜对/没猜对"学习）
+        self._last_prediction = None                              # 最近一次预感（供你反馈校准）
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
@@ -192,6 +194,19 @@ class Agent:
                 result["reply"] = gret
                 self._log_journal(who, utterance, gret, "graph")
                 return result
+
+        # --- 预测反馈校准（"猜对了/没猜对"）：据此调整该信号的可信度 ---
+        if action is None and who.get("obey") and getattr(self, "_last_prediction", None) and any(
+                k in utterance for k in ("猜对", "猜准", "说对了", "真准", "说得对",
+                                         "没猜对", "猜错", "没说对", "不太准", "蒙错")):
+            correct = any(k in utterance for k in ("猜对", "猜准", "说对了", "真准", "说得对"))
+            if self.calib is not None:
+                self.calib.feedback(self._last_prediction.get("source", "?"), correct)
+            self._last_prediction = None
+            reply = "好，记下了，下次预感会更准。" if correct else "好，我调整一下，下次再蒙准点。"
+            result["reply"] = reply
+            self._log_journal(who, utterance, reply, "predict_feedback")
+            return result
 
         # --- 信念解释（"你怎么看我/你眼中的我"）：说出理解 + 依据 ---
         if action is None and who.get("obey") and any(
@@ -629,11 +644,13 @@ class Agent:
         return [s for _, s in self.worldmodel.shaky(k)]
 
     def anticipate(self, now=None) -> str:
-        """情景预测：从日记规律预感这个点你可能想做什么。"""
+        """情景预测：多信号 + 校准，预感这个点你可能想做什么；记住这条以便你反馈。"""
         if self.journal is None:
             return ""
-        from .anticipate import predict
-        return predict(self.journal._all()[-200:], now=now)
+        from .predict import predict
+        p = predict(self.journal._all()[-200:], now=now, calib=getattr(self, "calib", None))
+        self._last_prediction = p
+        return p["label"] if p else ""
 
     def explain_beliefs(self, k: int = 3) -> str:
         """说出"我怎么看你"，并给出依据（举出支持的记忆）。"""
