@@ -103,6 +103,37 @@ class DeviceHub:
     def control(self, device, action, value=None) -> dict:
         return self.backend.apply(device, action, value)
 
+    def describe(self) -> list[str]:
+        """人类可读的设备状态，供网页展示。"""
+        out = []
+        for n, st in self.states().items():
+            label = _LABEL.get(n, n)
+            on = st.get("power") == "on"
+            extra = ""
+            if on and n == "ac" and "temp" in st:
+                extra = f" {st['temp']}度"
+            elif on and n == "music" and "volume" in st:
+                extra = f" 音量{st['volume']}"
+            elif on and "level" in st:
+                extra = f" {st['level']}"
+            out.append(f"{label}：{'开' if on else '关'}{extra}")
+        return out
+
+    def rows(self) -> list[dict]:
+        """结构化设备状态，供网页渲染开关按钮。"""
+        out = []
+        for n, st in self.states().items():
+            on = st.get("power") == "on"
+            detail = ""
+            if on and n == "ac" and "temp" in st:
+                detail = f"{st['temp']}度"
+            elif on and n == "music" and "volume" in st:
+                detail = f"音量{st['volume']}"
+            elif on and "level" in st:
+                detail = str(st["level"])
+            out.append({"key": n, "label": _LABEL.get(n, n), "on": on, "detail": detail})
+        return out
+
 
 # 把 HA 实体状态归一成"开/关"
 _ON_STATES = {"on", "open", "unlocked", "playing", "home", "heat", "cool", "auto"}
@@ -191,34 +222,3 @@ def build_device_hub(config=None) -> DeviceHub:
     if ha and ha.get("base_url") and ha.get("token"):
         return DeviceHub(backend=HomeAssistantBackend(ha["base_url"], ha["token"], ha.get("entities", {})))
     return DeviceHub()
-
-    def describe(self) -> list[str]:
-        """人类可读的设备状态，供网页展示。"""
-        out = []
-        for n, st in self.states().items():
-            label = _LABEL.get(n, n)
-            on = st.get("power") == "on"
-            extra = ""
-            if on and n == "ac" and "temp" in st:
-                extra = f" {st['temp']}度"
-            elif on and n == "music" and "volume" in st:
-                extra = f" 音量{st['volume']}"
-            elif on and "level" in st:
-                extra = f" {st['level']}"
-            out.append(f"{label}：{'开' if on else '关'}{extra}")
-        return out
-
-    def rows(self) -> list[dict]:
-        """结构化设备状态，供网页渲染开关按钮。"""
-        out = []
-        for n, st in self.states().items():
-            on = st.get("power") == "on"
-            detail = ""
-            if on and n == "ac" and "temp" in st:
-                detail = f"{st['temp']}度"
-            elif on and n == "music" and "volume" in st:
-                detail = f"音量{st['volume']}"
-            elif on and "level" in st:
-                detail = str(st["level"])
-            out.append({"key": n, "label": _LABEL.get(n, n), "on": on, "detail": detail})
-        return out

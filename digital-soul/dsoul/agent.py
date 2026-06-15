@@ -54,6 +54,8 @@ class Agent:
         self.devices = devices       # 设备/家居控制（灯/空调/音乐…）
         self.scenes = scenes         # 场景/例程（回家/睡眠/离家…）
         self.triggers = triggers     # 自动化（定时 + 进门事件）
+        self._sun_times = {"sunrise": "06:30", "sunset": "18:30"}  # 日出/日落（可配置）
+        self.sensors = {"temperature": 22}                        # 传感器读数（默认模拟，可接 HA）
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
@@ -579,18 +581,48 @@ class Agent:
         return ""
 
     def check_time_triggers(self, now=None) -> list:
-        """到点的定时触发（每条每天只触发一次）。由 daemon 定时调用。"""
+        """到点的定时触发（支持每天/每周/工作日/周末/日落日出；每条每天只触发一次）。"""
         if self.triggers is None:
             return []
         now = now or datetime.now()
-        hhmm, today = now.strftime("%H:%M"), date.today().isoformat()
+        today, wd, hhmm = date.today().isoformat(), now.weekday(), now.strftime("%H:%M")
         notices = []
         for t in self.triggers.time_triggers():
-            if t.get("spec") == hhmm and t.get("last_fired") != today:
-                self.triggers.mark_fired(t["id"], today)
+            target = self._sun_times.get(t.get("spec"), t.get("spec"))   # 日落/日出 → HH:MM
+            if target != hhmm:
+                continue
+            days = t.get("days")
+            if days and wd not in days:                                  # 周期不匹配
+                continue
+            if t.get("last_fired") == today:
+                continue
+            self.triggers.mark_fired(t["id"], today)
+            msg = self._fire_action(t.get("action", {}))
+            if msg:
+                notices.append(msg)
+        return notices
+
+    def check_conditions(self, readings=None) -> list:
+        """条件触发（如温度低于阈值）。上升沿触发一次，避免反复。由 daemon 定时调用。"""
+        if self.triggers is None:
+            return []
+        readings = readings if readings is not None else getattr(self, "sensors", {})
+        notices = []
+        for t in self.triggers.cond_triggers():
+            sp = t.get("spec", {})
+            val = readings.get(sp.get("sensor"))
+            if val is None:
+                continue
+            now_true = (val < sp["value"]) if sp["op"] == "<" else (val > sp["value"])
+            if now_true and not t.get("state"):
+                t["state"] = True
+                self.triggers._save()
                 msg = self._fire_action(t.get("action", {}))
                 if msg:
                     notices.append(msg)
+            elif (not now_true) and t.get("state"):
+                t["state"] = False
+                self.triggers._save()
         return notices
 
     def fire_event(self, event, who=None) -> list:

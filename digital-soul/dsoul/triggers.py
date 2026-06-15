@@ -16,6 +16,47 @@ from pathlib import Path
 from .devices import parse_device_command
 
 _ENTER = ("进门", "一进", "回到家", "到家", "回家")
+_DAYNAME = {"一": 0, "二": 1, "三": 2, "四": 3, "五": 4, "六": 5, "日": 6, "天": 6}
+
+
+def _parse_days(text: str):
+    if "工作日" in text:
+        return [0, 1, 2, 3, 4]
+    if "周末" in text:
+        return [5, 6]
+    days = [_DAYNAME[m.group(1)] for m in re.finditer(r"[周星期]期?([一二三四五六日天])", text)]
+    return sorted(set(days)) or None
+
+
+def _parse_sun(text: str):
+    if any(w in text for w in ("日落", "天黑", "傍晚")):
+        return "sunset"
+    if any(w in text for w in ("日出", "天亮")):
+        return "sunrise"
+    return None
+
+
+def _parse_condition(text: str):
+    m = re.search(r"温度\s*(低于|高于|超过|低过|不到)\s*(\d+)", text)
+    if not m:
+        return None
+    op = "<" if m.group(1) in ("低于", "低过", "不到") else ">"
+    return {"sensor": "temperature", "op": op, "value": int(m.group(2))}
+
+
+def _when_phrase(days) -> str:
+    if not days:
+        return "每天"
+    if days == [0, 1, 2, 3, 4]:
+        return "每个工作日"
+    if days == [5, 6]:
+        return "每个周末"
+    names = "一二三四五六日"
+    return "每周" + "".join(names[d] for d in days)
+
+
+def _cond_phrase(c) -> str:
+    return f"温度{'低于' if c['op'] == '<' else '高于'}{c['value']}度"
 
 
 def _action_desc(a: dict) -> str:
@@ -44,17 +85,30 @@ def _parse_action(text: str, scene_names):
 
 
 def parse_trigger(text: str, scene_names=None):
-    """识别自动化指令。返回 {kind, spec, action, desc} 或 None。"""
+    """识别自动化指令。返回 {kind, spec, ...} 或 None。
+
+    支持：定时（每天/每周/工作日/周末/日落日出）、进门事件、温度阈值条件。
+    """
     text = text or ""
     action = _parse_action(text, scene_names)
     if action is None:
         return None
+    days = _parse_days(text)
+    cond = _parse_condition(text)
+    if cond:
+        return {"kind": "cond", "spec": cond, "state": False, "action": action,
+                "desc": f"当{_cond_phrase(cond)} → {_action_desc(action)}"}
+    sun = _parse_sun(text)
+    if sun:
+        word = "日落" if sun == "sunset" else "日出"
+        return {"kind": "time", "spec": sun, "days": days, "action": action,
+                "desc": f"{_when_phrase(days)}{word} → {_action_desc(action)}"}
     m = re.search(r"(\d{1,2})\s*[:：点]\s*(\d{1,2})?", text)
-    if m and any(w in text for w in ("每天", "点", ":", "：", "定时", "到")):
+    if m and any(w in text for w in ("每天", "每周", "工作日", "周末", "点", ":", "：", "定时", "到")):
         hh, mm = int(m.group(1)), int(m.group(2) or 0)
         if 0 <= hh < 24 and 0 <= mm < 60:
-            return {"kind": "time", "spec": f"{hh:02d}:{mm:02d}", "action": action,
-                    "desc": f"每天 {hh:02d}:{mm:02d} → {_action_desc(action)}"}
+            return {"kind": "time", "spec": f"{hh:02d}:{mm:02d}", "days": days, "action": action,
+                    "desc": f"{_when_phrase(days)} {hh:02d}:{mm:02d} → {_action_desc(action)}"}
     if any(w in text for w in _ENTER):
         return {"kind": "event", "spec": "enter", "action": action,
                 "desc": f"一进门 → {_action_desc(action)}"}
@@ -94,6 +148,9 @@ class TriggerBook:
 
     def event_triggers(self, spec):
         return [t for t in self.items if t.get("kind") == "event" and t.get("spec") == spec]
+
+    def cond_triggers(self):
+        return [t for t in self.items if t.get("kind") == "cond"]
 
     def mark_fired(self, tid, day):
         for t in self.items:

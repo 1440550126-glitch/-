@@ -104,7 +104,7 @@ def trigger_loop(agent, mouth=None) -> None:
     while True:
         time.sleep(30)
         try:
-            notices = agent.check_time_triggers()
+            notices = agent.check_time_triggers() + agent.check_conditions()
         except Exception as e:
             print(f"[自动化] 出错：{e}", flush=True)
             continue
