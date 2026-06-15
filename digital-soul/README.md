@@ -47,7 +47,7 @@
 | 越用越懂你 | 对话日记 + 睡眠巩固成长期记忆 | `dsoul/journal.py` · `dsoul/consolidate.py` · `scripts/sleep.py` |
 | 桌面聊天界面 | Tkinter GUI（Python 自带） | `scripts/desktop.py` |
 | 一键常驻 / 部署 | 感知+巩固守护进程 · 树莓派/机器人指南 | `scripts/daemon.py` · `docs/deploy.md` |
-| 手机网页状态页 | 实时看"看到谁 / 七情条 / 记了啥 / 派了啥活" | `dsoul/webstatus.py` |
+| 手机网页状态页 | 实时看"看到谁 / 七情条 / 记了啥 / 派了啥活 / 待办看板" | `dsoul/webstatus.py` |
 | 轻量人脸(树莓派) | OpenCV LBPH 后端，免 dlib | `dsoul/perception_opencv.py` |
 | 七情六欲 | 情绪随互动起伏、影响口吻 | `dsoul/emotions.py` |
 | 多学科视角 | 心理/哲学/医学…思维调度 | `dsoul/knowledge.py` |

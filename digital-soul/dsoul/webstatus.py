@@ -42,6 +42,13 @@ def _snapshot(agent, monitor) -> dict:
     if getattr(agent, "emotions", None):
         mood_levels = agent.emotions.snapshot()
         mood_char = max(mood_levels, key=mood_levels.get) if mood_levels else None
+    tasks_open, tasks_done = [], 0
+    if getattr(agent, "tasks", None) is not None:
+        tasks_open = [
+            f'{t["agent"]}：{t["instruction"]}（试 {t["attempts"]} 次）'
+            for t in agent.tasks.open()
+        ][::-1][:6]
+        tasks_done = len(agent.tasks.done())
     return {
         "name": agent.identity.get("name", "我"),
         "llm": bool(agent.llm.available),
@@ -50,6 +57,8 @@ def _snapshot(agent, monitor) -> dict:
         "recent_memories": mems,
         "recent_journal": journal,
         "dispatches": dispatches,
+        "tasks_open": tasks_open,
+        "tasks_done": tasks_done,
         "mood": mood_char,
         "mood_levels": mood_levels,
         "people": [p["name"] for p in agent.authority.people.values()],
@@ -95,6 +104,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 <div class=card><div class=k>🧩 最近记住</div><ul id=mems></ul></div>
 <div class=card><div class=k>🕘 最近对话</div><ul id=jour></ul></div>
 <div class=card><div class=k>🛰️ 最近派活 / 提议</div><ul id=disp></ul></div>
+<div class=card><div class=k>📋 待办看板 <span id=taskstat class=dim></span></div><ul id=tasks></ul></div>
 <p class=dim style="text-align:center">状态每 3 秒自动刷新 · /api/status 提供 JSON</p>
 </div>
 <script>
@@ -118,6 +128,9 @@ async function refresh(){
     $('#mood').textContent=s.mood?(MOODS[s.mood]||s.mood):'平静';
     $('#moodbars').innerHTML=s.mood_levels?bars(s.mood_levels):'';
     $('#disp').innerHTML=li(s.dispatches||[]);
+    const op=s.tasks_open||[];
+    $('#taskstat').textContent='· 欠 '+op.length+' 件 · 已办成 '+(s.tasks_done||0)+' 件';
+    $('#tasks').innerHTML=op.length?li(op):'<li class=dim>都办妥啦 🎉</li>';
     $('#mems').innerHTML=li(s.recent_memories);
     $('#jour').innerHTML=li(s.recent_journal);
     if(!inited){$('#speaker').innerHTML=s.people.map(p=>'<option'+(p===s.owner?' selected':'')+'>'+esc(p)+'</option>').join('');inited=true;}
