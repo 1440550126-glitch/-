@@ -52,6 +52,30 @@ def test_memory_records_created_and_reinforce():
     assert it["recalls"] == 1 and "last_recall" in it
 
 
+def test_recall_is_strength_aware():
+    from dsoul.agent import Agent
+    a = object.__new__(Agent)
+    m = Memory(tempfile.mktemp(suffix=".json"))
+    old = m.add("我们一起去爬山看日出", source="x", emotion="平静")
+    m.add("我们一起去爬山看星星", source="x", emotion="平静")
+    for it in m.items:                                   # 让旧那条严重老化
+        it["created"] = time.time() - (300 * DAY if it["id"] == old else 0)
+    a.memory = m
+    texts = [it["text"] for _, it in a._recall("一起去爬山", k=2)]
+    assert texts and texts[0].endswith("星星")          # 新鲜的更易想起，排前
+
+
+def test_rescue_fading_reinforces_important():
+    from dsoul.agent import Agent
+    a = object.__new__(Agent)
+    m = Memory(tempfile.mktemp(suffix=".json"))
+    mid = m.add("我和小婷的结婚纪念日", source="x", emotion="深情")  # 重要
+    it = next(i for i in m.items if i["id"] == mid)
+    it["created"] = time.time() - 120 * DAY                          # 但在淡忘
+    a.memory = m
+    assert mid in a.rescue_fading() and it["recalls"] == 1
+
+
 if __name__ == "__main__":
     for _n, _f in sorted(globals().items()):
         if _n.startswith("test_") and callable(_f):

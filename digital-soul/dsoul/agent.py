@@ -184,8 +184,8 @@ class Agent:
                 self._log_journal(who, utterance, gret, "graph")
                 return result
 
-        # --- 检索记忆（被用到的记忆顺便强化，抗遗忘）---
-        recalled = self.memory.recall(utterance, k=4)
+        # --- 检索记忆（强度感知：淡忘的更难想起；被用到的顺便强化）---
+        recalled = self._recall(utterance, k=4)
         mems = [it["text"] for _, it in recalled]
         result["memories"] = mems
         if hasattr(self.memory, "reinforce"):
@@ -465,6 +465,10 @@ class Agent:
         # 3) 推进计划：能办的去办，该提醒的提醒
         if self.plan is not None:
             out["notices"] += self._advance_plan()
+        # 4) 温故：抢救正在淡忘的重要记忆
+        rescued = self.rescue_fading()
+        if rescued:
+            out["notices"].append(f"我又温习了 {len(rescued)} 件要紧事，免得淡忘。")
         return out
 
     def _advance_plan(self) -> list:
@@ -509,6 +513,24 @@ class Agent:
         scored = [(strength(it, now), it.get("text", "")) for it in self.memory.items]
         scored.sort(key=lambda x: x[0])
         return [(round(s, 2), t) for s, t in scored[:k] if s < 0.66]
+
+    def _recall(self, text, k: int = 4, now=None):
+        """强度感知检索：相关性 × (0.4 + 0.6×记忆强度)，淡忘的更难被想起。"""
+        from .forgetting import strength
+        cand = self.memory.recall(text, k=k * 3)
+        ranked = sorted(cand, key=lambda si: -(si[0] * (0.4 + 0.6 * strength(si[1], now))))
+        return ranked[:k]
+
+    def rescue_fading(self, now=None, threshold: float = 0.35) -> list:
+        """温故：抢救"重要但正在淡忘"的记忆（重温即强化），避免遗忘要紧事。"""
+        from .forgetting import importance, strength
+        if not hasattr(self.memory, "reinforce"):
+            return []
+        ids = [it["id"] for it in self.memory.items
+               if importance(it) >= 0.6 and strength(it, now) < threshold]
+        if ids:
+            self.memory.reinforce(ids, now=now)
+        return ids
 
     # ---------- 记忆图谱（人—事—主题 关系网）----------
     def memory_graph(self):
