@@ -8,8 +8,8 @@ const fmt = (s) => { if (!isFinite(s) || s < 0) return '0:00'; s = Math.floor(s)
 
 const player = new DolbyPlayer({
   tracks: [
-    { src: 'demo-assets/track-1.wav', title: '潮汐 · Am–F–C–G', artist: 'dolby-audio demo' },
-    { src: 'demo-assets/track-2.wav', title: '夜行 · Dm–B♭–F–C', artist: 'dolby-audio demo' }
+    { src: 'demo-assets/track-1.wav', title: '潮汐 · Am–F–C–G', artist: 'dolby-audio demo', album: 'dolby-audio' },
+    { src: 'demo-assets/track-2.wav', title: '夜行 · Dm–B♭–F–C', artist: 'dolby-audio demo', album: 'dolby-audio' }
   ],
   dolby: { preset: 'music' }
 });

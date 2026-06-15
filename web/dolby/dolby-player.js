@@ -48,9 +48,12 @@ export class DolbyPlayer {
     this._autoplayNext = options.autoplayNext !== false;
     this.audio.volume = options.volume != null ? clamp01(options.volume) : 1;
 
+    this._msApi = (typeof navigator !== 'undefined' && navigator.mediaSession) ? navigator.mediaSession : null;
+    this._ms = options.mediaSession !== false && !!this._msApi;
     this._handlers = {};
     this._bound = {};
     this._wire();
+    if (this._ms) this._initMediaSession();
     if (this.tracks.length && options.autoload !== false) this.load(0, false);
   }
 
@@ -62,10 +65,10 @@ export class DolbyPlayer {
 
   _wire() {
     const A = this.audio, B = this._bound;
-    B.play = () => this._emit('play');
-    B.pause = () => this._emit('pause');
-    B.time = () => this._emit('time', { currentTime: A.currentTime, duration: A.duration || 0 });
-    B.loaded = () => this._emit('loaded', { duration: A.duration || 0 });
+    B.play = () => { this._emit('play'); this._setPlayback('playing'); };
+    B.pause = () => { this._emit('pause'); this._setPlayback('paused'); };
+    B.time = () => { this._emit('time', { currentTime: A.currentTime, duration: A.duration || 0 }); this._setPosition(); };
+    B.loaded = () => { this._emit('loaded', { duration: A.duration || 0 }); this._setPosition(); };
     B.ended = () => this._onEnded();
     B.error = () => this._emit('error', A.error);
     B.vol = () => this._emit('volume', A.volume);
@@ -95,6 +98,7 @@ export class DolbyPlayer {
     this.audio.src = srcOf(this.tracks[i]);
     this.audio.load && this.audio.load();
     this._emit('track', { index: i, track: this.tracks[i] });
+    this._setMetadata(this.tracks[i]);
     if (autoplay) this.play();
     return this;
   }
@@ -142,6 +146,45 @@ export class DolbyPlayer {
     else if (this.repeat === 'all') this.load(0, true);   // 否则到列表末尾自然停止
   }
 
+  // ---- Media Session（锁屏/通知栏：封面、上一首/下一首、进度） ----
+  _initMediaSession() {
+    const ms = this._msApi; if (!ms || !ms.setActionHandler) return;
+    const set = (a, fn) => { try { ms.setActionHandler(a, fn); } catch { /* 不支持的动作忽略 */ } };
+    set('play', () => this.play());
+    set('pause', () => this.pause());
+    set('previoustrack', () => this.prev(true));
+    set('nexttrack', () => this.next(true));
+    set('stop', () => this.stop());
+    set('seekto', (d) => { if (d && d.seekTime != null) this.seek(d.seekTime); });
+    set('seekbackward', (d) => this.seek(Math.max(0, this.currentTime - ((d && d.seekOffset) || 10))));
+    set('seekforward', (d) => this.seek(this.currentTime + ((d && d.seekOffset) || 10)));
+  }
+  _setMetadata(track) {
+    if (!this._ms || !this._msApi || typeof MediaMetadata === 'undefined') return;
+    const t = typeof track === 'string' ? { src: track } : (track || {});
+    let artwork = t.artwork;
+    if (!artwork && t.cover) artwork = [{ src: t.cover, sizes: '512x512' }];
+    try { this._msApi.metadata = new MediaMetadata({ title: t.title || t.src || '', artist: t.artist || '', album: t.album || '', artwork: artwork || [] }); } catch { /* ok */ }
+  }
+  _setPlayback(state) { if (this._ms && this._msApi) { try { this._msApi.playbackState = state; } catch { /* ok */ } } }
+  _setPosition() {
+    if (!this._ms || !this._msApi || !this._msApi.setPositionState) return;
+    const d = this.duration, p = this.currentTime;
+    if (!isFinite(d) || d <= 0 || p > d) return;
+    try { this._msApi.setPositionState({ duration: d, position: p, playbackRate: this.audio.playbackRate || 1 }); } catch { /* ok */ }
+  }
+  /** 开/关锁屏与通知栏的媒体控制（默认在支持的浏览器自动开启） */
+  setMediaSession(on) {
+    on = !!on && !!this._msApi;
+    this._ms = on;
+    if (on) { this._initMediaSession(); this._setMetadata(this.current); this._setPlayback(this.playing ? 'playing' : 'paused'); }
+    else if (this._msApi) {
+      for (const a of ['play', 'pause', 'previoustrack', 'nexttrack', 'stop', 'seekto', 'seekbackward', 'seekforward']) { try { this._msApi.setActionHandler(a, null); } catch { /* ok */ } }
+      try { this._msApi.metadata = null; this._msApi.playbackState = 'none'; } catch { /* ok */ }
+    }
+    return this;
+  }
+
   // ---- 引擎便捷代理（完整能力见 player.dolby） ----
   setPreset(p) { this.dolby.setPreset(p); return this; }
   setIntensity(v) { this.dolby.setIntensity(v); return this; }
@@ -154,6 +197,7 @@ export class DolbyPlayer {
   }
 
   dispose({ closeContext = false } = {}) {
+    if (this._ms) this.setMediaSession(false);
     const A = this.audio, B = this._bound;
     for (const [ev, fn] of [['play', B.play], ['pause', B.pause], ['timeupdate', B.time], ['loadedmetadata', B.loaded], ['ended', B.ended], ['error', B.error], ['volumechange', B.vol]]) {
       A.removeEventListener(ev, fn);

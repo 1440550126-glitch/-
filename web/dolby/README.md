@@ -22,6 +22,7 @@
 - 🎚 **5 档预设 + 自定义** — 标准/影院/音乐/夜间/人声，`registerPreset()` 可扩展
 - 💾 **可选偏好持久化** — `dolby-store.js` 助手（引擎本身保持无状态、解耦）
 - 🎧 **开箱即用播放器层** — `dolby-player.js`：`<audio>`+引擎+播放列表（上下一首/进度/音量/循环/随机/事件）
+- 🔒 **锁屏/通知栏控制** — 自动接入 Media Session（封面/曲目信息 + 上一首/下一首/进度），移动端体验到位
 - 🪶 **零依赖 / 零构建** — ES Module，含 TypeScript 类型定义
 
 ## 快速开始
@@ -225,6 +226,16 @@ player.dolby.setSpatialMode('headphones'); // 引擎全部能力仍可用
 
 事件：`track` / `play` / `pause` / `ended` / `time` / `loaded` / `error` / `volume` / `playlist`
 （`on(ev, fn)` / `off` / `once`）。
+
+**锁屏/通知栏（Media Session）**：在支持的浏览器自动开启，锁屏与通知栏会显示曲目信息、
+封面，并提供上一首/下一首/播放/暂停/进度控制。给曲目加 `cover`（或标准 `artwork` 数组）
+和 `album` 即可显示封面与专辑：
+
+```js
+{ src: '/music/a.mp3', title: '歌名', artist: '歌手', album: '专辑', cover: '/cover/a.jpg' }
+```
+
+用 `player.setMediaSession(false)` 可关闭。
 
 ## 集成注意事项
 

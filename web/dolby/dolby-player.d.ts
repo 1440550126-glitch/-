@@ -23,6 +23,8 @@ export interface DolbyPlayerOptions {
   crossOrigin?: string;
   autoplayNext?: boolean;
   autoload?: boolean;
+  /** 锁屏/通知栏媒体控制（默认在支持的浏览器自动开启） */
+  mediaSession?: boolean;
 }
 
 export interface PlayerState {
@@ -74,6 +76,7 @@ export class DolbyPlayer {
   prev(autoplay?: boolean): this;
   setRepeat(mode: RepeatMode): this;
   setShuffle(on: boolean): this;
+  setMediaSession(on: boolean): this;
 
   setPreset(p: string | object): this;
   setIntensity(v: number): this;

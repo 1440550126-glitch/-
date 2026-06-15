@@ -164,4 +164,24 @@ player.dispose(); ok(audio._count('play') === 0, 'dispose 解绑音频事件');
 const p2 = createPlayer({ audio: makeAudio(), dolby: new DolbyAudio({ context: makeCtx(), autoConnect: false }) });
 ok(p2 instanceof DolbyPlayer, 'createPlayer 工厂函数'); p2.dispose();
 
+// 12) Media Session 集成
+const handlers = {}; let posState = null;
+globalThis.MediaMetadata = class { constructor(o) { Object.assign(this, o); } };
+const navDesc = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+Object.defineProperty(globalThis, 'navigator', { configurable: true, writable: true, value: { mediaSession: { metadata: null, playbackState: 'none', setActionHandler(a, fn) { handlers[a] = fn; }, setPositionState(s) { posState = s; } } } });
+const ma = makeAudio();
+const mp = new DolbyPlayer({ audio: ma, dolby: new DolbyAudio({ context: makeCtx(), autoConnect: false }), tracks: [{ src: 'a.mp3', title: 'A', artist: 'X', cover: '/c.png' }, { src: 'b.mp3', title: 'B' }] });
+ok(typeof handlers.play === 'function' && typeof handlers.nexttrack === 'function' && typeof handlers.seekto === 'function', 'Media Session 注册动作处理器');
+ok(navigator.mediaSession.metadata?.title === 'A' && navigator.mediaSession.metadata.artist === 'X', 'track 载入设置 metadata（标题/艺人）');
+ma.duration = 200; ma.currentTime = 50; ma._fire('timeupdate'); ok(posState?.duration === 200 && posState.position === 50, 'timeupdate 同步 setPositionState');
+ma._fire('play'); ok(navigator.mediaSession.playbackState === 'playing', "'play' 事件更新 playbackState");
+ma._fire('pause'); ok(navigator.mediaSession.playbackState === 'paused', "'pause' 事件更新 playbackState");
+handlers.seekto({ seekTime: 30 }); ok(ma.currentTime === 30, 'seekto 动作跳转');
+handlers.nexttrack(); ok(mp.index === 1 && navigator.mediaSession.metadata.title === 'B', 'nexttrack 动作切歌并更新 metadata');
+mp.setMediaSession(false); ok(navigator.mediaSession.playbackState === 'none' && handlers.play === null, 'setMediaSession(false) 清理处理器与状态');
+await Promise.resolve();
+mp.dispose();
+if (navDesc) Object.defineProperty(globalThis, 'navigator', navDesc); else delete globalThis.navigator;
+delete globalThis.MediaMetadata;
+
 console.log(`\n========== dolby-audio：${pass} 项断言全部通过 ✅ ==========`);
