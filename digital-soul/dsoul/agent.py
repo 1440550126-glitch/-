@@ -514,13 +514,13 @@ class Agent:
     # ---------- 内心独白 ----------
     def _inner_thought(self, utterance, who, assoc_texts) -> str:
         from .monologue import compose_thought
-        mood = None
+        mood_char = mood = None
         if self.emotions is not None:
             from .emotions import _DESC
             top, val = self.emotions.mood()
             if val >= self.emotions.baseline + 0.08:
-                mood = _DESC.get(top)
-        return compose_thought(utterance, mood=mood, assoc=assoc_texts,
+                mood_char, mood = top, _DESC.get(top)
+        return compose_thought(utterance, mood=mood, mood_char=mood_char, assoc=assoc_texts,
                                speaker=who.get("name") if who.get("known") else None)
 
     # ---------- 价值抉择 ----------
@@ -639,7 +639,8 @@ class Agent:
         from .dream import compose_dream
         mood = self.emotions.mood()[0] if self.emotions is not None else None
         names = [p.get("name") for p in self.authority.people.values()]
-        text = compose_dream(self.memory.items, mood=mood, names=names, llm=self.llm)
+        extra = [t.strip("（）") for t in list(getattr(self, "thoughts", []))[-3:]]
+        text = compose_dream(self.memory.items, mood=mood, names=names, llm=self.llm, extra=extra)
         if text:
             self.dreams.add(text, mood=mood)
             if self.emotions is not None and mood:

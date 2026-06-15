@@ -28,7 +28,7 @@ def _fragment(text: str) -> str:
     return next((p.strip() for p in parts if p.strip()), text or "")[:24]
 
 
-def compose_dream(items, mood=None, names=None, llm=None, seed=None) -> str:
+def compose_dream(items, mood=None, names=None, llm=None, seed=None, extra=None) -> str:
     items = [it for it in items if "dream" not in (it.get("tags") or [])]
     if len(items) < 2:
         return ""
@@ -38,6 +38,8 @@ def compose_dream(items, mood=None, names=None, llm=None, seed=None) -> str:
     chain = list(seeds)
     for _w, it in spreading_activation(seeds, items, names=names, k=3):
         chain.append(it)
+    if extra:                                  # 白天反复冒出的心声也飘进梦里
+        chain += [{"text": e} for e in extra if e]
     if llm is not None and getattr(llm, "available", False):
         woven = _llm_dream(llm, chain, mood)
         if woven:
