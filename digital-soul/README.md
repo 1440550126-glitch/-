@@ -49,6 +49,11 @@
 | 一键常驻 / 部署 | 感知+巩固守护进程 · 树莓派/机器人指南 | `scripts/daemon.py` · `docs/deploy.md` |
 | 手机网页状态页 | 实时看"看到谁 / 记了什么" | `dsoul/webstatus.py` |
 | 轻量人脸(树莓派) | OpenCV LBPH 后端，免 dlib | `dsoul/perception_opencv.py` |
+| 七情六欲 | 情绪随互动起伏、影响口吻 | `dsoul/emotions.py` |
+| 多学科视角 | 心理/哲学/医学…思维调度 | `dsoul/knowledge.py` |
+| 技能（做饭/家务）| 授权可执行的技能 | `dsoul/skills.py` |
+| 隔空指挥智能体 | 派活给爱马仕/openclaw 并回传 | `dsoul/remote_agents.py` |
+| 人格热切换 | 运行时一键换"灵魂" | `dsoul/personas.py` |
 
 ## 架构
 
@@ -204,6 +209,19 @@ python scripts/daemon.py --voice         # 感知 + 语音对话 + 定时巩固
 docker build -t digital-soul . && docker run --rm -e DSOUL_LLM_HOST=http://192.168.1.10:11434 digital-soul
 ```
 
+**🛰️ 隔空指挥外部智能体** —— 机器人当大脑，把活儿派给笔记本/Mac 上的智能体（爱马仕/openclaw），干完回传。
+```bash
+python scripts/demo_agents.py            # 本地起两个 worker，一条命令跑通整条链路
+# 真机：在那两台机器各跑 digital-soul worker --name openclaw --port 9302
+```
+端点配置见 `config/agents.yaml`；任何监听 `POST /task` 的智能体都能接。它是机器人，却能隔空驱动主机上的智能体干活、再把结果带回来。
+
+**🎭 人格热切换 + 七情六欲** —— 运行时一键换"灵魂"，且情绪会随相处起伏。
+```bash
+digital-soul persona flirty-girlfriend --seed-memory   # 换人格(连"我们的故事")
+```
+对话中它的喜怒哀惧爱恶欲会变化并自然流露；还会用心理/哲学/医学等多学科视角帮你。
+
 **📱 手机网页状态页 + 远程对话** —— 常驻时随手看它"看到谁 / 记了什么"，还能**在手机上直接跟它聊天**。
 ```bash
 python scripts/daemon.py --web        # 浏览器打开 http://<树莓派IP>:8765/
@@ -232,9 +250,14 @@ digital-soul/
 │   ├── presence.py    持续感知：认人进画面 → 主动打招呼
 │   ├── journal.py     对话日记（短期记忆）
 │   ├── consolidate.py 睡眠巩固：对话 → 长期记忆
+│   ├── emotions.py    七情六欲情绪状态
+│   ├── knowledge.py   多学科视角调度
+│   ├── skills.py      技能（做饭/家务…）
+│   ├── remote_agents.py  隔空指挥外部智能体（爱马仕/openclaw）
+│   ├── personas.py    人格切换共享逻辑
 │   ├── perception_opencv.py  轻量人脸后端（OpenCV LBPH，免 dlib）
 │   └── webstatus.py   手机网页状态页
-├── scripts/           demo · chat · desktop · ingest · timeline · voice_chat · watch · sleep · finetune_* · daemon · doctor
+├── scripts/           demo · chat · desktop · persona · ingest · timeline · voice_chat · watch · sleep · finetune_* · daemon · doctor · agent_worker · demo_agents
 ├── docs/              finetune.md（微调）· deploy.md（树莓派/机器人部署）
 ├── Dockerfile · scripts/install.sh   一键容器 / 一键安装
 └── tests/             授权 / 记忆 / 情感 / 感知 / 巩固 单元测试

@@ -58,6 +58,25 @@
 - **新增动作**：在 `agent._execute()` 里加分支，并在 `relationships.yaml` 的
   `permissions` 里授权。
 
+## 能力扩展层
+
+| 模块 | 职责 | 关键接口 |
+|---|---|---|
+| `emotions.py` | 七情六欲：随互动起伏、随时间回落 | `observe()` · `prompt_hint()` · `mood()` |
+| `knowledge.py` | 多学科视角调度（深度由模型提供） | `prompt_hint()` |
+| `skills.py` | 可执行技能（做饭/家务…），按权限放行 | `SkillRegistry` · `Skill` |
+| `remote_agents.py` | 隔空把任务派给外部智能体并回传 | `AgentHub.dispatch()` · `RemoteAgent` |
+| `personas.py` | 人格切换共享逻辑（命令行+运行时复用） | `apply_persona()` · `list_personas()` |
+| `webstatus.py` | 网页状态页 + 远程对话 | `start_web()` |
+
+这些都通过 `Agent` 的可选构造参数注入：`emotions / knowledge / skills / hub`；
+`Agent.handle()` 会把情绪与学识作为 hints 拼进人格提示词，
+`run_skill()` / `dispatch_agent()` / `switch_persona()` 分别对应技能、外部智能体、人格热切换。
+
+**外部智能体协议**：worker 监听 `GET /ping` 与 `POST /task {task, params}`，
+返回 `{ok, result}`。机器人侧 `RemoteAgent.dispatch()` 发起、收结果。
+参考实现 `scripts/agent_worker.py`，端点配置 `config/agents.yaml`。
+
 ## 数据与隐私
 
 | 路径 | 内容 | 是否入库 |

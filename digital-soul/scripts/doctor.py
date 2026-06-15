@@ -100,6 +100,12 @@ def main() -> None:
         line(OK if nfaces else WARN, "人脸识别", f"{backend} · {nfaces} 张已登记人脸",
              "用 scripts/ingest.py face <id> <图片> 登记")
 
+    if agent is not None and getattr(agent, "hub", None) is not None and agent.hub.names():
+        av = agent.hub.available()
+        on = [n for n, v in av.items() if v]
+        line(OK if on else WARN, "外部智能体", f"在线 {len(on)}/{len(av)}：{', '.join(av)}",
+             "在对应机器上 `digital-soul worker --name <名> --port <口>` 启动")
+
     line(OK if _imp("tkinter") else WARN, "桌面界面(tkinter)",
          "可用" if _imp("tkinter") else "未安装", "sudo apt install python3-tk")
 
