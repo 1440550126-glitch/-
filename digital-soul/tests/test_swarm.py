@@ -20,8 +20,17 @@ def test_risky_question_leans_no():
 
 def test_report_has_panel_and_reasons():
     f = forecast("会不会成")
-    assert "小会" in f["text"] and "个不同的我" in f["text"]
+    assert "小会" in f["text"] and "种不同的思路" in f["text"]
     assert f["yes"] + f["no"] + f["neutral"] == len(f["panel"])
+
+
+def test_cognitive_diversity_signal():
+    # 风险明确 → 几种思路趋于一致（分歧低、有数）
+    united = forecast("风险极大又危险又累，还得熬夜拼命，靠谱吗")
+    # 含糊问题 → 思路分歧（多样性更高）
+    split = forecast("会不会成")
+    assert united["diversity"] < split["diversity"]
+    assert "一致" in united["text"]
 
 
 def test_llm_panel_when_available():

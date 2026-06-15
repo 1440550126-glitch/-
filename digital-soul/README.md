@@ -77,7 +77,7 @@
 | 世界模型(置信/自我修正) | 信念随证据增减、遇相反信号会动摇甚至改主意 | `dsoul/worldmodel.py` |
 | 情景预测 | 从日记规律预感"这个点你常想做什么"，提前一步 | `dsoul/anticipate.py` |
 | 可校准预测 | 多信号预感带置信度，"猜对/没猜对"反馈越用越准；高置信主动提、一句"好"就安排 | `dsoul/predict.py` |
-| 群体模拟预测 | 脑中开小会：多视角各自表态、聚合成预感（参考 MiroFish "Predict Anything"） | `dsoul/swarm.py` |
+| 群体模拟预测 | 脑中开小会：6 种认知思维各自表态、聚合成预感，并以"一致/分歧"作信号（参考 MiroFish · ruv-swarm 认知多样性） | `dsoul/swarm.py` |
 
 ## 架构
 

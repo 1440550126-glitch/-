@@ -121,7 +121,7 @@ flowchart TB
 | `worldmodel.py` | 世界模型：带置信度的信念，随证据增减、遇相反信号自我修正（会改主意） |
 | `anticipate.py` | 情景预测：把日记按时段聚合，预感"这个点你常想做什么"，提前一步 |
 | `predict.py` | 可校准预测：多信号带置信度，从"猜对/没猜对"反馈自我校准 |
-| `swarm.py` | 群体模拟预测：脑中开个小会，多视角表态聚合成预感（参考 MiroFish） |
+| `swarm.py` | 群体模拟预测：6 种认知思维模式表态聚合，"一致/分歧"作信号（参考 MiroFish · ruv-swarm 认知多样性） |
 | `tasks.py` | 派活待办本：成记功、败记账、可跟进重试 |
 | `emotions.py` · `knowledge.py` | 七情六欲随互动起伏；多学科视角调度 |
 | `perception.py` · `perception_opencv.py` · `presence.py` | 人脸认人；树莓派轻量后端；持续感知/进门事件 |
