@@ -3,6 +3,7 @@
 import pathlib
 import sys
 import types
+from datetime import date, datetime
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
@@ -64,6 +65,15 @@ def test_butler_refuses_strangers():
     a = _agent()
     stranger = {"known": False, "name": "路人", "obey": False}
     assert a._butler_route("简报", stranger) is None             # 不对外人汇报（隐私）
+
+
+def test_morning_brief_window():
+    a = object.__new__(Agent)
+    a._briefed_on = None
+    assert a._should_morning_brief(datetime(2026, 1, 1, 8, 0)) is True    # 清晨
+    assert a._should_morning_brief(datetime(2026, 1, 1, 15, 0)) is False  # 下午不主动
+    a._briefed_on = date.today().isoformat()
+    assert a._should_morning_brief(datetime(2026, 1, 1, 8, 0)) is False   # 今天已报过
 
 
 if __name__ == "__main__":

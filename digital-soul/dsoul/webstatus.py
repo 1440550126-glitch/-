@@ -50,6 +50,7 @@ def _snapshot(agent, monitor) -> dict:
         ][::-1][:6]
         tasks_done = len(agent.tasks.done())
     reflections = agent.recent_reflections() if hasattr(agent, "recent_reflections") else []
+    devices = agent.devices.describe() if getattr(agent, "devices", None) is not None else []
     plan_items = []
     if getattr(agent, "plan", None) is not None:
         plan_items = [
@@ -68,6 +69,7 @@ def _snapshot(agent, monitor) -> dict:
         "tasks_done": tasks_done,
         "reflections": reflections,
         "plan": plan_items,
+        "devices": devices,
         "mood": mood_char,
         "mood_levels": mood_levels,
         "people": [p["name"] for p in agent.authority.people.values()],
@@ -104,6 +106,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 <h1 id=title>🧠 数字分身</h1>
 <div class=card><span id=llm class="badge off">…</span>&nbsp;&nbsp;<span id=memc>记忆 …</span></div>
 <div class=card><div class=k>👁️ 现在看到谁</div><div id=present>…</div></div>
+<div class=card><div class=k>🏠 设备</div><div id=devices class=dim>…</div></div>
 <div class=card><div class=k>💞 此刻心情</div><div id=mood>…</div><div id=moodbars></div></div>
 <div class=card><div class=k>🤵 管家</div>
   <button id=brief>☀️ 要一份简报</button>&nbsp;<button id=diag style="background:#37474f">🩺 系统自检</button></div>
@@ -139,6 +142,7 @@ async function refresh(){
     $('#llm').className='badge '+(s.llm?'on':'off');
     $('#memc').textContent='记忆 '+s.memory_count+' 条';
     $('#present').textContent=s.present.length?s.present.join('、'):'暂时没看到人';
+    $('#devices').textContent=(s.devices&&s.devices.length)?s.devices.join('　'):'无设备';
     $('#mood').textContent=s.mood?(MOODS[s.mood]||s.mood):'平静';
     $('#moodbars').innerHTML=s.mood_levels?bars(s.mood_levels):'';
     $('#disp').innerHTML=li(s.dispatches||[]);

@@ -26,11 +26,14 @@ from dsoul.presence import PresenceMonitor  # noqa: E402
 from dsoul.voice import Ears, Mouth, record_wav  # noqa: E402
 
 
-def start_vision(agent) -> bool:
+def start_vision(agent, mouth=None) -> bool:
     me = agent.identity.get("name", "我")
 
     def on_enter(name: str) -> None:
-        print(f"[感知] {name} 进入画面 → {me}: {agent.greet(name)}", flush=True)
+        text = agent.greet(name)   # 清晨第一次见到主人会自动带上"晨间简报"
+        print(f"[感知] {name} 进入画面 → {me}: {text}", flush=True)
+        if mouth is not None:
+            mouth.speak(text)
 
     def on_leave(name: str) -> None:
         print(f"[感知] {name} 离开画面", flush=True)
@@ -132,7 +135,8 @@ def main() -> None:
         flush=True,
     )
 
-    monitor = start_vision(agent) if not args.no_vision else None
+    mouth = Mouth() if args.voice else None   # 语音模式下，连打招呼/晨报也念出来
+    monitor = start_vision(agent, mouth) if not args.no_vision else None
 
     if args.web is not None:
         from dsoul.webstatus import start_web
@@ -147,7 +151,7 @@ def main() -> None:
 
     try:
         if args.voice:
-            ears, mouth = Ears(), Mouth()
+            ears = Ears()
             print(f"[语音] 听:{ears.backend or '无'} ｜ 说:{mouth.backend or '无(打印)'}", flush=True)
             if ears.available:
                 voice_loop(agent, ears, mouth, monitor, wake=args.wake)
