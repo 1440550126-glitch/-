@@ -117,6 +117,9 @@ export class DolbyAudio {
   resetLoudness(): this;
   setHRIR(buffer: AudioBuffer | null): this;
   clearHRIR(): this;
+  loadHRIRSet(set: { sampleRate?: number; dirs: { az: number; el?: number }[]; ir: [Float32Array | number[], Float32Array | number[]][] }): this;
+  setLimiterParams(params: { threshold?: number; attack?: number; release?: number }): this;
+  getLimiterReduction(): number;
   setIntensity(v: number, instant?: boolean): this;
   setEnabled(on: boolean, instant?: boolean): this;
   enable(on: boolean): this;

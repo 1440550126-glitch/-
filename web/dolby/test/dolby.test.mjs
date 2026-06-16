@@ -133,9 +133,19 @@ d.setHRIR({}); ok(d.hasHRIR, 'setHRIR 上传个性化 HRIR');
 d.setSpatialMode('headphones'); ok(d.hrirTap.gain.value === 1 && d.binauralTap.gain.value === 0, '耳机+HRIR → 走卷积双耳');
 d.clearHRIR(); ok(!d.hasHRIR && d.binauralTap.gain.value === 1, 'clearHRIR → 回内置 HRTF');
 d.setSpatialMode('speakers');
-// 限幅器 worklet 降级
+// HRIR 集 → 双耳 IR（dolby-hrir）
+const hrir = await import('../dolby-hrir.js');
+const storeCtx = { sampleRate: 48000, createBuffer: (cch, len, rate) => { const a = Array.from({ length: cch }, () => new Float32Array(len)); return { numberOfChannels: cch, length: len, sampleRate: rate, getChannelData: (i) => a[i] }; } };
+const hset = { sampleRate: 48000, dirs: [{ az: -30, el: 0 }, { az: 30, el: 0 }], ir: [[Float32Array.of(1, 0), Float32Array.of(0.5, 0)], [Float32Array.of(0.2, 0), Float32Array.of(0.8, 0)]] };
+ok(hrir.nearestDir(hset.dirs, 28) === 1 && hrir.nearestDir(hset.dirs, -32) === 0, 'nearestDir 取最近方位');
+const bir = hrir.buildBinauralIR(storeCtx, hset);
+ok(bir.numberOfChannels === 4 && bir.getChannelData(0)[0] === 1 && Math.abs(bir.getChannelData(2)[0] - 0.2) < 1e-6, 'buildBinauralIR 组 4 声道真立体声 IR');
+d.loadHRIRSet(hset); ok(d.hasHRIR, 'loadHRIRSet 渲染并应用个性化 HRTF'); d.clearHRIR();
+// 限幅器 worklet 降级 + 调参/监看不抛错
 const dl = new DolbyAudio({ context: makeCtx(), limiterWorklet: true });
-ok(dl.limiterWorklet === false, 'limiterWorklet 不支持环境优雅降级（保持软削波）'); dl.dispose();
+ok(dl.limiterWorklet === false, 'limiterWorklet 不支持环境优雅降级（保持软削波）');
+dl.setLimiterParams({ threshold: 0.9, attack: 0.5, release: 0.03 });
+ok(typeof dl.getLimiterReduction() === 'number', 'setLimiterParams/getLimiterReduction 不抛错'); dl.dispose();
 
 // 8) 自定义预设
 registerPreset({ id: 'myroom', label: '我的房间', desc: 't', p: presetById('cinema').p });

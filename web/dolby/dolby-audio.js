@@ -17,6 +17,7 @@
 //   await dolby.resume(); dolby.setSpatialMode('headphones');
 // ============================================================
 import { makeKWeighting, lufsFromMeanSquare, gainForLufs, IntegratedLoudness } from './dolby-loudness.js';
+import { buildBinauralIR } from './dolby-hrir.js';
 
 // width：Side 增益倍数（1=原立体声宽度）；vocal：人声中置提升 dB
 export const DOLBY_PRESETS = [
@@ -291,7 +292,8 @@ export class DolbyAudio {
     if (this._limiterWorklet || !ctx.audioWorklet || typeof AudioWorkletNode === 'undefined') return;
     let url; try { url = new URL('./dolby-limiter-worklet.js', import.meta.url); } catch { return; }
     ctx.audioWorklet.addModule(url).then(() => {
-      this._limNode = new AudioWorkletNode(ctx, 'dolby-limiter', { outputChannelCount: [2] });
+      this._limNode = new AudioWorkletNode(ctx, 'dolby-limiter', { outputChannelCount: [2], processorOptions: { lookahead: 64 } });
+      this._limNode.port.onmessage = (e) => { this._limGr = e.data; };
       this.limiterIn.disconnect();
       this.limiterIn.connect(this._limNode); this._limNode.connect(this.makeup);
       try { this.limiter.disconnect(); } catch { /* ok */ }
@@ -299,6 +301,16 @@ export class DolbyAudio {
     }).catch(() => { /* 回退软削波 */ });
   }
   get limiterWorklet() { return !!this._limiterWorklet; }
+  /** 调限幅器参数（真机调参用）：{ threshold 0.1..1, attack, release }；仅 limiterWorklet 生效 */
+  setLimiterParams(p = {}) {
+    if (!this._limNode || !this._limNode.parameters) return this;
+    const t = this.context.currentTime;
+    const set = (name, v) => { if (typeof v === 'number') { const pr = this._limNode.parameters.get(name); if (pr) pr.setTargetAtTime(v, t, 0.02); } };
+    set('threshold', p.threshold); set('attack', p.attack); set('release', p.release);
+    return this;
+  }
+  /** 限幅器增益衰减（dB，≤0；需 limiterWorklet 开启） */
+  getLimiterReduction() { return this._limGr != null ? 20 * Math.log10(this._limGr || 1e-6) : 0; }
 
   // 用 AudioWorklet 在音频线程做响度测量（脱离主线程）；失败/不支持则保持分析器测量
   _initWorklet() {
@@ -310,7 +322,7 @@ export class DolbyAudio {
       this._workletNode = new AudioWorkletNode(ctx, 'dolby-loudness');
       this._workletSink = ctx.createGain(); this._workletSink.gain.value = 0;   // 静默汇入，确保节点被驱动
       this._kw.output.connect(this._workletNode); this._workletNode.connect(this._workletSink); this._workletSink.connect(this.output);
-      this._workletNode.port.onmessage = (e) => { this._wmMs = e.data; };
+      this._workletNode.port.onmessage = (e) => { this._wmMs = e.data; if (this._integMeasuring) this._integ.addBlock(e.data); };  // 真 400ms 块喂积分
       this._worklet = true;
     }).catch(() => { /* 回退到分析器测量 */ });
   }
@@ -380,6 +392,8 @@ export class DolbyAudio {
   /** 上传个性化 HRTF：用自定义双耳脉冲响应(HRIR/BRIR，AudioBuffer)做卷积双耳；耳机模式下生效 */
   setHRIR(buffer) { try { this.hrirConv.buffer = buffer; this._hasHRIR = !!buffer; } catch { this._hasHRIR = false; } this._applyRender(); return this; }
   clearHRIR() { try { this.hrirConv.buffer = null; } catch { /* ok */ } this._hasHRIR = false; this._applyRender(); return this; }
+  /** 由 HRIR 数据集（见 dolby-hrir.js 格式）渲染并应用个性化双耳 */
+  loadHRIRSet(set) { return this.setHRIR(buildBinauralIR(this.context, set)); }
   get hasHRIR() { return !!this._hasHRIR; }
 
   /** 多频带压缩开关（三段 / 单段），等功率交叉淡化 */
@@ -448,7 +462,7 @@ export class DolbyAudio {
   }
   _updateMatch() {
     const lufs = this._measureLufs();
-    this._integ.addBlock(this._lastMs);                    // 累积门控积分响度
+    if (this._integMeasuring && !this._worklet) this._integ.addBlock(this._lastMs);   // 无 worklet 时由此累积（近似块）
     if (this._normTarget != null) {                        // 归一化到目标 LUFS
       if (!isFinite(lufs) || lufs < -70) return;           // 静音不调
       const target = gainForLufs(lufs, this._normTarget);
