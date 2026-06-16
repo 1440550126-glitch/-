@@ -31,6 +31,8 @@
 ```
 认人 → 对话 → 授权 → 巩固 → 次日记得，一条闭环。
 
+> 🕯️ **缅怀 / 数字遗产**：把某人的聊天记录、书信喂进去（`scripts/ingest_life.py`），配好口头禅与重要日子，分身就能带着 TA 的口吻和你们的共同回忆，在想念时陪着家人。跑一遍 `python scripts/memorial_demo.py` 看「外公」的分身如何陪伴想他的孙女。它是一面承载记忆的镜子，帮在世的人好好怀念，而不是替代那个人本身。
+
 ## 它能做到你要的每一件事
 
 | 你的需求 | 在本框架里的实现 | 代码 |
@@ -56,6 +58,9 @@
 | 技能（做饭/家务）| 授权可执行的技能 | `dsoul/skills.py` |
 | 隔空指挥智能体 | 大白话派活、主动提议、记进长期记忆、失败入待办并主动跟进重试 | `dsoul/remote_agents.py` · `dsoul/agent.py` · `dsoul/tasks.py` |
 | 人格热切换 | 运行时一键换"灵魂" | `dsoul/personas.py` |
+| 像 TA 一样说话 | 口头禅/语气词/口吻，降级也"像本人" | `dsoul/style.py` |
+| 缅怀与抚慰 | 纪念日主动提起；思念时借共同回忆、以本人口吻温柔回应 | `dsoul/memorial.py` |
+| 生平导入 | 聊天记录/书信 → TA 的记忆与口头禅 | `dsoul/lifelog.py` · `scripts/ingest_life.py` |
 | 贾维斯式管家 | 点名应答 / 态势简报 / 系统自检，只服务听命于你的人 | `dsoul/butler.py` |
 | 语音唤醒词 | 设了"贾维斯"就只在被点名时回应 | `scripts/daemon.py`(--wake) |
 | 设备 / 家居控制 | "把灯关了 / 空调调到26度"，内置 Home Assistant 后端 | `dsoul/devices.py` |
