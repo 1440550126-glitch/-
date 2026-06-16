@@ -114,14 +114,25 @@ def _t_run_shell(args, ctx):
         if re.search(pat, cmd):
             return f"[已拦截] 命令命中高危模式，拒绝执行：{pat}"
     timeout = int(ctx.config.get("shell_timeout", 60)) if ctx.config else 60
+    engine = ctx.config.get("sandbox.engine", "none") if ctx.config else "none"
     try:
-        r = subprocess.run(cmd, shell=True, cwd=ctx.cwd, capture_output=True,
-                           text=True, timeout=timeout)
+        if engine and engine != "none":
+            if not shutil.which(engine):
+                return f"[沙箱不可用] 配置了 sandbox.engine={engine} 但系统无此命令；为安全已拒绝执行。"
+            image = ctx.config.get("sandbox.image", "python:3.11-slim")
+            workdir = str(Path(ctx.cwd).resolve())
+            full = [engine, "run", "--rm", "--network", "none",
+                    "-v", f"{workdir}:/work", "-w", "/work", image, "sh", "-c", cmd]
+            r = subprocess.run(full, capture_output=True, text=True, timeout=timeout)
+        else:
+            r = subprocess.run(cmd, shell=True, cwd=ctx.cwd, capture_output=True,
+                               text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return f"[超时] 命令超过 {timeout}s 被终止"
     out = (r.stdout or "") + (("\n[stderr]\n" + r.stderr) if r.stderr else "")
     out = out.strip() or "(无输出)"
-    return f"[退出码 {r.returncode}]\n{out[:8000]}"
+    tag = f"[沙箱:{engine}] " if engine and engine != "none" else ""
+    return f"{tag}[退出码 {r.returncode}]\n{out[:8000]}"
 
 
 def _t_web_fetch(args, ctx):

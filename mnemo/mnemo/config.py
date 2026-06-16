@@ -25,6 +25,8 @@ DEFAULTS: dict[str, Any] = {
     "memory": {"enabled": True, "recall_limit": 6, "min_importance": 1, "semantic": False},
     # 安全：confirm_danger 在交互模式下让写入/执行类工具需确认；deny 永久禁用某些工具
     "tools": {"confirm_danger": False, "deny": []},
+    # 沙箱：engine=docker/podman 时 run_shell 在容器内隔离执行（--network none）
+    "sandbox": {"engine": "none", "image": "python:3.11-slim"},
     "providers": {
         "anthropic": {"model": "claude-opus-4-8", "base_url": "https://api.anthropic.com"},
         "openai": {"model": "gpt-4o-mini", "base_url": "https://api.openai.com/v1"},

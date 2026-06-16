@@ -487,11 +487,39 @@ def cmd_see(args):
     if not app.provider.supports_vision():
         print(yellow(f"当前后端 {app.provider.name} 不支持视觉，请配置 gpt-4o / claude 等"))
         return 1
+    from .media import extract_frames, is_video
     try:
-        print(app.provider.vision(args.path, args.prompt))
+        if is_video(args.path):
+            frames = extract_frames(args.path, n=3)
+            if not frames:
+                print(yellow("无法抽取视频帧（需要 ffmpeg）。"))
+                return 1
+            for i, fr in enumerate(frames, 1):
+                print(bold(f"帧{i}: ") + app.provider.vision(fr, args.prompt))
+        else:
+            print(app.provider.vision(args.path, args.prompt))
     except ProviderError as e:
         print(red(f"[视觉调用失败] {e}"))
         return 1
+    return 0
+
+
+def cmd_voice(args):
+    app = build_app(args)
+    from . import voice
+    miss = voice.missing()
+    if any(k.startswith(("录音", "识别")) for k in miss):
+        print(red("语音对话不可用，缺少：" + "、".join(miss)))
+        print(dim("安装示例：apt install alsa-utils espeak ffmpeg；pip install openai-whisper"))
+        return 1
+    print(dim(f"每轮录音 {args.seconds}s，Ctrl-C 退出。"))
+    try:
+        while True:
+            print(voice.converse_once(app, args.seconds))
+            if args.once:
+                break
+    except KeyboardInterrupt:
+        print("\n再见 👋")
     return 0
 
 
@@ -639,8 +667,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     psp = sub.add_parser("speak", help="用系统 TTS 朗读一段文本（语音输出）")
     psp.add_argument("text")
-    pse = sub.add_parser("see", help="用视觉模型理解一张图片（多模态）")
+    pse = sub.add_parser("see", help="用视觉模型理解图片或视频（多模态，视频需 ffmpeg）")
     pse.add_argument("path"); pse.add_argument("--prompt", default="详细描述这张图片")
+
+    pvo = sub.add_parser("voice", help="语音对话：录音→转写→回答→朗读")
+    pvo.add_argument("--seconds", type=int, default=5); pvo.add_argument("--once", action="store_true")
 
     sub.add_parser("doctor", help="环境自检")
     return p
@@ -651,7 +682,7 @@ _HANDLERS = {
     "memory": cmd_memory, "skill": cmd_skill, "plugin": cmd_plugin, "task": cmd_task,
     "daemon": cmd_daemon, "doctor": cmd_doctor, "audit": cmd_audit,
     "market": cmd_market, "sync": cmd_sync, "speak": cmd_speak, "see": cmd_see,
-    "serve": cmd_serve,
+    "serve": cmd_serve, "voice": cmd_voice,
 }
 
 

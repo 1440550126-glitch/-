@@ -449,6 +449,43 @@ class TestSyncAndMarket(unittest.TestCase):
         tmp.cleanup()
 
 
+class TestSandboxMediaVoice(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = load_config(self.tmp.name)
+        self.tools = build_default_registry()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_shell_runs_without_sandbox(self):
+        ctx = ToolContext(config=self.cfg, cwd=".")
+        out = self.tools.run("run_shell", {"command": "echo hello123"}, ctx)
+        self.assertIn("hello123", out)
+
+    def test_sandbox_refuses_when_engine_missing(self):
+        import shutil
+        if shutil.which("docker"):
+            self.skipTest("docker present")
+        self.cfg.set("sandbox.engine", "docker")
+        ctx = ToolContext(config=self.cfg, cwd=".")
+        out = self.tools.run("run_shell", {"command": "echo hi"}, ctx)
+        self.assertIn("沙箱不可用", out)
+
+    def test_extract_frames_no_ffmpeg(self):
+        import shutil
+        from mnemo.media import extract_frames, is_video
+        self.assertTrue(is_video("a.mp4"))
+        self.assertFalse(is_video("a.png"))
+        if shutil.which("ffmpeg"):
+            self.skipTest("ffmpeg present")
+        self.assertEqual(extract_frames("nope.mp4"), [])
+
+    def test_voice_missing_is_list(self):
+        from mnemo import voice
+        self.assertIsInstance(voice.missing(), list)
+
+
 class TestServe(unittest.TestCase):
     def test_health_and_chat(self):
         from mnemo.serve import make_handler
