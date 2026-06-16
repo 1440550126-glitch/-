@@ -119,6 +119,23 @@ ok(Math.abs(loud.gainForLufs(-20, -14) - Math.pow(10, 6 / 20)) < 1e-9, 'gainForL
 ok(loud.gainForLufs(-Infinity, -14) === 1, '无效响度→增益 1');
 const dw = new DolbyAudio({ context: makeCtx(), worklet: true });
 ok(dw.worklet === false, 'worklet 不支持环境优雅降级（保持分析器测量）'); dw.dispose();
+// 门控积分 LUFS（纯函数）
+const il = new loud.IntegratedLoudness();
+il.addBlock(1e-9); il.addBlock(0.01); il.addBlock(0.01);
+ok(Math.abs(il.integrated() - (-20.691)) < 0.5, `门控积分 LUFS≈${il.integrated().toFixed(1)}（静音块被门控）`);
+il.reset(); ok(il.count === 0 && il.integrated() === -Infinity, 'IntegratedLoudness.reset 清空');
+// 引擎积分响度
+d.measureLoudness(true); d._updateMatch(); d._updateMatch();
+ok(isFinite(d.getIntegratedLoudness()), `getIntegratedLoudness=${d.getIntegratedLoudness().toFixed(1)} LUFS`);
+d.measureLoudness(false); d.resetLoudness();
+// 个性化 HRIR
+d.setHRIR({}); ok(d.hasHRIR, 'setHRIR 上传个性化 HRIR');
+d.setSpatialMode('headphones'); ok(d.hrirTap.gain.value === 1 && d.binauralTap.gain.value === 0, '耳机+HRIR → 走卷积双耳');
+d.clearHRIR(); ok(!d.hasHRIR && d.binauralTap.gain.value === 1, 'clearHRIR → 回内置 HRTF');
+d.setSpatialMode('speakers');
+// 限幅器 worklet 降级
+const dl = new DolbyAudio({ context: makeCtx(), limiterWorklet: true });
+ok(dl.limiterWorklet === false, 'limiterWorklet 不支持环境优雅降级（保持软削波）'); dl.dispose();
 
 // 8) 自定义预设
 registerPreset({ id: 'myroom', label: '我的房间', desc: 't', p: presetById('cinema').p });

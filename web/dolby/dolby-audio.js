@@ -16,7 +16,7 @@
 //   dolby.attachMedia(document.querySelector('audio'));
 //   await dolby.resume(); dolby.setSpatialMode('headphones');
 // ============================================================
-import { makeKWeighting, lufsFromMeanSquare, gainForLufs } from './dolby-loudness.js';
+import { makeKWeighting, lufsFromMeanSquare, gainForLufs, IntegratedLoudness } from './dolby-loudness.js';
 
 // width：Side 增益倍数（1=原立体声宽度）；vocal：人声中置提升 dB
 export const DOLBY_PRESETS = [
@@ -173,6 +173,8 @@ export class DolbyAudio {
     this.panFL = vSpeaker(-30); this.panFR = vSpeaker(30);
     this.panRL = vSpeaker(-110); this.panRR = vSpeaker(110);
     this.binauralBus = Gain(); this.binauralTap = Gain();
+    // 个性化 HRTF：自定义 HRIR 卷积双耳（设了 HRIR 且耳机模式时取代内置 HRTF）
+    this.hrirConv = ctx.createConvolver(); this.hrirTap = Gain(); this.hrirTap.gain.value = 0; this._hasHRIR = false;
     const preComp = Gain(); this._preComp = preComp;
     // 动态：单段
     this.comp = ctx.createDynamicsCompressor(); this.compTap = Gain();
@@ -198,7 +200,8 @@ export class DolbyAudio {
     this._dryMeter = ctx.createAnalyser(); this._dryMeter.fftSize = 256;
     this._wetMeter = ctx.createAnalyser(); this._wetMeter.fftSize = 256;
     this._kw = makeKWeighting(ctx); this._kwMeter = ctx.createAnalyser(); this._kwMeter.fftSize = 2048;
-    this._lufs = -Infinity; this._normTarget = null;
+    this._lufs = -Infinity; this._lastMs = 0; this._normTarget = null;
+    this._integ = new IntegratedLoudness(); this._integMeasuring = false;
 
     // —— 连线 ——
     this.input.connect(this.pre);
@@ -233,6 +236,8 @@ export class DolbyAudio {
     this.bRevSplit.connect(this.panRL, 0); this.bRevSplit.connect(this.panRR, 1);
     for (const sp of [this.panFL, this.panFR, this.panRL, this.panRR]) sp.connect(this.binauralBus);
     this.binauralBus.connect(this.binauralTap); this.binauralTap.connect(preComp);
+    // 个性化 HRIR 卷积路（取加宽立体声）
+    this.merger.connect(this.hrirConv); this.hrirConv.connect(this.hrirTap); this.hrirTap.connect(preComp);
     // 动态：单段路
     preComp.connect(this.comp); this.comp.connect(this.compTap); this.compTap.connect(this.limiterIn);
     // 动态：多频带路
@@ -277,7 +282,23 @@ export class DolbyAudio {
     if (options.loudnessMatch) this.setLoudnessMatch(true);
     if (options.loudnessNorm != null) this.setLoudnessNorm(options.loudnessNorm);
     if (options.worklet) this._initWorklet();
+    if (options.limiterWorklet) this._initLimiterWorklet();
   }
+
+  // 用 AudioWorklet 前瞻限幅器替换软削波（实验性，主信号路径）；失败保持 WaveShaper
+  _initLimiterWorklet() {
+    const ctx = this.context;
+    if (this._limiterWorklet || !ctx.audioWorklet || typeof AudioWorkletNode === 'undefined') return;
+    let url; try { url = new URL('./dolby-limiter-worklet.js', import.meta.url); } catch { return; }
+    ctx.audioWorklet.addModule(url).then(() => {
+      this._limNode = new AudioWorkletNode(ctx, 'dolby-limiter', { outputChannelCount: [2] });
+      this.limiterIn.disconnect();
+      this.limiterIn.connect(this._limNode); this._limNode.connect(this.makeup);
+      try { this.limiter.disconnect(); } catch { /* ok */ }
+      this._limiterWorklet = true;
+    }).catch(() => { /* 回退软削波 */ });
+  }
+  get limiterWorklet() { return !!this._limiterWorklet; }
 
   // 用 AudioWorklet 在音频线程做响度测量（脱离主线程）；失败/不支持则保持分析器测量
   _initWorklet() {
@@ -343,14 +364,23 @@ export class DolbyAudio {
     node.release.setTargetAtTime(c.release, t, tc);
   }
 
-  /** 声场渲染：'speakers' / 'headphones'（HRTF 双耳虚拟环绕） */
+  /** 声场渲染：'speakers' / 'headphones'（内置 HRTF 或自定义 HRIR 双耳） */
   setSpatialMode(mode, instant = false) {
     this._spatialMode = mode === 'headphones' ? 'headphones' : 'speakers';
-    const t = this.context.currentTime, tc = instant ? 0.001 : 0.1, hp = this._spatialMode === 'headphones' ? 1 : 0;
-    this.binauralTap.gain.setTargetAtTime(hp, t, tc);
-    this.stereoTap.gain.setTargetAtTime(1 - hp, t, tc);
+    this._applyRender(instant);
     return this;
   }
+  _applyRender(instant = false) {
+    const t = this.context.currentTime, tc = instant ? 0.001 : 0.1;
+    const hp = this._spatialMode === 'headphones', useHrir = hp && this._hasHRIR;
+    this.stereoTap.gain.setTargetAtTime(hp ? 0 : 1, t, tc);
+    this.binauralTap.gain.setTargetAtTime(hp && !useHrir ? 1 : 0, t, tc);
+    this.hrirTap.gain.setTargetAtTime(useHrir ? 1 : 0, t, tc);
+  }
+  /** 上传个性化 HRTF：用自定义双耳脉冲响应(HRIR/BRIR，AudioBuffer)做卷积双耳；耳机模式下生效 */
+  setHRIR(buffer) { try { this.hrirConv.buffer = buffer; this._hasHRIR = !!buffer; } catch { this._hasHRIR = false; } this._applyRender(); return this; }
+  clearHRIR() { try { this.hrirConv.buffer = null; } catch { /* ok */ } this._hasHRIR = false; this._applyRender(); return this; }
+  get hasHRIR() { return !!this._hasHRIR; }
 
   /** 多频带压缩开关（三段 / 单段），等功率交叉淡化 */
   setMultiband(on, instant = false) {
@@ -387,9 +417,14 @@ export class DolbyAudio {
   get loudnessNorm() { return this._normTarget; }
   /** 当前估计的响度（LUFS 近似，K 加权瞬时；非认证 BS.1770 积分值） */
   getLoudness() { return this._measureLufs(); }
+  /** 开/关积分响度测量回路（供 getIntegratedLoudness 累积） */
+  measureLoudness(on = true) { this._integMeasuring = !!on; this._ensureLoop(); return this; }
+  /** 门控积分响度（LUFS，BS.1770/R128 风格）；需测量回路在跑（归一/对齐/measureLoudness 任一开启） */
+  getIntegratedLoudness() { return this._integ.integrated(); }
+  resetLoudness() { this._integ.reset(); return this; }
 
   _ensureLoop() {
-    const need = this._loudnessMatch || this._normTarget != null;
+    const need = this._loudnessMatch || this._normTarget != null || this._integMeasuring;
     if (need && !this._matchTimer) { if (typeof setInterval === 'function') this._matchTimer = setInterval(() => this._updateMatch(), 250); }
     else if (!need && this._matchTimer) { clearInterval(this._matchTimer); this._matchTimer = null; }
   }
@@ -400,15 +435,20 @@ export class DolbyAudio {
     return Math.sqrt(s / buf.length);
   }
   _measureLufs() {
-    const an = this._kwMeter, buf = this._kbuf || (this._kbuf = new Float32Array(an.fftSize));
-    if (this._wmMs != null) { this._lufs = lufsFromMeanSquare(this._wmMs); return this._lufs; }  // Worklet 测量优先
-    if (an.getFloatTimeDomainData) an.getFloatTimeDomainData(buf);
-    let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
-    this._lufs = lufsFromMeanSquare(s / buf.length);
+    let ms;
+    if (this._wmMs != null) ms = this._wmMs;                  // Worklet 测量优先
+    else {
+      const an = this._kwMeter, buf = this._kbuf || (this._kbuf = new Float32Array(an.fftSize));
+      if (an.getFloatTimeDomainData) an.getFloatTimeDomainData(buf);
+      let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
+      ms = s / buf.length;
+    }
+    this._lastMs = ms; this._lufs = lufsFromMeanSquare(ms);
     return this._lufs;
   }
   _updateMatch() {
     const lufs = this._measureLufs();
+    this._integ.addBlock(this._lastMs);                    // 累积门控积分响度
     if (this._normTarget != null) {                        // 归一化到目标 LUFS
       if (!isFinite(lufs) || lufs < -70) return;           // 静音不调
       const target = gainForLufs(lufs, this._normTarget);
@@ -502,11 +542,11 @@ export class DolbyAudio {
       this.midBus, this.sideL, this.sideR, this.sideBus, this.sideW, this.sidePlus, this.sideMinus,
       this.vocalBP, this.vocalGain, this.motionLfo, this.motionDepth, this.convolver, this.reverbGain,
       this.stereoBus, this.stereoTap, this.bSplit, this.bRevSplit, this.panFL, this.panFR, this.panRL,
-      this.panRR, this.binauralBus, this.binauralTap, this._preComp, this.comp, this.compTap,
+      this.panRR, this.binauralBus, this.binauralTap, this.hrirConv, this.hrirTap, this._preComp, this.comp, this.compTap,
       this.loA, this.loB, this.miHP, this.miLP, this.hiA, this.hiB, this.compLow, this.compMid,
       this.compHigh, this.bandSum, this.mbTap, this.limiterIn, this.limiter, this.makeup, this.matchGain,
       this.cfIn, this.cfSplit, this.cfMerge, this.cfDL, this.cfDR, this.cfLd, this.cfLlp, this.cfLg,
-      this.cfRd, this.cfRlp, this.cfRg, this._kw.input, this._kw.output, this._kwMeter, this._workletNode, this._workletSink,
+      this.cfRd, this.cfRlp, this.cfRg, this._kw.input, this._kw.output, this._kwMeter, this._workletNode, this._workletSink, this._limNode,
       this.dry, this.wet, this._meter, this._dryMeter, this._wetMeter, this.analyser];
     for (const n of nodes) { try { n && n.disconnect(); } catch { /* ok */ } }
     this._sources.clear();

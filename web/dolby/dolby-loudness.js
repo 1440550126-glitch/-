@@ -25,3 +25,30 @@ export function gainForLufs(currentLufs, targetLufs, maxDb = 12) {
   const db = Math.max(-maxDb, Math.min(maxDb, targetLufs - currentLufs));
   return Math.pow(10, db / 20);
 }
+
+// 门控积分响度（BS.1770 / EBU R128 风格）：对一连串测量块（约 400ms 窗口的均方）
+// 做绝对门控(-70 LUFS) + 相对门控(-10 LU)，得到整段"积分响度"。
+// 注：单/合声道近似，块来自周期性测量，非逐样本 400ms/75% 重叠的严格实现。
+export class IntegratedLoudness {
+  constructor(maxBlocks = 36000) { this._max = maxBlocks; this.reset(); }
+  reset() { this._blocks = []; return this; }
+  /** 加入一个测量块的均方值 */
+  addBlock(meanSquare) {
+    if (meanSquare > 0) { this._blocks.push(meanSquare); if (this._blocks.length > this._max) this._blocks.shift(); }
+    return this;
+  }
+  get count() { return this._blocks.length; }
+  /** 双门控积分响度（LUFS）；无有效块返回 -Infinity */
+  integrated() {
+    const b = this._blocks;
+    if (!b.length) return -Infinity;
+    const absKept = b.filter((ms) => lufsFromMeanSquare(ms) >= -70);          // 绝对门控
+    if (!absKept.length) return -Infinity;
+    const meanAbs = absKept.reduce((a, x) => a + x, 0) / absKept.length;
+    const relThresh = lufsFromMeanSquare(meanAbs) - 10;                       // 相对门控 -10 LU
+    const relKept = absKept.filter((ms) => lufsFromMeanSquare(ms) >= relThresh);
+    if (!relKept.length) return -Infinity;
+    const meanRel = relKept.reduce((a, x) => a + x, 0) / relKept.length;
+    return lufsFromMeanSquare(meanRel);
+  }
+}

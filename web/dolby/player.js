@@ -106,6 +106,15 @@ DOLBY_PRESETS.forEach((p) => {
 const hpEl = $('hpSwitch');
 hpEl.addEventListener('click', () => { const on = dolby.spatialMode !== 'headphones'; dolby.setSpatialMode(on ? 'headphones' : 'speakers'); dolby.setCrossfeed(on ? 0.35 : 0); hpEl.classList.toggle('on', on); });
 $('intensity').addEventListener('input', () => dolby.setIntensity($('intensity').value / 100));
+// 个性化 HRTF：上传 HRIR/双耳脉冲响应 → 卷积双耳
+$('hrir').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const buf = await dolby.context.decodeAudioData(await f.arrayBuffer());
+    dolby.setHRIR(buf); dolby.setSpatialMode('headphones'); dolby.setCrossfeed(0.35); hpEl.classList.add('on');
+    $('hrirHint').textContent = `已启用个性化 HRTF：${f.name}`;
+  } catch { $('hrirHint').textContent = '无法解码该文件（建议 wav/mp3 的双耳脉冲响应）'; }
+});
 
 // —— 视觉预设 + 性能档位 ——
 const vizPresetsEl = $('vizPresets');

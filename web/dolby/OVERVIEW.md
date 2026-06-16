@@ -38,7 +38,7 @@ createVisualizer(canvas, { dolby: player.dolby }).start();
 
 ## API 速查
 
-- **引擎**：`setPreset(id|对象)` `setIntensity(0..1)` `setEnabled(on)` `setSpatialMode('speakers'|'headphones')` `setCrossfeed(0..1)` `setMultiband(on)` `setLoudnessMatch(on)` `setLoudnessNorm(LUFS|null)` `setBass/setAir/setWidth/setReverb/setVocal` `setEQBand(i,dB)`/`setEQ([..])` `snapshotPreset(id,label)` `getLevel()`→`{rms,peak,db,clip}` `getLoudness()` `getFrequencyResponse()` `getAnalyser()` `dispose()`
+- **引擎**：`setPreset(id|对象)` `setIntensity(0..1)` `setEnabled(on)` `setSpatialMode('speakers'|'headphones')` `setCrossfeed(0..1)` `setMultiband(on)` `setLoudnessMatch(on)` `setLoudnessNorm(LUFS|null)` `setHRIR(buffer)`（个性化 HRTF）`setBass/setAir/setWidth/setReverb/setVocal` `setEQBand(i,dB)`/`setEQ([..])` `snapshotPreset(id,label)` `getLevel()`→`{rms,peak,db,clip}` `getLoudness()` `getIntegratedLoudness()` `getFrequencyResponse()` `getAnalyser()` `dispose()`
 - **播放器**：`play/pause/toggle/stop/seek/setVolume/next/prev/load` `setRepeat/'off'|'one'|'all'` `setShuffle` `setPlaylist/add` `on(ev,fn)`（`track/play/pause/ended/time/loaded/error/volume/playlist`）`player.dolby`
 - **可视化**：`start/stop/dispose` `setBaseHue(h)` `setCover(img)` `setVizPreset(id)` `setQuality('low'|'mid'|'high')` `analyze()`/`last`→`{bass,mid,treble,energy,beat,bpm}`
 
@@ -56,4 +56,4 @@ npm start                                   # http://localhost:3000/dolby/demo.h
 npm run dolby:test                          # 零依赖自测（模拟 Web Audio，94 断言）
 ```
 
-当前版本：**1.15.0** ·  许可证 MIT
+当前版本：**1.16.0** ·  许可证 MIT

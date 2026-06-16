@@ -48,6 +48,8 @@ export interface DolbyOptions {
   crossfeed?: number;
   /** 用 AudioWorklet 做响度测量（脱离主线程），失败回退分析器 */
   worklet?: boolean;
+  /** 用 AudioWorklet 前瞻限幅器替换软削波（实验性，主信号路径），失败回退 */
+  limiterWorklet?: boolean;
 }
 
 export interface DolbyState {
@@ -110,6 +112,11 @@ export class DolbyAudio {
   setLoudnessNorm(targetLufs: number | null): this;
   setCrossfeed(amount: number): this;
   getLoudness(): number;
+  measureLoudness(on?: boolean): this;
+  getIntegratedLoudness(): number;
+  resetLoudness(): this;
+  setHRIR(buffer: AudioBuffer | null): this;
+  clearHRIR(): this;
   setIntensity(v: number, instant?: boolean): this;
   setEnabled(on: boolean, instant?: boolean): this;
   enable(on: boolean): this;
@@ -139,6 +146,8 @@ export class DolbyAudio {
   readonly loudnessNorm: number | null;
   readonly crossfeed: number;
   readonly worklet: boolean;
+  readonly limiterWorklet: boolean;
+  readonly hasHRIR: boolean;
   readonly state: DolbyState;
 
   dispose(opts?: { closeContext?: boolean }): void;
