@@ -71,6 +71,7 @@ class Agent:
         self._last_prediction = None                              # 最近一次预感（供你反馈校准）
         self._pending_offer = None                                # 已主动提出、待你点头的预感
         self.memorial = memorial or {}                            # 重要日子（缅怀/纪念）
+        self._degraded_notice_shown = False                       # 降级提示只提一次
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
@@ -367,10 +368,17 @@ class Agent:
                 addr = f"{who['name']}（放心，有我在）"
         else:
             addr = ""
-        mem_part = (" 我想起来：" + "；".join(mems[:2]) + "。") if mems else ""
-        tail = "（当前是降级模式：装好 Ollama 并 `ollama pull qwen2.5:7b-instruct` 后，我就能用完整性格和全部记忆回应了。）"
         from .style import apply_style
-        return apply_style(f"{opener}{addr}你说「{utterance}」，我听到了。{mem_part}", self.identity) + " " + tail
+        if mems:
+            body = f"{opener}{addr}我记得——{mems[0].rstrip('。.')}。" + \
+                   (f" 还有，{mems[1].rstrip('。.')}。" if len(mems) > 1 else "")
+        else:
+            body = f"{opener}{addr}你说「{utterance}」，我都听着呢。"
+        out = apply_style(body, self.identity)
+        if not getattr(self, "_degraded_notice_shown", False):     # 技术提示只出现一次
+            self._degraded_notice_shown = True
+            out += "\n（小提示：接上本地 Ollama 后，我能用完整性格和全部记忆回应。）"
+        return out
 
     # ---------- 主动打招呼（由持续感知 presence 触发）----------
     def greet(self, person_name: str) -> str:
@@ -838,9 +846,10 @@ class Agent:
 
     # ---------- 价值抉择 ----------
     def deliberate(self, text) -> str:
+        from .style import apply_style
         from .values import deliberate as _deliberate
-        return _deliberate(text, values=self.values,
-                           guarded=self.authority.guarded_people(), llm=self.llm)
+        return apply_style(_deliberate(text, values=self.values,
+                                       guarded=self.authority.guarded_people(), llm=self.llm), self.identity)
 
     def evolve_values(self) -> None:
         """从近期经历里统计各价值被触动的次数，缓慢演化权重并持久化。"""
@@ -1008,9 +1017,10 @@ class Agent:
         if getattr(self, "dreams", None) is not None:
             dr = self.dreams.recent(1)
             dream = dr[0]["text"] if dr else None
-        return compose_self_narrative(name, core_people=core, mood_desc=mood_desc,
-                                      insight=refl[0] if refl else None, cherished=cherished,
-                                      dream=dream, traits=traits, llm=self.llm)
+        from .style import apply_style
+        return apply_style(compose_self_narrative(
+            name, core_people=core, mood_desc=mood_desc, insight=refl[0] if refl else None,
+            cherished=cherished, dream=dream, traits=traits, llm=self.llm), self.identity)
 
     def memory_graph(self):
         """构建/复用记忆图谱（记忆条数变化时才重建）。"""
