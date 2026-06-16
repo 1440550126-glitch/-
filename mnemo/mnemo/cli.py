@@ -255,6 +255,13 @@ def cmd_memory(args):
         for r in rows:
             when = time.strftime("%m-%d %H:%M", time.localtime(r["remind_at"]))
             print(f"#{r['id']:<3} {when}  {r['text']}")
+    elif args.action == "graph":
+        from .viz import render_graph_html
+        data = m.graph(limit=args.limit)
+        out = Path(args.out)
+        out.write_text(render_graph_html(data), encoding="utf-8")
+        print(green(f"已生成记忆图谱：{out}") +
+              dim(f"（{len(data['nodes'])} 节点 / {len(data['edges'])} 关联，浏览器打开查看）"))
     return 0
 
 
@@ -539,6 +546,8 @@ def build_parser() -> argparse.ArgumentParser:
     mr = pms.add_parser("remind", help="设置定时提醒")
     mr.add_argument("text"); mr.add_argument("--when", required=True,
                                              help="in 2h / 18:30 / 2026-06-17 09:00")
+    mg = pms.add_parser("graph", help="导出记忆关系图为自包含 HTML")
+    mg.add_argument("--out", default="mnemo-graph.html"); mg.add_argument("--limit", type=int, default=80)
 
     ps = sub.add_parser("skill", help="技能：学习/查看/管理")
     pss = ps.add_subparsers(dest="action", required=True)

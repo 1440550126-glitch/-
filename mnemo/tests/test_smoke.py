@@ -160,6 +160,27 @@ class TestProactiveMemory(unittest.TestCase):
         res = self.mem.consolidate(max_age_days=30)
         self.assertGreaterEqual(res["forgotten"], 1)
 
+    def test_ann_candidates(self):
+        self.mem.add_fact("我家有一只橘猫")
+        self.mem.add_fact("邻居养了大狗")
+        self.mem.embed_backfill(FakeEmbedProvider())
+        qvec = FakeEmbedProvider().embed(["猫"])[0]
+        cands = self.mem.ann_candidates(qvec)
+        cat = [f["id"] for f in self.mem.all_facts() if "猫" in f["text"]][0]
+        dog = [f["id"] for f in self.mem.all_facts() if "狗" in f["text"]][0]
+        self.assertIn(cat, cands)
+        self.assertNotIn(dog, cands)
+
+    def test_graph_and_html(self):
+        self.mem.add_fact("用户在做终端 AI 助理 Mnemo")
+        self.mem.add_fact("用户给 Mnemo 加了永久记忆功能")
+        g = self.mem.graph()
+        self.assertGreaterEqual(len(g["nodes"]), 2)
+        from mnemo.viz import render_graph_html
+        html = render_graph_html(g)
+        self.assertIn("<!doctype", html)
+        self.assertIn("Mnemo", html)
+
     def test_reminders(self):
         rid = self.mem.add_reminder("买牛奶", time.time() - 10)
         self.assertTrue(any(r["id"] == rid for r in self.mem.due_reminders()))

@@ -124,6 +124,8 @@ class Memory:
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(facts)")}
         if "embedding" not in cols:
             self.db.execute("ALTER TABLE facts ADD COLUMN embedding TEXT")
+        if "lsh" not in cols:
+            self.db.execute("ALTER TABLE facts ADD COLUMN lsh INTEGER")  # ANN 签名
         self.db.commit()
         if not self.get_profile("first_seen"):
             self.set_profile("first_seen", str(int(time.time())))
@@ -160,6 +162,8 @@ class Memory:
             return []
         q = set(_tokens(query))
         now = time.time()
+        # ANN 预筛：只对同桶候选算余弦（大库时显著省算力）
+        cands = self.ann_candidates(query_vec) if query_vec else None
         scored: list[tuple[float, sqlite3.Row]] = []
         for r in rows:
             ftoks = set(_tokens(r["text"]))
@@ -168,7 +172,7 @@ class Memory:
             recency = 1.0 / (1.0 + age_days / 14)          # 两周半衰
             score = hit * 3 + r["importance"] + recency + math.log1p(r["use_count"])
             sem_hit = False
-            if query_vec and r["embedding"]:
+            if query_vec and r["embedding"] and (cands is None or r["id"] in cands):
                 try:
                     sim = _cosine(query_vec, json.loads(r["embedding"]))
                     score += sim * 6
@@ -307,10 +311,36 @@ class Memory:
             lines.append(f"- 互动次数：{p['interactions']}")
         return "\n".join(lines)
 
-    # ---------- 语义记忆（向量） ----------
+    # ---------- 语义记忆（向量 + LSH 近似最近邻） ----------
+    def _hyperplanes(self, dim: int, n_bits: int = 16) -> list[list[float]]:
+        """随机投影超平面；固定种子 → 跨运行/跨设备一致，可持久复用。"""
+        key = f"lsh_{dim}"
+        raw = self.get_profile(key)
+        if raw:
+            return json.loads(raw)
+        import random
+        rng = random.Random(20240607 + dim)
+        planes = [[rng.gauss(0, 1) for _ in range(dim)] for _ in range(n_bits)]
+        self.set_profile(key, json.dumps(planes))
+        return planes
+
+    def _signature(self, vec: list[float]) -> int:
+        bits = 0
+        for k, p in enumerate(self._hyperplanes(len(vec))):
+            if sum(a * b for a, b in zip(vec, p)) >= 0:
+                bits |= (1 << k)
+        return bits
+
+    def ann_candidates(self, query_vec: list[float], max_bits_diff: int = 5) -> set[int]:
+        """LSH 多探针：按签名汉明距离筛候选，避免对全部向量做余弦。"""
+        qsig = self._signature(query_vec)
+        rows = self.db.execute("SELECT id, lsh FROM facts WHERE lsh IS NOT NULL").fetchall()
+        return {r["id"] for r in rows
+                if bin((r["lsh"] or 0) ^ qsig).count("1") <= max_bits_diff}
+
     def set_embedding(self, fact_id: int, vec: list[float]) -> None:
-        self.db.execute("UPDATE facts SET embedding=? WHERE id=?",
-                        (json.dumps(vec), fact_id))
+        self.db.execute("UPDATE facts SET embedding=?, lsh=? WHERE id=?",
+                        (json.dumps(vec), self._signature(vec), fact_id))
         self.db.commit()
 
     def embed_backfill(self, provider, limit: int = 256) -> int:
@@ -381,6 +411,22 @@ class Memory:
     def mark_reminder_done(self, rid: int) -> None:
         self.db.execute("UPDATE reminders SET done=1 WHERE id=?", (rid,))
         self.db.commit()
+
+    # ---------- 记忆图谱 ----------
+    def graph(self, limit: int = 80, min_shared: int = 2) -> dict:
+        """构建记忆关系图：节点=事实，边=共享词足够多的两条事实。"""
+        facts = self.all_facts(limit)
+        nodes = [{"id": f["id"], "text": f["text"][:46], "kind": f["kind"],
+                  "importance": f["importance"]} for f in facts]
+        toks = {f["id"]: set(_tokens(f["text"])) for f in facts}
+        ids = [f["id"] for f in facts]
+        edges = []
+        for i in range(len(ids)):
+            for j in range(i + 1, len(ids)):
+                shared = len(toks[ids[i]] & toks[ids[j]])
+                if shared >= min_shared:
+                    edges.append({"source": ids[i], "target": ids[j], "w": shared})
+        return {"nodes": nodes, "edges": edges}
 
     def stats(self) -> dict:
         f = self.db.execute("SELECT COUNT(*) c FROM facts").fetchone()["c"]
