@@ -201,6 +201,17 @@ class Agent:
                 self._log_journal(who, utterance, prop["reply"], f"propose:{prop['agent']}")
                 return result
 
+        # --- 行为习惯（"你在干嘛/这会儿在做什么"）：说出 TA 此刻惯常的活动 ---
+        if action is None and who.get("obey") and any(
+                k in utterance for k in ("你在干嘛", "你在做什么", "这会儿在", "你现在忙", "在忙啥", "在干什么")):
+            from .habits import current_activity
+            from .style import apply_style
+            act = current_activity(self.identity.get("daily_life"), )
+            reply = apply_style(f"我这会儿一般{act}。" if act else "这会儿啊，就随便待着，陪陪你。", self.identity)
+            result["reply"] = reply
+            self._log_journal(who, utterance, reply, "habit")
+            return result
+
         # --- 哀伤抚慰（家人表达思念）：以本人口吻、借共同回忆温柔回应 ---
         if action is None and who.get("obey"):
             from .memorial import comfort_reply, is_grief
