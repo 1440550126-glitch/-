@@ -10,7 +10,7 @@ API Key 就能启动完整系统（走离线兜底）；配上任意大模型后
 
 ```bash
 cd mnemo
-python -m mnemo doctor      # 环境自检
+python -m mnemo doctor      # 环境自检（含能力探测）
 python -m mnemo             # 进入对话（默认命令）
 ```
 
@@ -27,48 +27,65 @@ export OPENAI_API_KEY=sk-... OPENAI_BASE_URL=https://api.deepseek.com/v1 OPENAI_
 
 ---
 
-## 你要的功能 → 现在就能用
+## 能力总览（全部已实现并测试）
 
 | 你的需求 | Mnemo 的实现 |
 | --- | --- |
-| 在终端本地运行 | 纯 Python CLI，`mnemo` / `python -m mnemo`，数据全在本地 `~/.mnemo` |
-| 7×24 跑任务 | `mnemo daemon` 守护进程 + 持久化任务调度（`every 30m` / `@hourly` / `@daily 09:00` / `@startup`） |
-| 越来越懂你 + 永久记忆 | SQLite 三层记忆：长期事实库 + 全量对话留存 + **不断进化的用户画像**（自动抽取姓名/偏好/高频话题），每轮对话后自动学习 |
-| 接入任何大模型 | Provider 抽象 + **通用文本工具协议**：Anthropic / OpenAI 兼容 / Ollama 本地 / 离线兜底，`provider=auto` 自动挑可用后端；插件可注册全新后端 |
-| 学技能 | Markdown 技能（带元信息），`mnemo skill learn --url/--file`，命中任务时自动注入；即学即用 |
-| 下载插件 | `mnemo plugin install <git或本地路径>`，插件可注入工具/技能/新大模型后端 |
-| 市面上没有的 | 见下方[路线图](#路线图想要别人没有的)——主动式记忆、自我进化技能、跨设备记忆同步等 |
+| 本地终端运行 | 纯 Python CLI，数据全在本地 `~/.mnemo` |
+| 7×24 跑任务 | `mnemo daemon` 守护进程 + 持久化调度（`every 30m`/`@hourly`/`@daily 09:00`/`@startup`） |
+| 永久记忆 + 越来越懂你 | SQLite 三层记忆（事实/全量对话/进化画像/话题），每轮对话后自动抽取姓名·偏好·话题 |
+| **主动式记忆** | **向量语义检索**（`memory.semantic`）+ **记忆巩固/遗忘**（合并近重复、淡忘陈旧）+ **定时提醒**（守护进程到点主动触发） |
+| 接入任何大模型 | Provider 抽象 + 通用文本工具协议；`auto` 自动挑可用后端；**可选原生 function-calling**（`native_tools`） |
+| 学技能 + **自我进化** | Markdown 技能即学即用；**一次成功任务可自动沉淀为新技能**（`skill distill` / `run --distill`） |
+| 下载插件 + **市场** | `plugin install <git/本地>`；**`market search/install`** 从 registry 按名安装技能/插件 |
+| **多 Agent 协作** | `delegate` 工具：主 Agent 把聚焦子任务派给角色化子 Agent |
+| **多模态 + 语音** | `see`/`view_image`（视觉）、`speak`（TTS）、`transcribe`（whisper STT），按能力探测优雅降级 |
+| **安全沙箱** | 全量工具**审计日志**（`mnemo audit`）+ 审批策略（`tools.confirm_danger` / `tools.deny`）+ 高危命令拦截 |
+| **跨设备同步** | `sync export/import` 口令加密打包 `~/.mnemo`，换机也"还是那个懂你的它" |
 
 ---
 
 ## 常用命令
 
 ```bash
-mnemo                       # 交互对话（REPL）。内置 /memory /profile /skills /provider /forget /new
-mnemo run "把当前目录的 README 总结成3点"   # 单次任务（带工具：读写文件/Shell/抓网页…）
-mnemo -v run "..."          # -v 显示思考与工具调用细节
+# 对话与任务
+mnemo                       # 交互对话。内置 /memory /profile /skills /provider /forget /distill /new
+mnemo run "把当前目录 README 总结成3点"
+mnemo run "研究X并给方案" --distill research-flow   # 完成后把过程沉淀为技能
+mnemo -v run "..."          # 显示思考与工具细节
 
+# 记忆（永久 + 主动）
 mnemo memory profile        # 看"它对你的了解"
-mnemo memory list           # 列出长期记忆
-mnemo memory add "我女儿生日是 5 月 20 日" --importance 5
+mnemo memory add "我女儿生日 5/20" --importance 5
 mnemo memory search 生日
+mnemo memory remind "给妈妈打电话" --when "in 2h"    # 守护进程到点主动提醒
+mnemo memory reminders
+mnemo memory consolidate    # 主动巩固：合并近重复、淡忘陈旧
+mnemo memory backfill       # 为记忆补算语义向量（需后端支持 embed）
 
-mnemo provider list         # 各大模型后端是否就绪
-mnemo provider test         # 实际打一次模型连通性
+# 大模型后端
+mnemo provider list / test
+mnemo config set native_tools true     # 对支持的后端启用原生 function-calling
+mnemo config set memory.semantic true  # 启用向量语义检索
 
-mnemo skill list            # 技能列表（内置 + 自有）
-mnemo skill learn --url https://example.com/some-skill.md
-mnemo skill new my-workflow # 生成技能模板
+# 技能与插件
+mnemo skill list / show <名> / new <名> / learn --url <md> / distill --name <名>
+mnemo plugin install ./examples/plugins/hello
+mnemo market --registry ./examples/registry.json list
+mnemo market --registry ./examples/registry.json install hello
 
-mnemo plugin install ./examples/plugins/hello   # 安装示例插件（新增 coin_flip 工具）
-mnemo plugin list
+# 多模态与语音
+mnemo see photo.jpg --prompt "图里有什么"
+mnemo speak "你好，我是 Mnemo"
 
-mnemo task add --name 每日简报 --every "@daily 08:30" --prompt "用 daily-briefing 技能给我做今日简报"
-mnemo task list
-mnemo daemon                # 启动 7×24 守护进程（Ctrl-C 退出）
-mnemo daemon --once         # 只巡检一次（可挂到系统 cron）
+# 7×24 守护、安全、同步
+mnemo task add --name 每日简报 --every "@daily 08:30" --prompt "用 daily-briefing 技能做今日简报"
+mnemo daemon                # 启动守护进程（到点跑任务 + 触发提醒 + 每日巩固记忆）
+mnemo audit                 # 工具调用审计日志
+mnemo sync export backup.mnemo --passphrase 你的口令
+mnemo sync import backup.mnemo --passphrase 你的口令
 
-mnemo doctor                # 环境自检
+mnemo doctor                # 环境自检 + 能力探测
 ```
 
 ---
@@ -77,40 +94,34 @@ mnemo doctor                # 环境自检
 
 ```
 mnemo/
-├─ cli.py          命令行入口：把各能力串起来（chat/run/memory/skill/plugin/task/daemon/doctor）
-├─ agent.py        核心循环：组装上下文 → 调模型 → 解析工具 → 执行 → 循环 → 固化记忆
+├─ cli.py          命令行入口：串起全部能力
+├─ agent.py        核心循环：文本工具协议 / 原生 function-calling 双路径 + 记忆固化 + 轨迹
 ├─ config.py       分层配置：默认 < config.json < .mnemo.json < 环境变量
-├─ memory.py       永久记忆：facts(事实) / episodes(对话) / profile(画像) / topics(话题)，CJK 友好检索
-├─ tools.py        工具：读写文件 / Shell / 抓网页 / 记忆读写 / 时间，可被插件扩展
-├─ skills.py       技能：Markdown(带 frontmatter) 加载、相关性匹配注入、learn 学习
-├─ plugins.py      插件：本地/git 安装，register(ctx) 钩子注入 工具/技能/Provider
-├─ daemon.py       守护进程：任务持久化 + 调度器（间隔/每日/启动）
-├─ providers/      大模型后端：base 抽象 + anthropic / openai / ollama / offline + 注册表(auto)
-└─ skills_builtin/ 内置技能（daily-briefing / summarize-url）
+├─ memory.py       永久记忆：facts/episodes/profile/topics/reminders；关键词+向量检索；巩固/遗忘
+├─ tools.py        工具：文件/Shell/网页/记忆/提醒/委派/视觉/语音；审批与拦截
+├─ skills.py       技能：Markdown 加载、相关性注入、learn 学习、distill 自我进化
+├─ plugins.py      插件：本地/git 安装，register(ctx) 注入 工具/技能/Provider
+├─ market.py       技能/插件市场：registry 搜索与按名安装
+├─ sync.py         跨设备同步：打包 + 口令加密（PBKDF2 + SHA256 流 + HMAC）
+├─ daemon.py       守护进程：任务调度 + 主动提醒 + 每日记忆巩固
+├─ providers/      大模型后端：base 抽象 + anthropic/openai/ollama/offline + 注册表(auto)
+└─ skills_builtin/ 内置技能
 ```
 
-**为什么用"文本工具协议"而不是各家 function-calling？** 因为目标是"接入**任何**大模型"——
-包括本地开源模型。让模型用统一的 ```tool {json}``` 代码块发起调用，是兼容性的最大公约数；
-未来可为支持原生 tool-use 的后端做增强（见路线图），但默认协议保证人人可用。
+**为什么用"文本工具协议"作默认？** 目标是接入**任何**大模型（含本地开源）。统一的
+` ```tool {json} ``` ` 是兼容性最大公约数；对 OpenAI/Anthropic 可一键切换 `native_tools=true`
+走更稳的原生函数调用。
 
 ---
 
 ## 写一个插件（30 秒）
 
-```
-my-plugin/
-├─ plugin.json        {"name":"my-plugin","version":"0.1.0","entry":"entry.py"}
-└─ entry.py
-```
-
 ```python
-# entry.py
+# my-plugin/entry.py   （配 my-plugin/plugin.json: {"name":"my-plugin","entry":"entry.py"}）
 def register(ctx):
-    def my_tool(args, c):
-        return "hello " + args.get("name", "world")
-    ctx.tools.add("greet", "打个招呼", {"name": "名字"}, my_tool)
+    ctx.tools.add("greet", "打个招呼", {"name": "名字"},
+                  lambda args, c: "hello " + args.get("name", "world"))
     # ctx.register_provider("my_llm", MyProvider)   # 还能接入全新大模型后端
-    # ctx.skills.add_runtime(Skill(...))            # 也能注入技能
 ```
 
 ```bash
@@ -122,31 +133,26 @@ mnemo plugin install ./my-plugin
 
 ---
 
-## 路线图（想要"别人没有的"）
-
-已搭好可扩展底座，下面这些能力按此架构逐步加：
-
-- **主动式记忆**：守护进程定期回顾近期对话，自动提炼/合并/遗忘记忆（记忆的"睡眠巩固"），并主动提醒。
-- **自我进化技能**：一次成功的复杂任务后，Agent 自动把过程沉淀为一个新技能（`skill learn` 自动化），越用越强。
-- **向量语义记忆**：在现有关键词检索上叠加 provider embedding，命中更准（接口已预留 `Provider.embed`）。
-- **原生 tool-use 增强**：为 Anthropic/OpenAI 等接入各家原生函数调用，提速提稳，文本协议作兜底。
-- **多 Agent 协作**：把任务拆给子 Agent 并行（研究员/编码/审阅），主 Agent 汇总。
-- **技能/插件市场**：`mnemo plugin search`，一个去中心化的技能与插件注册表。
-- **跨设备记忆同步**：把 `~/.mnemo` 加密同步，换机也"还是那个懂你的它"。
-- **多模态与语音**：语音唤醒、读图、读 PDF。
-- **审批与安全沙箱**：高危工具的细粒度确认、容器化执行、操作审计。
-
----
-
 ## 测试
 
 ```bash
-python -m unittest discover -s tests -v     # 15 项全链路冒烟（记忆/画像/工具循环/调度/技能/离线）
+python -m unittest discover -s tests -v   # 36 项全链路冒烟，全部通过
 ```
+
+覆盖：记忆/画像、语义检索、巩固/遗忘、提醒、工具循环、原生 function-calling（含消息往返与
+OpenAI/Anthropic 翻译）、自我进化技能、多 Agent 委派、安全审计/策略、市场、加密同步、多模态/语音。
+
+## 路线图（继续"别人没有的"）
+
+- 官方去中心化技能/插件市场托管 + 评分与签名校验
+- 向量索引加速（ANN）与记忆图谱可视化
+- 桌面/移动 GUI、团队共享记忆
+- 实时语音流（边说边答）与视频理解
+- 工具执行容器化沙箱（更强隔离）
 
 ## 数据与隐私
 
 所有记忆与配置都在本地 `~/.mnemo`（可用 `MNEMO_HOME` 改）。密钥优先从环境变量读取，
-不强制写入磁盘。删除 `~/.mnemo/mnemo.db` 即"失忆"。
+不强制写入磁盘。删除 `~/.mnemo/mnemo.db` 即"失忆"；`sync` 导出的备份默认建议加口令。
 
 > 这是与同仓库「AI句灵」社交产品相互独立的全新子项目。

@@ -256,14 +256,14 @@ class Memory:
         return [(r["term"], r["count"]) for r in rows]
 
     # ---------- 学习一轮对话（让它"越来越懂你"） ----------
+    # (正则, 事实模板, 重要度, 类别, 是否作为姓名)
     _PREF_PATTERNS = [
-        (r"我(?:的名字)?(?:叫|是)\s*([^\s，。,.!！?？]{1,20})", "你叫{0}", 5, "identity"),
-        (r"叫我\s*([^\s，。,.!！?？]{1,20})", "称呼用户为{0}", 5, "identity"),
-        (r"我(?:很|超|非常)?喜欢\s*([^\s，。,.!！?？]{1,30})", "用户喜欢{0}", 4, "preference"),
-        (r"我(?:很)?讨厌\s*([^\s，。,.!！?？]{1,30})", "用户讨厌{0}", 4, "preference"),
-        (r"我不喜欢\s*([^\s，。,.!！?？]{1,30})", "用户不喜欢{0}", 4, "preference"),
-        (r"我(?:是|在做|从事)\s*([^\s，。,.!！?？]{1,30})(?:的)?(?:工作|程序员|开发|设计)?",
-         "用户职业/身份：{0}", 4, "identity"),
+        (r"(?:我叫|我的名字(?:是|叫)|叫我)\s*([^\s，。,.!！?？]{1,20})",
+         "你叫{0}", 5, "identity", True),
+        (r"我(?:很|超|非常)?喜欢\s*([^\s，。,.!！?？]{1,30})", "用户喜欢{0}", 4, "preference", False),
+        (r"我(?:很)?讨厌\s*([^\s，。,.!！?？]{1,30})", "用户讨厌{0}", 4, "preference", False),
+        (r"我不喜欢\s*([^\s，。,.!！?？]{1,30})", "用户不喜欢{0}", 4, "preference", False),
+        (r"我(?:在做|从事|是)\s*([^\s，。,.!！?？]{1,30})", "用户职业/身份：{0}", 4, "identity", False),
     ]
 
     def observe(self, user_text: str, assistant_text: str, session: str = "default") -> list[str]:
@@ -272,7 +272,7 @@ class Memory:
         self.add_episode(session, user_text, assistant_text)
         self._bump_topics(user_text)
 
-        for pat, tmpl, imp, kind in self._PREF_PATTERNS:
+        for pat, tmpl, imp, kind, is_name in self._PREF_PATTERNS:
             m = re.search(pat, user_text)
             if m:
                 val = m.group(1).strip()
@@ -280,7 +280,7 @@ class Memory:
                     fact = tmpl.format(val)
                     self.add_fact(fact, kind=kind, importance=imp, source="observed")
                     learned.append(fact)
-                    if kind == "identity" and ("叫" in pat or "名字" in pat):
+                    if is_name:
                         self.set_profile("name", val)
 
         # 互动统计
