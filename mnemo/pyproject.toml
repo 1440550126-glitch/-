@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mnemo"
+version = "0.1.0"
+description = "本地 7×24 AI 伙伴 · 永久记忆 · 接入任意大模型 · 可学技能装插件"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+# 核心零第三方依赖：纯标准库即可运行
+dependencies = []
+
+[project.scripts]
+mnemo = "mnemo.cli:main"
+
+[tool.setuptools]
+packages = ["mnemo", "mnemo.providers"]
+
+[tool.setuptools.package-data]
+mnemo = ["skills_builtin/*.md"]

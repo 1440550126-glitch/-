@@ -1,0 +1,164 @@
+"""全链路冒烟测试：记忆 / 画像 / 工具循环 / 调度 / 技能 / 离线 provider。
+
+零依赖运行：  python -m unittest discover -s tests   或   python tests/test_smoke.py
+"""
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from mnemo.agent import Agent, parse_tool_call          # noqa: E402
+from mnemo.config import load_config                     # noqa: E402
+from mnemo.daemon import compute_next, parse_schedule    # noqa: E402
+from mnemo.memory import Memory, _tokens                 # noqa: E402
+from mnemo.providers import build_provider               # noqa: E402
+from mnemo.providers.base import Message, Provider       # noqa: E402
+from mnemo.providers.offline import OfflineProvider      # noqa: E402
+from mnemo.skills import SkillRegistry                   # noqa: E402
+from mnemo.tools import build_default_registry           # noqa: E402
+
+
+class FakeProvider(Provider):
+    """按脚本逐条返回，用于驱动并验证 Agent 工具循环。"""
+    name = "fake"
+
+    def __init__(self, scripted):
+        super().__init__()
+        self.scripted = list(scripted)
+
+    def chat(self, messages, **kw):
+        return self.scripted.pop(0) if self.scripted else "（无更多脚本）"
+
+
+class TestMemory(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.mem = Memory(Path(self.tmp.name) / "m.db")
+
+    def tearDown(self):
+        self.mem.close()
+        self.tmp.cleanup()
+
+    def test_fact_and_recall(self):
+        self.mem.add_fact("用户在做一个终端 AI 助理项目 Mnemo", importance=4)
+        self.mem.add_fact("用户喜欢喝美式咖啡", kind="preference", importance=4)
+        hits = self.mem.recall("咖啡")
+        self.assertTrue(any("咖啡" in h["text"] for h in hits))
+
+    def test_observe_learns_profile(self):
+        self.mem.observe("你好，我叫小明，我喜欢爬山", "你好小明！")
+        self.assertEqual(self.mem.get_profile("name"), "小明")
+        summary = self.mem.profile_summary()
+        self.assertIn("小明", summary)
+        self.assertEqual(int(self.mem.get_profile("interactions")), 1)
+
+    def test_tokens_cjk(self):
+        toks = _tokens("终端 AI 助理")
+        self.assertIn("ai", toks)
+
+
+class TestAgentLoop(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = load_config(self.tmp.name)
+        self.mem = Memory(self.cfg.db_path)
+        self.skills = SkillRegistry(self.cfg)
+        self.tools = build_default_registry()
+
+    def tearDown(self):
+        self.mem.close()
+        self.tmp.cleanup()
+
+    def test_tool_then_final(self):
+        prov = FakeProvider([
+            '好的，先看下时间\n```tool\n{"name": "now", "args": {}}\n```',
+            "现在帮你记住了。",
+        ])
+        agent = Agent(prov, self.tools, self.mem, self.skills, self.cfg)
+        events = []
+        out = agent.run("你好，我叫小红", on_event=lambda k, d: events.append((k, d)))
+        self.assertEqual(out, "现在帮你记住了。")
+        self.assertTrue(any(k == "tool" and d["name"] == "now" for k, d in events))
+        self.assertEqual(self.mem.get_profile("name"), "小红")
+
+    def test_remember_tool_writes_memory(self):
+        prov = FakeProvider([
+            '```tool\n{"name":"remember","args":{"text":"用户的生日是 6 月 16 日","importance":5}}\n```',
+            "已记住你的生日。",
+        ])
+        agent = Agent(prov, self.tools, self.mem, self.skills, self.cfg)
+        agent.run("记一下我的生日")
+        self.assertTrue(any("生日" in f["text"] for f in self.mem.all_facts()))
+
+
+class TestParsing(unittest.TestCase):
+    def test_parse_nested_args(self):
+        txt = '```tool\n{"name":"write_file","args":{"path":"a.txt","content":"x{y}z"}}\n```'
+        name, args = parse_tool_call(txt)
+        self.assertEqual(name, "write_file")
+        self.assertEqual(args["path"], "a.txt")
+
+    def test_parse_none_when_plain(self):
+        self.assertIsNone(parse_tool_call("这是一句普通回答，没有工具。"))
+
+    def test_parse_bare_json(self):
+        name, args = parse_tool_call('{"name": "now", "args": {}}')
+        self.assertEqual(name, "now")
+
+
+class TestSchedule(unittest.TestCase):
+    def test_interval(self):
+        self.assertEqual(parse_schedule("every 5m"), ("interval", 300))
+        self.assertEqual(parse_schedule("2h"), ("interval", 7200))
+        self.assertEqual(compute_next("every 10s", 1000.0), 1010.0)
+
+    def test_daily_and_startup(self):
+        self.assertEqual(parse_schedule("@daily 09:30"), ("daily", (9, 30)))
+        self.assertEqual(parse_schedule("@startup")[0], "startup")
+        self.assertIsNone(compute_next("@startup", 1000.0))
+
+
+class TestProvidersAndSkills(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = load_config(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_auto_falls_back_offline(self):
+        # 测试环境无 Key、无 Ollama，auto 应回退到 offline
+        prov = build_provider(self.cfg)
+        self.assertTrue(prov.available())
+
+    def test_offline_echo(self):
+        out = OfflineProvider().chat([Message("user", "echo 你好")])
+        self.assertEqual(out, "你好")
+
+    def test_offline_remember_emits_tool(self):
+        out = OfflineProvider().chat([Message("user", "记住 我喜欢猫")])
+        name, args = parse_tool_call(out)
+        self.assertEqual(name, "remember")
+
+    def test_builtin_skills_loaded(self):
+        sk = SkillRegistry(self.cfg)
+        names = [s.name for s in sk.list()]
+        self.assertIn("daily-briefing", names)
+
+
+class TestTools(unittest.TestCase):
+    def test_read_write_roundtrip(self):
+        from mnemo.tools import ToolContext
+        tmp = tempfile.TemporaryDirectory()
+        reg = build_default_registry()
+        ctx = ToolContext(cwd=tmp.name, config=load_config(tmp.name))
+        reg.run("write_file", {"path": "hello.txt", "content": "你好 Mnemo"}, ctx)
+        out = reg.run("read_file", {"path": "hello.txt"}, ctx)
+        self.assertIn("你好 Mnemo", out)
+        tmp.cleanup()
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
