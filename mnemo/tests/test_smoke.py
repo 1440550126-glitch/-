@@ -20,6 +20,7 @@ from mnemo.providers.offline import OfflineProvider      # noqa: E402
 from mnemo.providers.openai import OpenAIProvider         # noqa: E402
 from mnemo.providers.anthropic import AnthropicProvider   # noqa: E402
 import mnemo.providers.openai as openai_mod               # noqa: E402
+from mnemo.plugins import PluginManager                  # noqa: E402
 from mnemo.skills import SkillRegistry                   # noqa: E402
 from mnemo.skills import distill_from_trace              # noqa: E402
 from mnemo.tools import ToolContext, build_default_registry  # noqa: E402
@@ -335,6 +336,50 @@ class TestProvidersAndSkills(unittest.TestCase):
         sk = SkillRegistry(self.cfg)
         names = [s.name for s in sk.list()]
         self.assertIn("daily-briefing", names)
+
+
+class TestSyncAndMarket(unittest.TestCase):
+    def test_sync_roundtrip_encrypted(self):
+        from mnemo import sync
+        src = tempfile.TemporaryDirectory()
+        dst = tempfile.TemporaryDirectory()
+        m = Memory(Path(src.name) / "mnemo.db")
+        m.add_fact("跨设备永久记忆测试", importance=5)
+        m.close()
+        bundle = Path(src.name) / "backup.mnemo"
+        sync.export_bundle(Path(src.name), bundle, passphrase="pw123")
+        sync.import_bundle(bundle, Path(dst.name), passphrase="pw123")
+        m2 = Memory(Path(dst.name) / "mnemo.db")
+        self.assertTrue(any("跨设备" in f["text"] for f in m2.all_facts()))
+        m2.close()
+        src.cleanup()
+        dst.cleanup()
+
+    def test_sync_wrong_passphrase(self):
+        from mnemo import sync
+        tmp = tempfile.TemporaryDirectory()
+        Memory(Path(tmp.name) / "mnemo.db").close()
+        bundle = Path(tmp.name) / "b.mnemo"
+        sync.export_bundle(Path(tmp.name), bundle, passphrase="right")
+        with self.assertRaises(ValueError):
+            sync.import_bundle(bundle, Path(tmp.name) / "out", passphrase="wrong")
+        tmp.cleanup()
+
+    def test_market_install_skill_from_file(self):
+        from mnemo.market import install, search
+        tmp = tempfile.TemporaryDirectory()
+        cfg = load_config(tmp.name)
+        skills = SkillRegistry(cfg)
+        plugins = PluginManager(cfg, build_default_registry(), skills)
+        md = Path(tmp.name) / "src.md"
+        md.write_text("---\nname: x\ndescription: 复盘技能\n---\n正文", encoding="utf-8")
+        reg = {"skills": [{"name": "market-skill", "description": "复盘技能", "file": str(md)}],
+               "plugins": []}
+        self.assertEqual(len(search(reg, "复盘")["skills"]), 1)
+        what = install("market-skill", reg, skills, plugins)
+        self.assertEqual(what, "skill:market-skill")
+        self.assertIsNotNone(skills.get("market-skill"))
+        tmp.cleanup()
 
 
 class TestTools(unittest.TestCase):

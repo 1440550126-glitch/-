@@ -21,6 +21,7 @@ DEFAULTS: dict[str, Any] = {
     "shell_timeout": 60,
     "persona": "你是 Mnemo，用户的私人 AI 伙伴：可靠、简洁、主动。说中文。",
     "native_tools": False,    # true 时对支持的后端启用原生 function-calling（更稳）
+    "registry": "",           # 技能/插件市场地址（本地文件或 URL）
     "memory": {"enabled": True, "recall_limit": 6, "min_importance": 1, "semantic": False},
     # 安全：confirm_danger 在交互模式下让写入/执行类工具需确认；deny 永久禁用某些工具
     "tools": {"confirm_danger": False, "deny": []},

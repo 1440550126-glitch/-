@@ -6,6 +6,7 @@ import json
 import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 from . import __version__
 from .agent import Agent
@@ -365,6 +366,53 @@ def cmd_daemon(args):
     return 0
 
 
+def cmd_market(args):
+    app = build_app(args)
+    from .market import install, load_registry, search
+    source = args.registry or app.cfg.get("registry")
+    if not source:
+        print(red("未配置市场。用 --registry <文件或URL>，或 mnemo config set registry <...>"))
+        return 1
+    try:
+        reg = load_registry(source)
+    except Exception as e:  # noqa: BLE001
+        print(red(f"读取市场失败：{e}"))
+        return 1
+    if args.action in ("list", "search"):
+        res = search(reg, getattr(args, "query", "") or "")
+        print(bold("技能"))
+        for s in res["skills"]:
+            print(f"  {bold(s['name'])} — {s.get('description', '')}")
+        print(bold("插件"))
+        for p in res["plugins"]:
+            print(f"  {bold(p['name'])} — {p.get('description', '')}")
+    elif args.action == "install":
+        try:
+            what = install(args.name, reg, app.skills, app.plugins)
+            print(green(f"已从市场安装：{what}"))
+        except Exception as e:  # noqa: BLE001
+            print(red(f"安装失败：{e}"))
+            return 1
+    return 0
+
+
+def cmd_sync(args):
+    from . import sync
+    cfg = load_config(getattr(args, "home", None))
+    if args.action == "export":
+        n = sync.export_bundle(cfg.home, Path(args.file), args.passphrase)
+        tag = dim("（已加密）") if args.passphrase else dim("（明文，建议加 --passphrase）")
+        print(green(f"已导出 {n} 字节 → {args.file}") + tag)
+    elif args.action == "import":
+        try:
+            members = sync.import_bundle(Path(args.file), cfg.home, args.passphrase)
+        except ValueError as e:
+            print(red(str(e)))
+            return 1
+        print(green(f"已导入到 {cfg.home}：{', '.join(members)}"))
+    return 0
+
+
 def cmd_audit(args):
     cfg = load_config(getattr(args, "home", None))
     path = cfg.home / "audit.log"
@@ -493,6 +541,18 @@ def build_parser() -> argparse.ArgumentParser:
     pa = sub.add_parser("audit", help="查看工具调用审计日志")
     pa.add_argument("--limit", type=int, default=30)
 
+    pmk = sub.add_parser("market", help="技能/插件市场：搜索与安装")
+    pmk.add_argument("--registry", help="registry 文件或 URL（默认读 config.registry）")
+    pmks = pmk.add_subparsers(dest="action", required=True)
+    pmks.add_parser("list")
+    mks = pmks.add_parser("search"); mks.add_argument("query")
+    mki = pmks.add_parser("install"); mki.add_argument("name")
+
+    psy = sub.add_parser("sync", help="跨设备记忆同步：加密导出/导入")
+    psys = psy.add_subparsers(dest="action", required=True)
+    se = psys.add_parser("export"); se.add_argument("file"); se.add_argument("--passphrase")
+    si = psys.add_parser("import"); si.add_argument("file"); si.add_argument("--passphrase")
+
     sub.add_parser("doctor", help="环境自检")
     return p
 
@@ -501,6 +561,7 @@ _HANDLERS = {
     "chat": cmd_chat, "run": cmd_run, "config": cmd_config, "provider": cmd_provider,
     "memory": cmd_memory, "skill": cmd_skill, "plugin": cmd_plugin, "task": cmd_task,
     "daemon": cmd_daemon, "doctor": cmd_doctor, "audit": cmd_audit,
+    "market": cmd_market, "sync": cmd_sync,
 }
 
 
