@@ -72,6 +72,29 @@ def test_agent_family_roster():
     assert "外公" in a.family_roster()
 
 
+class _FakeMem:
+    """recall 给两条同分记忆，让 _recall 的"在场加权"成为唯一变量。"""
+
+    def __init__(self, items):
+        self._items = items
+
+    def recall(self, q, k=4):
+        return [(0.5, it) for it in self._items]
+
+
+def test_member_memory_boosted_when_active():
+    gen = {"id": "g", "text": "一条共享记忆", "tags": []}
+    mem = {"id": "m", "text": "外公的专属记忆", "tags": ["member:外公"]}
+    a = object.__new__(Agent)
+    a.memory = _FakeMem([gen, mem])
+
+    a.active_member = None                       # 没人"在场"：同分，保持输入顺序
+    assert a._recall("随便", k=2)[0][1]["id"] == "g"
+
+    a.active_member = "外公"                       # 外公在场：TA 的记忆被加权到第一
+    assert a._recall("随便", k=2)[0][1]["id"] == "m"
+
+
 if __name__ == "__main__":
     for _n, _f in sorted(globals().items()):
         if _n.startswith("test_") and callable(_f):

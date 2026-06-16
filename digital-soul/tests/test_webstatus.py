@@ -17,9 +17,15 @@ class _StubAgent:
         self.family = kw.get("family", {})
         self.care = kw.get("care", {})
         self._chronicle = kw.get("chronicle", "")
+        self.memory = kw.get("memory")
 
     def life_chronicle(self):
         return self._chronicle
+
+
+class _Mem:
+    def __init__(self, items):
+        self.items = items
 
 
 def test_empty_agent_degrades_gracefully():
@@ -54,6 +60,20 @@ def test_care_summarised_readonly():
     assert "妈：降压药 08:00、20:00；复查 11-15" in joined
     assert "爸：药 21:30" in joined
     assert "坏数据" not in joined          # 非法项被跳过
+
+
+def test_family_member_memory_counts():
+    mem = _Mem([
+        {"text": "外公的记忆1", "tags": ["member:外公"]},
+        {"text": "外公的记忆2", "tags": ["member:外公"]},
+        {"text": "共享记忆", "tags": []},
+    ])
+    d = _legacy_family_care(_StubAgent(
+        family={"members": [{"name": "外公", "relation": "姥爷"},
+                            {"name": "外婆", "relation": "姥姥"}]},
+        memory=mem))
+    by = {m["name"]: m["mem"] for m in d["family_members"]}
+    assert by["外公"] == 2 and by["外婆"] == 0
 
 
 def test_page_has_new_cards():

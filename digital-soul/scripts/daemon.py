@@ -119,10 +119,11 @@ def trigger_loop(agent, mouth=None) -> None:
         except Exception as e:
             print(f"[自动化] 出错：{e}", flush=True)
             notices = []
+        profile = agent.identity.get("voice")
         for n in notices:
             print(f"[自动化] {n}", flush=True)
             if mouth is not None:
-                mouth.speak(n)
+                mouth.speak(n, mood=_mood(agent), profile=profile)
         try:
             cares = agent.due_care()
         except Exception as e:
@@ -130,8 +131,8 @@ def trigger_loop(agent, mouth=None) -> None:
             cares = []
         for c in cares:
             print(f"[守护] {c}", flush=True)
-            if mouth is not None:
-                mouth.speak(c)
+            if mouth is not None:                       # 用 TA 本人的嗓音叮嘱家人
+                mouth.speak(c, mood=_mood(agent), profile=profile)
 
 
 def think_loop(agent, minutes: float) -> None:

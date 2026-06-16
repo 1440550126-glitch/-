@@ -44,8 +44,12 @@ def _legacy_family_care(agent) -> dict:
         try:
             from .family import members as _fm, roster_line as _rl
             family_roster = _rl(agent.family)
-            family_members = [{"name": m.get("name"), "relation": m.get("relation", "")}
-                              for m in _fm(agent.family)]
+            items = getattr(agent, "memory", None).items if getattr(agent, "memory", None) else []
+            for m in _fm(agent.family):
+                name = m.get("name")
+                tag = f"member:{name}"
+                mem = sum(1 for it in items if tag in (it.get("tags") or []))
+                family_members.append({"name": name, "relation": m.get("relation", ""), "mem": mem})
         except Exception:
             family_roster, family_members = "", []
     care_list = []
@@ -390,7 +394,7 @@ async function refresh(){
     $('#lastwords').innerHTML=(s.last_words&&s.last_words.length)?li(s.last_words):'<li class=dim>（还没留下嘱托）</li>';
     $('#precepts').innerHTML=(s.precepts&&s.precepts.length)?li(s.precepts):'<li class=dim>（还没立下家训）</li>';
     $('#family').textContent=s.family||'（还没登记家人）';
-    $('#familychips').innerHTML=(s.family_members&&s.family_members.length)?s.family_members.map(m=>'<button class=devbtn style="margin:3px" onclick="talkTo(\''+esc(m.name)+'\')">叫 '+esc(m.name)+'</button>').join(''):'';
+    $('#familychips').innerHTML=(s.family_members&&s.family_members.length)?s.family_members.map(m=>'<button class=devbtn style="margin:3px" onclick="talkTo(\''+esc(m.name)+'\')">叫 '+esc(m.name)+(m.mem?(' · '+m.mem+'忆'):'')+'</button>').join(''):'';
     $('#care').innerHTML=(s.care&&s.care.length)?li(s.care):'<li class=dim>暂未设置守护对象（见 config/care.yaml）</li>';
     $('#mems').innerHTML=li(s.recent_memories);
     $('#jour').innerHTML=li(s.recent_journal);

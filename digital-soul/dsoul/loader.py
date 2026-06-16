@@ -87,6 +87,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
     devices = build_device_hub(devcfg)
     scenes = SceneBook(_load_yaml(base / "config" / "scenes.yaml"))
     triggers = TriggerBook(base / "data" / "triggers.json")
+    family_cfg = _load_yaml(base / "config" / "family.yaml")
+    _seed_family(memory, family_cfg)   # 把每位家人的专属记忆灌进库（按 member 标签）
 
     return Agent(identity, persona, memory, authority, perception, llm, robot, journal,
                  emotions=emotions, knowledge=knowledge, skills=skills, hub=hub, tasks=tasks,
@@ -104,7 +106,7 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  llm_router=llm_router,
                  legacy=_load_yaml(base / "config" / "legacy.yaml"),
                  care=_load_yaml(base / "config" / "care.yaml"),
-                 family=_load_yaml(base / "config" / "family.yaml"))
+                 family=family_cfg)
 
 
 def _seed_memory(base: Path, memory) -> None:
@@ -114,6 +116,18 @@ def _seed_memory(base: Path, memory) -> None:
             if f.suffix.lower() in (".md", ".txt"):
                 for para in split_paragraphs(f.read_text(encoding="utf-8")):
                     memory.add(para, source=f.name)
+
+
+def _seed_family(memory, family_cfg) -> None:
+    """多人合一：把每位家人的专属记忆灌进库，打上 member:<名字> 标签。
+
+    幂等：Memory.add 按文本去重，重复启动不会堆叠。
+    """
+    from .family import members
+    for m in members(family_cfg):
+        name = m["name"]
+        for mem in (m.get("memories") or []):
+            memory.add(mem, source=f"family:{name}", tags=[f"member:{name}"])
 
 
 def reload_agent(agent, base_dir=None):

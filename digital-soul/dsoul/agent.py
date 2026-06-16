@@ -1090,11 +1090,22 @@ class Agent:
         return [(round(s, 2), t) for s, t in scored[:k] if s < 0.66]
 
     def _recall(self, text, k: int = 4, now=None):
-        """强度感知检索：相关性 × (0.4 + 0.6×记忆强度)，淡忘的更难被想起。"""
+        """强度感知检索：相关性 × (0.4 + 0.6×记忆强度)，淡忘的更难被想起。
+
+        若此刻"叫出"了某位家人（多人合一），TA 自己的记忆会被额外加权——更像 TA 本人在回想。
+        """
         from .forgetting import strength
         cand = self.memory.recall(text, k=k * 3)
-        ranked = sorted(cand, key=lambda si: -(si[0] * (0.4 + 0.6 * strength(si[1], now))))
-        return ranked[:k]
+        boost_tag = f"member:{self.active_member}" if getattr(self, "active_member", None) else None
+
+        def weight(si):
+            s, it = si
+            base = s * (0.4 + 0.6 * strength(it, now))
+            if boost_tag and boost_tag in (it.get("tags") or []):
+                base *= 1.8           # 当某位家人"在场"，TA 自己的记忆更容易被想起
+            return -base
+
+        return sorted(cand, key=weight)[:k]
 
     def dream(self) -> str:
         """睡眠时做一个梦：记忆碎片 + 情绪 + 纠缠联想重组成一段超现实叙事。"""
