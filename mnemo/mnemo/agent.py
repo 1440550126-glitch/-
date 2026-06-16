@@ -112,13 +112,29 @@ class Agent:
         )
         return "\n\n".join(parts)
 
+    def _audit(self, tool: str, args: dict, result: str) -> None:
+        home = getattr(self.config, "home", None)
+        if not home:
+            return
+        try:
+            import time as _t
+            line = json.dumps({"ts": _t.time(), "depth": self._depth, "tool": tool,
+                               "args": args, "ok": not str(result).startswith(("[错误", "[已", "[工具异常")),
+                               "result": str(result)[:200]}, ensure_ascii=False)
+            with open(Path(home) / "audit.log", "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except OSError:
+            pass
+
     def run(self, user_input: str, *, session: str = "default", max_steps: int | None = None,
             cwd: str = ".", auto_approve: bool = True,
+            confirm: Callable[[str], bool] | None = None,
             on_event: Callable[[str, dict], None] | None = None) -> str:
         max_steps = max_steps or int(self.config.get("max_steps", 8))
         emit = on_event or (lambda *_: None)
+        deny = tuple(self.config.get("tools.deny", []) or ())
         ctx = ToolContext(memory=self.memory, config=self.config, cwd=cwd,
-                          auto_approve=auto_approve, agent=self)
+                          auto_approve=auto_approve, confirm=confirm, agent=self, deny=deny)
         steps: list[dict] = []
 
         messages = [Message("system", self._system_prompt(user_input))]
@@ -144,6 +160,7 @@ class Agent:
             emit("tool", {"name": name, "args": args})
             messages.append(Message("assistant", reply))
             result = self.tools.run(name, args, ctx)
+            self._audit(name, args, result)
             emit("observation", {"name": name, "result": result})
             steps.append({"tool": name, "args": args, "result": str(result)[:500]})
             messages.append(Message("tool", result, name=name))

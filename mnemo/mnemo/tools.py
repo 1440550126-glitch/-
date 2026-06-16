@@ -28,6 +28,7 @@ class ToolContext:
     auto_approve: bool = True   # daemon/非交互下自动放行；交互模式可由 CLI 改写
     confirm: Callable[[str], bool] | None = None
     agent: object = None        # 当前 Agent（供 delegate 派生子 Agent）
+    deny: tuple = ()            # 被策略禁用的工具名（始终拒绝）
 
 
 @dataclass
@@ -67,6 +68,8 @@ class ToolRegistry:
         tool = self._tools.get(name)
         if not tool:
             return f"[错误] 未知工具：{name}。可用：{', '.join(self.names())}"
+        if name in (ctx.deny or ()):
+            return f"[已拒绝] 工具 {name} 被安全策略禁用（tools.deny）"
         if tool.danger and not ctx.auto_approve:
             ok = ctx.confirm(f"执行高危工具 {name}({args})？") if ctx.confirm else False
             if not ok:

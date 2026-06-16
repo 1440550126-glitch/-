@@ -84,6 +84,13 @@ def cmd_chat(args):
             print(dim("我对你的了解：\n" + prof))
     on_event = _make_on_event(args.verbose)
     session = "default"
+    confirm_danger = app.cfg.get("tools.confirm_danger", False) and _TTY
+
+    def _confirm(msg):
+        try:
+            return input(yellow(f"{msg} [y/N] ")).strip().lower() in ("y", "yes")
+        except (EOFError, KeyboardInterrupt):
+            return False
     while True:
         try:
             line = input(cyan("\n你 › ")).strip()
@@ -137,7 +144,8 @@ def cmd_chat(args):
             print(dim("已开启新会话"))
             continue
         try:
-            reply = app.agent.run(line, session=session, on_event=on_event)
+            reply = app.agent.run(line, session=session, on_event=on_event,
+                                   auto_approve=not confirm_danger, confirm=_confirm)
             print(bold("Mnemo › ") + reply)
         except ProviderError as e:
             print(red(f"[模型调用失败] {e}"))
@@ -357,6 +365,26 @@ def cmd_daemon(args):
     return 0
 
 
+def cmd_audit(args):
+    cfg = load_config(getattr(args, "home", None))
+    path = cfg.home / "audit.log"
+    if not path.is_file():
+        print(dim("（暂无审计记录）所有工具调用都会记录到 " + str(path)))
+        return 0
+    lines = path.read_text(encoding="utf-8").splitlines()[-args.limit:]
+    for ln in lines:
+        try:
+            e = json.loads(ln)
+        except json.JSONDecodeError:
+            continue
+        ts = time.strftime("%m-%d %H:%M:%S", time.localtime(e["ts"]))
+        mark = green("✓") if e.get("ok") else red("✗")
+        depth = dim(f"d{e['depth']}") if e.get("depth") else "  "
+        print(f"{ts} {mark} {depth} {bold(e['tool'])} "
+              f"{dim(json.dumps(e.get('args', {}), ensure_ascii=False)[:80])}")
+    return 0
+
+
 def cmd_doctor(args):
     cfg = load_config(getattr(args, "home", None))
     print(bold("Mnemo 自检"))
@@ -462,6 +490,9 @@ def build_parser() -> argparse.ArgumentParser:
     pd.add_argument("--once", action="store_true", help="只巡检一次（用于测试/cron）")
     pd.add_argument("--interval", type=int, default=30, help="巡检间隔秒")
 
+    pa = sub.add_parser("audit", help="查看工具调用审计日志")
+    pa.add_argument("--limit", type=int, default=30)
+
     sub.add_parser("doctor", help="环境自检")
     return p
 
@@ -469,7 +500,7 @@ def build_parser() -> argparse.ArgumentParser:
 _HANDLERS = {
     "chat": cmd_chat, "run": cmd_run, "config": cmd_config, "provider": cmd_provider,
     "memory": cmd_memory, "skill": cmd_skill, "plugin": cmd_plugin, "task": cmd_task,
-    "daemon": cmd_daemon, "doctor": cmd_doctor,
+    "daemon": cmd_daemon, "doctor": cmd_doctor, "audit": cmd_audit,
 }
 
 

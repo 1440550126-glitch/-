@@ -85,6 +85,19 @@ class TestAgentLoop(unittest.TestCase):
         self.assertTrue(any(k == "tool" and d["name"] == "now" for k, d in events))
         self.assertEqual(self.mem.get_profile("name"), "小红")
 
+    def test_audit_logged(self):
+        prov = FakeProvider(['```tool\n{"name":"now","args":{}}\n```', "现在是…"])
+        agent = Agent(prov, self.tools, self.mem, self.skills, self.cfg)
+        agent.run("几点了")
+        audit = self.cfg.home / "audit.log"
+        self.assertTrue(audit.exists())
+        self.assertIn("now", audit.read_text(encoding="utf-8"))
+
+    def test_deny_policy_blocks_tool(self):
+        ctx = ToolContext(config=self.cfg, deny=("run_shell",))
+        out = self.tools.run("run_shell", {"command": "echo hi"}, ctx)
+        self.assertIn("禁用", out)
+
     def test_remember_tool_writes_memory(self):
         prov = FakeProvider([
             '```tool\n{"name":"remember","args":{"text":"用户的生日是 6 月 16 日","importance":5}}\n```',
