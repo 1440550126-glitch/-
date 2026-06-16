@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import urllib.request
 from dataclasses import dataclass, field
@@ -157,6 +158,48 @@ def _t_now(args, ctx):
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S %A")
 
 
+def _t_view_image(args, ctx):
+    """多模态：用带视觉能力的后端理解一张本地图片。"""
+    prov = getattr(ctx.agent, "provider", None) if ctx.agent else None
+    if not prov or not getattr(prov, "supports_vision", lambda: False)():
+        return "[view_image] 当前后端不支持视觉，请配置视觉模型（如 gpt-4o / claude）"
+    path = Path(ctx.cwd) / args["path"]
+    if not path.is_file():
+        return f"[错误] 图片不存在：{path}"
+    return prov.vision(str(path), args.get("prompt", "详细描述这张图片"))
+
+
+# 语音合成：按可用性挑选系统 TTS
+_TTS = [("say", lambda t: ["say", t]), ("spd-say", lambda t: ["spd-say", t]),
+        ("espeak-ng", lambda t: ["espeak-ng", t]), ("espeak", lambda t: ["espeak", t])]
+
+
+def _t_speak(args, ctx):
+    text = args.get("text", "")
+    for cmd, build in _TTS:
+        if shutil.which(cmd):
+            try:
+                subprocess.run(build(text), timeout=60, capture_output=True)
+                return f"已朗读（{cmd}）：{text[:40]}"
+            except Exception as e:  # noqa: BLE001
+                return f"[speak] 调用 {cmd} 失败：{e}"
+    return "[speak] 未找到系统 TTS（macOS say / Linux espeak/spd-say）。原文：" + text[:120]
+
+
+def _t_transcribe(args, ctx):
+    path = args.get("path", "")
+    if not Path(path).is_file():
+        return f"[错误] 音频文件不存在：{path}"
+    for cmd in ("whisper", "whisper-cli", "whisper-cpp"):
+        if shutil.which(cmd):
+            try:
+                r = subprocess.run([cmd, path], capture_output=True, text=True, timeout=600)
+                return (r.stdout or r.stderr or "(无输出)")[:4000]
+            except Exception as e:  # noqa: BLE001
+                return f"[transcribe] 调用 {cmd} 失败：{e}"
+    return "[transcribe] 未找到本地语音识别。可 `pip install openai-whisper` 或安装 whisper.cpp。"
+
+
 def _t_delegate(args, ctx):
     """把一个聚焦的子任务委派给子 Agent（多 Agent 协作），返回其结果。"""
     parent = ctx.agent
@@ -202,4 +245,9 @@ def build_default_registry() -> ToolRegistry:
     r.add("delegate", "把一个聚焦子任务交给子 Agent 处理并拿回结果（多 Agent 协作）",
           {"role": "子 Agent 的角色，如 研究员/程序员/审阅者", "task": "子任务描述"},
           _t_delegate)
+    r.add("view_image", "用视觉模型理解一张本地图片（多模态）",
+          {"path": "图片路径", "prompt": "想问什么，默认描述图片"}, _t_view_image)
+    r.add("speak", "用系统 TTS 朗读文本（语音输出）", {"text": "要朗读的文本"}, _t_speak)
+    r.add("transcribe", "把本地音频转写成文字（需 whisper，语音输入）",
+          {"path": "音频文件路径"}, _t_transcribe)
     return r

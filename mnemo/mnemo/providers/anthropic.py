@@ -73,6 +73,27 @@ class AnthropicProvider(Provider):
                              "content": m.content})
         return "\n\n".join(system), conv
 
+    def supports_vision(self) -> bool:
+        return bool(self.api_key)
+
+    def vision(self, image_path, prompt="描述这张图片") -> str:
+        import base64
+        import mimetypes
+        from pathlib import Path
+        if not self.api_key:
+            raise ProviderError("缺少 ANTHROPIC_API_KEY")
+        data = base64.b64encode(Path(image_path).read_bytes()).decode()
+        mime = mimetypes.guess_type(image_path)[0] or "image/png"
+        payload = {"model": self.model or "claude-opus-4-8", "max_tokens": 1024, "messages": [
+            {"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": mime, "data": data}},
+                {"type": "text", "text": prompt}]}]}
+        resp = http_post_json(f"{self.base_url or 'https://api.anthropic.com'}/v1/messages",
+                              payload, headers={"x-api-key": self.api_key,
+                                                "anthropic-version": "2023-06-01"})
+        return "".join(b.get("text", "") for b in resp.get("content", [])
+                       if b.get("type") == "text").strip()
+
     def chat_tools(self, messages, tool_specs, *, temperature=0.7, max_tokens=2048) -> dict:
         if not self.api_key:
             raise ProviderError("缺少 ANTHROPIC_API_KEY")

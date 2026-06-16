@@ -87,5 +87,13 @@ class Provider(ABC):
         """可选：返回向量。不支持则返回 None（记忆检索会回退到关键词）。"""
         return None
 
+    def supports_vision(self) -> bool:
+        """是否支持图像理解（多模态）。"""
+        return False
+
+    def vision(self, image_path: str, prompt: str = "描述这张图片") -> str:
+        """对一张本地图片做视觉问答，返回文本。"""
+        raise NotImplementedError
+
     def __repr__(self) -> str:
         return f"<Provider {self.name} model={self.model}>"

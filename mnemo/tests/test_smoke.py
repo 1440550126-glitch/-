@@ -283,6 +283,46 @@ class TestNativeTools(unittest.TestCase):
         self.assertEqual(conv[2]["content"][0]["type"], "tool_result")
 
 
+class TestMultimodalVoice(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = load_config(self.tmp.name)
+        self.mem = Memory(self.cfg.db_path)
+        self.skills = SkillRegistry(self.cfg)
+        self.tools = build_default_registry()
+
+    def tearDown(self):
+        self.mem.close()
+        self.tmp.cleanup()
+
+    def test_view_image_offline_graceful(self):
+        agent = Agent(OfflineProvider(), self.tools, self.mem, self.skills, self.cfg)
+        ctx = ToolContext(agent=agent, config=self.cfg, cwd=".")
+        out = self.tools.run("view_image", {"path": "nope.png"}, ctx)
+        self.assertIn("不支持视觉", out)
+
+    def test_openai_vision_parse(self):
+        prov = OpenAIProvider(api_key="x")
+        img = Path(self.tmp.name) / "a.png"
+        img.write_bytes(b"\x89PNG-fake-bytes")
+        orig = openai_mod.http_post_json
+        openai_mod.http_post_json = lambda url, payload, headers=None, timeout=120: {
+            "choices": [{"message": {"content": "一只橘猫"}}]}
+        try:
+            out = prov.vision(str(img), "这是什么")
+        finally:
+            openai_mod.http_post_json = orig
+        self.assertEqual(out, "一只橘猫")
+
+    def test_speak_graceful(self):
+        out = self.tools.run("speak", {"text": "你好"}, ToolContext())
+        self.assertIsInstance(out, str)
+
+    def test_transcribe_missing_file(self):
+        out = self.tools.run("transcribe", {"path": "/no/such.wav"}, ToolContext())
+        self.assertIn("不存在", out)
+
+
 class TestParsing(unittest.TestCase):
     def test_parse_nested_args(self):
         txt = '```tool\n{"name":"write_file","args":{"path":"a.txt","content":"x{y}z"}}\n```'

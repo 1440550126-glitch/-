@@ -80,6 +80,25 @@ class OpenAIProvider(Provider):
                                           for k, v in s["parameters"].items()},
                            "required": []}}} for s in specs]
 
+    def supports_vision(self) -> bool:
+        return bool(self.api_key)
+
+    def vision(self, image_path, prompt="描述这张图片") -> str:
+        import base64
+        import mimetypes
+        from pathlib import Path
+        if not self.api_key:
+            raise ProviderError("缺少 OPENAI_API_KEY")
+        data = base64.b64encode(Path(image_path).read_bytes()).decode()
+        mime = mimetypes.guess_type(image_path)[0] or "image/png"
+        url = f"{self.base_url or 'https://api.openai.com/v1'}/chat/completions"
+        payload = {"model": self.model or "gpt-4o-mini", "max_tokens": 1024, "messages": [
+            {"role": "user", "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}}]}]}
+        resp = http_post_json(url, payload, headers={"Authorization": f"Bearer {self.api_key}"})
+        return ((resp.get("choices") or [{}])[0].get("message", {}).get("content") or "").strip()
+
     def chat_tools(self, messages, tool_specs, *, temperature=0.7, max_tokens=2048) -> dict:
         if not self.api_key:
             raise ProviderError("缺少 OPENAI_API_KEY")

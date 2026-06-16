@@ -433,6 +433,25 @@ def cmd_audit(args):
     return 0
 
 
+def cmd_speak(args):
+    from .tools import ToolContext, build_default_registry
+    print(build_default_registry().run("speak", {"text": args.text}, ToolContext()))
+    return 0
+
+
+def cmd_see(args):
+    app = build_app(args)
+    if not app.provider.supports_vision():
+        print(yellow(f"当前后端 {app.provider.name} 不支持视觉，请配置 gpt-4o / claude 等"))
+        return 1
+    try:
+        print(app.provider.vision(args.path, args.prompt))
+    except ProviderError as e:
+        print(red(f"[视觉调用失败] {e}"))
+        return 1
+    return 0
+
+
 def cmd_doctor(args):
     cfg = load_config(getattr(args, "home", None))
     print(bold("Mnemo 自检"))
@@ -456,6 +475,15 @@ def cmd_doctor(args):
         print(bold("\n记忆") + f"  事实 {s['facts']} · 对话 {s['episodes']} · 话题 {s['topics']}")
     except Exception as e:  # noqa: BLE001
         print(red(f"记忆库异常：{e}"))
+    # 能力探测（不联网）
+    import shutil as _sh
+    from .providers import build_provider as _bp
+    from .tools import _TTS
+    prov = _bp(cfg)
+    tts = next((c for c, _ in _TTS if _sh.which(c)), None)
+    print(bold("\n能力") + f"  原生工具 {'✓' if prov.supports_tools() else '—'}  ·  "
+          f"视觉 {'✓' if prov.supports_vision() else '—'}  ·  系统TTS {tts or '—'}  ·  "
+          f"whisper {_sh.which('whisper') and '✓' or '—'}")
     return 0
 
 
@@ -553,6 +581,11 @@ def build_parser() -> argparse.ArgumentParser:
     se = psys.add_parser("export"); se.add_argument("file"); se.add_argument("--passphrase")
     si = psys.add_parser("import"); si.add_argument("file"); si.add_argument("--passphrase")
 
+    psp = sub.add_parser("speak", help="用系统 TTS 朗读一段文本（语音输出）")
+    psp.add_argument("text")
+    pse = sub.add_parser("see", help="用视觉模型理解一张图片（多模态）")
+    pse.add_argument("path"); pse.add_argument("--prompt", default="详细描述这张图片")
+
     sub.add_parser("doctor", help="环境自检")
     return p
 
@@ -561,7 +594,7 @@ _HANDLERS = {
     "chat": cmd_chat, "run": cmd_run, "config": cmd_config, "provider": cmd_provider,
     "memory": cmd_memory, "skill": cmd_skill, "plugin": cmd_plugin, "task": cmd_task,
     "daemon": cmd_daemon, "doctor": cmd_doctor, "audit": cmd_audit,
-    "market": cmd_market, "sync": cmd_sync,
+    "market": cmd_market, "sync": cmd_sync, "speak": cmd_speak, "see": cmd_see,
 }
 
 
