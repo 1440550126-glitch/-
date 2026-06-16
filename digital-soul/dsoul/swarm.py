@@ -84,10 +84,12 @@ def _aggregate(panel) -> dict:
             "panel": panel, "reasons": say, "text": text}
 
 
-def forecast(question: str, llm=None) -> dict:
+def forecast(question: str, llm=None, extra=None) -> dict:
     panel = None
     if llm is not None and getattr(llm, "available", False):
         panel = _llm_panel(question, llm)
     if not panel:
         panel = _heuristic_panel(question)
+    if extra:                                   # 联邦：外部智能体作为独立思维节点入会
+        panel = panel + list(extra)
     return _aggregate(panel)

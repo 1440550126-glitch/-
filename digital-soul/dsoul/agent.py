@@ -241,6 +241,12 @@ class Agent:
 
         # --- 群体模拟预测（"会不会/能成吗/靠谱吗"）：脑中开个小会拿主意 ---
         if action is None and who.get("obey") and any(
+                k in utterance for k in ("集思广益", "问问大家", "大家觉得", "众人")):
+            fed = self.federated_forecast(utterance)
+            result["reply"] = fed
+            self._log_journal(who, utterance, fed, "federated_forecast")
+            return result
+        if action is None and who.get("obey") and any(
                 k in utterance for k in ("会不会", "能不能成", "成不成", "能成", "成吗", "靠谱吗",
                                          "可行吗", "行不行", "你觉得会", "预测一下", "猜猜会", "模拟一下")):
             fc = self.forecast(utterance)
@@ -750,6 +756,19 @@ class Agent:
             q = f"「{(question or '')[:18]}」这事我心里几种思路打架，挺想弄明白。"
             self.curiosity.add((question or "?")[:12] or "?", q, priority=0.9)
         return fc["text"]
+
+    def federated_forecast(self, question) -> str:
+        """预测联邦：把外部智能体也拉进小会当独立思维节点，集思广益再聚合。"""
+        from .swarm import forecast
+        extra = []
+        if self.hub is not None:
+            for name in self.hub.names():
+                res = self.hub.dispatch(name, "forecast", question=question)
+                if res.get("ok"):
+                    txt = str(res.get("result", ""))
+                    lean = 1 if "会" in txt else (-1 if ("悬" in txt or "不" in txt) else 0)
+                    extra.append((f"外脑·{name}", lean, txt[:18]))
+        return forecast(question, llm=self.llm, extra=extra)["text"]
 
     def proactive_prediction(self, now=None, min_conf: float = 0.7) -> str:
         """高置信预感主动提一句（并挂起，等你点头）。已提过未回应则不重复。"""

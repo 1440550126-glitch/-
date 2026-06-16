@@ -24,6 +24,14 @@ def test_report_has_panel_and_reasons():
     assert f["yes"] + f["no"] + f["neutral"] == len(f["panel"])
 
 
+def test_extra_panel_federation():
+    # 外部"思维节点"加入后，面板变大、票数计入
+    base = forecast("会不会成")
+    fed = forecast("会不会成", extra=[("外脑·甲", 1, "我看行"), ("外脑·乙", -1, "悬")])
+    assert len(fed["panel"]) == len(base["panel"]) + 2
+    assert fed["yes"] == base["yes"] + 1 and fed["no"] == base["no"] + 1
+
+
 def test_cognitive_diversity_signal():
     # 风险明确 → 几种思路趋于一致（分歧低、有数）
     united = forecast("风险极大又危险又累，还得熬夜拼命，靠谱吗")

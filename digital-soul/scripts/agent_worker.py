@@ -24,6 +24,10 @@ def execute(name: str, task: str, params: dict) -> dict:
         return {"result": float(params.get("a", 0)) + float(params.get("b", 0))}
     if task == "nl":  # 自然语言指令
         return {"result": f"[{name}] 收到并执行：{params.get('instruction', '')}"}
+    if task == "forecast":  # 作为"外脑"给个表态（演示：按问题长度伪随机）
+        q = str(params.get("question", ""))
+        stance = "会，我看行" if (len(q) % 2 == 0) else "悬，我有点保留"
+        return {"result": stance}
     return {"result": f"[{name}] 已（模拟）执行：{task}，参数={params}"}
 
 
