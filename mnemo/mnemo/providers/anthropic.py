@@ -25,6 +25,16 @@ def _normalize(messages: list[Message]) -> tuple[str, list[dict]]:
 
 class AnthropicProvider(Provider):
     name = "anthropic"
+    DEFAULT_MODEL = "claude-opus-4-8"
+    # 这些模型仅接受默认 temperature（=1），发送非默认值会 400
+    _FIXED_TEMP = ("opus-4-8", "opus-4-7")
+
+    def _model(self) -> str:
+        return self.model or self.DEFAULT_MODEL
+
+    def _maybe_temp(self, payload: dict, temperature: float) -> None:
+        if not any(m in self._model() for m in self._FIXED_TEMP):
+            payload["temperature"] = temperature
 
     def chat(self, messages, *, temperature=0.7, max_tokens=2048) -> str:
         if not self.api_key:
@@ -32,11 +42,11 @@ class AnthropicProvider(Provider):
         system, conv = _normalize(messages)
         url = f"{self.base_url or 'https://api.anthropic.com'}/v1/messages"
         payload = {
-            "model": self.model or "claude-opus-4-8",
+            "model": self._model(),
             "max_tokens": max_tokens,
-            "temperature": temperature,
             "messages": conv,
         }
+        self._maybe_temp(payload, temperature)
         if system:
             payload["system"] = system
         resp = http_post_json(url, payload, headers={
@@ -103,8 +113,9 @@ class AnthropicProvider(Provider):
                                    "properties": {k: {"type": "string", "description": v}
                                                   for k, v in s["parameters"].items()},
                                    "required": []}} for s in tool_specs]
-        payload = {"model": self.model or "claude-opus-4-8", "max_tokens": max_tokens,
-                   "temperature": temperature, "messages": conv, "tools": tools}
+        payload = {"model": self._model(), "max_tokens": max_tokens,
+                   "messages": conv, "tools": tools}
+        self._maybe_temp(payload, temperature)
         if system:
             payload["system"] = system
         resp = http_post_json(f"{self.base_url or 'https://api.anthropic.com'}/v1/messages",

@@ -198,9 +198,10 @@ def _t_speak(args, ctx):
 
 
 def _t_transcribe(args, ctx):
-    path = args.get("path", "")
-    if not Path(path).is_file():
+    path = Path(ctx.cwd) / args.get("path", "")
+    if not path.is_file():
         return f"[错误] 音频文件不存在：{path}"
+    path = str(path)
     for cmd in ("whisper", "whisper-cli", "whisper-cpp"):
         if shutil.which(cmd):
             try:

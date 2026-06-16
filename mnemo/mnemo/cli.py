@@ -191,6 +191,10 @@ def cmd_config(args):
 
 def cmd_provider(args):
     cfg = load_config(getattr(args, "home", None))
+    if getattr(args, "provider", None):
+        cfg.set("provider", args.provider)
+    if getattr(args, "model", None):
+        cfg.set("model", args.model)
     if args.action == "list":
         for st in provider_status(cfg):
             mark = green("● 就绪") if st["available"] else dim("○ 未就绪")
@@ -420,9 +424,16 @@ def cmd_market(args):
                 star = dim(f"  {rt['avg']}★×{rt['count']}") if rt else ""
                 print(f"  {bold(it['name'])} — {it.get('description', '')}{star}")
     elif args.action == "install":
-        if reg.get("signature") and key and not market.verify_registry(reg, key):
-            print(red("拒绝安装：registry 签名校验失败"))
+        # 提供了 key 就必须签名有效（缺签名也拒绝），坚守信任链
+        if key and not market.verify_registry(reg, key):
+            print(red("拒绝安装：提供了 --key 但 registry 签名缺失或校验失败"))
             return 1
+        is_plugin = any(p.get("name") == args.name for p in reg.get("plugins", []))
+        if is_plugin and _TTY and not args.yes:
+            ans = input(yellow(f"市场插件 {args.name} 会执行任意代码，确认安装？[y/N] "))
+            if ans.strip().lower() not in ("y", "yes"):
+                print("已取消")
+                return 1
         try:
             what = market.install(args.name, reg, app.skills, app.plugins)
             print(green(f"已从市场安装：{what}"))
@@ -649,6 +660,7 @@ def build_parser() -> argparse.ArgumentParser:
     pmks.add_parser("list")
     mks = pmks.add_parser("search"); mks.add_argument("query")
     mki = pmks.add_parser("install"); mki.add_argument("name")
+    mki.add_argument("-y", "--yes", action="store_true", help="跳过插件安装确认")
     pmks.add_parser("verify", help="校验 registry 签名")
     msg = pmks.add_parser("sign", help="给 registry 签名"); msg.add_argument("--out")
     mra = pmks.add_parser("rate", help="给某技能/插件本地评分")

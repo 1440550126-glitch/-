@@ -77,6 +77,7 @@ class Config:
     def __init__(self, data: dict, home: Path):
         self.data = data
         self.home = home
+        self._env_paths: set[str] = set()   # 从环境注入的路径，save 时不落盘
 
     # ---- 路径 ----
     @property
@@ -106,6 +107,7 @@ class Config:
         return cur
 
     def set(self, path: str, value: Any) -> None:
+        self._env_paths.discard(path)   # 用户显式设置 → 视为可持久化
         parts = path.split(".")
         cur = self.data
         for p in parts[:-1]:
@@ -116,11 +118,21 @@ class Config:
 
     def save(self) -> None:
         self.home.mkdir(parents=True, exist_ok=True)
-        # 不把从环境注入的密钥写回磁盘：保存的是用户显式 set 的内容（self.data 已含），
-        # 这里按原样保存，密钥若来自 env 则 env 优先级更高、不依赖文件。
+        # 不把从环境注入的密钥写回磁盘：env 提供的值仅在内存生效，下次加载会再注入。
+        import copy
+        out = copy.deepcopy(self.data)
+        for path in self._env_paths:
+            cur = out
+            parts = path.split(".")
+            for p in parts[:-1]:
+                if not isinstance(cur, dict) or p not in cur:
+                    cur = None
+                    break
+                cur = cur[p]
+            if isinstance(cur, dict):
+                cur.pop(parts[-1], None)
         self.config_file.write_text(
-            json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+            json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def provider_conf(self, name: str) -> dict:
         return dict(self.get(f"providers.{name}", {}) or {})
@@ -152,9 +164,12 @@ def load_config(home: str | None = None) -> Config:
 
     cfg = Config(data, home_path)
 
-    # 环境变量覆盖（最高优先级）
+    # 环境变量覆盖（最高优先级）；记录这些路径，save 时不落盘
+    injected: set[str] = set()
     for env_key, path in ENV_MAP.items():
         if env_key in os.environ and os.environ[env_key]:
             cfg.set(path, os.environ[env_key])
+            injected.add(path)
+    cfg._env_paths = injected
 
     return cfg

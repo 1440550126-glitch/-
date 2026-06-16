@@ -13,6 +13,18 @@ import os
 import tarfile
 from pathlib import Path
 
+
+def _safe_extract(tar: tarfile.TarFile, dest: Path) -> None:
+    """逐成员校验，拒绝绝对路径 / .. 越界 / 链接，避免恶意归档写出目录。"""
+    base = dest.resolve()
+    for m in tar.getmembers():
+        target = (base / m.name).resolve()
+        if target != base and not str(target).startswith(str(base) + os.sep):
+            raise ValueError(f"拒绝越界的归档成员：{m.name}")
+        if m.issym() or m.islnk():
+            raise ValueError(f"拒绝归档中的链接成员：{m.name}")
+    tar.extractall(base)
+
 MAGIC = b"MNEMOSYNC1"
 # 同步内容：记忆库 / 配置 / 技能 / 插件（排除审计、轨迹、pid 等运行态）
 INCLUDE = ["mnemo.db", "config.json", "skills", "plugins"]
@@ -91,8 +103,5 @@ def import_bundle(src: Path, home: Path, passphrase: str | None = None) -> list[
     home.mkdir(parents=True, exist_ok=True)
     with tarfile.open(fileobj=io.BytesIO(blob), mode="r:gz") as tar:
         members = tar.getnames()
-        try:
-            tar.extractall(home, filter="data")   # 3.12+ 安全过滤
-        except TypeError:
-            tar.extractall(home)                   # 兼容旧版
+        _safe_extract(tar, home)   # 全版本一致的安全解压（不依赖 filter 参数）
     return members

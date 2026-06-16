@@ -26,6 +26,7 @@ from mnemo.providers.offline import OfflineProvider      # noqa: E402
 from mnemo.providers.openai import OpenAIProvider         # noqa: E402
 from mnemo.providers.anthropic import AnthropicProvider   # noqa: E402
 import mnemo.providers.openai as openai_mod               # noqa: E402
+import mnemo.providers.anthropic as anthropic_mod         # noqa: E402
 from mnemo.plugins import PluginManager                  # noqa: E402
 from mnemo.skills import SkillRegistry                   # noqa: E402
 from mnemo.skills import distill_from_trace              # noqa: E402
@@ -567,6 +568,76 @@ class TestMarketTrust(unittest.TestCase):
         self.assertEqual(s["hello"]["count"], 2)
         self.assertEqual(s["hello"]["avg"], 4.0)
         tmp.cleanup()
+
+
+class TestReviewFixes(unittest.TestCase):
+    def test_save_excludes_env_secret(self):
+        import os
+        os.environ["OPENAI_API_KEY"] = "sk-secret-xyz"
+        try:
+            tmp = tempfile.TemporaryDirectory()
+            cfg = load_config(tmp.name)
+            self.assertEqual(cfg.get("providers.openai.api_key"), "sk-secret-xyz")
+            cfg.set("temperature", 0.3)
+            cfg.save()
+            data = _json.loads(cfg.config_file.read_text(encoding="utf-8"))
+            self.assertNotIn("api_key", data.get("providers", {}).get("openai", {}))
+            self.assertEqual(data["temperature"], 0.3)
+            tmp.cleanup()
+        finally:
+            os.environ.pop("OPENAI_API_KEY", None)
+
+    def test_anthropic_omits_temp_for_opus(self):
+        captured = {}
+        orig = anthropic_mod.http_post_json
+        anthropic_mod.http_post_json = (lambda url, payload, headers=None, timeout=120:
+                                        (captured.update(payload) or
+                                         {"content": [{"type": "text", "text": "hi"}]}))
+        try:
+            AnthropicProvider(api_key="x", model="claude-opus-4-8").chat(
+                [Message("user", "hi")], temperature=0.7)
+            self.assertNotIn("temperature", captured)
+            captured.clear()
+            AnthropicProvider(api_key="x", model="claude-sonnet-4-6").chat(
+                [Message("user", "hi")], temperature=0.7)
+            self.assertIn("temperature", captured)
+        finally:
+            anthropic_mod.http_post_json = orig
+
+    def test_sync_rejects_path_traversal(self):
+        import io
+        import tarfile
+        from mnemo import sync
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+            info = tarfile.TarInfo("../evil.txt"); info.size = 4
+            tar.addfile(info, io.BytesIO(b"evil"))
+        tmp = tempfile.TemporaryDirectory()
+        bundle = Path(tmp.name) / "b.tgz"
+        bundle.write_bytes(buf.getvalue())
+        with self.assertRaises(ValueError):
+            sync.import_bundle(bundle, Path(tmp.name) / "home")
+        tmp.cleanup()
+
+    def test_parse_when_invalid(self):
+        from mnemo.memory import parse_when
+        self.assertIsNone(parse_when("25:00"))
+        self.assertIsNone(parse_when("2026-13-40 10:00"))
+
+    def test_offline_remember_json_safe(self):
+        from mnemo.agent import parse_tool_call
+        out = OfflineProvider().chat([Message("user", "记住 路径 C:\\tmp 和\n第二行")])
+        name, args = parse_tool_call(out)
+        self.assertEqual(name, "remember")
+        self.assertIn("C:\\tmp", args["text"])
+        self.assertIn("第二行", args["text"])
+
+    def test_plugin_name_traversal_rejected(self):
+        from mnemo.plugins import _safe_plugin_name
+        for bad in ["../evil", "/abs", "a/b", "..", "x\\y"]:
+            with self.assertRaises(ValueError):
+                _safe_plugin_name(bad)
+        self.assertEqual(_safe_plugin_name("good"), "good")
 
 
 class TestTools(unittest.TestCase):

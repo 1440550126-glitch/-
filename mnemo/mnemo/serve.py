@@ -113,9 +113,13 @@ def make_handler(app, lock, token):
             if not msg:
                 return self._json(400, {"error": "empty"})
             session = payload.get("session") or "web"
+            # Web 端无法交互确认：若用户开启了危险工具确认，则在此拒绝放行（auto_approve=False，
+            # 且无 confirm 回调 → 危险工具被拦下），与终端一致地尊重该安全设置。
+            cfg = getattr(app, "cfg", None)
+            confirm_danger = bool(cfg and cfg.get("tools.confirm_danger", False))
             try:
                 with lock:                      # 串行化，保护单连接 SQLite
-                    reply = app.agent.run(msg, session=session)
+                    reply = app.agent.run(msg, session=session, auto_approve=not confirm_danger)
             except Exception as e:  # noqa: BLE001
                 return self._json(500, {"error": str(e)})
             return self._json(200, {"reply": reply})

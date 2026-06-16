@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import json
 import re
 
 from .base import Message, Provider
@@ -32,8 +33,8 @@ class OfflineProvider(Provider):
         m_remember = re.match(r"^\s*(?:记住|remember)[:：]?\s*(.+)$", user, re.S)
         if m_remember:
             fact = m_remember.group(1).strip()
-            return ('```tool\n{"name": "remember", "args": {"text": "%s"}}\n```'
-                    % fact.replace('"', "'"))
+            call = json.dumps({"name": "remember", "args": {"text": fact}}, ensure_ascii=False)
+            return f"```tool\n{call}\n```"
 
         return (
             "（离线模式）我已收到："

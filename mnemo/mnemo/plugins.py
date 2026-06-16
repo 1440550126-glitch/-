@@ -18,10 +18,19 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+
+def _safe_plugin_name(name: str) -> str:
+    """插件名必须是单层目录名，禁止 .. / 路径分隔符 / 绝对路径，防止写出插件目录。"""
+    if (not name or name in (".", "..") or "/" in name or "\\" in name
+            or os.sep in name or (os.altsep and os.altsep in name) or os.path.isabs(name)):
+        raise ValueError(f"非法插件名：{name!r}")
+    return name
 
 from .providers import register_provider
 from .skills import _parse_skill
@@ -106,7 +115,7 @@ class PluginManager:
             source.startswith("http") and "github.com" in source)
         if is_git:
             url = source[4:] if source.startswith("git+") else source
-            name = name or Path(url).stem
+            name = _safe_plugin_name(name or Path(url).stem)
             dest = self.dir / name
             if dest.exists():
                 raise FileExistsError(f"插件已存在：{name}")
@@ -116,7 +125,7 @@ class PluginManager:
             src = Path(source).expanduser()
             if not src.is_dir():
                 raise FileNotFoundError(f"路径不存在：{src}")
-            name = name or src.name
+            name = _safe_plugin_name(name or src.name)
             dest = self.dir / name
             if dest.exists():
                 raise FileExistsError(f"插件已存在：{name}")

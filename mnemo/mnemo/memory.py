@@ -59,10 +59,15 @@ def parse_when(spec: str, now: float | None = None) -> float | None:
     m = re.match(r"(\d{4})-(\d{1,2})-(\d{1,2})[ t](\d{1,2}):(\d{2})", s)
     if m:
         y, mo, d, hh, mm = map(int, m.groups())
-        return datetime(y, mo, d, hh, mm).timestamp()
+        try:
+            return datetime(y, mo, d, hh, mm).timestamp()
+        except ValueError:
+            return None
     m = re.match(r"(\d{1,2}):(\d{2})$", s)
     if m:
         hh, mm = int(m.group(1)), int(m.group(2))
+        if hh > 23 or mm > 59:
+            return None
         dt = datetime.fromtimestamp(now).replace(hour=hh, minute=mm, second=0, microsecond=0)
         if dt.timestamp() <= now:
             dt += timedelta(days=1)
