@@ -4,6 +4,7 @@
 """
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -91,6 +92,60 @@ class TestAgentLoop(unittest.TestCase):
         agent = Agent(prov, self.tools, self.mem, self.skills, self.cfg)
         agent.run("记一下我的生日")
         self.assertTrue(any("生日" in f["text"] for f in self.mem.all_facts()))
+
+
+class FakeEmbedProvider(Provider):
+    name = "fakeembed"
+
+    def chat(self, messages, **kw):
+        return "ok"
+
+    def embed(self, texts):
+        return [[float(t.count("猫")), float(t.count("狗"))] for t in texts]
+
+
+class TestProactiveMemory(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.mem = Memory(Path(self.tmp.name) / "m.db")
+
+    def tearDown(self):
+        self.mem.close()
+        self.tmp.cleanup()
+
+    def test_semantic_recall(self):
+        self.mem.add_fact("我家有一只橘猫")
+        self.mem.add_fact("邻居养了大狗")
+        self.assertEqual(self.mem.embed_backfill(FakeEmbedProvider()), 2)
+        qvec = FakeEmbedProvider().embed(["猫"])[0]
+        hits = self.mem.recall("猫", query_vec=qvec)
+        self.assertTrue(any("猫" in h["text"] for h in hits))
+        self.assertFalse(any("狗" in h["text"] for h in hits))
+
+    def test_consolidate_merges_near_dup(self):
+        self.mem.add_fact("用户喜欢喝美式咖啡", importance=3)
+        self.mem.add_fact("用户喜欢喝美式咖啡哦", importance=2)
+        res = self.mem.consolidate()
+        self.assertGreaterEqual(res["merged"], 1)
+
+    def test_consolidate_forgets_stale(self):
+        fid = self.mem.add_fact("一条不重要的旧信息", importance=1)
+        self.mem.db.execute("UPDATE facts SET created_at=? WHERE id=?",
+                            (time.time() - 60 * 86400, fid))
+        self.mem.db.commit()
+        res = self.mem.consolidate(max_age_days=30)
+        self.assertGreaterEqual(res["forgotten"], 1)
+
+    def test_reminders(self):
+        rid = self.mem.add_reminder("买牛奶", time.time() - 10)
+        self.assertTrue(any(r["id"] == rid for r in self.mem.due_reminders()))
+        self.mem.mark_reminder_done(rid)
+        self.assertEqual(self.mem.due_reminders(), [])
+
+    def test_parse_when(self):
+        from mnemo.memory import parse_when
+        self.assertEqual(parse_when("in 1h", now=1000.0), 1000.0 + 3600)
+        self.assertIsNone(parse_when("看不懂的时间"))
 
 
 class TestParsing(unittest.TestCase):

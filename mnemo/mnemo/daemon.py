@@ -158,8 +158,26 @@ class Scheduler:
             self.store.mark_run(task, False, f"ERROR: {e}")
             self.log(f"[{ts}] ✗ 任务 #{task.id} 失败：{e}")
 
+    def _maintenance(self, now: float) -> None:
+        """主动式记忆：到点提醒 + 每日记忆巩固。"""
+        mem = getattr(self.agent, "memory", None)
+        if not mem:
+            return
+        for rem in mem.due_reminders(now):
+            ts = datetime.now().strftime("%H:%M")
+            self.log(f"[{ts}] 🔔 提醒：{rem['text']}")
+            mem.mark_reminder_done(rem["id"])
+        last = float(mem.get_profile("last_consolidate", "0") or 0)
+        if now - last > 86400:
+            res = mem.consolidate()
+            mem.set_profile("last_consolidate", str(int(now)))
+            if res["merged"] or res["forgotten"]:
+                self.log(f"🧠 记忆巩固：合并 {res['merged']}，淡忘 {res['forgotten']}，"
+                         f"保留 {res['kept']}")
+
     def run_once(self, now: float | None = None) -> int:
         now = now or time.time()
+        self._maintenance(now)
         due = self.store.due(now)
         for t in due:
             self._run_task(t)

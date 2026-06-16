@@ -205,6 +205,30 @@ def cmd_memory(args):
         print(m.profile_summary() or "(还没积累到画像)")
     elif args.action == "stats":
         print(json.dumps(m.stats(), ensure_ascii=False, indent=2))
+    elif args.action == "consolidate":
+        res = m.consolidate()
+        print(green(f"记忆巩固完成：合并 {res['merged']}，淡忘 {res['forgotten']}，"
+                    f"保留 {res['kept']}"))
+    elif args.action == "backfill":
+        n = m.embed_backfill(app.provider)
+        print(green(f"已为 {n} 条记忆补算语义向量") if n
+              else yellow("无可补算（当前后端无 embed 能力，或已全部完成）"))
+    elif args.action == "remind":
+        from .memory import parse_when
+        when = parse_when(args.when)
+        if when is None:
+            print(red("无法解析时间，请用：in 2h / 18:30 / 2026-06-17 09:00"))
+            return 1
+        rid = m.add_reminder(args.text, when)
+        print(green(f"已设提醒 #{rid}（{time.strftime('%m-%d %H:%M', time.localtime(when))}）"
+                    + dim("，启动 mnemo daemon 后到点会主动触发")))
+    elif args.action == "reminders":
+        rows = m.pending_reminders()
+        if not rows:
+            print(dim("（无待办提醒）"))
+        for r in rows:
+            when = time.strftime("%m-%d %H:%M", time.localtime(r["remind_at"]))
+            print(f"#{r['id']:<3} {when}  {r['text']}")
     return 0
 
 
@@ -370,6 +394,12 @@ def build_parser() -> argparse.ArgumentParser:
     ma.add_argument("--kind", default="fact"); ma.add_argument("--importance", type=int, default=3)
     mf = pms.add_parser("forget"); mf.add_argument("id", type=int)
     pms.add_parser("profile"); pms.add_parser("stats")
+    pms.add_parser("consolidate", help="主动巩固：合并近重复、淡忘陈旧低价值记忆")
+    pms.add_parser("backfill", help="为记忆补算语义向量（需后端支持 embed）")
+    pms.add_parser("reminders", help="查看待办提醒")
+    mr = pms.add_parser("remind", help="设置定时提醒")
+    mr.add_argument("text"); mr.add_argument("--when", required=True,
+                                             help="in 2h / 18:30 / 2026-06-17 09:00")
 
     ps = sub.add_parser("skill", help="技能：学习/查看/管理")
     pss = ps.add_subparsers(dest="action", required=True)

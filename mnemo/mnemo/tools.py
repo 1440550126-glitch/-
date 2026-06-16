@@ -153,6 +153,18 @@ def _t_now(args, ctx):
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S %A")
 
 
+def _t_remind(args, ctx):
+    if not ctx.memory:
+        return "[错误] 记忆不可用"
+    from .memory import parse_when
+    when = parse_when(args.get("when", ""))
+    if when is None:
+        return "[错误] 无法解析时间，请用：in 2h / 18:30 / 2026-06-17 09:00"
+    import time
+    rid = ctx.memory.add_reminder(args["text"], when)
+    return f"已设提醒 #{rid}：{args['text']}（{time.strftime('%m-%d %H:%M', time.localtime(when))}）"
+
+
 def build_default_registry() -> ToolRegistry:
     r = ToolRegistry()
     r.add("read_file", "读取文本文件内容", {"path": "相对/绝对路径"}, _t_read_file)
@@ -166,4 +178,6 @@ def build_default_registry() -> ToolRegistry:
           {"text": "要记住的内容", "importance": "1-5，默认3"}, _t_remember)
     r.add("recall", "从长期记忆检索", {"query": "查询词", "limit": "条数"}, _t_recall)
     r.add("now", "获取当前日期时间", {}, _t_now)
+    r.add("remind", "设置一个定时提醒（守护进程到点会主动触发）",
+          {"text": "提醒内容", "when": "时间：in 2h / 18:30 / 2026-06-17 09:00"}, _t_remind)
     return r

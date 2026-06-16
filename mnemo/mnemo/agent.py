@@ -75,8 +75,16 @@ class Agent:
             prof = self.memory.profile_summary()
             if prof:
                 parts.append("## 我对你的了解（持续积累）\n" + prof)
-            hits = self.memory.recall(user_input,
-                                      limit=int(self.config.get("memory.recall_limit", 6)))
+            qvec = None
+            if self.config.get("memory.semantic", False):
+                try:
+                    embs = self.provider.embed([user_input])
+                    qvec = embs[0] if embs else None
+                except Exception:  # noqa: BLE001
+                    qvec = None
+            hits = self.memory.recall(
+                user_input, limit=int(self.config.get("memory.recall_limit", 6)),
+                query_vec=qvec)
             if hits:
                 parts.append("## 相关长期记忆\n" + "\n".join(f"- {h['text']}" for h in hits))
 

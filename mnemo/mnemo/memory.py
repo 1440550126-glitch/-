@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import json
 import math
 import re
 import sqlite3
@@ -34,6 +35,41 @@ def _tokens(text: str) -> list[str]:
         for i in range(len(run) - 1):
             toks.append(run[i:i + 2])
     return toks
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    return dot / (na * nb) if na and nb else 0.0
+
+
+def parse_when(spec: str, now: float | None = None) -> float | None:
+    """把自然时间解析为 epoch：in 2h / 30m / 1d、HH:MM（今/明）、YYYY-MM-DD HH:MM。"""
+    import time as _t
+    from datetime import datetime, timedelta
+    now = now or _t.time()
+    s = (spec or "").strip().lower()
+    m = re.match(r"in\s+(\d+)\s*([smhd])", s)
+    if m:
+        mult = {"s": 1, "m": 60, "h": 3600, "d": 86400}[m.group(2)]
+        return now + int(m.group(1)) * mult
+    m = re.match(r"(\d{4})-(\d{1,2})-(\d{1,2})[ t](\d{1,2}):(\d{2})", s)
+    if m:
+        y, mo, d, hh, mm = map(int, m.groups())
+        return datetime(y, mo, d, hh, mm).timestamp()
+    m = re.match(r"(\d{1,2}):(\d{2})$", s)
+    if m:
+        hh, mm = int(m.group(1)), int(m.group(2))
+        dt = datetime.fromtimestamp(now).replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if dt.timestamp() <= now:
+            dt += timedelta(days=1)
+        return dt.timestamp()
+    if s.isdigit():
+        return float(s)
+    return None
 
 
 class Memory:
@@ -75,8 +111,19 @@ class Memory:
                 count INTEGER DEFAULT 0,
                 last_at REAL
             );
+            CREATE TABLE IF NOT EXISTS reminders(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                text TEXT NOT NULL,
+                remind_at REAL,
+                created_at REAL,
+                done INTEGER DEFAULT 0
+            );
             """
         )
+        # 迁移：为旧库补上 embedding 列（语义检索用）
+        cols = {r["name"] for r in self.db.execute("PRAGMA table_info(facts)")}
+        if "embedding" not in cols:
+            self.db.execute("ALTER TABLE facts ADD COLUMN embedding TEXT")
         self.db.commit()
         if not self.get_profile("first_seen"):
             self.set_profile("first_seen", str(int(time.time())))
@@ -106,7 +153,8 @@ class Memory:
         self.db.commit()
         return cur.lastrowid
 
-    def recall(self, query: str, limit: int = 6) -> list[dict]:
+    def recall(self, query: str, limit: int = 6, query_vec: list[float] | None = None) -> list[dict]:
+        """关键词打分；若给出 query_vec（来自 provider.embed），叠加向量语义相似度。"""
         rows = self.db.execute("SELECT * FROM facts").fetchall()
         if not rows:
             return []
@@ -119,7 +167,15 @@ class Memory:
             age_days = max(0.0, (now - (r["created_at"] or now)) / 86400)
             recency = 1.0 / (1.0 + age_days / 14)          # 两周半衰
             score = hit * 3 + r["importance"] + recency + math.log1p(r["use_count"])
-            if hit or r["importance"] >= 4:
+            sem_hit = False
+            if query_vec and r["embedding"]:
+                try:
+                    sim = _cosine(query_vec, json.loads(r["embedding"]))
+                    score += sim * 6
+                    sem_hit = sim > 0.35
+                except (ValueError, TypeError):
+                    pass
+            if hit or sem_hit or r["importance"] >= 4:
                 scored.append((score, r))
         scored.sort(key=lambda x: x[0], reverse=True)
         top = scored[:limit]
@@ -250,6 +306,81 @@ class Memory:
         if p.get("interactions"):
             lines.append(f"- 互动次数：{p['interactions']}")
         return "\n".join(lines)
+
+    # ---------- 语义记忆（向量） ----------
+    def set_embedding(self, fact_id: int, vec: list[float]) -> None:
+        self.db.execute("UPDATE facts SET embedding=? WHERE id=?",
+                        (json.dumps(vec), fact_id))
+        self.db.commit()
+
+    def embed_backfill(self, provider, limit: int = 256) -> int:
+        """给尚无向量的事实补算 embedding。返回新增条数。需 provider.embed 可用。"""
+        rows = self.db.execute(
+            "SELECT id,text FROM facts WHERE embedding IS NULL LIMIT ?", (limit,)
+        ).fetchall()
+        if not rows:
+            return 0
+        vecs = provider.embed([r["text"] for r in rows])
+        if not vecs:
+            return 0
+        for r, v in zip(rows, vecs):
+            self.set_embedding(r["id"], v)
+        return len(rows)
+
+    # ---------- 主动式记忆：巩固 / 遗忘 ----------
+    def consolidate(self, max_age_days: int = 30) -> dict:
+        """记忆的"睡眠巩固"：合并近重复、淡忘陈旧低价值条目。"""
+        rows = self.db.execute("SELECT * FROM facts ORDER BY importance DESC, id").fetchall()
+        merged, forgotten = 0, 0
+        kept: list[tuple[set, int]] = []  # (tokens, id)
+        now = time.time()
+        for r in rows:
+            toks = set(_tokens(r["text"]))
+            dup_of = None
+            for ktoks, kid in kept:
+                inter = len(toks & ktoks)
+                union = len(toks | ktoks) or 1
+                if inter / union >= 0.8:          # Jaccard 近重复
+                    dup_of = kid
+                    break
+            if dup_of is not None:
+                self.db.execute("DELETE FROM facts WHERE id=?", (r["id"],))
+                self.db.execute(
+                    "UPDATE facts SET importance=MIN(5,importance+1) WHERE id=?", (dup_of,))
+                merged += 1
+                continue
+            age_days = (now - (r["created_at"] or now)) / 86400
+            if age_days > max_age_days and r["importance"] <= 2 and r["use_count"] == 0:
+                self.db.execute("DELETE FROM facts WHERE id=?", (r["id"],))
+                forgotten += 1
+                continue
+            kept.append((toks, r["id"]))
+        self.db.commit()
+        return {"merged": merged, "forgotten": forgotten, "kept": len(kept)}
+
+    # ---------- 提醒（主动提醒） ----------
+    def add_reminder(self, text: str, remind_at: float) -> int:
+        cur = self.db.execute(
+            "INSERT INTO reminders(text,remind_at,created_at) VALUES(?,?,?)",
+            (text, remind_at, time.time()))
+        self.db.commit()
+        return cur.lastrowid
+
+    def due_reminders(self, now: float | None = None) -> list[dict]:
+        now = now or time.time()
+        rows = self.db.execute(
+            "SELECT * FROM reminders WHERE done=0 AND remind_at<=? ORDER BY remind_at",
+            (now,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def pending_reminders(self) -> list[dict]:
+        rows = self.db.execute(
+            "SELECT * FROM reminders WHERE done=0 ORDER BY remind_at").fetchall()
+        return [dict(r) for r in rows]
+
+    def mark_reminder_done(self, rid: int) -> None:
+        self.db.execute("UPDATE reminders SET done=1 WHERE id=?", (rid,))
+        self.db.commit()
 
     def stats(self) -> dict:
         f = self.db.execute("SELECT COUNT(*) c FROM facts").fetchone()["c"]
