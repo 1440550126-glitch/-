@@ -406,14 +406,15 @@ class Agent:
                 return result
 
         # --- 传统节日（"今天是什么节" / "端午有什么讲究"）---
-        if action is None and who.get("obey") and "节" in (utterance or ""):
+        if action is None and who.get("obey"):
             u6 = utterance or ""
-            if any(k in u6 for k in ("今天什么节", "今天是什么节", "今天有什么节", "什么节日")):
+            if any(k in u6 for k in ("今天什么节", "今天是什么节", "今天有什么节", "什么节日",
+                                     "今天过什么节")):
                 line = self.festival_today() or "今天不是什么特别的节日，平常日子也要好好过。"
                 result["reply"] = line
                 self._log_journal(who, u6, line, "festival")
                 return result
-            if any(k in u6 for k in ("讲究", "习俗", "怎么过", "风俗", "祝福")):
+            if any(k in u6 for k in ("讲究", "习俗", "怎么过", "风俗", "祝福语")):
                 info = self.festival_info(u6)
                 if info:
                     result["reply"] = info
