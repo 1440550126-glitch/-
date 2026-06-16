@@ -61,6 +61,10 @@
 | 像 TA 一样说话 | 口头禅/语气词/口吻，降级也"像本人" | `dsoul/style.py` |
 | 缅怀与抚慰 | 纪念日主动提起；思念时借共同回忆、以本人口吻温柔回应 | `dsoul/memorial.py` |
 | 生平导入 | 聊天记录/书信 → TA 的记忆与口头禅 | `dsoul/lifelog.py` · `scripts/ingest_life.py` |
+| 照片多模态 | 照片(谁/何时/何地)→带日期记忆，进时间线与图谱 | `dsoul/photo.py` · `scripts/ingest_photo.py` |
+| 编年生平 + 嘱托 | 一生编年成故事；保管临终留言/家训郑重交付 | `dsoul/legacy.py` |
+| 本人嗓音 | 嗓音档案(语速/音量)+情绪叠加，可接声音克隆 CLI | `dsoul/voice.py` |
+| 多模型路由 | Ollama+OpenAI兼容，按任务选模型，小会异质模型投票 | `dsoul/llm.py` |
 | 贾维斯式管家 | 点名应答 / 态势简报 / 系统自检，只服务听命于你的人 | `dsoul/butler.py` |
 | 语音唤醒词 | 设了"贾维斯"就只在被点名时回应 | `scripts/daemon.py`(--wake) |
 | 设备 / 家居控制 | "把灯关了 / 空调调到26度"，内置 Home Assistant 后端 | `dsoul/devices.py` |

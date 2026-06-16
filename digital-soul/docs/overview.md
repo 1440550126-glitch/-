@@ -133,6 +133,9 @@ flowchart TB
 | `scenes.py` · `triggers.py` | 场景/例程；定时·日落·温度·进门自动化 |
 | `orchestrator.py` | 多步任务拆解与路由汇总 |
 | `remote_agents.py` | 隔空指挥外部智能体（爱马仕/openclaw…） |
+| `photo.py` | 多模态·照片：照片要素→带日期记忆，汇入时间线/图谱 |
+| `legacy.py` | 编年生平 + 嘱托：一生编年成故事，保管临终留言/家训 |
+| `llm.py` | 大模型：多模型/多服务商(Ollama+OpenAI兼容)，按任务路由 + 小会异质模型 |
 | `webstatus.py` | 手机网页：状态/对话/设备/场景/自动化 + 关系图谱·一生时间线 |
 
 ## 4. 脚本地图（`scripts/`）
@@ -163,7 +166,7 @@ flowchart TB
 
 ## 6. 测试
 
-30 套单测、约 115+ 用例，纯标准库、零网络即可跑：
+37 套单测、约 180+ 用例，纯标准库、零网络即可跑：
 
 ```bash
 cd digital-soul
