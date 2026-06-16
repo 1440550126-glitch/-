@@ -238,6 +238,13 @@ class Agent:
                 result["reply"] = txt
                 self._log_journal(who, u, txt, "family_restore")
                 return result
+            if any(k in u for k in ("聊", "说说", "唠", "谈", "对话", "对谈")) and \
+                    len(self.find_family_members(u)) >= 2:
+                txt = self.let_them_talk(u)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "family_dialogue")
+                    return result
             if any(k in u for k in ("叫来", "叫出来", "想和", "想跟", "我找", "在吗",
                                     "来说说", "来聊", "说说话", "出来说", "换成")):
                 m = find_member(self.family, u)
@@ -506,6 +513,27 @@ class Agent:
     def family_roster(self) -> str:
         from .family import roster_line
         return roster_line(self.family)
+
+    def find_family_members(self, query) -> list:
+        """从一句话里认出提到的家人（按名字或称呼），按出现顺序返回、去重。"""
+        from .family import members
+        q = str(query or "")
+        out, seen = [], set()
+        for m in members(self.family):
+            name, rel = m.get("name", ""), m.get("relation", "")
+            if ((name and name in q) or (rel and rel in q)) and name not in seen:
+                seen.add(name)
+                out.append(m)
+        return out
+
+    def let_them_talk(self, query) -> str:
+        """让被点到的两位（或更多）家人，就某话题各用各的口吻聊几句。"""
+        from .converse import extract_topic, family_dialogue
+        ms = self.find_family_members(query)
+        if len(ms) < 2:
+            return ""
+        turns = family_dialogue(ms, extract_topic(query, ms), llm=self.llm)
+        return "\n".join(f"{t['speaker']}：{t['text']}" for t in turns)
 
     def become(self, query) -> str:
         """把某位家人"叫出来"：热切换到 TA 本人的口吻继续对话，并以 TA 的口气打个招呼。"""

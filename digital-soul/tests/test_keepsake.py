@@ -5,7 +5,12 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from dsoul.keepsake import build_keepsake, keepsake_html, timeline_groups  # noqa: E402
+from dsoul.keepsake import (build_keepsake, gather_photos,  # noqa: E402
+                            keepsake_html, timeline_groups)
+
+_PNG = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00"
+        b"\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82")
 
 ITEMS = [
     {"text": "在成都出生", "when": "1990"},
@@ -44,6 +49,29 @@ def test_keepsake_escapes_html():
 def test_empty_keepsake_degrades():
     h = keepsake_html("TA")
     assert "还没攒下" in h and h.startswith("<!doctype html>")
+
+
+def test_photos_embedded_selfcontained():
+    photos = [{"src": "data:image/png;base64,AAAA", "caption": "1990 出生"}]
+    h = keepsake_html("外公", photos=photos)
+    assert "影像" in h and "<figure>" in h
+    assert 'src="data:image/png;base64,AAAA"' in h
+    assert "1990 出生" in h
+    assert "http://" not in h and "https://" not in h     # 仍自包含
+    assert "影像" not in keepsake_html("外公")               # 无照片则无该节
+
+
+def test_gather_photos_reads_folder():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        d = pathlib.Path(d)
+        (d / "b_2018.png").write_bytes(_PNG)
+        (d / "a_1990.png").write_bytes(_PNG)
+        (d / "notes.txt").write_text("x", encoding="utf-8")
+        got = gather_photos(d)
+        assert [p["caption"] for p in got] == ["a_1990", "b_2018"]   # 排序、跳过非图片
+        assert all(p["src"].startswith("data:image/png;base64,") for p in got)
+        assert gather_photos(d / "nope") == []                      # 不存在 → 空
 
 
 class _Agent:
