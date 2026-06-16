@@ -21,6 +21,54 @@ def _owner(agent) -> str:
     return agent.identity.get("name", "我")
 
 
+def _legacy_family_care(agent) -> dict:
+    """数字遗产（一生/嘱托/家训）+ 多人合一（全家）+ 守护惦记，只读展示数据。
+
+    独立成函数，便于单测；任何一块取数失败都各自降级为空，不影响整页。
+    """
+    chronicle = ""
+    if hasattr(agent, "life_chronicle"):
+        try:
+            chronicle = agent.life_chronicle()
+        except Exception:
+            chronicle = ""
+    last_words, precepts = [], []
+    try:
+        from .legacy import last_words as _lw, precepts as _pc
+        last_words = _lw(getattr(agent, "legacy", {}) or {})
+        precepts = _pc(getattr(agent, "legacy", {}) or {})
+    except Exception:
+        pass
+    family_roster, family_members = "", []
+    if getattr(agent, "family", None):
+        try:
+            from .family import members as _fm, roster_line as _rl
+            family_roster = _rl(agent.family)
+            family_members = [{"name": m.get("name"), "relation": m.get("relation", "")}
+                              for m in _fm(agent.family)]
+        except Exception:
+            family_roster, family_members = "", []
+    care_list = []
+    if getattr(agent, "care", None):
+        try:
+            for person, cfg in agent.care.items():
+                if not isinstance(cfg, dict):
+                    continue
+                meds = cfg.get("medicine")
+                meds = meds if isinstance(meds, list) else ([meds] if meds else [])
+                parts = []
+                if meds:
+                    parts.append(f"{cfg.get('note', '药')} {('、'.join(str(t) for t in meds))}")
+                if cfg.get("checkup"):
+                    parts.append(f"复查 {cfg.get('checkup')}")
+                if parts:
+                    care_list.append(f"{person}：{'；'.join(parts)}")
+        except Exception:
+            care_list = []
+    return {"chronicle": chronicle, "last_words": last_words, "precepts": precepts,
+            "family": family_roster, "family_members": family_members, "care": care_list}
+
+
 def _snapshot(agent, monitor) -> dict:
     present = sorted(monitor.present.keys()) if monitor is not None else []
     mems = [it["text"] for it in agent.memory.items[-8:]][::-1]
@@ -193,6 +241,7 @@ def _snapshot(agent, monitor) -> dict:
         "mood_levels": mood_levels,
         "people": [p["name"] for p in agent.authority.people.values()],
         "owner": _owner(agent),
+        **_legacy_family_care(agent),
     }
 
 
@@ -261,6 +310,11 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
   <div class=row style="margin-top:6px"><button id=gplay class=devbtn>▶ 生长</button><input id=gyslider type=range style="flex:1"><span id=gylabel class=dim>全部</span></div>
   <div id=graphtop class=dim></div></div>
 <div class=card><div class=k>📜 一生时间线</div><div id=tlfilters></div><div id=timeline></div></div>
+<div class=card><div class=k>🕯️ TA 的一生</div><div id=chronicle style="font-size:14px;line-height:1.7;white-space:pre-wrap">…</div></div>
+<div class=card><div class=k>💌 想留给你的话</div><ul id=lastwords></ul>
+  <div class=k style="margin-top:10px">📖 家训</div><ul id=precepts></ul></div>
+<div class=card><div class=k>👪 这一家子</div><div id=family class=dim></div><div id=familychips style="margin-top:6px"></div></div>
+<div class=card><div class=k>🫶 守护惦记</div><ul id=care></ul></div>
 <div class=card><div class=k>🧩 最近记住</div><ul id=mems></ul></div>
 <div class=card><div class=k>🕘 最近对话</div><ul id=jour></ul></div>
 <div class=card><div class=k>🛰️ 最近派活 / 提议</div><ul id=disp></ul></div>
@@ -278,6 +332,7 @@ function radar(lv){const S=160,c=S/2,R=54,n=SEVEN.length;function pt(i,r){const 
 function devRow(d){const st=d.on?('开'+(d.detail?(' '+d.detail):'')):'关';return '<div class=devrow><span class=devname>'+d.label+'</span><span class=devst>'+st+'</span><button class=devbtn onclick="dev(\''+d.key+'\',\'on\')">开</button><button class=devbtn onclick="dev(\''+d.key+'\',\'off\')">关</button></div>';}
 async function dev(k,a){const sp=$('#speaker').value;try{const r=await (await fetch('/api/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device:k,action:a,speaker:sp})})).json();add(soulName,r.reply,'soul');}catch(e){}refresh();}
 async function scene(n){const sp=$('#speaker').value;try{const r=await (await fetch('/api/scene',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scene:n,speaker:sp})})).json();add(soulName,r.reply,'soul');}catch(e){}refresh();}
+function talkTo(name){ask('我想和'+name+'说说话');}
 let inited=false, soulName="它";
 function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
 function renderTimeline(tl){if(!tl||!tl.length)return '<span class=dim>暂无带年份的记忆</span>';let h='',last=null;tl.forEach(e=>{if(e.year!==last){h+='<div class=tlyear>'+esc(e.year)+'</div>';last=e.year;}h+='<div class=tlitem>'+esc(e.text)+'</div>';});return h;}
@@ -331,6 +386,12 @@ async function refresh(){
     _gv=s.graph_viz||{nodes:[],edges:[]};const _yr=gYears(_gv),_sl=$('#gyslider');if(_yr){_sl.min=_yr[0];_sl.max=_yr[1];if(_sl.dataset.init!=='1'){_sl.value=_yr[1];_sl.dataset.init='1';}}drawGraph();
     $('#graphtop').textContent=((s.graph&&s.graph.length)?('最核心：'+s.graph.join(' · ')):'')+((s.graph_viz&&s.graph_viz.nodes.length)?'　·　点节点筛选时间线 / ▶生长看关系网长出来':'');
     _tl=s.timeline||[]; $('#tlfilters').innerHTML=renderTLfilters(s.timeline_entities); drawTL();
+    $('#chronicle').textContent=s.chronicle||'（还没攒下带年份的生平）';
+    $('#lastwords').innerHTML=(s.last_words&&s.last_words.length)?li(s.last_words):'<li class=dim>（还没留下嘱托）</li>';
+    $('#precepts').innerHTML=(s.precepts&&s.precepts.length)?li(s.precepts):'<li class=dim>（还没立下家训）</li>';
+    $('#family').textContent=s.family||'（还没登记家人）';
+    $('#familychips').innerHTML=(s.family_members&&s.family_members.length)?s.family_members.map(m=>'<button class=devbtn style="margin:3px" onclick="talkTo(\''+esc(m.name)+'\')">叫 '+esc(m.name)+'</button>').join(''):'';
+    $('#care').innerHTML=(s.care&&s.care.length)?li(s.care):'<li class=dim>暂未设置守护对象（见 config/care.yaml）</li>';
     $('#mems').innerHTML=li(s.recent_memories);
     $('#jour').innerHTML=li(s.recent_journal);
     if(!inited){$('#speaker').innerHTML=s.people.map(p=>'<option'+(p===s.owner?' selected':'')+'>'+esc(p)+'</option>').join('');inited=true;}
