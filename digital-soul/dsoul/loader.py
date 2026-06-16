@@ -112,7 +112,9 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  family=family_cfg,
                  calendar=EventBook(base / "data" / "calendar.json"),
                  capsules=CapsuleBook(base / "data" / "capsules.json"),
-                 notes=NoteBook(base / "data" / "notes.json"))
+                 notes=NoteBook(base / "data" / "notes.json"),
+                 recipes=_load_yaml(base / "config" / "recipes.yaml"),
+                 sayings=_load_yaml(base / "config" / "sayings.yaml"))
 
 
 def _seed_memory(base: Path, memory) -> None:

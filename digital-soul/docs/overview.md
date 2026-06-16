@@ -145,6 +145,9 @@ flowchart TB
 | `timecapsule.py` | 时光胶囊：封存一句话给未来，到某日(含错过补送)由分身交给某位家人，只送一次 |
 | `wishes.py` | 临别期许：TA 对每位家人的一句盼望(legacy.wishes / 成员 wish)，问起时道来 |
 | `notes.py` | 速记便签：随手记/翻/搜/清的最轻备忘，本地持久化 |
+| `recipes.py` | 家传菜谱：记下拿手菜与做法，"外婆的红烧肉怎么做"照着来（config + 成员 recipes） |
+| `sayings.py` | 口头语录：TA 常念叨的老话，问起能背几句，也能挑应景的撒进回复 |
+| `qa_interview.py` | 生平采访：按人生阶段的引导问题，把回答存进记忆养出更像 TA 的分身 |
 | `keepsake.py` | 数字纪念册：把一生/影像/嘱托/家训/全家/时间线导出成一页自包含、可打印的 HTML（照片 base64 内嵌） |
 | `book.py` | 家族册：每位家人各一页(生平/性格/口头禅/TA 的记忆)+一段对谈，编成可打印传家的一本 HTML |
 | `llm.py` | 大模型：多模型/多服务商(Ollama+OpenAI兼容)，按任务路由 + 小会异质模型 |
@@ -165,6 +168,7 @@ flowchart TB
 | `sleep.py` · `timeline.py` · `ingest.py` | 睡眠巩固 / 一生时间线 / 文档灌记忆 |
 | `keepsake.py` | 导出数字纪念册：一生编成一页自包含、可打印的 HTML |
 | `family_book.py` | 导出家族册：每位家人一页 + 对谈，编成可传家的一本 HTML |
+| `interview.py` | 生平采访：一问一答把人生问出来，存进记忆库 |
 | `finetune_prepare.py` · `finetune_train.py` | QLoRA 本地微调贴近本人文风 |
 | `agent_worker.py` | 外部智能体参考实现（监听 `POST /task`） |
 | `doctor.py` | 环境自检 |
@@ -180,14 +184,15 @@ flowchart TB
 
 ## 6. 测试
 
-51 套单测、约 280+ 用例，纯标准库、零网络即可跑：
+54 套单测、约 300+ 用例，纯标准库、零网络即可跑：
 
 ```bash
 cd digital-soul
 for t in authority memory annotate presence consolidate emotions skills dispatch tasks reflect plan butler devices orchestrate scenes \
          triggers ha graph voice forgetting entangle dream selfnarrative values monologue curiosity worldmodel anticipate predict swarm \
          style memorial lifelog habits photo llm legacy guardian family webstatus keepsake converse \
-         briefing book letters calendar reminisce gratitude timecapsule wishes notes; do
+         briefing book letters calendar reminisce gratitude timecapsule wishes notes \
+         recipes sayings qa_interview; do
   python tests/test_$t.py || break
 done
 ```

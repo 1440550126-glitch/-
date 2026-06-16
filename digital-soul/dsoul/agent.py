@@ -35,7 +35,8 @@ class Agent:
                  scenes=None, triggers=None, sensor_source=None, dreams=None, selflog=None,
                  values=None, values_path=None, curiosity=None, worldmodel=None, calib=None,
                  memorial=None, llm_router=None, legacy=None, care=None, family=None,
-                 calendar=None, capsules=None, notes=None) -> None:
+                 calendar=None, capsules=None, notes=None,
+                 recipes=None, sayings=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -79,6 +80,8 @@ class Agent:
         self.calendar = calendar                                  # 本地日程本（生日/复诊/约定）
         self.capsules = capsules                                  # 时光胶囊（封存给未来的话）
         self.notes = notes                                        # 速记便签（最轻的随手备忘）
+        self.recipes = recipes or {}                              # 家传菜谱
+        self.sayings = sayings or {}                              # 口头语录 / 老话
         self.family = family or {}                                # 多人合一：一宅多位家人
         self.active_member = None                                # 当前"叫出来"说话的是哪位家人
         self._home_identity = None                               # 切换前的本尊身份（可还原）
@@ -335,6 +338,27 @@ class Agent:
                 txt = self.reminisce_about(cue)
                 result["reply"] = txt
                 self._log_journal(who, u, txt, "reminisce")
+                return result
+
+        # --- 家传菜谱（"外婆的红烧肉怎么做" / "你有什么拿手菜"）---
+        if action is None and who.get("obey") and self.recipes and (
+                "怎么做" in (utterance or "") or "咋做" in (utterance or "")
+                or "怎么烧" in (utterance or "") or "拿手菜" in (utterance or "")
+                or "菜谱" in (utterance or "") or "会做什么菜" in (utterance or "")):
+            txt = self.cook(utterance)
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "recipe")
+                return result
+
+        # --- 口头语录（"你常说什么" / "念几句你的老话"）---
+        if action is None and who.get("obey") and self.sayings and any(
+                k in (utterance or "") for k in ("你常说", "常挂嘴边", "你的老话", "你的语录",
+                                                 "念几句", "口头禅是", "爱说的话")):
+            txt = self.recite_sayings()
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "sayings")
                 return result
 
         # --- 时光胶囊（"给孙女留句话，到2035年6月16日：好好长大"）---
@@ -743,6 +767,23 @@ class Agent:
     def recent_notes(self, k=8) -> list:
         n = getattr(self, "notes", None)
         return n.recent(k) if n is not None else []
+
+    # ---------- 家传菜谱 / 口头语录 ----------
+    def cook(self, query) -> str:
+        """照着 TA 的方子说一道菜；问"有什么拿手菜"则报菜名。"""
+        from .recipes import collect_recipes, find_recipe, list_names, recipe_text
+        rs = collect_recipes(self.recipes, self.family)
+        if not rs:
+            return ""
+        if any(k in (query or "") for k in ("拿手菜", "会做什么", "会做啥", "都会做", "菜谱")):
+            names = list_names(rs)
+            return ("我拿手的有：" + "、".join(names) + "。想吃哪个？") if names else ""
+        r = find_recipe(rs, query)
+        return recipe_text(r) if r else ""
+
+    def recite_sayings(self, topic=None) -> str:
+        from .sayings import collect_sayings, recite
+        return recite(collect_sayings(self.sayings, self.identity))
 
     # ---------- 触景生情 / 感恩与遗憾 ----------
     def reminisce_about(self, cue) -> str:

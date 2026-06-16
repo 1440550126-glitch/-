@@ -76,6 +76,9 @@
 | 时光胶囊 | 封存一句话给未来，到某日由分身交给某位家人（含错过补送，只送一次） | `dsoul/timecapsule.py` |
 | 临别期许 | TA 对每位家人的一句盼望，问"你希望我怎样"时道来 | `dsoul/wishes.py` |
 | 速记便签 | 随手"记个事"，回头能翻能搜能清 | `dsoul/notes.py` |
+| 家传菜谱 | "外婆的红烧肉怎么做"照着 TA 的方子来 | `dsoul/recipes.py` · `config/recipes.yaml` |
+| 口头语录 | TA 常念叨的老话，问起能背几句 | `dsoul/sayings.py` · `config/sayings.yaml` |
+| 生平采访 | 按人生阶段一问一答，把回答存进记忆养出更像 TA 的分身 | `dsoul/qa_interview.py` · `scripts/interview.py` |
 | 家族册导出 | 每位家人各一页(生平/性格/口头禅/记忆)+对谈，编成可打印传家的 HTML | `dsoul/book.py` · `scripts/family_book.py` |
 | 生平上网页 | 手机网页看 TA 的一生/嘱托家训/全家/守护惦记，点全家按钮即唤出某位 | `dsoul/webstatus.py` |
 | 数字纪念册 | 一生/影像/嘱托/家训/全家/时间线导出成一页自包含、可打印的 HTML（照片 base64 内嵌），存得住传得下 | `dsoul/keepsake.py` · `scripts/keepsake.py` |
