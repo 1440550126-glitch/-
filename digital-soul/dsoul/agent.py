@@ -33,7 +33,7 @@ class Agent:
                  tasks=None, reflector=None, planner=None, plan=None, devices=None,
                  scenes=None, triggers=None, sensor_source=None, dreams=None, selflog=None,
                  values=None, values_path=None, curiosity=None, worldmodel=None, calib=None,
-                 memorial=None, llm_router=None) -> None:
+                 memorial=None, llm_router=None, legacy=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -71,6 +71,7 @@ class Agent:
         self._last_prediction = None                              # 最近一次预感（供你反馈校准）
         self._pending_offer = None                                # 已主动提出、待你点头的预感
         self.memorial = memorial or {}                            # 重要日子（缅怀/纪念）
+        self.legacy = legacy or {}                                # 嘱托/家训（数字遗产）
         self.llm_router = llm_router                              # 多模型路由（按任务选模型 + 小会面板）
         self._degraded_notice_shown = False                       # 降级提示只提一次
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
@@ -213,6 +214,27 @@ class Agent:
             result["reply"] = reply
             self._log_journal(who, utterance, reply, "habit")
             return result
+
+        # --- 编年生平 / 嘱托 / 家训（数字遗产）---
+        if action is None and who.get("obey"):
+            u = utterance or ""
+            if any(k in u for k in ("你的一生", "你这一生", "讲讲你的故事", "你的生平", "编年", "这辈子")):
+                txt = self.life_chronicle() or "我这一生平平淡淡，倒也知足。"
+                result["reply"] = txt
+                self._log_journal(who, u, txt, "chronicle")
+                return result
+            if any(k in u for k in ("想对我说", "留给我的话", "嘱托", "遗言", "想叮嘱", "对我说的", "交代")):
+                txt = self.deliver_last_words()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "last_words")
+                    return result
+            if any(k in u for k in ("家训", "家规", "老规矩", "家风")):
+                txt = self.deliver_precepts()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "precepts")
+                    return result
 
         # --- 哀伤抚慰（家人表达思念）：以本人口吻、借共同回忆温柔回应 ---
         if action is None and who.get("obey"):
@@ -412,6 +434,10 @@ class Agent:
             occ = self.memorial_today()
             if occ:
                 text = f"{text} 对了，今天是{'、'.join(occ)}呢。"
+                from .legacy import last_words
+                lw = last_words(self.legacy)
+                if lw:
+                    text += f" 我一直想对你说：「{lw[0]}」"
         # 主动预感：见到你时，高置信的预感主动提一句
         if who.get("obey"):
             po = self.proactive_prediction()
@@ -423,6 +449,28 @@ class Agent:
     def memorial_today(self, now=None) -> list:
         from .memorial import today_occasions
         return today_occasions((self.memorial or {}).get("dates", {}), now)
+
+    # ---------- 编年生平 + 嘱托（数字遗产）----------
+    def life_chronicle(self) -> str:
+        from .legacy import chronicle
+        from .style import apply_style
+        return apply_style(chronicle(self.memory.items), self.identity)
+
+    def deliver_last_words(self) -> str:
+        from .legacy import last_words
+        from .style import apply_style
+        lw = last_words(self.legacy)
+        if not lw:
+            return ""
+        return apply_style("有几句话，我一直想留给你：" + " ".join(f"「{w}」" for w in lw), self.identity)
+
+    def deliver_precepts(self) -> str:
+        from .legacy import precepts
+        from .style import apply_style
+        ps = precepts(self.legacy)
+        if not ps:
+            return ""
+        return apply_style("咱们家的老规矩，我念给你听：" + " ".join(f"「{p}」" for p in ps), self.identity)
 
     def _fallback_greet(self, who: dict) -> str:
         name = who["name"]
