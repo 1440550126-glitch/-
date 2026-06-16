@@ -21,6 +21,7 @@ function makeCtx() {
     createChannelMerger: () => node(),
     createStereoPanner: () => node({ pan: Param(0) }),
     createPanner: () => node({ panningModel: '', distanceModel: '', positionX: Param(0), positionY: Param(0), positionZ: Param(0), setPosition() {} }),
+    createDelay: () => node({ delayTime: Param(0) }),
     createConvolver: () => node({ buffer: null }),
     createDynamicsCompressor: () => node({ threshold: Param(-24), ratio: Param(12), knee: Param(30), attack: Param(0.003), release: Param(0.25) }),
     createOscillator: () => node({ type: '', frequency: Param(1), detune: Param(0), start() {}, stop() {} }),
@@ -104,6 +105,18 @@ ok(snap.id === 'mysnap' && Array.isArray(snap.p.eq) && snap.p.eq[2] === 3, 'snap
 registerPreset(snap); d.setPreset('standard'); ok(d.getEQ().every((b) => b.gain === 0), 'setPreset（无 eq）复位均衡');
 d.setPreset('mysnap'); ok(d.getEQ()[2].gain === 3, 'setPreset 应用快照预设的均衡');
 d.resetEQ();
+
+// 7d) 多声道下混 / 耳机交叉馈送 / LUFS 响度
+ok(d.input.channelCountMode === 'explicit' && d.input.channelCount === 2, '多声道源按标准下混到立体声');
+d.setCrossfeed(0.4); ok(Math.abs(d.crossfeed - 0.4) < 1e-9, 'setCrossfeed 设置交叉馈送');
+ok(typeof d.getLoudness() === 'number' && isFinite(d.getLoudness()), `getLoudness=${d.getLoudness().toFixed(1)} LUFS（K 加权估计）`);
+d.setLoudnessNorm(-14); ok(d.loudnessNorm === -14 && d.state.loudnessNorm === -14, '响度归一化目标=-14 LUFS');
+d.setLoudnessNorm(null); ok(d.loudnessNorm === null, 'setLoudnessNorm(null) 关闭');
+const loud = await import('../dolby-loudness.js');
+ok(loud.lufsFromMeanSquare(1) === -0.691, 'lufsFromMeanSquare(1)=-0.691');
+ok(loud.lufsFromMeanSquare(0) === -Infinity, '静音→-Infinity');
+ok(Math.abs(loud.gainForLufs(-20, -14) - Math.pow(10, 6 / 20)) < 1e-9, 'gainForLufs 提 +6dB');
+ok(loud.gainForLufs(-Infinity, -14) === 1, '无效响度→增益 1');
 
 // 8) 自定义预设
 registerPreset({ id: 'myroom', label: '我的房间', desc: 't', p: presetById('cinema').p });

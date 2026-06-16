@@ -104,7 +104,7 @@ DOLBY_PRESETS.forEach((p) => {
   presetsEl.append(b);
 });
 const hpEl = $('hpSwitch');
-hpEl.addEventListener('click', () => { const on = dolby.spatialMode !== 'headphones'; dolby.setSpatialMode(on ? 'headphones' : 'speakers'); hpEl.classList.toggle('on', on); });
+hpEl.addEventListener('click', () => { const on = dolby.spatialMode !== 'headphones'; dolby.setSpatialMode(on ? 'headphones' : 'speakers'); dolby.setCrossfeed(on ? 0.35 : 0); hpEl.classList.toggle('on', on); });
 $('intensity').addEventListener('input', () => dolby.setIntensity($('intensity').value / 100));
 
 // —— 视觉预设 + 性能档位 ——

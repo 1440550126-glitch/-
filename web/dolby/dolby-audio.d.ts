@@ -42,6 +42,12 @@ export interface DolbyOptions {
   spatialMode?: SpatialMode;
   multiband?: boolean;
   loudnessMatch?: boolean;
+  /** 响度归一化目标 LUFS（如 -14）；不传则关闭 */
+  loudnessNorm?: number;
+  /** 耳机交叉馈送强度 0..1 */
+  crossfeed?: number;
+  /** 用 AudioWorklet 做响度测量（脱离主线程），失败回退分析器 */
+  worklet?: boolean;
 }
 
 export interface DolbyState {
@@ -51,6 +57,8 @@ export interface DolbyState {
   spatialMode: SpatialMode;
   multiband: boolean;
   loudnessMatch: boolean;
+  loudnessNorm: number | null;
+  crossfeed: number;
   supported: boolean;
 }
 
@@ -99,6 +107,9 @@ export class DolbyAudio {
   setSpatialMode(mode: SpatialMode, instant?: boolean): this;
   setMultiband(on: boolean, instant?: boolean): this;
   setLoudnessMatch(on: boolean): this;
+  setLoudnessNorm(targetLufs: number | null): this;
+  setCrossfeed(amount: number): this;
+  getLoudness(): number;
   setIntensity(v: number, instant?: boolean): this;
   setEnabled(on: boolean, instant?: boolean): this;
   enable(on: boolean): this;
@@ -125,6 +136,8 @@ export class DolbyAudio {
   readonly spatialMode: SpatialMode;
   readonly multiband: boolean;
   readonly loudnessMatch: boolean;
+  readonly loudnessNorm: number | null;
+  readonly crossfeed: number;
   readonly state: DolbyState;
 
   dispose(opts?: { closeContext?: boolean }): void;

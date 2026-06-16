@@ -101,18 +101,21 @@ function refreshState() {
 }
 swEl.addEventListener('click', () => { dolby.setEnabled(!dolby.enabled); refreshState(); });
 
-// —— 耳机 HRTF 虚拟环绕 ——
+// —— 耳机 HRTF 虚拟环绕（同时开/关交叉馈送，改善头外定位） ——
 const hpEl = $('hpSwitch');
 hpEl.addEventListener('click', () => {
   const on = dolby.spatialMode !== 'headphones';
   dolby.setSpatialMode(on ? 'headphones' : 'speakers');
+  dolby.setCrossfeed(on ? 0.35 : 0);
   hpEl.classList.toggle('on', on);
 });
-// —— 多频带压缩 / 响度对齐 ——
+// —— 多频带压缩 / 响度对齐 / 响度归一(-14 LUFS) ——
 const mbEl = $('mbSwitch');
 mbEl.addEventListener('click', () => { const on = !dolby.multiband; dolby.setMultiband(on); mbEl.classList.toggle('on', on); });
 const lmEl = $('lmSwitch');
 lmEl.addEventListener('click', () => { const on = !dolby.loudnessMatch; dolby.setLoudnessMatch(on); lmEl.classList.toggle('on', on); });
+const lnEl = $('lnSwitch');
+if (lnEl) lnEl.addEventListener('click', () => { const on = dolby.loudnessNorm == null; dolby.setLoudnessNorm(on ? -14 : null); lnEl.classList.toggle('on', on); });
 
 // —— 按住听原声（A/B 即时对比） ——
 const abEl = $('abHold'); let abPrev = null;

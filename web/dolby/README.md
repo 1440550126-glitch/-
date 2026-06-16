@@ -250,8 +250,13 @@ img.src = track.cover;
 ```js
 dolby.setMultiband(true);      // 三段（低<250Hz<中<3.5kHz<高）独立压缩，更扎实
 dolby.setLoudnessMatch(true);  // 响度对齐：处理后≈原声响度，A/B 切换更公平
+dolby.setLoudnessNorm(-14);    // 响度归一化（类 Dolby Volume）：拉到目标 LUFS；getLoudness() 读当前
 dolby.setVocal(6);             // 人声/对白中置提升 +6dB（旁白、播客更清晰）
+dolby.setCrossfeed(0.35);      // 耳机交叉馈送：改善头外定位、收敛过宽（戴耳机时建议开）
 ```
+
+> **响度**：`setLoudnessNorm` 用近似 K 加权（BS.1770 风格）做**瞬时**响度估计与归一，
+> 是工程近似、非认证积分 LUFS。**多声道源**（5.1/7.1）接入时按标准 ITU 系数自动下混到立体声再处理。
 
 - **多频带压缩**：用 LR4 分频成低/中/高三段各自压缩再相加，比单段更能"压住"个别频段而不发闷；默认单段，按需打开。
 - **响度对齐**：内部用两个分析器持续测量原声与处理后信号的 RMS，自动微调输出增益使两者响度接近——这样开/关杜比做 A/B 时不会被"变大声"误导成"更好听"。

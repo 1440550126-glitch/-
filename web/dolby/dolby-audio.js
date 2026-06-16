@@ -16,6 +16,7 @@
 //   dolby.attachMedia(document.querySelector('audio'));
 //   await dolby.resume(); dolby.setSpatialMode('headphones');
 // ============================================================
+import { makeKWeighting, lufsFromMeanSquare, gainForLufs } from './dolby-loudness.js';
 
 // width：Side 增益倍数（1=原立体声宽度）；vocal：人声中置提升 dB
 export const DOLBY_PRESETS = [
@@ -134,6 +135,8 @@ export class DolbyAudio {
 
     // —— 节点 ——
     this.input = Gain(); this.output = Gain(); this.pre = Gain();
+    // 多声道源（5.1/7.1 等）按标准 ITU 下混到立体声后再处理
+    this.input.channelCount = 2; this.input.channelCountMode = 'explicit'; this.input.channelInterpretation = 'speakers';
     this.low = Filt(); this.low.type = 'lowshelf';
     this.midEq = Filt(); this.midEq.type = 'peaking';
     this.high = Filt(); this.high.type = 'highshelf';
@@ -183,11 +186,19 @@ export class DolbyAudio {
     this.limiterIn = Gain();
     this.limiter = ctx.createWaveShaper(); this.limiter.curve = shaperCurve(2.2); this.limiter.oversample = '4x';
     this.makeup = Gain(); this.matchGain = Gain(); this.matchGain.gain.value = 1;
+    // 耳机交叉馈送（crossfeed）：对侧声道延迟+低通后少量混入，缓解耳机过宽、改善头外定位
+    this.cfIn = Gain(); this.cfSplit = ctx.createChannelSplitter(2); this.cfMerge = ctx.createChannelMerger(2);
+    this.cfDL = Gain(); this.cfDR = Gain();
+    this.cfLd = ctx.createDelay(0.01); this.cfLlp = Filt(); this.cfLlp.type = 'lowpass'; this.cfLlp.frequency.value = 700; this.cfLg = Gain(); this.cfLg.gain.value = 0;
+    this.cfRd = ctx.createDelay(0.01); this.cfRlp = Filt(); this.cfRlp.type = 'lowpass'; this.cfRlp.frequency.value = 700; this.cfRg = Gain(); this.cfRg.gain.value = 0;
+    this.cfLd.delayTime.value = 0.0003; this.cfRd.delayTime.value = 0.0003; this._crossfeed = 0;
     this.dry = Gain(); this.wet = Gain();
-    // 电平表（输出）+ 响度对齐用的干/湿表
+    // 电平表（输出）+ 响度对齐用的干/湿表 + K 加权响度表
     this._meter = ctx.createAnalyser(); this._meter.fftSize = 256;
     this._dryMeter = ctx.createAnalyser(); this._dryMeter.fftSize = 256;
     this._wetMeter = ctx.createAnalyser(); this._wetMeter.fftSize = 256;
+    this._kw = makeKWeighting(ctx); this._kwMeter = ctx.createAnalyser(); this._kwMeter.fftSize = 2048;
+    this._lufs = -Infinity; this._normTarget = null;
 
     // —— 连线 ——
     this.input.connect(this.pre);
@@ -229,14 +240,22 @@ export class DolbyAudio {
     preComp.connect(this.miHP); this.miHP.connect(this.miLP); this.miLP.connect(this.compMid); this.compMid.connect(this.bandSum);
     preComp.connect(this.hiA); this.hiA.connect(this.hiB); this.hiB.connect(this.compHigh); this.compHigh.connect(this.bandSum);
     this.bandSum.connect(this.mbTap); this.mbTap.connect(this.limiterIn);
-    // 限制 → 补偿 → 对齐 → 湿声；干声直通
+    // 限制 → 补偿 → 交叉馈送 → 响度对齐 → 湿声；干声直通
     this.limiterIn.connect(this.limiter); this.limiter.connect(this.makeup);
-    this.makeup.connect(this.matchGain); this.matchGain.connect(this.wet); this.wet.connect(this.output);
+    this.makeup.connect(this.cfIn);
+    this.cfIn.connect(this.cfSplit);
+    this.cfSplit.connect(this.cfDL, 0); this.cfDL.connect(this.cfMerge, 0, 0);
+    this.cfSplit.connect(this.cfDR, 1); this.cfDR.connect(this.cfMerge, 0, 1);
+    this.cfSplit.connect(this.cfLd, 0); this.cfLd.connect(this.cfLlp); this.cfLlp.connect(this.cfLg); this.cfLg.connect(this.cfMerge, 0, 1);   // 左→右
+    this.cfSplit.connect(this.cfRd, 1); this.cfRd.connect(this.cfRlp); this.cfRlp.connect(this.cfRg); this.cfRg.connect(this.cfMerge, 0, 0);   // 右→左
+    this.cfDL.gain.value = 1; this.cfDR.gain.value = 1;
+    this.cfMerge.connect(this.matchGain); this.matchGain.connect(this.wet); this.wet.connect(this.output);
     this.input.connect(this.dry); this.dry.connect(this.output);
     // 表
     this.output.connect(this._meter);
     this.input.connect(this._dryMeter);
     this.makeup.connect(this._wetMeter);
+    this.makeup.connect(this._kw.input); this._kw.output.connect(this._kwMeter);   // K 加权响度测量
 
     try { this.motionLfo.start(); } catch { /* 已启动 */ }
 
@@ -254,7 +273,9 @@ export class DolbyAudio {
     this.setSpatialMode(options.spatialMode || 'speakers', true);
     this.setMultiband(!!options.multiband, true);
     this._applyMix(true);
+    if (options.crossfeed) this.setCrossfeed(options.crossfeed);
     if (options.loudnessMatch) this.setLoudnessMatch(true);
+    if (options.loudnessNorm != null) this.setLoudnessNorm(options.loudnessNorm);
   }
 
   // ---- 源接入 ----
@@ -323,18 +344,37 @@ export class DolbyAudio {
     return this;
   }
 
-  /** 响度对齐：让处理后的响度≈原声，A/B 切换公平（开=启用内部测量回路） */
-  setLoudnessMatch(on) {
-    on = !!on;
-    if (on === !!this._loudnessMatch) return this;
-    this._loudnessMatch = on;
-    if (on) {
-      if (typeof setInterval === 'function') this._matchTimer = setInterval(() => this._updateMatch(), 250);
-    } else {
-      if (this._matchTimer) { clearInterval(this._matchTimer); this._matchTimer = null; }
-      this._matchVal = 1; this.matchGain.gain.setTargetAtTime(1, this.context.currentTime, 0.2);
-    }
+  /** 耳机交叉馈送强度 0..1（0=关）：改善耳机头外定位、收敛过宽声场 */
+  setCrossfeed(amount) {
+    this._crossfeed = clamp(amount || 0, 0, 1);
+    const g = this._crossfeed * 0.5, t = this.context.currentTime;
+    this.cfLg.gain.setTargetAtTime(g, t, 0.05); this.cfRg.gain.setTargetAtTime(g, t, 0.05);
     return this;
+  }
+  get crossfeed() { return this._crossfeed; }
+
+  /** 响度对齐：让处理后的响度≈原声，A/B 切换公平 */
+  setLoudnessMatch(on) {
+    this._loudnessMatch = !!on;
+    if (!this._loudnessMatch && this._normTarget == null) { this._matchVal = 1; this.matchGain.gain.setTargetAtTime(1, this.context.currentTime, 0.2); }
+    this._ensureLoop();
+    return this;
+  }
+  /** 响度归一化（向 Dolby Volume 看齐）：把输出拉到目标 LUFS（如 -14）；传 null 关闭 */
+  setLoudnessNorm(targetLufs) {
+    this._normTarget = (typeof targetLufs === 'number') ? targetLufs : null;
+    if (this._normTarget == null && !this._loudnessMatch) { this._matchVal = 1; this.matchGain.gain.setTargetAtTime(1, this.context.currentTime, 0.2); }
+    this._ensureLoop();
+    return this;
+  }
+  get loudnessNorm() { return this._normTarget; }
+  /** 当前估计的响度（LUFS 近似，K 加权瞬时；非认证 BS.1770 积分值） */
+  getLoudness() { return this._measureLufs(); }
+
+  _ensureLoop() {
+    const need = this._loudnessMatch || this._normTarget != null;
+    if (need && !this._matchTimer) { if (typeof setInterval === 'function') this._matchTimer = setInterval(() => this._updateMatch(), 250); }
+    else if (!need && this._matchTimer) { clearInterval(this._matchTimer); this._matchTimer = null; }
   }
   _rms(an) {
     const buf = this._mbuf || (this._mbuf = new Float32Array(an.fftSize));
@@ -342,12 +382,28 @@ export class DolbyAudio {
     let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
     return Math.sqrt(s / buf.length);
   }
+  _measureLufs() {
+    const an = this._kwMeter, buf = this._kbuf || (this._kbuf = new Float32Array(an.fftSize));
+    if (this._wmMs != null) { this._lufs = lufsFromMeanSquare(this._wmMs); return this._lufs; }  // Worklet 测量优先
+    if (an.getFloatTimeDomainData) an.getFloatTimeDomainData(buf);
+    let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
+    this._lufs = lufsFromMeanSquare(s / buf.length);
+    return this._lufs;
+  }
   _updateMatch() {
-    const dry = this._rms(this._dryMeter), wet = this._rms(this._wetMeter);
-    if (dry < 1e-4 || wet < 1e-4) return;                 // 静音时不调整
-    const target = clamp(dry / wet, 0.25, 4);
-    this._matchVal += (target - this._matchVal) * 0.3;     // 平滑
-    this.matchGain.gain.setTargetAtTime(this._matchVal, this.context.currentTime, 0.2);
+    const lufs = this._measureLufs();
+    if (this._normTarget != null) {                        // 归一化到目标 LUFS
+      if (!isFinite(lufs) || lufs < -70) return;           // 静音不调
+      const target = gainForLufs(lufs, this._normTarget);
+      this._matchVal += (target - this._matchVal) * 0.2;
+      this.matchGain.gain.setTargetAtTime(clamp(this._matchVal, 0.25, 4), this.context.currentTime, 0.25);
+    } else if (this._loudnessMatch) {                      // 干/湿等响（A/B 公平）
+      const dry = this._rms(this._dryMeter), wet = this._rms(this._wetMeter);
+      if (dry < 1e-4 || wet < 1e-4) return;
+      const target = clamp(dry / wet, 0.25, 4);
+      this._matchVal += (target - this._matchVal) * 0.3;
+      this.matchGain.gain.setTargetAtTime(this._matchVal, this.context.currentTime, 0.2);
+    }
   }
 
   setIntensity(v, instant = false) { this._intensity = clamp(v, 0, 1); this._applyMix(instant); return this; }
@@ -419,7 +475,7 @@ export class DolbyAudio {
   get spatialMode() { return this._spatialMode; }
   get multiband() { return this._multiband; }
   get loudnessMatch() { return !!this._loudnessMatch; }
-  get state() { return { enabled: this._enabled, preset: this._presetId, intensity: this._intensity, spatialMode: this._spatialMode, multiband: this._multiband, loudnessMatch: !!this._loudnessMatch, supported: true }; }
+  get state() { return { enabled: this._enabled, preset: this._presetId, intensity: this._intensity, spatialMode: this._spatialMode, multiband: this._multiband, loudnessMatch: !!this._loudnessMatch, loudnessNorm: this._normTarget, crossfeed: this._crossfeed, supported: true }; }
 
   dispose({ closeContext = false } = {}) {
     try { this.motionLfo.stop(); } catch { /* ok */ }
@@ -432,6 +488,8 @@ export class DolbyAudio {
       this.panRR, this.binauralBus, this.binauralTap, this._preComp, this.comp, this.compTap,
       this.loA, this.loB, this.miHP, this.miLP, this.hiA, this.hiB, this.compLow, this.compMid,
       this.compHigh, this.bandSum, this.mbTap, this.limiterIn, this.limiter, this.makeup, this.matchGain,
+      this.cfIn, this.cfSplit, this.cfMerge, this.cfDL, this.cfDR, this.cfLd, this.cfLlp, this.cfLg,
+      this.cfRd, this.cfRlp, this.cfRg, this._kw.input, this._kw.output, this._kwMeter, this._workletNode,
       this.dry, this.wet, this._meter, this._dryMeter, this._wetMeter, this.analyser];
     for (const n of nodes) { try { n && n.disconnect(); } catch { /* ok */ } }
     this._sources.clear();
