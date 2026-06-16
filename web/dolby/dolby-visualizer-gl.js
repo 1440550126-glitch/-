@@ -9,7 +9,7 @@
 //   const viz = createVisualizer(canvas, { dolby });   // GL 优先，失败回退
 //   viz.start(); viz.setBaseHue(coverHue);
 // ============================================================
-import { AudioReactor, resolveAnalyser, DolbyVisualizer } from './dolby-visualizer.js';
+import { AudioReactor, resolveAnalyser, DolbyVisualizer, VIZ_PRESETS, VIZ_QUALITY, vizPresetById } from './dolby-visualizer.js';
 
 const FRAG = `
 precision mediump float;
@@ -130,11 +130,15 @@ export class DolbyVisualizerGL {
     this.analyser.fftSize = options.fftSize || 1024;
     this.reactor = new AudioReactor(this.analyser);
     this.baseHue = options.baseHue ?? 270;
+    this.hueRange = options.hueRange ?? 80;
     this.scale = options.scale ?? Math.min(globalThis.devicePixelRatio || 1, 1.5);
     this._hue = this.baseHue / 360; this._pulse = 0; this._t0 = (globalThis.performance?.now?.() ?? 0); this._raf = 0; this._running = false;
+    this._minDt = 0; this._lastTs = 0;
     this._onResize = () => this.resize();
     if (typeof addEventListener === 'function') addEventListener('resize', this._onResize);
     this.resize();
+    if (options.vizPreset) this.setVizPreset(options.vizPreset);
+    if (options.quality) this.setQuality(options.quality);
   }
 
   get renderer() { return 'webgl'; }
@@ -159,13 +163,26 @@ export class DolbyVisualizerGL {
     return this;
   }
   clearCover() { this._coverMixTarget = 0; return this; }
+  /** 视觉预设（配色风格） */
+  setVizPreset(id) { const p = vizPresetById(id); this.baseHue = p.baseHue; this.hueRange = p.hueRange; this._vizPreset = p.id; return this; }
+  /** 性能档位 'low' | 'mid' | 'high'（渲染分辨率 + 粒子数 + 帧率） */
+  setQuality(q) {
+    const m = VIZ_QUALITY[q] || VIZ_QUALITY.mid; this._quality = (q in VIZ_QUALITY) ? q : 'mid';
+    this._minDt = 1000 / m.fps;
+    this.scale = m.scale ?? Math.min(globalThis.devicePixelRatio || 1, 1.5);
+    this.resize();
+    if (this._pointsOk) { this._pn = m.points; this._pts = new Float32Array(this._pn * 2); for (let i = 0; i < this._pn; i++) { this._pts[2 * i] = Math.random() * 2 - 1; this._pts[2 * i + 1] = Math.random() * 2 - 1; } }
+    return this;
+  }
+  get vizPreset() { return this._vizPreset; }
+  get quality() { return this._quality; }
   analyze() { return this.reactor.read(); }
 
   start() {
     if (this._running) return this;
     this._running = true;
     if (typeof requestAnimationFrame === 'function') {
-      const loop = () => { if (!this._running) return; this._raf = requestAnimationFrame(loop); this._frame(); };
+      const loop = (ts) => { if (!this._running) return; this._raf = requestAnimationFrame(loop); if (this._minDt && ts - this._lastTs < this._minDt) return; this._lastTs = ts; this._frame(); };
       this._raf = requestAnimationFrame(loop);
     }
     return this;
@@ -178,7 +195,7 @@ export class DolbyVisualizerGL {
     const f = this._last = this.reactor.read();
     const { bass, mid, treble, energy, beat } = f;
     this._pulse = Math.max(this._pulse * 0.9, beat ? 1 : 0);
-    const targetHue = (this.baseHue + (treble - bass) * 40) / 360;
+    const targetHue = (this.baseHue + (treble - bass) * this.hueRange) / 360;
     this._hue += (targetHue - this._hue) * 0.05;
     const gl = this.gl, u = this.u, now = (globalThis.performance?.now?.() ?? Date.now());
     // 流体程序 + 全屏三角形（粒子层会切换程序/缓冲，每帧复位）

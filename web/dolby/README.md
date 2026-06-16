@@ -223,6 +223,10 @@ viz.start();
 WebGL 还有缓慢镜头旋转、**叠加的加色发光粒子层**（`points` 选项控制数量），Canvas 版有粒子拖尾辉光。
 接口一致：`start/stop/dispose/setBaseHue/setCover/analyze/resize`，`viz.last` 取最近一帧分析。
 
+**视觉预设 + 性能档位**：`viz.setVizPreset('nebula'|'aurora'|'ember'|'ocean'|'neon'|'mono')` 换配色风格
+（见 `VIZ_PRESETS`）；`viz.setQuality('low'|'mid'|'high')` 一键调粒子数/渲染分辨率/帧率（弱机省电）。
+构造时也可传 `{ vizPreset, quality }`。`player.html` 底部「视觉」区即是它们的开关。
+
 也可直接传 `{ analyser }` 或 `{ node, context }`。`viz.analyze()`（或 `viz.last`）返回
 `{ bass, mid, treble, energy, beat, bpm }`——含**估计的 BPM**，可驱动你自己的动效。
 

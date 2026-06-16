@@ -1,7 +1,7 @@
 // dolby-player Demo：播放列表 / 传输控制 / 进度 / 杜比音效 / 湍流可视化
 import { DolbyPlayer } from './dolby-player.js';
 import { DOLBY_PRESETS, presetById } from './dolby-audio.js';
-import { coverColor } from './dolby-visualizer.js';
+import { coverColor, VIZ_PRESETS } from './dolby-visualizer.js';
 import { createVisualizer } from './dolby-visualizer-gl.js';
 
 const $ = (id) => document.getElementById(id);
@@ -18,8 +18,8 @@ const player = new DolbyPlayer({
 const dolby = player.dolby;
 
 // —— 湍流可视化背景（WebGL 流体优先，失败回退 Canvas2D；跟随节奏 + 随频谱/封面变色） ——
-const viz = createVisualizer($('viz'), { dolby, particles: 120 });
-let vizStarted = false;
+const viz = createVisualizer($('viz'), { dolby, quality: 'high' });
+let vizStarted = false, themeAuto = true;
 const HUES = [275, 205, 330, 150];
 // 没有真实封面时，按曲目生成一张程序化封面（也用于喂进 WebGL 背景纹理）
 function makeCover(track, index) {
@@ -37,7 +37,7 @@ function makeCover(track, index) {
   return c;
 }
 function applyTheme(track, index) {
-  const apply = (src, hue) => { if (viz.setCover) viz.setCover(src); viz.setBaseHue(hue); document.documentElement.style.setProperty('--hue', String(Math.round(hue))); };
+  const apply = (src, hue) => { if (viz.setCover) viz.setCover(src); if (themeAuto) { viz.setBaseHue(hue); document.documentElement.style.setProperty('--hue', String(Math.round(hue))); } };
   const cover = track && typeof track === 'object' ? track.cover : null;
   const fallback = () => { const cv = makeCover(track, index); let h = HUES[index % HUES.length]; try { h = coverColor(cv).hue; } catch { /* ok */ } apply(cv, h); };
   if (cover) { const img = new Image(); img.crossOrigin = 'anonymous'; img.onload = () => { let h = HUES[index % HUES.length]; try { h = coverColor(img).hue; } catch { /* ok */ } apply(img, h); }; img.onerror = fallback; img.src = cover; }
@@ -106,6 +106,22 @@ DOLBY_PRESETS.forEach((p) => {
 const hpEl = $('hpSwitch');
 hpEl.addEventListener('click', () => { const on = dolby.spatialMode !== 'headphones'; dolby.setSpatialMode(on ? 'headphones' : 'speakers'); hpEl.classList.toggle('on', on); });
 $('intensity').addEventListener('input', () => dolby.setIntensity($('intensity').value / 100));
+
+// —— 视觉预设 + 性能档位 ——
+const vizPresetsEl = $('vizPresets');
+const selViz = (node) => [...vizPresetsEl.children].forEach((c) => c.classList.toggle('active', c === node));
+const autoChip = el('button', 'chip active', '自动');
+autoChip.addEventListener('click', () => { themeAuto = true; selViz(autoChip); applyTheme(player.current, Math.max(0, player.index)); });
+vizPresetsEl.append(autoChip);
+for (const p of VIZ_PRESETS) {
+  const b = el('button', 'chip', p.label);
+  b.addEventListener('click', () => { themeAuto = false; viz.setVizPreset(p.id); document.documentElement.style.setProperty('--hue', String(p.baseHue)); selViz(b); });
+  vizPresetsEl.append(b);
+}
+const qBtns = [...document.querySelectorAll('[data-q]')];
+const selQ = (q) => qBtns.forEach((b) => b.classList.toggle('active', b.dataset.q === q));
+qBtns.forEach((b) => b.addEventListener('click', () => { viz.setQuality(b.dataset.q); selQ(b.dataset.q); }));
+selQ(viz.quality || 'high');
 
 // —— 初始化 UI ——
 renderList();

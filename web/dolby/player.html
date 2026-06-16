@@ -94,6 +94,17 @@
       </div>
       <div class="row" style="margin-top:14px"><span class="label">强度</span><input id="intensity" type="range" min="0" max="100" value="85" /></div>
     </div>
+
+    <div class="card hideable">
+      <div style="font-weight:800;font-size:15px;margin-bottom:10px">视觉</div>
+      <div class="row" id="vizPresets" style="flex-wrap:wrap;gap:8px"></div>
+      <div class="row" style="gap:8px;margin-top:12px;align-items:center">
+        <span class="label">性能</span>
+        <button class="chip" data-q="low">省电</button>
+        <button class="chip" data-q="mid">均衡</button>
+        <button class="chip" data-q="high">高画质</button>
+      </div>
+    </div>
   </div>
   <script type="module" src="./player.js"></script>
 </body>

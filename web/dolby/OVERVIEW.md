@@ -40,7 +40,7 @@ createVisualizer(canvas, { dolby: player.dolby }).start();
 
 - **引擎**：`setPreset(id|对象)` `setIntensity(0..1)` `setEnabled(on)` `setSpatialMode('speakers'|'headphones')` `setMultiband(on)` `setLoudnessMatch(on)` `setBass/setAir/setWidth/setReverb/setVocal` `setEQBand(i,dB)`/`setEQ([..])` `snapshotPreset(id,label)` `getLevel()`→`{rms,peak,db,clip}` `getFrequencyResponse()` `getAnalyser()` `dispose()`
 - **播放器**：`play/pause/toggle/stop/seek/setVolume/next/prev/load` `setRepeat/'off'|'one'|'all'` `setShuffle` `setPlaylist/add` `on(ev,fn)`（`track/play/pause/ended/time/loaded/error/volume/playlist`）`player.dolby`
-- **可视化**：`start/stop/dispose` `setBaseHue(h)` `setCover(img)` `analyze()`/`last`→`{bass,mid,treble,energy,beat,bpm}`
+- **可视化**：`start/stop/dispose` `setBaseHue(h)` `setCover(img)` `setVizPreset(id)` `setQuality('low'|'mid'|'high')` `analyze()`/`last`→`{bass,mid,treble,energy,beat,bpm}`
 
 ## 注意事项（落地必看）
 
@@ -56,4 +56,4 @@ npm start                                   # http://localhost:3000/dolby/demo.h
 npm run dolby:test                          # 零依赖自测（模拟 Web Audio，94 断言）
 ```
 
-当前版本：**1.12.0** ·  许可证 MIT
+当前版本：**1.13.0** ·  许可证 MIT

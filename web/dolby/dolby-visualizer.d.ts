@@ -1,6 +1,8 @@
 // 类型定义 · dolby-visualizer
 import type { DolbyAudio } from './dolby-audio';
 
+export type VizQuality = 'low' | 'mid' | 'high';
+
 export interface VisualizerOptions {
   analyser?: AnalyserNode;
   dolby?: DolbyAudio;
@@ -11,7 +13,21 @@ export interface VisualizerOptions {
   hueRange?: number;
   particles?: number;
   background?: [number, number, number];
+  vizPreset?: string;
+  quality?: VizQuality;
 }
+
+export interface VizPreset {
+  id: string;
+  label: string;
+  baseHue: number;
+  hueRange: number;
+  background: [number, number, number];
+}
+
+export const VIZ_PRESETS: VizPreset[];
+export const VIZ_QUALITY: Record<VizQuality, { scale: number | null; particles: number; points: number; fps: number }>;
+export function vizPresetById(id: string): VizPreset;
 
 export interface AudioFrame {
   bass: number;
@@ -48,6 +64,10 @@ export class DolbyVisualizer {
   setParticles(n: number): this;
   setCover(img: CanvasImageSource | null): this;
   clearCover(): this;
+  setVizPreset(id: string): this;
+  setQuality(q: VizQuality): this;
+  readonly vizPreset: string;
+  readonly quality: string;
   start(): this;
   stop(): this;
   readonly running: boolean;

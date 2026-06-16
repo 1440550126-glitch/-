@@ -20,6 +20,10 @@ export class DolbyVisualizerGL {
   setParticles(n?: number): this;
   setCover(img: CanvasImageSource | null): this;
   clearCover(): this;
+  setVizPreset(id: string): this;
+  setQuality(q: 'low' | 'mid' | 'high'): this;
+  readonly vizPreset: string;
+  readonly quality: string;
   analyze(): AudioFrame;
   start(): this;
   stop(): this;

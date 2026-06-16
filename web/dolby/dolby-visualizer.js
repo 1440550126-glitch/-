@@ -15,6 +15,22 @@
 
 const DPR = () => Math.min(globalThis.devicePixelRatio || 1, 2);
 
+// 视觉预设（配色风格）与性能档位（粒子数/分辨率/帧率），两种渲染器共用
+export const VIZ_PRESETS = [
+  { id: 'nebula', label: '星云', baseHue: 275, hueRange: 80, background: [10, 8, 18] },
+  { id: 'aurora', label: '极光', baseHue: 160, hueRange: 95, background: [8, 12, 20] },
+  { id: 'ember', label: '火焰', baseHue: 25, hueRange: 45, background: [18, 8, 6] },
+  { id: 'ocean', label: '深海', baseHue: 200, hueRange: 70, background: [6, 12, 20] },
+  { id: 'neon', label: '霓虹', baseHue: 310, hueRange: 120, background: [10, 6, 16] },
+  { id: 'mono', label: '极简', baseHue: 230, hueRange: 18, background: [10, 10, 14] }
+];
+export const vizPresetById = (id) => VIZ_PRESETS.find((x) => x.id === id) || VIZ_PRESETS[0];
+export const VIZ_QUALITY = {
+  low: { scale: 0.6, particles: 36, points: 28, fps: 30 },
+  mid: { scale: 1.0, particles: 90, points: 70, fps: 60 },
+  high: { scale: null, particles: 150, points: 130, fps: 60 }   // scale=null → min(dpr,1.5)
+};
+
 export function resolveAnalyser(o) {
   if (o.analyser) return o.analyser;
   if (o.dolby) {
@@ -71,6 +87,9 @@ export class DolbyVisualizer {
     if (typeof addEventListener === 'function') addEventListener('resize', this._onResize);
     this.resize();
     this._initParticles();
+    this._minDt = 0; this._lastTs = 0;
+    if (options.vizPreset) this.setVizPreset(options.vizPreset);
+    if (options.quality) this.setQuality(options.quality);
   }
 
   resize() {
@@ -89,12 +108,18 @@ export class DolbyVisualizer {
   /** 设置封面图（Image/Canvas）作为暗淡背景层；接口与 WebGL 版一致 */
   setCover(img) { this._cover = img || null; return this; }
   clearCover() { this._cover = null; return this; }
+  /** 视觉预设（配色风格） */
+  setVizPreset(id) { const p = vizPresetById(id); this.baseHue = p.baseHue; this.hueRange = p.hueRange; this.bg = p.background.slice(); this._vizPreset = p.id; return this; }
+  /** 性能档位 'low' | 'mid' | 'high'（粒子数 + 帧率） */
+  setQuality(q) { const m = VIZ_QUALITY[q] || VIZ_QUALITY.mid; this._quality = (q in VIZ_QUALITY) ? q : 'mid'; this._minDt = 1000 / m.fps; this.setParticles(m.particles); return this; }
+  get vizPreset() { return this._vizPreset; }
+  get quality() { return this._quality; }
 
   start() {
     if (this._running) return this;
     this._running = true;
     if (typeof requestAnimationFrame === 'function') {
-      const loop = () => { if (!this._running) return; this._raf = requestAnimationFrame(loop); this._frame(); };
+      const loop = (ts) => { if (!this._running) return; this._raf = requestAnimationFrame(loop); if (this._minDt && ts - this._lastTs < this._minDt) return; this._lastTs = ts; this._frame(); };
       this._raf = requestAnimationFrame(loop);
     }
     return this;

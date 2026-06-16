@@ -232,6 +232,12 @@ ok(bpmV === 120, `AudioReactor BPM 估计=${bpmV}`);
 const viz2 = new DolbyVisualizer(vCanvas, { analyser: vAn, particles: 4 });
 const fakeImg = {}; viz2.setCover(fakeImg); ok(viz2._cover === fakeImg, 'setCover 设置封面背景');
 viz2.clearCover(); ok(viz2._cover === null, 'clearCover 清除封面'); viz2.dispose();
+const { VIZ_PRESETS, VIZ_QUALITY } = await import('../dolby-visualizer.js');
+const viz3 = new DolbyVisualizer(vCanvas, { analyser: vAn, vizPreset: 'ember', quality: 'low' });
+ok(viz3.vizPreset === 'ember' && viz3.quality === 'low', 'options.vizPreset/quality 生效');
+ok(viz3.particleCount === VIZ_QUALITY.low.particles, `low 档粒子数=${viz3.particleCount}`);
+viz3.setVizPreset('aurora'); ok(viz3.baseHue === VIZ_PRESETS.find((p) => p.id === 'aurora').baseHue, 'setVizPreset 改配色');
+viz3.setQuality('high'); ok(viz3.particleCount === VIZ_QUALITY.high.particles, 'setQuality 改粒子数'); viz3.dispose();
 
 // 15) 预设导入/导出
 const jsonP = store.exportPreset({ id: 'x', label: 'X', p: { bass: { gain: 6 } } });
