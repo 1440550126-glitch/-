@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable
 
 from .providers import Message, Provider
@@ -67,6 +68,13 @@ class Agent:
     memory: object
     skills: object
     config: object
+    learn: bool = True          # 子 Agent 设为 False，避免污染主画像
+    _depth: int = 0             # 委派深度，防止无限递归
+    last_trace: dict = field(default_factory=dict)
+
+    def _make_subagent(self) -> "Agent":
+        return Agent(self.provider, self.tools, self.memory, self.skills, self.config,
+                     learn=False, _depth=self._depth + 1)
 
     def _system_prompt(self, user_input: str) -> str:
         parts = [self.config.get("persona", "你是 Mnemo，用户的私人 AI 伙伴。")]
@@ -110,7 +118,8 @@ class Agent:
         max_steps = max_steps or int(self.config.get("max_steps", 8))
         emit = on_event or (lambda *_: None)
         ctx = ToolContext(memory=self.memory, config=self.config, cwd=cwd,
-                          auto_approve=auto_approve)
+                          auto_approve=auto_approve, agent=self)
+        steps: list[dict] = []
 
         messages = [Message("system", self._system_prompt(user_input))]
         # 注入最近对话，保持连续性
@@ -136,17 +145,29 @@ class Agent:
             messages.append(Message("assistant", reply))
             result = self.tools.run(name, args, ctx)
             emit("observation", {"name": name, "result": result})
+            steps.append({"tool": name, "args": args, "result": str(result)[:500]})
             messages.append(Message("tool", result, name=name))
         else:
             # 步数耗尽，逼出一个总结
             messages.append(Message("user", "请基于以上信息，直接给出最终回答。"))
             final = self.provider.chat(messages, temperature=temperature, max_tokens=max_tokens)
 
-        # 固化记忆 + 进化画像
-        if self.memory and self.config.get("memory.enabled", True):
+        # 固化记忆 + 进化画像（子 Agent 不写，避免污染主画像）
+        if self.memory and self.learn and self.config.get("memory.enabled", True):
             learned = self.memory.observe(user_input, final, session=session)
             if learned:
                 emit("learned", {"items": learned})
+
+        # 记录本次轨迹（供"自我进化技能"提炼）
+        self.last_trace = {"input": user_input, "steps": steps, "final": final}
+        if self.learn:
+            try:
+                home = getattr(self.config, "home", None)
+                if home:
+                    (Path(home) / "last_trace.json").write_text(
+                        json.dumps(self.last_trace, ensure_ascii=False), encoding="utf-8")
+            except OSError:
+                pass
 
         emit("final", {"text": final})
         return final

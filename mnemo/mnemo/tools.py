@@ -27,6 +27,7 @@ class ToolContext:
     cwd: str = "."
     auto_approve: bool = True   # daemon/非交互下自动放行；交互模式可由 CLI 改写
     confirm: Callable[[str], bool] | None = None
+    agent: object = None        # 当前 Agent（供 delegate 派生子 Agent）
 
 
 @dataclass
@@ -153,6 +154,21 @@ def _t_now(args, ctx):
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S %A")
 
 
+def _t_delegate(args, ctx):
+    """把一个聚焦的子任务委派给子 Agent（多 Agent 协作），返回其结果。"""
+    parent = ctx.agent
+    if parent is None or not hasattr(parent, "_make_subagent"):
+        return "[delegate] 当前环境不支持委派"
+    if getattr(parent, "_depth", 0) >= 2:
+        return "[delegate] 已达最大委派深度（防止无限递归）"
+    sub = parent._make_subagent()
+    role = args.get("role", "专家助手")
+    task = args.get("task", "")
+    out = sub.run(f"你的角色是「{role}」。聚焦完成这个子任务，直接给结论：\n{task}",
+                  session="subagent", cwd=ctx.cwd, auto_approve=ctx.auto_approve)
+    return f"[{role} 的结果]\n{out}"[:2500]
+
+
 def _t_remind(args, ctx):
     if not ctx.memory:
         return "[错误] 记忆不可用"
@@ -180,4 +196,7 @@ def build_default_registry() -> ToolRegistry:
     r.add("now", "获取当前日期时间", {}, _t_now)
     r.add("remind", "设置一个定时提醒（守护进程到点会主动触发）",
           {"text": "提醒内容", "when": "时间：in 2h / 18:30 / 2026-06-17 09:00"}, _t_remind)
+    r.add("delegate", "把一个聚焦子任务交给子 Agent 处理并拿回结果（多 Agent 协作）",
+          {"role": "子 Agent 的角色，如 研究员/程序员/审阅者", "task": "子任务描述"},
+          _t_delegate)
     return r

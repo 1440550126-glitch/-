@@ -97,7 +97,18 @@ def cmd_chat(args):
             break
         if line == "/help":
             print(dim("/memory 记忆概览  /profile 画像  /skills 技能  /provider 后端  "
-                      "/forget <id> 删记忆  /new 新会话  /exit 退出"))
+                      "/forget <id> 删记忆  /distill <名> 把刚才任务存为技能  "
+                      "/new 新会话  /exit 退出"))
+            continue
+        if line.startswith("/distill "):
+            from .skills import distill_from_trace
+            nm = line.split(maxsplit=1)[1].strip()
+            if not app.agent.last_trace:
+                print(dim("还没有可提炼的对话"))
+                continue
+            text = distill_from_trace(app.agent.last_trace, app.provider, nm)
+            s = app.skills.learn(name=nm, text=text)
+            print(dim(f"✦ 已学会技能：{s.name} → {s.path}"))
             continue
         if line == "/memory" and app.memory:
             s = app.memory.stats()
@@ -141,6 +152,11 @@ def cmd_run(args):
         print(red(f"[模型调用失败] {e}"), file=sys.stderr)
         return 1
     print(out)
+    if getattr(args, "distill", None):
+        from .skills import distill_from_trace
+        text = distill_from_trace(app.agent.last_trace, app.provider, args.distill)
+        s = app.skills.learn(name=args.distill, text=text)
+        print(dim(f"✦ 已把本次过程沉淀为技能：{s.name}"), file=sys.stderr)
     return 0
 
 
@@ -252,6 +268,16 @@ def cmd_skill(args):
         print(green(f"已学会技能：{s.name} → {s.path}"))
     elif args.action == "remove":
         print(green("已删除") if sk.remove(args.name) else red("无法删除（不存在或为内置）"))
+    elif args.action == "distill":
+        from .skills import distill_from_trace
+        trace_file = app.cfg.home / "last_trace.json"
+        if not trace_file.is_file():
+            print(red("没有可提炼的最近任务，先用 mnemo run 跑一个任务"))
+            return 1
+        trace = json.loads(trace_file.read_text(encoding="utf-8"))
+        text = distill_from_trace(trace, app.provider, args.name)
+        s = sk.learn(name=args.name, text=text)
+        print(green(f"已把最近任务沉淀为技能：{s.name} → {s.path}"))
     return 0
 
 
@@ -375,6 +401,7 @@ def build_parser() -> argparse.ArgumentParser:
     pr = sub.add_parser("run", help="单次执行一个任务")
     pr.add_argument("prompt", help="任务描述")
     pr.add_argument("--cwd", default=".", help="工作目录")
+    pr.add_argument("--distill", metavar="NAME", help="完成后把过程沉淀为名为 NAME 的技能")
 
     pc = sub.add_parser("config", help="查看/修改配置")
     pcs = pc.add_subparsers(dest="action", required=True)
@@ -409,6 +436,8 @@ def build_parser() -> argparse.ArgumentParser:
     sl = pss.add_parser("learn")
     sl.add_argument("--name"); sl.add_argument("--file"); sl.add_argument("--url"); sl.add_argument("--text")
     srm = pss.add_parser("remove"); srm.add_argument("name")
+    sd = pss.add_parser("distill", help="把最近一次任务自动沉淀为新技能（自我进化）")
+    sd.add_argument("--name", required=True)
 
     pl = sub.add_parser("plugin", help="插件：安装/管理")
     pls = pl.add_subparsers(dest="action", required=True)

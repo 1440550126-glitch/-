@@ -18,7 +18,8 @@ from mnemo.providers import build_provider               # noqa: E402
 from mnemo.providers.base import Message, Provider       # noqa: E402
 from mnemo.providers.offline import OfflineProvider      # noqa: E402
 from mnemo.skills import SkillRegistry                   # noqa: E402
-from mnemo.tools import build_default_registry           # noqa: E402
+from mnemo.skills import distill_from_trace              # noqa: E402
+from mnemo.tools import ToolContext, build_default_registry  # noqa: E402
 
 
 class FakeProvider(Provider):
@@ -146,6 +147,46 @@ class TestProactiveMemory(unittest.TestCase):
         from mnemo.memory import parse_when
         self.assertEqual(parse_when("in 1h", now=1000.0), 1000.0 + 3600)
         self.assertIsNone(parse_when("看不懂的时间"))
+
+
+class TestEvolveAndDelegate(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = load_config(self.tmp.name)
+        self.mem = Memory(self.cfg.db_path)
+        self.skills = SkillRegistry(self.cfg)
+        self.tools = build_default_registry()
+
+    def tearDown(self):
+        self.mem.close()
+        self.tmp.cleanup()
+
+    def test_delegate_runs_subagent(self):
+        prov = FakeProvider(["子任务完成：答案是 42"])  # 子 Agent 直接给最终答案
+        agent = Agent(prov, self.tools, self.mem, self.skills, self.cfg)
+        ctx = ToolContext(memory=self.mem, config=self.cfg, agent=agent)
+        out = self.tools.run("delegate", {"role": "研究员", "task": "算一下"}, ctx)
+        self.assertIn("研究员", out)
+        self.assertIn("42", out)
+
+    def test_delegate_depth_guard(self):
+        prov = FakeProvider(["x"])
+        agent = Agent(prov, self.tools, self.mem, self.skills, self.cfg, _depth=2)
+        ctx = ToolContext(memory=self.mem, config=self.cfg, agent=agent)
+        out = self.tools.run("delegate", {"task": "x"}, ctx)
+        self.assertIn("深度", out)
+
+    def test_distill_heuristic(self):
+        trace = {"input": "列出目录并统计文件数",
+                 "steps": [{"tool": "list_dir", "args": {"path": "."}, "result": "a\nb"}],
+                 "final": "共 2 个文件"}
+        text = distill_from_trace(trace, OfflineProvider(), "list-and-count")
+        self.assertTrue(text.strip().startswith("---"))
+        self.assertIn("list-and-count", text)
+        self.assertIn("list_dir", text)
+        s = self.skills.learn(name="list-and-count", text=text)
+        self.assertIsNotNone(self.skills.get("list-and-count"))
+        self.assertTrue(s.path.exists())
 
 
 class TestParsing(unittest.TestCase):

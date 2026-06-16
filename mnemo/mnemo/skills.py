@@ -50,6 +50,42 @@ def _parse_skill(text: str, path: Path | None = None, builtin=False) -> Skill:
     )
 
 
+def distill_from_trace(trace: dict, provider, name: str) -> str:
+    """把一次成功任务的轨迹提炼成一个可复用技能（Markdown）。
+
+    优先让大模型撰写；离线或失败时回退到基于轨迹的启发式模板。
+    """
+    inp = trace.get("input", "")
+    steps = trace.get("steps", [])
+    final = trace.get("final", "")
+    step_lines = "\n".join(
+        f"- {s['tool']}({s['args']}) → {str(s['result'])[:120]}" for s in steps
+    ) or "（本次未调用工具，主要靠推理）"
+
+    text = None
+    try:
+        if provider is not None and getattr(provider, "name", "") != "offline":
+            from .providers import Message
+            instr = (
+                "下面是一次成功完成的任务记录。请把它提炼成一个【可复用技能】，"
+                "严格输出 Markdown：开头用 --- frontmatter 给出 name/description/when_to_use，"
+                "正文用编号步骤写清做法（工具名照写）。只输出技能本身，不要解释。\n\n"
+                f"任务：{inp}\n步骤：\n{step_lines}\n最终回答：{final[:300]}"
+            )
+            text = provider.chat([Message("user", instr)], max_tokens=800)
+    except Exception:  # noqa: BLE001
+        text = None
+
+    if not text or "---" not in text:
+        text = (
+            f"---\nname: {name}\ndescription: 由一次「{inp[:40]}」任务自动沉淀的技能\n"
+            f"when_to_use: 遇到类似「{inp[:40]}」的任务时\n---\n\n"
+            f"# {name}\n\n复用以下经过验证的步骤：\n\n{step_lines}\n\n"
+            f"完成后给出清晰结论。\n"
+        )
+    return text
+
+
 class SkillRegistry:
     def __init__(self, config):
         self.config = config
