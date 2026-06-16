@@ -32,7 +32,8 @@ class Agent:
                  journal=None, emotions=None, knowledge=None, skills=None, hub=None,
                  tasks=None, reflector=None, planner=None, plan=None, devices=None,
                  scenes=None, triggers=None, sensor_source=None, dreams=None, selflog=None,
-                 values=None, values_path=None, curiosity=None, worldmodel=None, calib=None) -> None:
+                 values=None, values_path=None, curiosity=None, worldmodel=None, calib=None,
+                 memorial=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -69,6 +70,7 @@ class Agent:
         self.calib = calib                                        # 预测校准（从"猜对/没猜对"学习）
         self._last_prediction = None                              # 最近一次预感（供你反馈校准）
         self._pending_offer = None                                # 已主动提出、待你点头的预感
+        self.memorial = memorial or {}                            # 重要日子（缅怀/纪念）
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
@@ -197,6 +199,21 @@ class Agent:
                 result["reply"] = prop["reply"]
                 result["proposal"] = prop
                 self._log_journal(who, utterance, prop["reply"], f"propose:{prop['agent']}")
+                return result
+
+        # --- 哀伤抚慰（家人表达思念）：以本人口吻、借共同回忆温柔回应 ---
+        if action is None and who.get("obey"):
+            from .memorial import comfort_reply, is_grief
+            if is_grief(utterance):
+                from .style import apply_style
+                mems = [it["text"] for _, it in self._recall(utterance, k=2)]
+                reply = apply_style(
+                    comfort_reply(who.get("name") if who.get("known") else None, self.identity, mems),
+                    self.identity)
+                if self.emotions is not None:
+                    self.emotions.feel({"爱": 0.2, "哀": 0.1})
+                result["reply"] = reply
+                self._log_journal(who, utterance, reply, "comfort")
                 return result
 
         # --- 记忆图谱问答（"关于X" / "我的关系网" / "最核心的人"）---
@@ -370,6 +387,11 @@ class Agent:
             if follow:
                 text = f"{text} {follow}"
                 self._await_retry_confirm = True
+        # 缅怀：今天是重要的日子，主动提起
+        if who.get("obey"):
+            occ = self.memorial_today()
+            if occ:
+                text = f"{text} 对了，今天是{'、'.join(occ)}呢。"
         # 主动预感：见到你时，高置信的预感主动提一句
         if who.get("obey"):
             po = self.proactive_prediction()
@@ -377,6 +399,10 @@ class Agent:
                 text = f"{text} {po}"
         self.robot.say(text)
         return text
+
+    def memorial_today(self, now=None) -> list:
+        from .memorial import today_occasions
+        return today_occasions((self.memorial or {}).get("dates", {}), now)
 
     def _fallback_greet(self, who: dict) -> str:
         name = who["name"]

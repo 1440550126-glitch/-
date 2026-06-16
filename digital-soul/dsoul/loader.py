@@ -98,7 +98,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  values_path=base / "data" / "values_state.json",
                  curiosity=QuestionLog(base / "data" / "questions.json"),
                  worldmodel=WorldModel(base / "data" / "beliefs.json"),
-                 calib=Calibration(base / "data" / "calibration.json"))
+                 calib=Calibration(base / "data" / "calibration.json"),
+                 memorial=_load_yaml(base / "config" / "memorial.yaml"))
 
 
 def _seed_memory(base: Path, memory) -> None:
