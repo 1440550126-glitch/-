@@ -220,13 +220,18 @@ const ok = (name) => {
   ok('store: add rid / merge dedup / clear');
 })();
 
-// 9) 分享内容
+// 9) 分享内容 + 邀请链接带 ref
 (() => {
   const { buildShare } = R('miniprogram/utils/share');
+  // 无 getApp（如未登录）→ 不带 ref
   const s = buildShare();
   assert.ok(s.title && typeof s.title === 'string');
   assert.strictEqual(s.path, '/pages/index/index');
-  ok('share.buildShare');
+  // 有 openid → 链接带 ref=openid 供归因
+  global.getApp = () => ({ globalData: { openid: 'oTEST123' } });
+  assert.strictEqual(buildShare().path, '/pages/index/index?ref=oTEST123');
+  delete global.getApp;
+  ok('share.buildShare + 邀请 ref');
 })();
 
 console.log(`\n全部通过：${n} 组用例 ✅`);

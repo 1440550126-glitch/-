@@ -4,7 +4,17 @@ const quota = require('../../utils/quota');
 const { buildShare, grantShare } = require('../../utils/share');
 
 Page({
-  data: { email: '', version, freeBalance: 0, shareReward: 0, shareLeft: 0, showCredits: false },
+  data: {
+    email: '',
+    version,
+    freeBalance: 0,
+    shareReward: 0,
+    shareLeft: 0,
+    invited: 0,
+    refReward: 0,
+    refBonus: 0,
+    showCredits: false,
+  },
 
   onLoad() {
     this.setData({
@@ -25,6 +35,9 @@ Page({
         freeBalance: (q.credits || 0) + (q.daily ? q.daily.left : 0),
         shareReward: q.share ? q.share.reward : 0,
         shareLeft: q.share ? q.share.left : 0,
+        invited: q.invited || 0,
+        refReward: q.ref ? q.ref.reward : 0,
+        refBonus: q.ref ? q.ref.bonus : 0,
       });
     });
   },

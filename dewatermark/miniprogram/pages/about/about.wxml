@@ -13,10 +13,12 @@
 
   <button wx:if="{{showCredits}}" class="share-card card" open-type="share">
     <view class="share-l">
-      <view class="share-t">分享得免广告次数</view>
-      <view class="muted share-s">每次分享 +{{shareReward}} 次（今日还可得 {{shareLeft}} 次）</view>
+      <view class="share-t">邀请好友 · 各得免广告次数</view>
+      <view class="muted share-s">好友通过你进来：你 +{{refReward}} 次，TA +{{refBonus}} 次</view>
+      <view class="muted share-s">分享本身 +{{shareReward}} 次（今日还可得 {{shareLeft}} 次）</view>
+      <view class="invited" wx:if="{{invited}}">已成功邀请 {{invited}} 人</view>
     </view>
-    <view class="share-go">去分享 ›</view>
+    <view class="share-go">去邀请 ›</view>
   </button>
 
   <view class="menu card">

@@ -35,7 +35,7 @@ dewatermark/
 │   ├── login/        静默登录 + 用户统计
 │   ├── stats/        数据看板聚合（按 ADMIN_OPENIDS 鉴权）
 │   ├── history/      解析记录云端同步（add/list/clear，按 openid）
-│   └── quota/        免广告额度 + 分享奖励（get/spend/reward，按 openid）
+│   └── quota/        免广告额度 + 分享奖励 + 邀请归因（get/spend/reward/bind，按 openid）
 ├── scripts/test.js   离线逻辑自测（不联网）
 └── docs/             DEPLOY 部署 / REVIEW 上架避坑 / MONETIZE 变现配置
 ```
@@ -64,7 +64,7 @@ cd dewatermark && npm test
 - **激励视频**：`result` 页点「保存」前播放，看完才解锁下载——这是主要收入来源。
 - **Banner**：首页 / 结果页底部横幅。
 - **插屏**：保存成功后偶发弹出（可在 `config.js` 留空关闭）。
-- **新人免广告 + 分享得次数**：`quota` 云函数按 openid 发放免广告额度，扣减优先级「每日免费 → 免广告额度 → 看广告」；兼顾变现与拉新留存，调参与取舍见 [docs/MONETIZE.md](docs/MONETIZE.md)。
+- **新人免广告 + 分享得次数 + 邀请裂变**：`quota` 云函数按 openid 发放免广告额度，扣减优先级「每日免费 → 免广告额度 → 看广告」；分享链接带 `?ref=openid`，新人进入登录后归因，**邀请人与新人各得奖励**（一次性绑定 / 仅新账号可归因 / 每日封顶防刷）。调参与取舍见 [docs/MONETIZE.md](docs/MONETIZE.md)。
 
 开通「流量主」需要小程序**累计独立访客 ≥ 1000**且类目合规。广告位创建、收益预估、策略调优见 **[docs/MONETIZE.md](docs/MONETIZE.md)**。
 

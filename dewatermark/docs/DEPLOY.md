@@ -56,8 +56,14 @@
 | `DAILY_FREE` | 每日额外免广告次数 | `0` |
 | `SHARE_REWARD` | 每次分享奖励的免广告次数 | `2` |
 | `SHARE_DAILY_CAP` | 每日可奖励的分享次数上限 | `3` |
+| `REF_REWARD` | 成功邀请 1 人，邀请人得 | `5` |
+| `REF_NEWBIE_BONUS` | 被邀请新人额外得 | `2` |
+| `REF_DAILY_CAP` | 邀请人每日可获奖励的邀请数 | `10` |
+| `REF_BIND_WINDOW_H` | 仅创建后多少小时内的新账号可被归因 | `24` |
 
-> 免广告额度按 openid 存在 `credits` 集合（服务端权威，防本地刷量）；同一微信用户重装也保留。变现与留存的取舍见 [MONETIZE.md](MONETIZE.md)。若 `quota` 云函数未部署，客户端自动降级到 `config.js` 的 `freeDownloadsPerDay` 本地逻辑，不影响使用。
+> 免广告额度按 openid 存在 `credits` 集合（服务端权威，防本地刷量）；同一微信用户重装也保留。变现与留存、邀请裂变的取舍见 [MONETIZE.md](MONETIZE.md)。若 `quota` 云函数未部署，客户端自动降级到 `config.js` 的 `freeDownloadsPerDay` 本地逻辑，不影响使用。
+>
+> **邀请裂变防刷**：分享链接带分享者 openid（`?ref=`），新人进入并登录后调用 `quota` 的 `bind` 归因——一次性绑定、不能自邀、**仅 `REF_BIND_WINDOW_H` 小时内创建的新账号可被归因**（防老用户点链接刷量）、邀请人每日奖励封顶 `REF_DAILY_CAP`。
 
 ### 平台说明
 

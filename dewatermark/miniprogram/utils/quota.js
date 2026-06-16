@@ -18,4 +18,9 @@ function reward(reason) {
   return call({ action: 'reward', reason });
 }
 
-module.exports = { get, spend, reward };
+// 邀请归因：referrer = 邀请人 openid
+function bind(referrer) {
+  return call({ action: 'bind', referrer });
+}
+
+module.exports = { get, spend, reward, bind };

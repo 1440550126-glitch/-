@@ -29,6 +29,7 @@
 .share-t { font-size: 30rpx; font-weight: 700; }
 .share-s { font-size: 23rpx; margin-top: 8rpx; }
 .share-go { flex: none; color: var(--brand); font-size: 27rpx; font-weight: 600; }
+.invited { margin-top: 10rpx; font-size: 23rpx; color: var(--brand); }
 
 .menu { margin-top: 24rpx; padding: 0 32rpx; }
 .mi {

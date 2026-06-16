@@ -12,8 +12,13 @@ Page({
     platforms: ['抖音', '快手', '小红书', '微博', 'B站', '皮皮虾'],
   },
 
-  onLoad() {
+  onLoad(query) {
     this.setData({ bannerUnitId: app.globalData.config.bannerAdUnitId || '' });
+    // 分享落地页：捕获邀请人并尝试归因
+    if (query && query.ref && !app.globalData.refBound) {
+      app.globalData.pendingRef = query.ref;
+      app.tryBindReferrer();
+    }
   },
 
   onInput(e) {
