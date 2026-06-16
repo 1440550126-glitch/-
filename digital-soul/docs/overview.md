@@ -152,6 +152,8 @@ flowchart TB
 | `goals.py` | 心愿与目标：长期想达成的事，能添/记进展/销账/盘点 |
 | `kinship.py` | 亲戚称呼计算器："我爸的弟弟"→叔叔、"妈妈的爸爸"→外公，覆盖常用父系/母系/内外 |
 | `festival.py` | 传统节日：今天是什么节+祝福+老讲究，清明/重阳牵出思念，喂给晨间关怀 |
+| `shopping.py` | 采买清单："买瓶酱油""鸡蛋买好了"，能加/划掉/清，本地持久化 |
+| `comfort_stages.py` | 哀伤阶段陪伴：按"离开多久"分初痛/浓念/渐和/长念，给一句贴合此刻的话 |
 | `keepsake.py` | 数字纪念册：把一生/影像/嘱托/家训/全家/时间线导出成一页自包含、可打印的 HTML（照片 base64 内嵌） |
 | `book.py` | 家族册：每位家人各一页(生平/性格/口头禅/TA 的记忆)+一段对谈，编成可打印传家的一本 HTML |
 | `llm.py` | 大模型：多模型/多服务商(Ollama+OpenAI兼容)，按任务路由 + 小会异质模型 |
@@ -188,7 +190,7 @@ flowchart TB
 
 ## 6. 测试
 
-58 套单测、约 340+ 用例，纯标准库、零网络即可跑：
+60 套单测、约 360+ 用例，纯标准库、零网络即可跑：
 
 ```bash
 cd digital-soul
@@ -196,7 +198,7 @@ for t in authority memory annotate presence consolidate emotions skills dispatch
          triggers ha graph voice forgetting entangle dream selfnarrative values monologue curiosity worldmodel anticipate predict swarm \
          style memorial lifelog habits photo llm legacy guardian family webstatus keepsake converse \
          briefing book letters calendar reminisce gratitude timecapsule wishes notes \
-         recipes sayings qa_interview social goals kinship festival; do
+         recipes sayings qa_interview social goals kinship festival shopping comfort_stages; do
   python tests/test_$t.py || break
 done
 ```

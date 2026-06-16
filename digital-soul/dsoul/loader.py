@@ -28,6 +28,7 @@ from .reflect import Reflector
 from .remote_agents import AgentHub
 from .selfnarrative import SelfLog
 from .scenes import SceneBook
+from .shopping import ShoppingList
 from .timecapsule import CapsuleBook
 from .skills import SkillRegistry
 from .social import SocialLog
@@ -118,7 +119,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  recipes=_load_yaml(base / "config" / "recipes.yaml"),
                  sayings=_load_yaml(base / "config" / "sayings.yaml"),
                  social=SocialLog(base / "data" / "social.json"),
-                 goals=GoalBook(base / "data" / "goals.json"))
+                 goals=GoalBook(base / "data" / "goals.json"),
+                 shopping=ShoppingList(base / "data" / "shopping.json"))
 
 
 def _seed_memory(base: Path, memory) -> None:

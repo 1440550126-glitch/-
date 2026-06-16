@@ -83,6 +83,8 @@
 | 心愿与目标 | 长期想达成的事帮你盯着，能记进展、能销账、能盘点 | `dsoul/goals.py` |
 | 亲戚称呼 | "我爸的弟弟叫什么"→叔叔，算中国式称谓(父系/母系/内外) | `dsoul/kinship.py` |
 | 传统节日 | 今天是什么节、祝福、老讲究；清明重阳牵出思念 | `dsoul/festival.py` |
+| 采买清单 | "买瓶酱油""鸡蛋买好了"，分身替你记着购物清单 | `dsoul/shopping.py` |
+| 哀伤阶段陪伴 | 按"离开多久"分阶段(初痛/浓念/渐和/长念)，给贴合此刻的安慰 | `dsoul/comfort_stages.py` |
 | 家族册导出 | 每位家人各一页(生平/性格/口头禅/记忆)+对谈，编成可打印传家的 HTML | `dsoul/book.py` · `scripts/family_book.py` |
 | 生平上网页 | 手机网页看 TA 的一生/嘱托家训/全家/守护惦记，点全家按钮即唤出某位 | `dsoul/webstatus.py` |
 | 数字纪念册 | 一生/影像/嘱托/家训/全家/时间线导出成一页自包含、可打印的 HTML（照片 base64 内嵌），存得住传得下 | `dsoul/keepsake.py` · `scripts/keepsake.py` |

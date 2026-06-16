@@ -36,7 +36,8 @@ class Agent:
                  values=None, values_path=None, curiosity=None, worldmodel=None, calib=None,
                  memorial=None, llm_router=None, legacy=None, care=None, family=None,
                  calendar=None, capsules=None, notes=None,
-                 recipes=None, sayings=None, social=None, goals=None) -> None:
+                 recipes=None, sayings=None, social=None, goals=None,
+                 shopping=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -84,6 +85,7 @@ class Agent:
         self.sayings = sayings or {}                              # 口头语录 / 老话
         self.social = social                                      # 社交记忆（对每人的亲疏冷暖）
         self.goals = goals                                        # 心愿与目标
+        self.shopping = shopping                                  # 采买清单
         self.family = family or {}                                # 多人合一：一宅多位家人
         self.active_member = None                                # 当前"叫出来"说话的是哪位家人
         self._home_identity = None                               # 切换前的本尊身份（可还原）
@@ -333,6 +335,37 @@ class Agent:
                 self._log_journal(who, u3, reply, "notes")
                 return result
 
+        # --- 采买清单（"买瓶酱油" / "鸡蛋买好了" / "采买清单"）---
+        if action is None and who.get("obey") and self.shopping is not None:
+            us = utterance or ""
+            if any(k in us for k in ("采买清单", "购物清单", "买东西清单", "要买什么", "买啥",
+                                     "清单上有啥", "采购清单")):
+                reply = self.shop_list()
+                result["reply"] = reply
+                self._log_journal(who, us, reply, "shopping")
+                return result
+            done_kw = next((k for k in ("买好了", "买到了", "买完了", "划掉") if k in us), None)
+            if done_kw:
+                item = us.replace(done_kw, "").replace("把", "").strip("，,。.、 ")
+                reply = self.shop_done(item)
+                result["reply"] = reply
+                self._log_journal(who, us, reply, "shopping")
+                return result
+            buy_kw = next((k for k in ("买瓶", "买袋", "买盒", "买点", "买个", "买斤", "买把",
+                                       "记得买", "要买", "买") if k in us), None)
+            if buy_kw and ("买" in us):
+                item = us
+                for kw in ("记得", "帮我", "顺便", "记一下", "再来", "再", "还", "也", "给我",
+                           "我想", "想", "要", "买瓶", "买袋", "买盒", "买点", "买个", "买斤",
+                           "买把", "买"):
+                    item = item.replace(kw, "")
+                item = item.strip("，,。.、吧啊呢 ")
+                if item:
+                    reply = self.shop_add(item)
+                    result["reply"] = reply
+                    self._log_journal(who, us, reply, "shopping")
+                    return result
+
         # --- 触景生情 / 睹物思人（"说起老房子" / "看到这个就想起"）---
         if action is None and who.get("obey"):
             u = utterance or ""
@@ -529,6 +562,9 @@ class Agent:
                     self.identity)
                 if self.emotions is not None:
                     self.emotions.feel({"爱": 0.2, "哀": 0.1})
+                stage = self.grief_stage_line()          # 按"离开多久"再添一句贴合此刻的陪伴
+                if stage:
+                    reply = f"{reply} {stage}"
                 result["reply"] = reply
                 self._log_journal(who, utterance, reply, "comfort")
                 return result
@@ -922,6 +958,42 @@ class Agent:
             return ""
         done = g.complete(query)
         return f"太好了，「{done['text']}」做到了！" if done else ""
+
+    # ---------- 采买清单 ----------
+    def shop_add(self, name, qty=None) -> str:
+        s = getattr(self, "shopping", None)
+        if s is None:
+            return ""
+        it = s.add(name, qty)
+        return f"好，加到采买清单了：{it['name']}" + (f"×{it['qty']}" if it.get('qty') else "") if it else ""
+
+    def shop_done(self, name) -> str:
+        s = getattr(self, "shopping", None)
+        if s is None:
+            return ""
+        it = s.check_off(name)
+        return f"{it['name']} 划掉了。" if it else f"清单里没找到「{name}」。"
+
+    def shop_list(self) -> str:
+        s = getattr(self, "shopping", None)
+        return s.describe() if s is not None else ""
+
+    # ---------- 哀伤阶段陪伴 ----------
+    def _passed_on_date(self):
+        """从配置里找"离开的日子"（legacy.passed_on 或 memorial.dates 里含忌日/过世的项）。"""
+        po = (self.legacy or {}).get("passed_on")
+        if po:
+            return po
+        for label, d in ((self.memorial or {}).get("dates", {}) or {}).items():
+            if any(k in str(label) for k in ("忌日", "过世", "走了", "离开", "逝")):
+                return d
+        return None
+
+    def grief_stage_line(self, who_name=None, now=None) -> str:
+        from datetime import datetime as _dt
+        from .comfort_stages import comfort_by_stage, days_between
+        days = days_between(self._passed_on_date(), now or _dt.now())
+        return comfort_by_stage(days, who_name)
 
     # ---------- 触景生情 / 感恩与遗憾 ----------
     def reminisce_about(self, cue) -> str:
