@@ -90,6 +90,7 @@ function header() {
       h('div', {}, h('b', {}, '灵阵'), h('small', {}, 'AI 团队 · 对标扣子'))),
     h('nav', { class: 'lz-nav' },
       h('a', { onclick: () => nav('#/') }, '团队广场'),
+      h('a', { onclick: () => nav('#/kb') }, '知识库'),
       h('a', { onclick: () => nav('#/history') }, '运行历史'),
       h('a', { class: 'primary', onclick: () => nav('#/new') }, '＋ 建队')),
     h('div', { class: 'lz-user' },
@@ -244,8 +245,43 @@ async function renderTeam(id) {
           (mb.tools || []).length ? h('div', { class: 'lz-tools' }, (mb.tools || []).map((tl) => h('span', { class: 'lz-tool' }, '🔧 ' + tl))) : null)))),
       (team.knowledge || []).length ? h('div', { class: 'lz-kb' }, '📚 挂载知识库：' + team.knowledge.map((k) => k.name).join('、')) : null,
       h('div', { class: 'lz-run-box' }, h('div', { class: 'lz-sec-t' }, '给这支团队下达任务'), ta, runBtn),
-      actions));
+      actions,
+      team.mine && !team.is_template ? apiPanel(team) : null));
   } catch (e) { mount(shell(empty('团队不存在或无权访问', e.message))); }
+}
+
+// 对外 API：为自己的团队生成密钥，任意外部系统可凭密钥同步调用（无需登录）
+function apiPanel(team) {
+  const box = h('div', { class: 'lz-api' });
+  async function regen() {
+    try { const d = await POST(`/api/teams/${team.id}/api-key`); draw(true, d.api_key); toast('已生成新密钥'); }
+    catch (e) { toast(e.message, 'warn'); }
+  }
+  async function revoke() {
+    if (!confirm('吊销后，使用此密钥的所有外部调用都会失效。继续？')) return;
+    try { await DEL(`/api/teams/${team.id}/api-key`); toast('已吊销'); draw(false, null); }
+    catch (e) { toast(e.message, 'warn'); }
+  }
+  function draw(hasApi, freshKey) {
+    box.innerHTML = '';
+    box.append(h('div', { class: 'lz-sec-t' }, '🔌 对外 API'),
+      h('p', { class: 'lz-api-desc' }, '生成团队密钥后，任意外部系统可凭密钥同步调用该团队（无需登录），每天 50 次。'));
+    if (freshKey) {
+      box.append(h('div', { class: 'lz-key-box' },
+        h('div', { class: 'lz-key-warn' }, '⚠ 密钥只显示这一次，请立即复制保存：'),
+        h('div', { class: 'lz-key-row' }, h('code', { class: 'lz-key' }, freshKey), h('button', { class: 'lz-btn mini', onclick: () => copy(freshKey) }, '复制')),
+        h('div', { class: 'lz-curl-t' }, '调用示例'),
+        h('pre', { class: 'lz-curl' }, `curl -X POST ${location.origin}/api/public/run \\\n  -H 'Content-Type: application/json' \\\n  -d '{"key":"${freshKey}","task":"你的任务描述"}'`)));
+    }
+    const row = h('div', { class: 'lz-api-actions' });
+    if (hasApi) row.append(h('span', { class: 'lz-tag pub' }, '● API 已开启'),
+      h('button', { class: 'lz-btn ghost sm', onclick: regen }, '重新生成'),
+      h('button', { class: 'lz-btn ghost danger sm', onclick: revoke }, '吊销'));
+    else row.append(h('button', { class: 'lz-btn sm', onclick: regen }, '生成 API 密钥'));
+    box.append(row);
+  }
+  draw(team.has_api, null);
+  return box;
 }
 
 // ---------------- 作战室：实时直播 ----------------
@@ -359,15 +395,17 @@ async function renderBuilder(editId) {
   mount(shell(spinner()));
   try {
     const m = await loadMeta();
-    const agents = await GET('/api/agents');
+    const [agents, kbsData] = await Promise.all([GET('/api/agents'), GET('/api/kb')]);
     const allAgents = [...agents.mine, ...agents.templates];
-    let team = { name: '', avatar: '🛰', goal: '', strategy: 'orchestrate', manager_note: '', member_ids: [], max_rounds: 3 };
+    const allKbs = [...kbsData.mine, ...kbsData.templates];
+    let team = { name: '', avatar: '🛰', goal: '', strategy: 'orchestrate', manager_note: '', member_ids: [], knowledge_ids: [], max_rounds: 3 };
     if (editId) {
       const d = await GET(`/api/teams/${editId}`);
       if (!d.team.mine) { mount(shell(empty('只能编辑自己的团队', '可先「复制为我的」'))); return; }
-      team = { name: d.team.name, avatar: d.team.avatar, goal: d.team.goal, strategy: d.team.strategy, manager_note: d.team.manager_note, member_ids: d.members.map((x) => x.id), max_rounds: d.team.max_rounds };
+      team = { name: d.team.name, avatar: d.team.avatar, goal: d.team.goal, strategy: d.team.strategy, manager_note: d.team.manager_note, member_ids: d.members.map((x) => x.id), knowledge_ids: d.team.knowledge_ids || [], max_rounds: d.team.max_rounds };
     }
     const sel = new Set(team.member_ids);
+    const kbSel = new Set(team.knowledge_ids);
 
     const fName = h('input', { class: 'lz-in', value: team.name, placeholder: '团队名（如：内容创作小组）', maxlength: 24 });
     const fAva = h('input', { class: 'lz-in tiny', value: team.avatar, maxlength: 8 });
@@ -390,9 +428,19 @@ async function renderBuilder(editId) {
     }));
     const cnt = h('small', { class: 'lz-pick-cnt' }, `已选 ${sel.size} / ${m.limits.max_members}`);
 
+    const kbPicker = allKbs.length
+      ? h('div', { class: 'lz-pick-grid' }, allKbs.map((k) => {
+        const card = h('button', { class: 'lz-pick' + (kbSel.has(k.id) ? ' on' : ''), onclick: () => {
+          if (kbSel.has(k.id)) kbSel.delete(k.id); else kbSel.add(k.id);
+          card.classList.toggle('on', kbSel.has(k.id));
+        } }, h('span', { class: 'lz-ava' }, '📚'), h('div', {}, h('b', {}, k.name), h('small', {}, `${k.chunk_count || 0} 块` + (k.is_template ? ' · 示例' : ''))));
+        return card;
+      }))
+      : h('p', { class: 'lz-hint' }, '还没有知识库，可先到「知识库」创建，再回来挂载（可选）。');
+
     const save = h('button', { class: 'lz-btn block xl' }, editId ? '保存修改' : '创建团队');
     save.addEventListener('click', async () => {
-      const body = { name: fName.value.trim(), avatar: fAva.value.trim() || '🛰', goal: fGoal.value.trim(), strategy: team.strategy, manager_note: fNote.value.trim(), member_ids: [...sel], max_rounds: Number(fRounds.value) || 3 };
+      const body = { name: fName.value.trim(), avatar: fAva.value.trim() || '🛰', goal: fGoal.value.trim(), strategy: team.strategy, manager_note: fNote.value.trim(), member_ids: [...sel], knowledge_ids: [...kbSel], max_rounds: Number(fRounds.value) || 3 };
       if (!body.name) { toast('给团队起个名字', 'warn'); return; }
       if (!body.member_ids.length) { toast('至少选 1 名成员', 'warn'); return; }
       save.disabled = true;
@@ -411,10 +459,103 @@ async function renderBuilder(editId) {
         h('label', {}, '团队使命'), fGoal,
         h('label', {}, '编排策略'), stratWrap,
         h('label', {}, ['选择成员 ', cnt]), roster,
+        h('label', {}, '挂载知识库（可选 · 供调研类成员 RAG 检索）'), kbPicker,
         h('label', {}, '编排官指令（可选）'), fNote,
         h('label', {}, ['每位成员最大工具轮数（1-', String(m.limits.max_rounds), '）']), fRounds,
         save)));
   } catch (e) { mount(shell(empty('加载失败', e.message))); }
+}
+
+// ---------------- 知识库（RAG） ----------------
+async function renderKB() {
+  mount(shell(spinner()));
+  try {
+    await loadMeta();
+    const { mine, templates } = await GET('/api/kb');
+    const nameIn = h('input', { class: 'lz-in', placeholder: '知识库名称（如：产品资料）', maxlength: 30 });
+    const descIn = h('input', { class: 'lz-in', placeholder: '简介（可选）', maxlength: 200 });
+    const createBtn = h('button', { class: 'lz-btn' }, '＋ 新建');
+    createBtn.addEventListener('click', async () => {
+      const name = nameIn.value.trim();
+      if (!name) { toast('给知识库起个名字', 'warn'); return; }
+      createBtn.disabled = true;
+      try { const { kb } = await POST('/api/kb', { name, description: descIn.value.trim() }); toast('已创建'); nav(`#/kb/${kb.id}`); }
+      catch (e) { toast(e.message, 'warn'); createBtn.disabled = false; }
+    });
+    const card = (k) => h('article', { class: 'lz-card', onclick: () => nav(`#/kb/${k.id}`) },
+      h('div', { class: 'lz-card-h' }, h('span', { class: 'lz-ava lg' }, '📚'),
+        h('div', { class: 'lz-card-ti' }, h('b', {}, k.name), h('span', { class: 'lz-strat' }, `${k.chunk_count || 0} 块 · ${k.doc_count || 0} 文档`)),
+        k.is_template ? h('span', { class: 'lz-tag tpl' }, '示例') : null),
+      k.description ? h('p', { class: 'lz-card-goal' }, k.description) : null);
+    mount(shell(
+      h('div', { class: 'lz-sec-t big' }, '📚 知识库'),
+      h('p', { class: 'lz-intro' }, '粘贴资料建库，调研类成员在运行时会自动 RAG 检索它（零依赖关键词检索，中文 bigram 倒排）。'),
+      h('div', { class: 'lz-kb-new' }, h('div', { class: 'lz-sec-t' }, '新建知识库'), h('div', { class: 'lz-row' }, nameIn, createBtn), descIn),
+      h('div', { class: 'lz-sec-t' }, `我的（${mine.length}）`),
+      mine.length ? h('div', { class: 'lz-grid' }, mine.map(card)) : empty('还没有知识库', '建一个，粘贴资料，团队成员就能检索它'),
+      templates.length ? h('div', { class: 'lz-sec-t' }, '内置示例') : null,
+      templates.length ? h('div', { class: 'lz-grid' }, templates.map(card)) : null));
+  } catch (e) { mount(shell(empty('加载失败', e.message))); }
+}
+
+async function renderKBDetail(id) {
+  mount(shell(spinner()));
+  try {
+    await loadMeta();
+    const data = await GET(`/api/kb/${id}`);
+    const kb = data.kb;
+
+    const qIn = h('input', { class: 'lz-in', placeholder: '输入要检索的内容，看 RAG 命中效果' });
+    const searchBtn = h('button', { class: 'lz-btn' }, '检索');
+    const hits = h('div', { class: 'lz-hits' });
+    async function doSearch() {
+      const query = qIn.value.trim(); if (!query) return;
+      searchBtn.disabled = true;
+      try {
+        const r = await POST(`/api/kb/${id}/search`, { query });
+        hits.innerHTML = '';
+        if (!r.hits.length) hits.append(h('p', { class: 'lz-hint' }, '没有命中，换个说法试试。'));
+        else for (const hh of r.hits) hits.append(h('div', { class: 'lz-hit' },
+          h('div', { class: 'lz-hit-h' }, h('small', {}, '📄 ' + hh.source), h('span', { class: 'lz-score' }, '得分 ' + hh.score)),
+          h('div', { class: 'lz-hit-t' }, hh.text)));
+      } catch (e) { toast(e.message, 'warn'); }
+      searchBtn.disabled = false;
+    }
+    searchBtn.addEventListener('click', doSearch);
+    qIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+
+    let addBox = null;
+    if (kb.mine) {
+      const srcIn = h('input', { class: 'lz-in', placeholder: '来源名（如：产品定位.md）', maxlength: 60 });
+      const txtIn = h('textarea', { class: 'lz-ta', rows: 5, placeholder: '粘贴文本，自动切块入库（支持中英文）' });
+      const addBtn = h('button', { class: 'lz-btn' }, '入库');
+      addBtn.addEventListener('click', async () => {
+        const text = txtIn.value.trim(); if (!text) { toast('粘贴一些文本', 'warn'); return; }
+        addBtn.disabled = true;
+        try { const r = await POST(`/api/kb/${id}/docs`, { text, source: srcIn.value.trim() || '文档' }); toast(`已入库 ${r.added} 块`); renderKBDetail(id); }
+        catch (e) { toast(e.message, 'warn'); addBtn.disabled = false; }
+      });
+      addBox = h('div', { class: 'lz-kb-new' }, h('div', { class: 'lz-sec-t' }, '添加文档'), srcIn, txtIn, addBtn);
+    }
+    const delBtn = kb.mine ? h('button', { class: 'lz-btn ghost danger sm', onclick: async () => {
+      if (!confirm('删除这个知识库及其全部内容？')) return;
+      try { await DEL(`/api/kb/${id}`); toast('已删除'); nav('#/kb'); } catch (e) { toast(e.message, 'warn'); }
+    } }, '🗑 删除知识库') : null;
+
+    mount(shell(
+      h('button', { class: 'lz-back', onclick: () => nav('#/kb') }, '‹ 知识库'),
+      h('div', { class: 'lz-team-hero' }, h('span', { class: 'lz-ava xl' }, '📚'),
+        h('div', { class: 'lz-team-meta' }, h('h1', {}, kb.name),
+          h('p', { class: 'lz-goal' }, `${kb.chunk_count || 0} 块 · ${kb.doc_count || 0} 文档` + (kb.mine ? '' : ' · 内置示例（只读）')),
+          kb.description ? h('p', { class: 'lz-note' }, kb.description) : null)),
+      h('div', { class: 'lz-run-box' }, h('div', { class: 'lz-sec-t' }, '🔎 检索测试'), h('div', { class: 'lz-row' }, qIn, searchBtn), hits),
+      addBox,
+      data.sources.length ? h('div', { class: 'lz-sec-t' }, '来源') : null,
+      data.sources.length ? h('div', { class: 'lz-srcs' }, data.sources.map((s) => h('span', { class: 'lz-src' }, `📄 ${s.source} · ${s.chunks} 块`))) : null,
+      data.sample.length ? h('div', { class: 'lz-sec-t' }, '内容预览') : null,
+      data.sample.length ? h('div', { class: 'lz-samples' }, data.sample.map((c) => h('div', { class: 'lz-sample' }, h('small', {}, c.source + ' #' + c.idx), h('div', {}, c.text)))) : null,
+      delBtn));
+  } catch (e) { mount(shell(empty('知识库不存在或无权访问', e.message))); }
 }
 
 // ---------------- 路由 ----------------
@@ -427,6 +568,8 @@ function route() {
   if (path === 'history') return renderHistory();
   if (path === 'new') return renderBuilder(null);
   if (path === 'edit' && p1) return renderBuilder(p1);
+  if (path === 'kb' && p1) return renderKBDetail(p1);
+  if (path === 'kb') return renderKB();
   return renderHome();
 }
 
