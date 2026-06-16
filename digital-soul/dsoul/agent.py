@@ -36,7 +36,7 @@ class Agent:
                  values=None, values_path=None, curiosity=None, worldmodel=None, calib=None,
                  memorial=None, llm_router=None, legacy=None, care=None, family=None,
                  calendar=None, capsules=None, notes=None,
-                 recipes=None, sayings=None) -> None:
+                 recipes=None, sayings=None, social=None, goals=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -82,6 +82,8 @@ class Agent:
         self.notes = notes                                        # 速记便签（最轻的随手备忘）
         self.recipes = recipes or {}                              # 家传菜谱
         self.sayings = sayings or {}                              # 口头语录 / 老话
+        self.social = social                                      # 社交记忆（对每人的亲疏冷暖）
+        self.goals = goals                                        # 心愿与目标
         self.family = family or {}                                # 多人合一：一宅多位家人
         self.active_member = None                                # 当前"叫出来"说话的是哪位家人
         self._home_identity = None                               # 切换前的本尊身份（可还原）
@@ -126,6 +128,15 @@ class Agent:
                 return result
             self._execute(action, who)
             result["executed"] = action
+
+        # --- 社交记忆：跟"认识的人"每打一次交道，更新这段关系的亲疏冷暖 ---
+        if who.get("known") and getattr(self, "social", None) is not None:
+            try:
+                emo = self.emotions.mood()[0] if getattr(self, "emotions", None) else None
+                topic = (utterance or "").strip()[:10] or None
+                self.social.note(who["name"], emotion=emo, topic=topic)
+            except Exception:
+                pass
 
         # --- 主动派活的"二段确认"：上一轮我提议过，这一轮你说"好" → 执行 ---
         if action is None and self._pending_dispatch is not None:
@@ -360,6 +371,51 @@ class Agent:
                 result["reply"] = txt
                 self._log_journal(who, utterance, txt, "sayings")
                 return result
+
+        # --- 社交记忆（"我跟小婷关系咋样" / "好久没见谁了"）---
+        if action is None and who.get("obey") and getattr(self, "social", None) is not None:
+            u4 = utterance or ""
+            if any(k in u4 for k in ("好久没见", "好久没联系", "该联系", "久没见")):
+                lines = self.long_unseen()
+                reply = lines[0] if lines else "最近常来常往的人都见着了，挺好。"
+                result["reply"] = reply
+                self._log_journal(who, u4, reply, "social")
+                return result
+            if ("关系" in u4 and ("咋样" in u4 or "怎么样" in u4 or "好不好" in u4 or "亲" in u4)):
+                for p in self.authority.people.values():
+                    nm = p.get("name")
+                    if nm and nm in u4 and nm != who.get("name"):
+                        reply = self.relation_with(nm)
+                        result["reply"] = reply
+                        self._log_journal(who, u4, reply, "social")
+                        return result
+
+        # --- 心愿目标（"立个目标：每周陪爸妈吃饭" / "我的心愿" / "X做到了"）---
+        if action is None and who.get("obey") and getattr(self, "goals", None) is not None:
+            u5 = utterance or ""
+            if any(k in u5 for k in ("我的目标", "我的心愿", "盘点目标", "盘一下目标",
+                                     "目标进展", "还有什么没做")):
+                reply = self.goals_summary()
+                result["reply"] = reply
+                self._log_journal(who, u5, reply, "goals")
+                return result
+            done_m = None
+            for kw in ("做到了", "完成了", "达成了", "实现了"):
+                if kw in u5:
+                    done_m = u5.replace(kw, "").strip("，,。.、！ ")
+                    break
+            if done_m is not None:
+                reply = self.complete_goal(done_m) or "这个目标我这儿没记着，不过做到了就好！"
+                result["reply"] = reply
+                self._log_journal(who, u5, reply, "goals")
+                return result
+            for kw in ("立个目标", "立个心愿", "记个心愿", "我想达成", "我的目标是", "定个目标"):
+                if kw in u5:
+                    body = u5.split(kw, 1)[-1].strip("，,。.：: ")
+                    reply = self.set_goal(body) or "想达成点什么？说具体点我好记下。"
+                    result["reply"] = reply
+                    self._log_journal(who, u5, reply, "goals")
+                    return result
 
         # --- 时光胶囊（"给孙女留句话，到2035年6月16日：好好长大"）---
         if action is None and who.get("obey") and self.capsules is not None:
@@ -784,6 +840,36 @@ class Agent:
     def recite_sayings(self, topic=None) -> str:
         from .sayings import collect_sayings, recite
         return recite(collect_sayings(self.sayings, self.identity))
+
+    # ---------- 社交记忆 / 心愿目标 ----------
+    def relation_with(self, name) -> str:
+        s = getattr(self, "social", None)
+        return s.describe(name) if s is not None else ""
+
+    def long_unseen(self) -> list:
+        """太久没见的人，提一句。"""
+        s = getattr(self, "social", None)
+        if s is None:
+            return []
+        return [f"好久没见{n}了（{d}天），抽空联系一下？" for n, d in s.cooled()]
+
+    def set_goal(self, text) -> str:
+        g = getattr(self, "goals", None)
+        if g is None:
+            return ""
+        goal = g.add(text)
+        return f"好，记下了这个心愿：{goal['text']}。我帮你盯着。" if goal else ""
+
+    def goals_summary(self) -> str:
+        g = getattr(self, "goals", None)
+        return g.summary() if g is not None else ""
+
+    def complete_goal(self, query) -> str:
+        g = getattr(self, "goals", None)
+        if g is None:
+            return ""
+        done = g.complete(query)
+        return f"太好了，「{done['text']}」做到了！" if done else ""
 
     # ---------- 触景生情 / 感恩与遗憾 ----------
     def reminisce_about(self, cue) -> str:

@@ -14,6 +14,7 @@ from .curiosity import QuestionLog
 from .devices import build_device_hub, build_sensor_source
 from .dream import DreamLog
 from .emotions import EmotionState
+from .goals import GoalBook
 from .journal import Journal
 from .knowledge import Knowledge
 from .llm import build_router
@@ -29,6 +30,7 @@ from .selfnarrative import SelfLog
 from .scenes import SceneBook
 from .timecapsule import CapsuleBook
 from .skills import SkillRegistry
+from .social import SocialLog
 from .tasks import TaskBook
 from .values import load_values
 from .worldmodel import WorldModel
@@ -114,7 +116,9 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  capsules=CapsuleBook(base / "data" / "capsules.json"),
                  notes=NoteBook(base / "data" / "notes.json"),
                  recipes=_load_yaml(base / "config" / "recipes.yaml"),
-                 sayings=_load_yaml(base / "config" / "sayings.yaml"))
+                 sayings=_load_yaml(base / "config" / "sayings.yaml"),
+                 social=SocialLog(base / "data" / "social.json"),
+                 goals=GoalBook(base / "data" / "goals.json"))
 
 
 def _seed_memory(base: Path, memory) -> None:

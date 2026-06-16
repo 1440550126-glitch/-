@@ -148,6 +148,8 @@ flowchart TB
 | `recipes.py` | 家传菜谱：记下拿手菜与做法，"外婆的红烧肉怎么做"照着来（config + 成员 recipes） |
 | `sayings.py` | 口头语录：TA 常念叨的老话，问起能背几句，也能挑应景的撒进回复 |
 | `qa_interview.py` | 生平采访：按人生阶段的引导问题，把回答存进记忆养出更像 TA 的分身 |
+| `social.py` | 社交记忆：对每个人记着亲疏冷暖/上次见面/近期话题，随互动情绪微调（Generative Agents 社会记忆） |
+| `goals.py` | 心愿与目标：长期想达成的事，能添/记进展/销账/盘点 |
 | `keepsake.py` | 数字纪念册：把一生/影像/嘱托/家训/全家/时间线导出成一页自包含、可打印的 HTML（照片 base64 内嵌） |
 | `book.py` | 家族册：每位家人各一页(生平/性格/口头禅/TA 的记忆)+一段对谈，编成可打印传家的一本 HTML |
 | `llm.py` | 大模型：多模型/多服务商(Ollama+OpenAI兼容)，按任务路由 + 小会异质模型 |
@@ -184,7 +186,7 @@ flowchart TB
 
 ## 6. 测试
 
-54 套单测、约 300+ 用例，纯标准库、零网络即可跑：
+56 套单测、约 320+ 用例，纯标准库、零网络即可跑：
 
 ```bash
 cd digital-soul
@@ -192,7 +194,7 @@ for t in authority memory annotate presence consolidate emotions skills dispatch
          triggers ha graph voice forgetting entangle dream selfnarrative values monologue curiosity worldmodel anticipate predict swarm \
          style memorial lifelog habits photo llm legacy guardian family webstatus keepsake converse \
          briefing book letters calendar reminisce gratitude timecapsule wishes notes \
-         recipes sayings qa_interview; do
+         recipes sayings qa_interview social goals; do
   python tests/test_$t.py || break
 done
 ```
