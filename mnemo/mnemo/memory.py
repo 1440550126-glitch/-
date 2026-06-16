@@ -73,10 +73,10 @@ def parse_when(spec: str, now: float | None = None) -> float | None:
 
 
 class Memory:
-    def __init__(self, db_path: str | Path):
+    def __init__(self, db_path: str | Path, check_same_thread: bool = True):
         self.db_path = str(db_path)
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(self.db_path)
+        self.db = sqlite3.connect(self.db_path, check_same_thread=check_same_thread)
         self.db.row_factory = sqlite3.Row
         self._init_schema()
 

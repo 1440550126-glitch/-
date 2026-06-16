@@ -43,13 +43,14 @@ class App:
     agent: object
 
 
-def build_app(args) -> App:
+def build_app(args, check_same_thread: bool = True) -> App:
     cfg = load_config(getattr(args, "home", None))
     if getattr(args, "provider", None):
         cfg.set("provider", args.provider)
     if getattr(args, "model", None):
         cfg.set("model", args.model)
-    memory = Memory(cfg.db_path) if cfg.get("memory.enabled", True) else None
+    memory = (Memory(cfg.db_path, check_same_thread=check_same_thread)
+              if cfg.get("memory.enabled", True) else None)
     tools = build_default_registry()
     skills = SkillRegistry(cfg)
     plugins = PluginManager(cfg, tools, skills)
@@ -433,6 +434,13 @@ def cmd_audit(args):
     return 0
 
 
+def cmd_serve(args):
+    app = build_app(args, check_same_thread=False)
+    from .serve import serve
+    serve(app, host=args.host, port=args.port, token=args.token)
+    return 0
+
+
 def cmd_speak(args):
     from .tools import ToolContext, build_default_registry
     print(build_default_registry().run("speak", {"text": args.text}, ToolContext()))
@@ -581,6 +589,11 @@ def build_parser() -> argparse.ArgumentParser:
     se = psys.add_parser("export"); se.add_argument("file"); se.add_argument("--passphrase")
     si = psys.add_parser("import"); si.add_argument("file"); si.add_argument("--passphrase")
 
+    psv = sub.add_parser("serve", help="启动本地 Web 图形界面（手机/电脑浏览器可用）")
+    psv.add_argument("--host", default="127.0.0.1", help="0.0.0.0 可供局域网团队共享")
+    psv.add_argument("--port", type=int, default=8765)
+    psv.add_argument("--token", help="访问令牌（局域网共享时强烈建议设置）")
+
     psp = sub.add_parser("speak", help="用系统 TTS 朗读一段文本（语音输出）")
     psp.add_argument("text")
     pse = sub.add_parser("see", help="用视觉模型理解一张图片（多模态）")
@@ -595,6 +608,7 @@ _HANDLERS = {
     "memory": cmd_memory, "skill": cmd_skill, "plugin": cmd_plugin, "task": cmd_task,
     "daemon": cmd_daemon, "doctor": cmd_doctor, "audit": cmd_audit,
     "market": cmd_market, "sync": cmd_sync, "speak": cmd_speak, "see": cmd_see,
+    "serve": cmd_serve,
 }
 
 

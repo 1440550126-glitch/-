@@ -2,10 +2,16 @@
 
 零依赖运行：  python -m unittest discover -s tests   或   python tests/test_smoke.py
 """
+import json as _json
 import sys
 import tempfile
+import threading
 import time
+import types
 import unittest
+import urllib.error
+import urllib.request
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -420,6 +426,54 @@ class TestSyncAndMarket(unittest.TestCase):
         self.assertEqual(what, "skill:market-skill")
         self.assertIsNotNone(skills.get("market-skill"))
         tmp.cleanup()
+
+
+class TestServe(unittest.TestCase):
+    def test_health_and_chat(self):
+        from mnemo.serve import make_handler
+        tmp = tempfile.TemporaryDirectory()
+        cfg = load_config(tmp.name)
+        mem = Memory(cfg.db_path, check_same_thread=False)
+        agent = Agent(FakeProvider(["你好，我记住了"]), build_default_registry(),
+                      mem, SkillRegistry(cfg), cfg)
+        app = types.SimpleNamespace(provider=agent.provider, memory=mem, agent=agent)
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(app, threading.Lock(), None))
+        port = httpd.server_address[1]
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            h = _json.loads(urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/api/health", timeout=5).read())
+            self.assertTrue(h["ok"])
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/chat",
+                data=_json.dumps({"message": "你好我叫小测"}).encode("utf-8"),
+                headers={"Content-Type": "application/json"})
+            r = _json.loads(urllib.request.urlopen(req, timeout=5).read())
+            self.assertEqual(r["reply"], "你好，我记住了")
+            self.assertEqual(mem.get_profile("name"), "小测")
+        finally:
+            httpd.shutdown()
+            mem.close()
+            tmp.cleanup()
+
+    def test_auth_blocks_without_token(self):
+        from mnemo.serve import make_handler
+        tmp = tempfile.TemporaryDirectory()
+        cfg = load_config(tmp.name)
+        mem = Memory(cfg.db_path, check_same_thread=False)
+        agent = Agent(FakeProvider(["x"]), build_default_registry(), mem, SkillRegistry(cfg), cfg)
+        app = types.SimpleNamespace(provider=agent.provider, memory=mem, agent=agent)
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(app, threading.Lock(), "secret"))
+        port = httpd.server_address[1]
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                urllib.request.urlopen(f"http://127.0.0.1:{port}/api/profile", timeout=5)
+            self.assertEqual(cm.exception.code, 401)
+        finally:
+            httpd.shutdown()
+            mem.close()
+            tmp.cleanup()
 
 
 class TestTools(unittest.TestCase):
