@@ -26,6 +26,7 @@ import { startTriggerLoop } from './agents/scheduler.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(__dirname, '..', 'web');
 const ADMIN_DIR = path.join(__dirname, '..', 'admin');
+const LINGZHEN_DIR = path.join(__dirname, '..', 'lingzhen');
 const PORT = Number(process.env.PORT) || 3000;
 
 GET('/api/health', async () => ({ status: 'ok', time: Date.now(), llm: llmEnabled() ? 'enabled' : 'local-fallback' }));
@@ -61,6 +62,11 @@ const server = http.createServer((req, res) => {
     const rel = pathname.replace(/^\/admin\/?/, '') || 'index.html';
     if (serveStatic(res, ADMIN_DIR, rel)) return;
   }
+  // 灵阵 · AI 团队（独立站，复用同一后端 API）
+  if (pathname === '/lingzhen' || pathname.startsWith('/lingzhen/')) {
+    const rel = pathname.replace(/^\/lingzhen\/?/, '') || 'index.html';
+    if (serveStatic(res, LINGZHEN_DIR, rel)) return;
+  }
   if (serveStatic(res, WEB_DIR, pathname)) return;
   res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
   res.end('404');
@@ -80,6 +86,7 @@ server.listen(PORT, () => {
   console.log(`\n  ✨ AI句灵 已启动`);
   console.log(`  📱 用户端   http://localhost:${PORT}`);
   console.log(`  🛠  管理后台 http://localhost:${PORT}/admin`);
+  console.log(`  🛰  灵阵独立站 http://localhost:${PORT}/lingzhen`);
   console.log(`  🤖 大模型   ${llmEnabled() ? '已接入 ' + process.env.LLM_PROVIDER : '未配置（本地规则引擎模式，零成本可完整体验）'}\n`);
 });
 
