@@ -61,6 +61,8 @@ export interface DolbyLevel {
   peak: number;
   /** dBFS */
   db: number;
+  /** 是否逼近满刻度（限幅器过载提示） */
+  clip: boolean;
 }
 
 export interface DolbyFrequencyResponse {

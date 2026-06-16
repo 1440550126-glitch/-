@@ -81,7 +81,7 @@ ok(true, '单项微调 setWidth/Bass/Air/Reverb 不抛错');
 
 // 7) 电平表
 const lvl = d.getLevel();
-ok(typeof lvl.rms === 'number' && typeof lvl.peak === 'number' && typeof lvl.db === 'number', `getLevel 返回 ${JSON.stringify({ rms: +lvl.rms.toFixed(3), peak: lvl.peak, db: +lvl.db.toFixed(1) })}`);
+ok(typeof lvl.rms === 'number' && typeof lvl.peak === 'number' && typeof lvl.db === 'number' && typeof lvl.clip === 'boolean' && lvl.clip === false, `getLevel 返回 ${JSON.stringify({ rms: +lvl.rms.toFixed(3), peak: lvl.peak, db: +lvl.db.toFixed(1), clip: lvl.clip })}`);
 
 // 7b) 频响曲线
 const fs = logFreqScale(64);

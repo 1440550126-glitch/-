@@ -152,7 +152,8 @@ A.addEventListener('input', () => { dolby.setAir(+A.value); $('airV').textConten
 V.addEventListener('input', () => { dolby.setVocal(+V.value); $('vocalV').textContent = `+${V.value}dB`; });
 
 // —— 频谱可视化 + 输出电平表 ——
-const cvs = $('viz'), cc = cvs.getContext('2d'), analyser = dolby.getAnalyser(), meterFill = $('meterFill');
+const cvs = $('viz'), cc = cvs.getContext('2d'), analyser = dolby.getAnalyser(), meterFill = $('meterFill'), clipEl = $('clip');
+let clipHold = 0;
 const bins = analyser.frequencyBinCount, data = new Uint8Array(bins);
 function resize() { const dpr = Math.min(devicePixelRatio || 1, 2); cvs.width = cvs.clientWidth * dpr; cvs.height = 120 * dpr; cc.setTransform(dpr, 0, 0, dpr, 0, 0); }
 resize(); addEventListener('resize', resize);
@@ -169,7 +170,11 @@ function draw() {
     const bw = w / n;
     cc.fillRect(i * bw + 1, h - bh, bw - 2, bh);
   }
-  meterFill.style.width = Math.min(100, dolby.getLevel().peak * 130) + '%';
+  const lv = dolby.getLevel();
+  meterFill.style.width = Math.min(100, lv.peak * 130) + '%';
+  clipHold = lv.clip ? 14 : Math.max(0, clipHold - 1);   // 过载提示灯（峰值保持）
+  clipEl.style.background = clipHold > 0 ? '#ff4d5e' : '#3a3550';
+  clipEl.style.boxShadow = clipHold > 0 ? '0 0 10px #ff4d5e' : '0 0 0 1px rgba(255,255,255,.15)';
 }
 draw();
 

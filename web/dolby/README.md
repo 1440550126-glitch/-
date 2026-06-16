@@ -140,12 +140,15 @@ dolby.setSpatialMode('speakers');    // 外放：加宽立体声（默认）
 
 ```js
 function tick() {
-  const { rms, peak, db } = dolby.getLevel();
+  const { rms, peak, db, clip } = dolby.getLevel();   // clip：逼近满刻度 → 限幅器过载提示灯
   meterEl.style.width = Math.min(100, peak * 130) + '%';
+  clipLight.classList.toggle('on', clip);
   requestAnimationFrame(tick);
 }
 tick();
 ```
+
+`demo.html` 的电平条旁就有一颗过载指示灯（峰值保持）。
 
 ## 均衡曲线可视化
 
@@ -214,9 +217,9 @@ viz.start();
 // 强制：{ renderer: 'webgl' }（失败抛错）或 { renderer: 'canvas' }
 ```
 
-两种渲染器都带：**径向频段光柱**（按频谱外扩）、**粒子拖尾辉光**、**随节拍的镜头脉冲/缩放**
-（WebGL 还有缓慢镜头旋转）。接口一致：`start/stop/dispose/setBaseHue/analyze/resize`，
-`viz.last` 取最近一帧分析（避免重复采样）。
+两种渲染器都带：**分色径向频段光柱**（低→高频跨色、按幅度外扩）、**随节拍的镜头脉冲/缩放**；
+WebGL 还有缓慢镜头旋转、**叠加的加色发光粒子层**（`points` 选项控制数量），Canvas 版有粒子拖尾辉光。
+接口一致：`start/stop/dispose/setBaseHue/setCover/analyze/resize`，`viz.last` 取最近一帧分析。
 
 也可直接传 `{ analyser }` 或 `{ node, context }`。`viz.analyze()`（或 `viz.last`）返回
 `{ bass, mid, treble, energy, beat, bpm }`——含**估计的 BPM**，可驱动你自己的动效。

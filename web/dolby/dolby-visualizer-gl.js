@@ -54,7 +54,7 @@ void main(){
   float ang = atan(dd.y, dd.x) / 6.2831853 + 0.5;
   float mag = texture2D(u_spec, vec2(ang, 0.5)).r;
   float ring = smoothstep(0.013, 0.0, abs(length(dd) - (0.30 + mag*0.16)));
-  col += ring * hsv2rgb(vec3(fract(u_hue + 0.08), 0.85, 1.0)) * (0.6 + u_energy);
+  col += ring * hsv2rgb(vec3(fract(u_hue + ang*0.85), 0.85, 1.0)) * (0.6 + u_energy);   // 分色：按角度(频段)跨色
   col *= 1.0 - 0.5*pow(length(uv-0.5), 2.4);          // 暗角
   gl_FragColor = vec4(col, 1.0);
 }`;
@@ -66,6 +66,10 @@ function compile(gl, type, src) {
     throw new Error('shader 编译失败: ' + log);
   }
   return sh;
+}
+function hsvToRgb(h, s, v) {           // h 0..1 → [r,g,b] 0..1
+  const i = Math.floor(h * 6), f = h * 6 - i, p = v * (1 - s), q = v * (1 - f * s), w = v * (1 - (1 - f) * s), m = ((i % 6) + 6) % 6;
+  return [[v, q, p, p, w, v][m], [w, v, v, q, p, p][m], [p, p, w, v, v, q][m]];
 }
 
 export class DolbyVisualizerGL {
@@ -82,7 +86,7 @@ export class DolbyVisualizerGL {
     const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     const loc = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    this.gl = gl; this.canvas = canvas;
+    this.gl = gl; this.canvas = canvas; this.prog = prog; this.quadBuf = buf; this.aLoc = loc;
     this.u = {}; for (const n of ['u_res', 'u_t', 'u_bass', 'u_mid', 'u_treble', 'u_energy', 'u_beat', 'u_hue', 'u_spec', 'u_cover', 'u_coverMix']) this.u[n] = gl.getUniformLocation(prog, n);
     // 频谱纹理（频段光柱用）：N×1 LUMINANCE，每帧上传
     this._specN = 128; this._spec = new Uint8Array(this._specN);
@@ -106,6 +110,21 @@ export class DolbyVisualizerGL {
     gl.uniform1i(this.u.u_cover, 1);
     gl.uniform1f(this.u.u_coverMix, 0);
     gl.activeTexture(gl.TEXTURE0);
+
+    // 粒子层（叠加在流体之上，gl.POINTS 加色发光）；编译失败则跳过，不影响流体
+    this._pointsOk = false;
+    try {
+      const pvs = compile(gl, gl.VERTEX_SHADER, 'attribute vec2 a_pos;uniform float u_size;void main(){gl_Position=vec4(a_pos,0.,1.);gl_PointSize=u_size;}');
+      const pfs = compile(gl, gl.FRAGMENT_SHADER, 'precision mediump float;uniform vec3 u_col;void main(){vec2 d=gl_PointCoord-0.5;float a=smoothstep(0.5,0.0,length(d));gl_FragColor=vec4(u_col*a,a);}');
+      const pp = gl.createProgram(); gl.attachShader(pp, pvs); gl.attachShader(pp, pfs); gl.linkProgram(pp);
+      if (!gl.getProgramParameter(pp, gl.LINK_STATUS)) throw new Error('points link');
+      this.pProg = pp; this.paLoc = gl.getAttribLocation(pp, 'a_pos');
+      this.uPSize = gl.getUniformLocation(pp, 'u_size'); this.uPCol = gl.getUniformLocation(pp, 'u_col');
+      this._pn = options.points ?? 80; this._pts = new Float32Array(this._pn * 2);
+      for (let i = 0; i < this._pn; i++) { this._pts[2 * i] = Math.random() * 2 - 1; this._pts[2 * i + 1] = Math.random() * 2 - 1; }
+      this.pBuf = gl.createBuffer();
+      this._pointsOk = true;
+    } catch { this._pointsOk = false; }
 
     this.analyser = resolveAnalyser(options);
     this.analyser.fftSize = options.fftSize || 1024;
@@ -162,6 +181,10 @@ export class DolbyVisualizerGL {
     const targetHue = (this.baseHue + (treble - bass) * 40) / 360;
     this._hue += (targetHue - this._hue) * 0.05;
     const gl = this.gl, u = this.u, now = (globalThis.performance?.now?.() ?? Date.now());
+    // 流体程序 + 全屏三角形（粒子层会切换程序/缓冲，每帧复位）
+    gl.useProgram(this.prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuf);
+    gl.enableVertexAttribArray(this.aLoc); gl.vertexAttribPointer(this.aLoc, 2, gl.FLOAT, false, 0, 0);
     // 频谱降采样 → 上传纹理（频段光柱）
     const src = this.reactor.data, sn = src.length, N = this._specN, spec = this._spec;
     for (let k = 0; k < N; k++) spec[k] = src[(k * sn / N) | 0];
@@ -178,9 +201,31 @@ export class DolbyVisualizerGL {
     gl.uniform1f(u.u_bass, bass); gl.uniform1f(u.u_mid, mid); gl.uniform1f(u.u_treble, treble);
     gl.uniform1f(u.u_energy, energy); gl.uniform1f(u.u_beat, this._pulse); gl.uniform1f(u.u_hue, this._hue);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    // 粒子层（流场平流 + 加色发光，节拍时变亮变大）
+    if (this._pointsOk) {
+      const pts = this._pts, pn = this._pn, tt = (now - this._t0) / 1000, spd = 0.0015 + energy * 0.012, turb = 0.6 + bass * 2.0;
+      for (let i = 0; i < pn; i++) {
+        let x = pts[2 * i], y = pts[2 * i + 1];
+        const ang = (Math.sin(x * 3 + tt * 0.3) + Math.sin(y * 3.2 - tt * 0.25) + Math.sin((x + y) * 2 + tt * 0.2)) * turb;
+        x += Math.cos(ang) * spd; y += Math.sin(ang) * spd;
+        if (x < -1) x += 2; else if (x > 1) x -= 2;
+        if (y < -1) y += 2; else if (y > 1) y -= 2;
+        pts[2 * i] = x; pts[2 * i + 1] = y;
+      }
+      gl.useProgram(this.pProg);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.pBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, pts, gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(this.paLoc); gl.vertexAttribPointer(this.paLoc, 2, gl.FLOAT, false, 0, 0);
+      gl.uniform1f(this.uPSize, (3 + energy * 10 + this._pulse * 8) * this.scale);
+      const c = hsvToRgb(this._hue, 0.7, 1.0), k = 0.4 + this._pulse * 0.6;
+      gl.uniform3f(this.uPCol, c[0] * k, c[1] * k, c[2] * k);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      gl.drawArrays(gl.POINTS, 0, pn);
+      gl.disable(gl.BLEND);
+    }
   }
 
-  dispose() { this.stop(); try { this.gl.deleteTexture(this.specTex); this.gl.deleteTexture(this.coverTex); } catch { /* ok */ } if (typeof removeEventListener === 'function') removeEventListener('resize', this._onResize); }
+  dispose() { this.stop(); try { this.gl.deleteTexture(this.specTex); this.gl.deleteTexture(this.coverTex); if (this.pProg) this.gl.deleteProgram(this.pProg); if (this.pBuf) this.gl.deleteBuffer(this.pBuf); } catch { /* ok */ } if (typeof removeEventListener === 'function') removeEventListener('resize', this._onResize); }
 }
 
 /** 优先 WebGL，失败（无 WebGL / 编译失败）自动回退到 Canvas2D。renderer:'webgl'|'canvas' 可强制 */

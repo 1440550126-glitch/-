@@ -410,7 +410,7 @@ export class DolbyAudio {
     let sum = 0, peak = 0;
     for (let i = 0; i < buf.length; i++) { const v = buf[i]; sum += v * v; if (Math.abs(v) > peak) peak = Math.abs(v); }
     const rms = Math.sqrt(sum / buf.length);
-    return { rms, peak, db: 20 * Math.log10(rms || 1e-6) };
+    return { rms, peak, db: 20 * Math.log10(rms || 1e-6), clip: peak >= 0.99 };
   }
 
   get enabled() { return this._enabled; }

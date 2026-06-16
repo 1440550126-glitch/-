@@ -52,7 +52,10 @@
         <label class="file"><input id="file" type="file" accept="audio/*" /><span>📂 载入你的音乐</span></label>
       </div>
       <div class="hint" id="srcHint">点击播放即开始（浏览器要求用户手势后才能出声）。</div>
-      <div class="meter"><div id="meterFill" class="meter-fill"></div></div>
+      <div class="row" style="gap:8px;align-items:center;margin-top:14px">
+        <div class="meter" style="flex:1;margin-top:0"><div id="meterFill" class="meter-fill"></div></div>
+        <span id="clip" title="限幅器过载" style="width:11px;height:11px;border-radius:50%;background:#3a3550;box-shadow:0 0 0 1px rgba(255,255,255,.15);flex-shrink:0;transition:background .08s,box-shadow .08s"></span>
+      </div>
       <button id="abHold" style="width:100%;margin-top:12px">按住听原声 (A/B)</button>
     </div>
 

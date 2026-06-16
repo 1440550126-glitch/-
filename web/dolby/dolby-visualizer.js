@@ -161,7 +161,7 @@ export class DolbyVisualizer {
       if (mag < 0.04) continue;
       const ang = (k / N) * Math.PI * 2 - Math.PI / 2, c = Math.cos(ang), s = Math.sin(ang);
       const r1 = r0 + mag * len * (1.4 + energy);
-      ctx.strokeStyle = `hsla(${(this._hue + k * 3) % 360}, 90%, ${50 + mag * 30}%, ${0.4 + mag * 0.5})`;
+      ctx.strokeStyle = `hsla(${(this._hue + (k / N) * 300) % 360}, 90%, ${50 + mag * 30}%, ${0.4 + mag * 0.5})`;  // 分色：低→高频跨色
       ctx.beginPath(); ctx.moveTo(cx + c * r0, cy + s * r0); ctx.lineTo(cx + c * r1, cy + s * r1); ctx.stroke();
     }
   }
