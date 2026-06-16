@@ -372,6 +372,34 @@ class Agent:
                 self._log_journal(who, utterance, txt, "sayings")
                 return result
 
+        # --- 传统节日（"今天是什么节" / "端午有什么讲究"）---
+        if action is None and who.get("obey") and "节" in (utterance or ""):
+            u6 = utterance or ""
+            if any(k in u6 for k in ("今天什么节", "今天是什么节", "今天有什么节", "什么节日")):
+                line = self.festival_today() or "今天不是什么特别的节日，平常日子也要好好过。"
+                result["reply"] = line
+                self._log_journal(who, u6, line, "festival")
+                return result
+            if any(k in u6 for k in ("讲究", "习俗", "怎么过", "风俗", "祝福")):
+                info = self.festival_info(u6)
+                if info:
+                    result["reply"] = info
+                    self._log_journal(who, u6, info, "festival")
+                    return result
+
+        # --- 亲戚称呼（"我爸的弟弟叫什么" / "妈妈的哥哥怎么称呼"）---
+        if action is None and who.get("obey") and any(
+                k in (utterance or "") for k in ("叫什么", "叫啥", "怎么称呼", "该叫", "称呼",
+                                                 "是我的什么", "算我什么")):
+            from .kinship import parse_steps
+            if len(parse_steps(utterance)) >= 1 and any(
+                    w in (utterance or "") for w in ("爸", "妈", "哥", "弟", "姐", "妹",
+                                                     "父", "母", "儿", "女", "夫", "妻")):
+                txt = self.kinship(utterance)
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "kinship")
+                return result
+
         # --- 社交记忆（"我跟小婷关系咋样" / "好久没见谁了"）---
         if action is None and who.get("obey") and getattr(self, "social", None) is not None:
             u4 = utterance or ""
@@ -730,9 +758,13 @@ class Agent:
     def care_briefing(self, name=None, now=None) -> str:
         """晨间关怀简报：今天什么日子 + 谁该吃药复查 + 今天打算 + 一句暖场白。"""
         from .briefing import compose_briefing
+        from .festival import festival_on
         from .guardian import due_reminders
         from .legacy import last_words
-        occ = self.memorial_today(now)
+        occ = list(self.memorial_today(now))
+        fest = festival_on(now)
+        if fest:
+            occ = [fest] + occ
         care = list(due_reminders(self.care, now)) if self.care else []
         agenda = list(self.today_events(now))
         if getattr(self, "plan", None) is not None:
@@ -840,6 +872,26 @@ class Agent:
     def recite_sayings(self, topic=None) -> str:
         from .sayings import collect_sayings, recite
         return recite(collect_sayings(self.sayings, self.identity))
+
+    def kinship(self, text) -> str:
+        """算亲戚称呼："我爸的弟弟" → "该叫叔叔"。"""
+        from .kinship import call_what
+        return call_what(text)
+
+    def festival_today(self, now=None) -> str:
+        from .festival import today_line
+        return today_line(now)
+
+    def festival_info(self, text) -> str:
+        """报某个节的祝福与讲究（"端午有什么讲究"）。"""
+        from .festival import _INFO, customs, greeting
+        t = text or ""
+        for name in _INFO:
+            core = name.rstrip("节")
+            if name in t or (len(core) >= 2 and core in t):
+                cu = customs(name)
+                return greeting(name) + (f" 老讲究：{cu}" if cu else "")
+        return ""
 
     # ---------- 社交记忆 / 心愿目标 ----------
     def relation_with(self, name) -> str:
