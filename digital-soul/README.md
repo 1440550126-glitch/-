@@ -68,6 +68,7 @@
 | 守护提醒 | 惦记家人吃药/复查/重要日子，到点本地生成叮嘱（不碰外部账号设备） | `dsoul/guardian.py` · `config/care.yaml` |
 | 多人合一 | 一宅多位家人，"把外公叫来"即以 TA 本人口吻聊，彼此知道对方存在 | `dsoul/family.py` · `config/family.yaml` |
 | 生平上网页 | 手机网页看 TA 的一生/嘱托家训/全家/守护惦记，点全家按钮即唤出某位 | `dsoul/webstatus.py` |
+| 数字纪念册 | 一生/嘱托/家训/全家/时间线导出成一页自包含、可打印的 HTML，存得住传得下 | `dsoul/keepsake.py` · `scripts/keepsake.py` |
 | 本人嗓音 | 嗓音档案(语速/音量)+情绪叠加，可接声音克隆 CLI | `dsoul/voice.py` |
 | 多模型路由 | Ollama+OpenAI兼容，按任务选模型，小会异质模型投票 | `dsoul/llm.py` |
 | 贾维斯式管家 | 点名应答 / 态势简报 / 系统自检，只服务听命于你的人 | `dsoul/butler.py` |

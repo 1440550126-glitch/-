@@ -136,6 +136,7 @@ flowchart TB
 | `legacy.py` | 编年生平 + 嘱托：一生编年成故事，保管临终留言/家训 |
 | `guardian.py` | 守护提醒：惦记家人吃药/复查/重要日子，到点本地生成叮嘱（不碰外部账号设备） |
 | `family.py` | 多人合一：一宅多位家人，可"叫出来"由 TA 本人口吻说话+优先想起 TA 的专属记忆，彼此知道对方存在 |
+| `keepsake.py` | 数字纪念册：把一生/嘱托/家训/全家/时间线导出成一页自包含、可打印的 HTML |
 | `llm.py` | 大模型：多模型/多服务商(Ollama+OpenAI兼容)，按任务路由 + 小会异质模型 |
 | `webstatus.py` | 手机网页：状态/对话/设备/场景/自动化 + 关系图谱·一生时间线·TA的一生/嘱托家训·全家·守护惦记 |
 
@@ -152,6 +153,7 @@ flowchart TB
 | `chat.py` · `desktop.py` · `voice_chat.py` | 终端 / 桌面 GUI / 语音 对话 |
 | `watch.py` | 摄像头持续感知、进画面主动打招呼 |
 | `sleep.py` · `timeline.py` · `ingest.py` | 睡眠巩固 / 一生时间线 / 文档灌记忆 |
+| `keepsake.py` | 导出数字纪念册：一生编成一页自包含、可打印的 HTML |
 | `finetune_prepare.py` · `finetune_train.py` | QLoRA 本地微调贴近本人文风 |
 | `agent_worker.py` | 外部智能体参考实现（监听 `POST /task`） |
 | `doctor.py` | 环境自检 |
@@ -167,13 +169,13 @@ flowchart TB
 
 ## 6. 测试
 
-40 套单测、约 200+ 用例，纯标准库、零网络即可跑：
+41 套单测、约 210+ 用例，纯标准库、零网络即可跑：
 
 ```bash
 cd digital-soul
 for t in authority memory annotate presence consolidate emotions skills dispatch tasks reflect plan butler devices orchestrate scenes \
          triggers ha graph voice forgetting entangle dream selfnarrative values monologue curiosity worldmodel anticipate predict swarm \
-         style memorial lifelog habits photo llm legacy guardian family webstatus; do
+         style memorial lifelog habits photo llm legacy guardian family webstatus keepsake; do
   python tests/test_$t.py || break
 done
 ```

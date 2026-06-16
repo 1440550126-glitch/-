@@ -14,6 +14,9 @@ data/finetune/lora-adapter/
 data/journal/*.jsonl
 data/journal/*.state.json
 
+# 导出的数字纪念册（含个人生平，不入库）
+data/keepsake.html
+
 # 派活待办本 / 当天计划 / 自动化 / 梦境 / 自我成长史 / 价值演化（含个人事项，不入库）
 data/tasks.json
 data/plan.json
