@@ -727,6 +727,8 @@ class Agent:
             if res.get("ok"):
                 ans = str(res.get("result", ""))[:120]
                 self.memory.add(f"（学到）{q['term']}：{ans}", source="learned", tags=["learned"])
+                if getattr(self, "worldmodel", None) is not None:   # 学到的沉淀成信念（知识在累积）
+                    self.worldmodel.reinforce(f"learned:{q['term']}", f"我了解到「{q['term']}」是怎么回事")
                 learned.append((q["term"], ans))
         if learned:
             self.curiosity.resolve_known(" ".join(it.get("text", "") for it in self.memory.items))
