@@ -24,6 +24,23 @@ def photo_memory(people=None, when=None, caption=None, place=None) -> str:
     return "（照片）" + base + "。"
 
 
+def member_tags(people, family) -> list:
+    """照片里出现的人，凡是登记在册的家人（按名字或称呼），就给这条记忆打上 TA 的归属标签。
+
+    于是"那张全家福"会成为照片里每一位家人各自的回忆——"叫出"TA 时优先想起。
+    """
+    from .family import members
+    fam = {m["name"] for m in members(family or {})}
+    rel = {m.get("relation"): m["name"] for m in members(family or {}) if m.get("relation")}
+    out, seen = [], set()
+    for p in (people or []):
+        name = p if p in fam else rel.get(p)
+        if name and name not in seen:
+            seen.add(name)
+            out.append(f"member:{name}")
+    return out
+
+
 def identify_faces(perception, image_path) -> list:
     """尽力用人脸识别认出照片里的人（没视觉后端则返回空）。"""
     if perception is None or not image_path:

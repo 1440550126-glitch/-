@@ -15,7 +15,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from dsoul.loader import _load_yaml  # noqa: E402
 from dsoul.memory import Memory  # noqa: E402
 from dsoul.perception import build_perception  # noqa: E402
-from dsoul.photo import identify_faces, photo_memory  # noqa: E402
+from dsoul.photo import identify_faces, member_tags, photo_memory  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -44,11 +44,16 @@ def main() -> None:
     print("📷 这张照片将成为记忆：")
     print("   " + mem_text)
 
+    # 照片里若有登记在册的家人，这条记忆也归到 TA 名下（多人合一·专属记忆）
+    mtags = member_tags(people, _load_yaml(ROOT / "config" / "family.yaml"))
+    if mtags:
+        print(f"👪 归属到家人：{ '、'.join(t.split(':', 1)[1] for t in mtags) }")
+
     if args.write:
         mem = Memory(ROOT / "data" / "memories" / "index.json")
         before = len(mem.items)
         mem.add(mem_text, source=f"photo:{pathlib.Path(args.image).name}",
-                tags=["photo"] + people, when=args.when)
+                tags=["photo"] + people + mtags, when=args.when)
         print(f"✅ 已写入长期记忆（+{len(mem.items) - before}）。它会出现在时间线与关系图谱里。")
     else:
         print("（预览模式。加 --write 才会真正写入。）")

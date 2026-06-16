@@ -531,6 +531,14 @@ class Agent:
         self.active_member = None
         return f"好，我又是{self.identity.get('name', '我')}了。"
 
+    def remember_photo(self, people=None, when=None, caption=None, place=None) -> str:
+        """把一张照片记下来：拼成带日期的记忆，并把照片里登记在册的家人归到 TA 名下。"""
+        from .photo import member_tags, photo_memory
+        text = photo_memory(people, when=when, caption=caption, place=place)
+        tags = ["photo"] + [p for p in (people or []) if p] + member_tags(people, self.family)
+        self.memory.add(text, source="photo", tags=tags, when=when)
+        return text
+
     # ---------- 编年生平 + 嘱托（数字遗产）----------
     def life_chronicle(self) -> str:
         from .legacy import chronicle

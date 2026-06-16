@@ -63,7 +63,7 @@
 | 像 TA 一样说话 | 口头禅/语气词/口吻，降级也"像本人" | `dsoul/style.py` |
 | 缅怀与抚慰 | 纪念日主动提起；思念时借共同回忆、以本人口吻温柔回应 | `dsoul/memorial.py` |
 | 生平导入 | 聊天记录/书信 → TA 的记忆与口头禅 | `dsoul/lifelog.py` · `scripts/ingest_life.py` |
-| 照片多模态 | 照片(谁/何时/何地)→带日期记忆，进时间线与图谱 | `dsoul/photo.py` · `scripts/ingest_photo.py` |
+| 照片多模态 | 照片(谁/何时/何地)→带日期记忆，进时间线与图谱；照片里的家人自动归到 TA 名下 | `dsoul/photo.py` · `scripts/ingest_photo.py` |
 | 编年生平 + 嘱托 | 一生编年成故事；保管临终留言/家训郑重交付 | `dsoul/legacy.py` |
 | 守护提醒 | 惦记家人吃药/复查/重要日子，到点本地生成叮嘱（不碰外部账号设备） | `dsoul/guardian.py` · `config/care.yaml` |
 | 多人合一 | 一宅多位家人，"把外公叫来"即以 TA 本人口吻聊，彼此知道对方存在 | `dsoul/family.py` · `config/family.yaml` |
