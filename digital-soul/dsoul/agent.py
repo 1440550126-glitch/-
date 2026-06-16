@@ -34,7 +34,8 @@ class Agent:
                  tasks=None, reflector=None, planner=None, plan=None, devices=None,
                  scenes=None, triggers=None, sensor_source=None, dreams=None, selflog=None,
                  values=None, values_path=None, curiosity=None, worldmodel=None, calib=None,
-                 memorial=None, llm_router=None, legacy=None, care=None, family=None) -> None:
+                 memorial=None, llm_router=None, legacy=None, care=None, family=None,
+                 calendar=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -75,6 +76,7 @@ class Agent:
         self.legacy = legacy or {}                                # 嘱托/家训（数字遗产）
         self.care = care or {}                                    # 守护对象的关照项（吃药/复查…）
         self._care_fired: set = set()                             # 当天已念过的守护提醒（去重）
+        self.calendar = calendar                                  # 本地日程本（生日/复诊/约定）
         self.family = family or {}                                # 多人合一：一宅多位家人
         self.active_member = None                                # 当前"叫出来"说话的是哪位家人
         self._home_identity = None                               # 切换前的本尊身份（可还原）
@@ -256,9 +258,15 @@ class Agent:
                         self._log_journal(who, u, txt, f"become:{m.get('name')}")
                         return result
 
-        # --- 编年生平 / 嘱托 / 家训（数字遗产）---
+        # --- 编年生平 / 嘱托 / 家训 / 感恩遗憾（数字遗产）---
         if action is None and who.get("obey"):
             u = utterance or ""
+            if any(k in u for k in ("你感恩", "最感念", "感激什么", "有什么遗憾", "你后悔",
+                                    "放不下的", "这辈子值得", "这辈子最")):
+                txt = self.reflect_gratitude()
+                result["reply"] = txt
+                self._log_journal(who, u, txt, "gratitude")
+                return result
             if any(k in u for k in ("你的一生", "你这一生", "讲讲你的故事", "你的生平", "编年", "这辈子")):
                 txt = self.life_chronicle() or "我这一生平平淡淡，倒也知足。"
                 result["reply"] = txt
@@ -276,6 +284,51 @@ class Agent:
                     result["reply"] = txt
                     self._log_journal(who, u, txt, "precepts")
                     return result
+
+        # --- 触景生情 / 睹物思人（"说起老房子" / "看到这个就想起"）---
+        if action is None and who.get("obey"):
+            u = utterance or ""
+            cue = None
+            for mark in ("触景生情", "睹物思人"):
+                if mark in u:
+                    cue = u.replace(mark, "").strip("，,。.、 ") or "往事"
+            import re as _re2
+            m = _re2.search(r"(?:说起|提起|看到|想起了?|聊起)(.{1,12}?)(?:就|，|,|。|我|$)", u)
+            if cue is None and m and ("想起" in u or "触景" in u or "睹物" in u
+                                      or "说起" in u or "提起" in u):
+                cue = m.group(1).strip("，,。.、 ")
+            if cue:
+                txt = self.reminisce_about(cue)
+                result["reply"] = txt
+                self._log_journal(who, u, txt, "reminisce")
+                return result
+
+        # --- 本地日程（"今天有什么事/日程" / "记一下6月18日去复诊"）---
+        if action is None and who.get("obey") and self.calendar is not None and (
+                "日程" in (utterance or "") or "安排吗" in (utterance or "")
+                or any(k in (utterance or "") for k in ("今天有什么事", "今天有啥事", "今天有事吗",
+                                                        "最近有什么事", "近几天有什么"))
+                or (("记" in (utterance or "") or "提醒我" in (utterance or "") or "加个" in (utterance or ""))
+                    and __import__("re").search(r"\d{1,2}\s*[-/月]\s*\d{1,2}", utterance or ""))):
+            import re as _re
+            mm = _re.search(r"(\d{4}\s*[-/年]\s*\d{1,2}\s*[-/月]\s*\d{1,2}\s*日?|\d{1,2}\s*[-/月]\s*\d{1,2}\s*日?)",
+                            utterance or "")
+            if mm:
+                raw = mm.group(1).replace(" ", "")
+                title = (utterance or "")
+                for kw in ("记一下", "记下", "记到日程", "加个日程", "加到日程", "提醒我",
+                           "日程", "记", "加个", "帮我", "去", raw):
+                    title = title.replace(kw, "")
+                title = title.strip("，,。.、 ")
+                ev = self.add_event(title or "有件事", raw)
+                reply = (f"好，记到日程了：{ev['date']} {ev['title']}。" if ev
+                         else "这个日期我没认出来，换成像 6月18日 这样再说一次？")
+            else:
+                evs = self.today_events()
+                reply = ("今天有：" + "、".join(evs) + "。") if evs else self.agenda_line()
+            result["reply"] = reply
+            self._log_journal(who, utterance, reply, "calendar")
+            return result
 
         # --- 代笔家书（"给小婷写封信" / "替你给妈写封生日信"）---
         if action is None and who.get("obey") and (
@@ -540,10 +593,11 @@ class Agent:
         from .legacy import last_words
         occ = self.memorial_today(now)
         care = list(due_reminders(self.care, now)) if self.care else []
-        agenda = []
+        agenda = list(self.today_events(now))
         if getattr(self, "plan", None) is not None:
-            agenda = [it.get("text", "") for it in self.plan.items
-                      if it.get("status") != "done"][:3]
+            agenda += [it.get("text", "") for it in self.plan.items
+                       if it.get("status") != "done"]
+        agenda = agenda[:3]
         encouragements = ["今天也要好好吃饭、好好睡觉。", "慢慢来，我都在。",
                           "别太累，记得歇一歇。", "想我了就跟我说说话。"]
         idx = (now or datetime.now()).toordinal() % len(encouragements)
@@ -569,6 +623,49 @@ class Agent:
             if occ in (text or ""):
                 return occ
         return None
+
+    # ---------- 本地日程：记事 / 今天有什么 / 最近几天 ----------
+    def add_event(self, title, date, kind="事") -> dict | None:
+        if self.calendar is None:
+            return None
+        return self.calendar.add(title, date, kind)
+
+    def today_events(self, now=None) -> list:
+        cal = getattr(self, "calendar", None)
+        return cal.describe_today(now) if cal is not None else []
+
+    def agenda_line(self, now=None) -> str:
+        """今天的日程一句话；空则给一句轻松的。"""
+        evs = self.today_events(now)
+        if evs:
+            return "今天有：" + "、".join(evs) + "。"
+        cal = getattr(self, "calendar", None)
+        up = cal.upcoming(7, now) if cal is not None else []
+        if up:
+            from .calendar_book import days_until
+            e = up[0]
+            n = days_until(e["date"], now or datetime.now())
+            when = "明天" if n == 1 else (f"{n}天后" if n else "今天")
+            return f"近几天：{when}是{e['title']}。"
+        return "今天没什么特别安排，轻松点。"
+
+    # ---------- 触景生情 / 感恩与遗憾 ----------
+    def reminisce_about(self, cue) -> str:
+        """顺着一个由头，回想相关记忆与当时的情绪，说一段带温度的回想。"""
+        from .reminisce import reminisce
+        from .style import apply_style
+        recalled = self._recall(cue or "", k=2)
+        mems = [it["text"] for _, it in recalled]
+        emotion = None
+        if recalled:
+            emotion = (recalled[0][1].get("emotion") or "").strip() or None
+        return apply_style(reminisce(cue, mems, emotion), self.identity)
+
+    def reflect_gratitude(self) -> str:
+        """回望一生，说出最感念的与放不下的。"""
+        from .gratitude import reflect
+        from .style import apply_style
+        return apply_style(reflect(self.memory.items), self.identity)
 
     # ---------- 多人合一：一座数字宅里住着不止一个人 ----------
     def family_roster(self) -> str:

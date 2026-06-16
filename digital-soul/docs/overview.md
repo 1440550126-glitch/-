@@ -139,6 +139,9 @@ flowchart TB
 | `converse.py` | 家人多人对谈："让外公和外婆聊聊做饭"，各用各的性格/口头禅/记忆，模型在则更自然 |
 | `briefing.py` | 晨间关怀简报：今天什么日子 + 谁该吃药复查 + 今天打算 + 一句暖场白，揉成一段早安话 |
 | `letters.py` | 代笔家书：以 TA 口吻给某位家人写一封信，按场合(生日/想念/道歉…)带上共同回忆 |
+| `calendar_book.py` | 本地日程本：生日/复诊/约定持久化，支持每年循环日期，喂给晨间关怀 |
+| `reminisce.py` | 触景生情/睹物思人：给一个由头，顺相关记忆与当时情绪说一段回想 |
+| `gratitude.py` | 感恩与遗憾：按记忆情绪挑出最感念的与放不下的，说成第一人称回望 |
 | `keepsake.py` | 数字纪念册：把一生/影像/嘱托/家训/全家/时间线导出成一页自包含、可打印的 HTML（照片 base64 内嵌） |
 | `book.py` | 家族册：每位家人各一页(生平/性格/口头禅/TA 的记忆)+一段对谈，编成可打印传家的一本 HTML |
 | `llm.py` | 大模型：多模型/多服务商(Ollama+OpenAI兼容)，按任务路由 + 小会异质模型 |
@@ -174,14 +177,14 @@ flowchart TB
 
 ## 6. 测试
 
-45 套单测、约 240+ 用例，纯标准库、零网络即可跑：
+48 套单测、约 260+ 用例，纯标准库、零网络即可跑：
 
 ```bash
 cd digital-soul
 for t in authority memory annotate presence consolidate emotions skills dispatch tasks reflect plan butler devices orchestrate scenes \
          triggers ha graph voice forgetting entangle dream selfnarrative values monologue curiosity worldmodel anticipate predict swarm \
          style memorial lifelog habits photo llm legacy guardian family webstatus keepsake converse \
-         briefing book letters; do
+         briefing book letters calendar reminisce gratitude; do
   python tests/test_$t.py || break
 done
 ```

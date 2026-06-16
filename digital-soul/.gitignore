@@ -23,6 +23,7 @@ data/photos/
 data/tasks.json
 data/plan.json
 data/triggers.json
+data/calendar.json
 data/dreams.json
 data/self.json
 data/values_state.json

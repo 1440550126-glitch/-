@@ -70,6 +70,9 @@
 | 家人多人对谈 | "让外公和外婆聊聊做饭"，两位各用各的性格/口头禅/记忆来回聊几句 | `dsoul/converse.py` |
 | 晨间关怀简报 | 今天什么日子+谁该吃药复查+今天打算+一句暖场白，揉成一段早安话 | `dsoul/briefing.py` |
 | 代笔家书 | 以 TA 口吻给家人写信，按场合(生日/想念/道歉…)带上共同回忆 | `dsoul/letters.py` |
+| 本地日程 | 生日/复诊/约定记在本地，"今天有什么事"能报，喂给晨间关怀 | `dsoul/calendar_book.py` |
+| 触景生情 | "说起老房子"，顺着相关记忆与当时情绪说一段回想 | `dsoul/reminisce.py` |
+| 感恩与遗憾 | 回望一生，挑出最感念的与放不下的 | `dsoul/gratitude.py` |
 | 家族册导出 | 每位家人各一页(生平/性格/口头禅/记忆)+对谈，编成可打印传家的 HTML | `dsoul/book.py` · `scripts/family_book.py` |
 | 生平上网页 | 手机网页看 TA 的一生/嘱托家训/全家/守护惦记，点全家按钮即唤出某位 | `dsoul/webstatus.py` |
 | 数字纪念册 | 一生/影像/嘱托/家训/全家/时间线导出成一页自包含、可打印的 HTML（照片 base64 内嵌），存得住传得下 | `dsoul/keepsake.py` · `scripts/keepsake.py` |

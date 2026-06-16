@@ -9,6 +9,7 @@ import yaml
 from .actions import SimulationRobot
 from .agent import Agent
 from .authority import Authority
+from .calendar_book import EventBook
 from .curiosity import QuestionLog
 from .devices import build_device_hub, build_sensor_source
 from .dream import DreamLog
@@ -106,7 +107,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  llm_router=llm_router,
                  legacy=_load_yaml(base / "config" / "legacy.yaml"),
                  care=_load_yaml(base / "config" / "care.yaml"),
-                 family=family_cfg)
+                 family=family_cfg,
+                 calendar=EventBook(base / "data" / "calendar.json"))
 
 
 def _seed_memory(base: Path, memory) -> None:
