@@ -49,7 +49,8 @@
     "demo.js",
     "player.html",
     "player.js",
-    "README.md"
+    "README.md",
+    "OVERVIEW.md"
   ],
   "scripts": {
     "test": "node test/dolby.test.mjs"
