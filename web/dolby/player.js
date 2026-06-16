@@ -13,7 +13,7 @@ const player = new DolbyPlayer({
     { src: 'demo-assets/track-1.wav', title: '潮汐 · Am–F–C–G', artist: 'dolby-audio demo', album: 'dolby-audio' },
     { src: 'demo-assets/track-2.wav', title: '夜行 · Dm–B♭–F–C', artist: 'dolby-audio demo', album: 'dolby-audio' }
   ],
-  dolby: { preset: 'music', analyser: true }
+  dolby: { preset: 'music', analyser: true, worklet: true }
 });
 const dolby = player.dolby;
 

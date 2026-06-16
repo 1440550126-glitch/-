@@ -138,6 +138,7 @@ export class DolbyAudio {
   readonly loudnessMatch: boolean;
   readonly loudnessNorm: number | null;
   readonly crossfeed: number;
+  readonly worklet: boolean;
   readonly state: DolbyState;
 
   dispose(opts?: { closeContext?: boolean }): void;

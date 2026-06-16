@@ -56,4 +56,4 @@ npm start                                   # http://localhost:3000/dolby/demo.h
 npm run dolby:test                          # 零依赖自测（模拟 Web Audio，94 断言）
 ```
 
-当前版本：**1.14.0** ·  许可证 MIT
+当前版本：**1.15.0** ·  许可证 MIT

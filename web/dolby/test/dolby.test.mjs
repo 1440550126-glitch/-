@@ -117,6 +117,8 @@ ok(loud.lufsFromMeanSquare(1) === -0.691, 'lufsFromMeanSquare(1)=-0.691');
 ok(loud.lufsFromMeanSquare(0) === -Infinity, '静音→-Infinity');
 ok(Math.abs(loud.gainForLufs(-20, -14) - Math.pow(10, 6 / 20)) < 1e-9, 'gainForLufs 提 +6dB');
 ok(loud.gainForLufs(-Infinity, -14) === 1, '无效响度→增益 1');
+const dw = new DolbyAudio({ context: makeCtx(), worklet: true });
+ok(dw.worklet === false, 'worklet 不支持环境优雅降级（保持分析器测量）'); dw.dispose();
 
 // 8) 自定义预设
 registerPreset({ id: 'myroom', label: '我的房间', desc: 't', p: presetById('cinema').p });

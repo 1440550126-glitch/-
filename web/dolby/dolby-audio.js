@@ -276,7 +276,24 @@ export class DolbyAudio {
     if (options.crossfeed) this.setCrossfeed(options.crossfeed);
     if (options.loudnessMatch) this.setLoudnessMatch(true);
     if (options.loudnessNorm != null) this.setLoudnessNorm(options.loudnessNorm);
+    if (options.worklet) this._initWorklet();
   }
+
+  // 用 AudioWorklet 在音频线程做响度测量（脱离主线程）；失败/不支持则保持分析器测量
+  _initWorklet() {
+    const ctx = this.context;
+    if (this._worklet || !ctx.audioWorklet || typeof AudioWorkletNode === 'undefined') return;
+    let url;
+    try { url = new URL('./dolby-loudness-worklet.js', import.meta.url); } catch { return; }
+    ctx.audioWorklet.addModule(url).then(() => {
+      this._workletNode = new AudioWorkletNode(ctx, 'dolby-loudness');
+      this._workletSink = ctx.createGain(); this._workletSink.gain.value = 0;   // 静默汇入，确保节点被驱动
+      this._kw.output.connect(this._workletNode); this._workletNode.connect(this._workletSink); this._workletSink.connect(this.output);
+      this._workletNode.port.onmessage = (e) => { this._wmMs = e.data; };
+      this._worklet = true;
+    }).catch(() => { /* 回退到分析器测量 */ });
+  }
+  get worklet() { return !!this._worklet; }
 
   // ---- 源接入 ----
   attachMedia(el) {
@@ -489,7 +506,7 @@ export class DolbyAudio {
       this.loA, this.loB, this.miHP, this.miLP, this.hiA, this.hiB, this.compLow, this.compMid,
       this.compHigh, this.bandSum, this.mbTap, this.limiterIn, this.limiter, this.makeup, this.matchGain,
       this.cfIn, this.cfSplit, this.cfMerge, this.cfDL, this.cfDR, this.cfLd, this.cfLlp, this.cfLg,
-      this.cfRd, this.cfRlp, this.cfRg, this._kw.input, this._kw.output, this._kwMeter, this._workletNode,
+      this.cfRd, this.cfRlp, this.cfRg, this._kw.input, this._kw.output, this._kwMeter, this._workletNode, this._workletSink,
       this.dry, this.wet, this._meter, this._dryMeter, this._wetMeter, this.analyser];
     for (const n of nodes) { try { n && n.disconnect(); } catch { /* ok */ } }
     this._sources.clear();
