@@ -68,6 +68,9 @@
 | 守护提醒 | 惦记家人吃药/复查/重要日子，到点本地生成叮嘱（不碰外部账号设备） | `dsoul/guardian.py` · `config/care.yaml` |
 | 多人合一 | 一宅多位家人，"把外公叫来"即以 TA 本人口吻聊，各有专属记忆，彼此知道对方存在 | `dsoul/family.py` · `config/family.yaml` |
 | 家人多人对谈 | "让外公和外婆聊聊做饭"，两位各用各的性格/口头禅/记忆来回聊几句 | `dsoul/converse.py` |
+| 晨间关怀简报 | 今天什么日子+谁该吃药复查+今天打算+一句暖场白，揉成一段早安话 | `dsoul/briefing.py` |
+| 代笔家书 | 以 TA 口吻给家人写信，按场合(生日/想念/道歉…)带上共同回忆 | `dsoul/letters.py` |
+| 家族册导出 | 每位家人各一页(生平/性格/口头禅/记忆)+对谈，编成可打印传家的 HTML | `dsoul/book.py` · `scripts/family_book.py` |
 | 生平上网页 | 手机网页看 TA 的一生/嘱托家训/全家/守护惦记，点全家按钮即唤出某位 | `dsoul/webstatus.py` |
 | 数字纪念册 | 一生/影像/嘱托/家训/全家/时间线导出成一页自包含、可打印的 HTML（照片 base64 内嵌），存得住传得下 | `dsoul/keepsake.py` · `scripts/keepsake.py` |
 | 本人嗓音 | 嗓音档案(语速/音量)+情绪叠加，可接声音克隆 CLI | `dsoul/voice.py` |

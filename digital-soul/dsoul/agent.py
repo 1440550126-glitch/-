@@ -25,6 +25,7 @@ _AGENT_HINTS = {"代码": "openclaw", "打包": "openclaw", "部署": "openclaw"
 _BRIEF_KW = ("简报", "汇报", "报一下", "什么情况", "近况", "今天怎么安排", "今天的安排",
              "状态怎么样", "汇报一下", "brief")
 _DIAG_KW = ("自检", "系统状态", "运行状况", "诊断", "各系统", "系统自检", "体检", "diagnostic", "status")
+_CARE_KW = ("关怀简报", "晨间关怀", "早安简报", "今天要紧", "暖场白", "关心一下", "关怀一下")
 
 
 class Agent:
@@ -276,6 +277,29 @@ class Agent:
                     self._log_journal(who, u, txt, "precepts")
                     return result
 
+        # --- 代笔家书（"给小婷写封信" / "替你给妈写封生日信"）---
+        if action is None and who.get("obey") and (
+                ("写" in (utterance or "") and "信" in (utterance or ""))
+                or "代笔" in (utterance or "") or "家书" in (utterance or "")):
+            recip = None
+            cands = list(self.authority.people.values())
+            try:
+                from .family import members as _fm
+                cands += _fm(self.family)
+            except Exception:
+                pass
+            for p in cands:
+                nm, rel = p.get("name"), p.get("relation")
+                if (nm and nm in utterance) or (rel and rel in utterance):
+                    recip = nm or rel
+                    break
+            if recip is None:
+                recip = who.get("name") if who.get("known") else None
+            letter = self.write_letter(recip, occasion=self._letter_occasion(utterance))
+            result["reply"] = letter
+            self._log_journal(who, utterance, letter, "letter")
+            return result
+
         # --- 哀伤抚慰（家人表达思念）：以本人口吻、借共同回忆温柔回应 ---
         if action is None and who.get("obey"):
             from .memorial import comfort_reply, is_grief
@@ -509,6 +533,43 @@ class Agent:
             out.append(text)
         return out
 
+    def care_briefing(self, name=None, now=None) -> str:
+        """晨间关怀简报：今天什么日子 + 谁该吃药复查 + 今天打算 + 一句暖场白。"""
+        from .briefing import compose_briefing
+        from .guardian import due_reminders
+        from .legacy import last_words
+        occ = self.memorial_today(now)
+        care = list(due_reminders(self.care, now)) if self.care else []
+        agenda = []
+        if getattr(self, "plan", None) is not None:
+            agenda = [it.get("text", "") for it in self.plan.items
+                      if it.get("status") != "done"][:3]
+        encouragements = ["今天也要好好吃饭、好好睡觉。", "慢慢来，我都在。",
+                          "别太累，记得歇一歇。", "想我了就跟我说说话。"]
+        idx = (now or datetime.now()).toordinal() % len(encouragements)
+        return compose_briefing(name=name, occasions=occ, care=care, agenda=agenda,
+                                last_words=last_words(self.legacy), now=now,
+                                encouragement=encouragements[idx])
+
+    def write_letter(self, recipient_name, occasion=None) -> str:
+        """以 TA 本人的口吻给某位家人写一封信（可指定场合）。"""
+        from .letters import compose_letter
+        who = self.authority.resolve(recipient_name) if recipient_name else {}
+        relation = who.get("relation") if who.get("known") else None
+        cps = self.identity.get("personality", {}).get("catchphrases", [])
+        mems = [it["text"] for _, it in self._recall(recipient_name or "我们", k=2)] \
+            if recipient_name else []
+        return compose_letter(
+            sender_name=self.identity.get("name", "我"), catchphrases=cps,
+            recipient_name=recipient_name, recipient_relation=relation,
+            occasion=occasion, memories=mems, llm=self.llm)
+
+    def _letter_occasion(self, text) -> str | None:
+        for occ in ("生日", "过年", "想念", "道歉", "鼓励", "感谢"):
+            if occ in (text or ""):
+                return occ
+        return None
+
     # ---------- 多人合一：一座数字宅里住着不止一个人 ----------
     def family_roster(self) -> str:
         from .family import roster_line
@@ -534,6 +595,26 @@ class Agent:
             return ""
         turns = family_dialogue(ms, extract_topic(query, ms), llm=self.llm)
         return "\n".join(f"{t['speaker']}：{t['text']}" for t in turns)
+
+    def member_memories(self, name, limit: int = 8) -> list:
+        """某位家人的专属记忆文本（按 member:<名字> 标签筛）。"""
+        tag = f"member:{name}"
+        out = [it.get("text", "") for it in self.memory.items if tag in (it.get("tags") or [])]
+        return [t for t in out if t][:limit]
+
+    def build_family_book(self, topic="家常") -> str:
+        """把全家编成一本自包含 HTML 家族册：每位一页 + 一段对谈。"""
+        from .book import dialogue_section, family_book_html, member_section
+        from .converse import family_dialogue
+        from .family import members, roster_line
+        ms = members(self.family)
+        secs = [member_section(m, self.member_memories(m["name"])) for m in ms]
+        dlg = ""
+        if len(ms) >= 2:
+            turns = family_dialogue(ms[:2], topic, llm=self.llm)
+            dlg = dialogue_section(turns)
+        title = (self.identity.get("name", "") + "家") if self.identity.get("name") else "我们家"
+        return family_book_html(title, secs, family_line=roster_line(self.family), dialogue=dlg)
 
     def become(self, query) -> str:
         """把某位家人"叫出来"：热切换到 TA 本人的口吻继续对话，并以 TA 的口气打个招呼。"""
@@ -1272,6 +1353,8 @@ class Agent:
         if any(k in u for k in _DIAG_KW):
             from .butler import diagnostics_text
             return diagnostics_text(self, self._addr(who))
+        if any(k in u for k in _CARE_KW):
+            return self.care_briefing(name=who["name"] if who.get("known") else None)
         if any(k in u for k in _BRIEF_KW):
             from .butler import daily_brief
             present = [who["name"]] if who.get("known") else None
