@@ -111,18 +111,27 @@ def sleep_loop(agent, hours: float) -> None:
 
 
 def trigger_loop(agent, mouth=None) -> None:
-    """每 30 秒检查一次定时自动化（如"每天22点提醒锁门"）。"""
+    """每 30 秒检查一次定时自动化（如"每天22点提醒锁门"）与守护提醒（吃药/复查）。"""
     while True:
         time.sleep(30)
         try:
             notices = agent.check_time_triggers() + agent.check_conditions()
         except Exception as e:
             print(f"[自动化] 出错：{e}", flush=True)
-            continue
+            notices = []
         for n in notices:
             print(f"[自动化] {n}", flush=True)
             if mouth is not None:
                 mouth.speak(n)
+        try:
+            cares = agent.due_care()
+        except Exception as e:
+            print(f"[守护] 出错：{e}", flush=True)
+            cares = []
+        for c in cares:
+            print(f"[守护] {c}", flush=True)
+            if mouth is not None:
+                mouth.speak(c)
 
 
 def think_loop(agent, minutes: float) -> None:

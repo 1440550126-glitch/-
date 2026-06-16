@@ -127,7 +127,6 @@ flowchart TB
 | `perception.py` · `perception_opencv.py` · `presence.py` | 人脸认人；树莓派轻量后端；持续感知/进门事件 |
 | `voice.py` | 本地听（Whisper）+ 说（离线 TTS，语气随七情变化） |
 | `actions.py` · `ros2_robot.py` | 机器人动作接口（模拟 / ROS2） |
-| `llm.py` | 本地大模型（Ollama），未接则优雅降级 |
 | `butler.py` | 贾维斯管家层：态势简报 + 系统自检 |
 | `devices.py` | 家居控制：内存模拟 + Home Assistant 后端 |
 | `scenes.py` · `triggers.py` | 场景/例程；定时·日落·温度·进门自动化 |
@@ -135,8 +134,9 @@ flowchart TB
 | `remote_agents.py` | 隔空指挥外部智能体（爱马仕/openclaw…） |
 | `photo.py` | 多模态·照片：照片要素→带日期记忆，汇入时间线/图谱 |
 | `legacy.py` | 编年生平 + 嘱托：一生编年成故事，保管临终留言/家训 |
+| `guardian.py` | 守护提醒：惦记家人吃药/复查/重要日子，到点本地生成叮嘱（不碰外部账号设备） |
 | `llm.py` | 大模型：多模型/多服务商(Ollama+OpenAI兼容)，按任务路由 + 小会异质模型 |
-| `webstatus.py` | 手机网页：状态/对话/设备/场景/自动化 + 关系图谱·一生时间线 |
+| `webstatus.py` | 手机网页：状态/对话/设备/场景/自动化 + 关系图谱·一生时间线·守护叮嘱 |
 
 ## 4. 脚本地图（`scripts/`）
 
@@ -166,12 +166,13 @@ flowchart TB
 
 ## 6. 测试
 
-37 套单测、约 180+ 用例，纯标准库、零网络即可跑：
+38 套单测、约 190+ 用例，纯标准库、零网络即可跑：
 
 ```bash
 cd digital-soul
 for t in authority memory annotate presence consolidate emotions skills dispatch tasks reflect plan butler devices orchestrate scenes \
-         triggers ha graph voice forgetting entangle dream selfnarrative values monologue curiosity worldmodel anticipate predict swarm; do
+         triggers ha graph voice forgetting entangle dream selfnarrative values monologue curiosity worldmodel anticipate predict swarm \
+         style memorial lifelog habits photo llm legacy guardian; do
   python tests/test_$t.py || break
 done
 ```

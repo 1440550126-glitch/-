@@ -33,7 +33,7 @@ class Agent:
                  tasks=None, reflector=None, planner=None, plan=None, devices=None,
                  scenes=None, triggers=None, sensor_source=None, dreams=None, selflog=None,
                  values=None, values_path=None, curiosity=None, worldmodel=None, calib=None,
-                 memorial=None, llm_router=None, legacy=None) -> None:
+                 memorial=None, llm_router=None, legacy=None, care=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -72,6 +72,8 @@ class Agent:
         self._pending_offer = None                                # 已主动提出、待你点头的预感
         self.memorial = memorial or {}                            # 重要日子（缅怀/纪念）
         self.legacy = legacy or {}                                # 嘱托/家训（数字遗产）
+        self.care = care or {}                                    # 守护对象的关照项（吃药/复查…）
+        self._care_fired: set = set()                             # 当天已念过的守护提醒（去重）
         self.llm_router = llm_router                              # 多模型路由（按任务选模型 + 小会面板）
         self._degraded_notice_shown = False                       # 降级提示只提一次
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
@@ -443,12 +445,31 @@ class Agent:
             po = self.proactive_prediction()
             if po:
                 text = f"{text} {po}"
+        # 守护提醒：见到你时，若此刻惦记的家人该吃药/复查，顺口叮嘱一句
+        if who.get("obey"):
+            for c in self.due_care():
+                text = f"{text} {c}"
         self.robot.say(text)
         return text
 
     def memorial_today(self, now=None) -> list:
         from .memorial import today_occasions
         return today_occasions((self.memorial or {}).get("dates", {}), now)
+
+    # ---------- 守护提醒：惦记家人的吃药 / 复查 ----------
+    def due_care(self, now=None) -> list:
+        """此刻该叮嘱家人的话（吃药到点 / 今天该复查），当天去重不重复念。"""
+        from .guardian import due_reminders
+        now = now or datetime.now()
+        day = now.strftime("%Y-%m-%d")
+        out = []
+        for text in due_reminders(self.care, now):
+            key = (day, text)
+            if key in self._care_fired:
+                continue
+            self._care_fired.add(key)
+            out.append(text)
+        return out
 
     # ---------- 编年生平 + 嘱托（数字遗产）----------
     def life_chronicle(self) -> str:
