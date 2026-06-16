@@ -76,7 +76,7 @@ class Agent:
         return Agent(self.provider, self.tools, self.memory, self.skills, self.config,
                      learn=False, _depth=self._depth + 1)
 
-    def _system_prompt(self, user_input: str) -> str:
+    def _system_prompt(self, user_input: str, native: bool = False) -> str:
         parts = [self.config.get("persona", "你是 Mnemo，用户的私人 AI 伙伴。")]
 
         if self.memory and self.config.get("memory.enabled", True):
@@ -102,15 +102,38 @@ class Agent:
                 blocks = [f"### 技能：{s.name}\n{s.description}\n{s.body}" for s in rel]
                 parts.append("## 可用技能（按需采用）\n" + "\n\n".join(blocks))
 
-        parts.append(
-            "## 工具使用\n"
-            "需要工具时，只输出一个代码块（块内是纯 JSON，块外不要写别的）：\n"
-            "```tool\n{\"name\": \"工具名\", \"args\": {\"参数\": \"值\"}}\n```\n"
-            "系统会执行并把结果返回给你，你再决定下一步。\n"
-            "当你已能直接回答、无需更多工具时，正常输出最终回答（不要再写 tool 代码块）。\n"
-            "可用工具：\n" + self.tools.specs()
-        )
+        if not native:
+            parts.append(
+                "## 工具使用\n"
+                "需要工具时，只输出一个代码块（块内是纯 JSON，块外不要写别的）：\n"
+                "```tool\n{\"name\": \"工具名\", \"args\": {\"参数\": \"值\"}}\n```\n"
+                "系统会执行并把结果返回给你，你再决定下一步。\n"
+                "当你已能直接回答、无需更多工具时，正常输出最终回答（不要再写 tool 代码块）。\n"
+                "可用工具：\n" + self.tools.specs()
+            )
         return "\n\n".join(parts)
+
+    def _tool_specs(self) -> list[dict]:
+        return [{"name": t.name, "description": t.description, "parameters": t.parameters}
+                for t in self.tools._tools.values()]
+
+    def _finalize(self, user_input, final, steps, session, emit):
+        """两条执行路径共用的收尾：固化记忆 + 进化画像 + 记录轨迹。"""
+        if self.memory and self.learn and self.config.get("memory.enabled", True):
+            learned = self.memory.observe(user_input, final, session=session)
+            if learned:
+                emit("learned", {"items": learned})
+        self.last_trace = {"input": user_input, "steps": steps, "final": final}
+        if self.learn:
+            try:
+                home = getattr(self.config, "home", None)
+                if home:
+                    (Path(home) / "last_trace.json").write_text(
+                        json.dumps(self.last_trace, ensure_ascii=False), encoding="utf-8")
+            except OSError:
+                pass
+        emit("final", {"text": final})
+        return final
 
     def _audit(self, tool: str, args: dict, result: str) -> None:
         home = getattr(self.config, "home", None)
@@ -132,6 +155,9 @@ class Agent:
             on_event: Callable[[str, dict], None] | None = None) -> str:
         max_steps = max_steps or int(self.config.get("max_steps", 8))
         emit = on_event or (lambda *_: None)
+        if self.config.get("native_tools", False) and self.provider.supports_tools():
+            return self._run_native(user_input, session=session, max_steps=max_steps,
+                                    cwd=cwd, auto_approve=auto_approve, confirm=confirm, emit=emit)
         deny = tuple(self.config.get("tools.deny", []) or ())
         ctx = ToolContext(memory=self.memory, config=self.config, cwd=cwd,
                           auto_approve=auto_approve, confirm=confirm, agent=self, deny=deny)
@@ -169,22 +195,42 @@ class Agent:
             messages.append(Message("user", "请基于以上信息，直接给出最终回答。"))
             final = self.provider.chat(messages, temperature=temperature, max_tokens=max_tokens)
 
-        # 固化记忆 + 进化画像（子 Agent 不写，避免污染主画像）
-        if self.memory and self.learn and self.config.get("memory.enabled", True):
-            learned = self.memory.observe(user_input, final, session=session)
-            if learned:
-                emit("learned", {"items": learned})
+        return self._finalize(user_input, final, steps, session, emit)
 
-        # 记录本次轨迹（供"自我进化技能"提炼）
-        self.last_trace = {"input": user_input, "steps": steps, "final": final}
-        if self.learn:
-            try:
-                home = getattr(self.config, "home", None)
-                if home:
-                    (Path(home) / "last_trace.json").write_text(
-                        json.dumps(self.last_trace, ensure_ascii=False), encoding="utf-8")
-            except OSError:
-                pass
+    def _run_native(self, user_input, *, session, max_steps, cwd, auto_approve, confirm, emit):
+        """原生 function-calling 执行路径（OpenAI/Anthropic 等支持的后端）。"""
+        deny = tuple(self.config.get("tools.deny", []) or ())
+        ctx = ToolContext(memory=self.memory, config=self.config, cwd=cwd,
+                          auto_approve=auto_approve, confirm=confirm, agent=self, deny=deny)
+        specs = self._tool_specs()
+        steps: list[dict] = []
+        messages = [Message("system", self._system_prompt(user_input, native=True))]
+        if self.memory:
+            for ep in self.memory.recent_episodes(limit=4, session=session):
+                messages.append(Message("user", ep["user"]))
+                messages.append(Message("assistant", ep["assistant"]))
+        messages.append(Message("user", user_input))
 
-        emit("final", {"text": final})
-        return final
+        temperature = float(self.config.get("temperature", 0.7))
+        max_tokens = int(self.config.get("max_tokens", 2048))
+        final = ""
+        for step in range(max_steps):
+            emit("think", {"step": step + 1})
+            res = self.provider.chat_tools(messages, specs, temperature=temperature,
+                                           max_tokens=max_tokens)
+            calls = res.get("tool_calls") or []
+            if not calls:
+                final = res.get("text", "")
+                break
+            messages.append(Message("assistant", res.get("text", ""), tool_calls=calls))
+            for tc in calls:
+                emit("tool", {"name": tc["name"], "args": tc["args"]})
+                result = self.tools.run(tc["name"], tc["args"], ctx)
+                self._audit(tc["name"], tc["args"], result)
+                emit("observation", {"name": tc["name"], "result": result})
+                steps.append({"tool": tc["name"], "args": tc["args"], "result": str(result)[:500]})
+                messages.append(Message("tool", result, name=tc["name"], tool_call_id=tc["id"]))
+        else:
+            final = res.get("text", "") or "(已达最大步数)"
+
+        return self._finalize(user_input, final, steps, session, emit)

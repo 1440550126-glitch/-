@@ -21,7 +21,9 @@ class ProviderError(Exception):
 class Message:
     role: str  # system | user | assistant | tool
     content: str
-    name: Optional[str] = None  # tool 角色时为工具名
+    name: Optional[str] = None        # tool 角色时为工具名
+    tool_calls: Optional[list] = None  # assistant 原生工具调用 [{id,name,args}]
+    tool_call_id: Optional[str] = None  # tool 结果对应的调用 id（原生）
 
     def to_openai(self) -> dict:
         d = {"role": "tool" if self.role == "tool" else self.role, "content": self.content}
@@ -68,6 +70,18 @@ class Provider(ABC):
     def available(self) -> bool:
         """是否具备调用条件（有 key / 服务可达）。auto 选择时据此筛选。"""
         return True
+
+    def supports_tools(self) -> bool:
+        """是否支持原生 function-calling。不支持则上层用文本工具协议。"""
+        return False
+
+    def chat_tools(self, messages: list[Message], tool_specs: list[dict], *,
+                   temperature: float = 0.7, max_tokens: int = 2048) -> dict:
+        """原生工具调用。返回 {"text": str, "tool_calls": [{id,name,args}]}。
+
+        tool_specs: [{"name","description","parameters": {名: 说明}}]
+        """
+        raise NotImplementedError
 
     def embed(self, texts: list[str]) -> list[list[float]] | None:
         """可选：返回向量。不支持则返回 None（记忆检索会回退到关键词）。"""

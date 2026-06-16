@@ -48,3 +48,52 @@ class AnthropicProvider(Provider):
 
     def available(self) -> bool:
         return bool(self.api_key)
+
+    def supports_tools(self) -> bool:
+        return bool(self.api_key)
+
+    @staticmethod
+    def _to_native(messages):
+        system, conv = [], []
+        for m in messages:
+            if m.role == "system":
+                system.append(m.content)
+            elif m.role == "assistant" and m.tool_calls:
+                blocks = ([{"type": "text", "text": m.content}] if m.content else [])
+                for tc in m.tool_calls:
+                    blocks.append({"type": "tool_use", "id": tc["id"],
+                                   "name": tc["name"], "input": tc["args"]})
+                conv.append({"role": "assistant", "content": blocks})
+            elif m.role == "tool":
+                conv.append({"role": "user", "content": [
+                    {"type": "tool_result", "tool_use_id": m.tool_call_id or m.name,
+                     "content": m.content}]})
+            else:
+                conv.append({"role": "assistant" if m.role == "assistant" else "user",
+                             "content": m.content})
+        return "\n\n".join(system), conv
+
+    def chat_tools(self, messages, tool_specs, *, temperature=0.7, max_tokens=2048) -> dict:
+        if not self.api_key:
+            raise ProviderError("缺少 ANTHROPIC_API_KEY")
+        system, conv = self._to_native(messages)
+        tools = [{"name": s["name"], "description": s["description"],
+                  "input_schema": {"type": "object",
+                                   "properties": {k: {"type": "string", "description": v}
+                                                  for k, v in s["parameters"].items()},
+                                   "required": []}} for s in tool_specs]
+        payload = {"model": self.model or "claude-opus-4-8", "max_tokens": max_tokens,
+                   "temperature": temperature, "messages": conv, "tools": tools}
+        if system:
+            payload["system"] = system
+        resp = http_post_json(f"{self.base_url or 'https://api.anthropic.com'}/v1/messages",
+                              payload, headers={"x-api-key": self.api_key,
+                                                "anthropic-version": "2023-06-01"})
+        text, calls = "", []
+        for block in resp.get("content", []):
+            if block.get("type") == "text":
+                text += block.get("text", "")
+            elif block.get("type") == "tool_use":
+                calls.append({"id": block.get("id"), "name": block.get("name"),
+                              "args": block.get("input") or {}})
+        return {"text": text.strip(), "tool_calls": calls}

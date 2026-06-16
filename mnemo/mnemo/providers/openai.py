@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+import json
+
 from .base import Message, Provider, ProviderError, http_post_json
 
 
@@ -47,3 +49,57 @@ class OpenAIProvider(Provider):
 
     def available(self) -> bool:
         return bool(self.api_key)
+
+    def supports_tools(self) -> bool:
+        return bool(self.api_key)
+
+    @staticmethod
+    def _to_native(messages: list[Message]) -> list[dict]:
+        out = []
+        for m in messages:
+            if m.role == "tool":
+                out.append({"role": "tool", "tool_call_id": m.tool_call_id or m.name,
+                            "content": m.content})
+            elif m.role == "assistant" and m.tool_calls:
+                out.append({"role": "assistant", "content": m.content or None,
+                            "tool_calls": [
+                                {"id": tc["id"], "type": "function",
+                                 "function": {"name": tc["name"],
+                                              "arguments": json.dumps(tc["args"], ensure_ascii=False)}}
+                                for tc in m.tool_calls]})
+            else:
+                out.append({"role": m.role, "content": m.content})
+        return out
+
+    @staticmethod
+    def _tool_schema(specs: list[dict]) -> list[dict]:
+        return [{"type": "function", "function": {
+            "name": s["name"], "description": s["description"],
+            "parameters": {"type": "object",
+                           "properties": {k: {"type": "string", "description": v}
+                                          for k, v in s["parameters"].items()},
+                           "required": []}}} for s in specs]
+
+    def chat_tools(self, messages, tool_specs, *, temperature=0.7, max_tokens=2048) -> dict:
+        if not self.api_key:
+            raise ProviderError("缺少 OPENAI_API_KEY")
+        url = f"{self.base_url or 'https://api.openai.com/v1'}/chat/completions"
+        payload = {
+            "model": self.model or "gpt-4o-mini",
+            "messages": self._to_native(messages),
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "tools": self._tool_schema(tool_specs),
+            "tool_choice": "auto",
+        }
+        resp = http_post_json(url, payload, headers={"Authorization": f"Bearer {self.api_key}"})
+        msg = (resp.get("choices") or [{}])[0].get("message", {})
+        calls = []
+        for tc in (msg.get("tool_calls") or []):
+            fn = tc.get("function", {})
+            try:
+                args = json.loads(fn.get("arguments") or "{}")
+            except json.JSONDecodeError:
+                args = {}
+            calls.append({"id": tc.get("id"), "name": fn.get("name"), "args": args})
+        return {"text": msg.get("content") or "", "tool_calls": calls}

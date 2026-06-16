@@ -17,6 +17,9 @@ from mnemo.memory import Memory, _tokens                 # noqa: E402
 from mnemo.providers import build_provider               # noqa: E402
 from mnemo.providers.base import Message, Provider       # noqa: E402
 from mnemo.providers.offline import OfflineProvider      # noqa: E402
+from mnemo.providers.openai import OpenAIProvider         # noqa: E402
+from mnemo.providers.anthropic import AnthropicProvider   # noqa: E402
+import mnemo.providers.openai as openai_mod               # noqa: E402
 from mnemo.skills import SkillRegistry                   # noqa: E402
 from mnemo.skills import distill_from_trace              # noqa: E402
 from mnemo.tools import ToolContext, build_default_registry  # noqa: E402
@@ -200,6 +203,83 @@ class TestEvolveAndDelegate(unittest.TestCase):
         s = self.skills.learn(name="list-and-count", text=text)
         self.assertIsNotNone(self.skills.get("list-and-count"))
         self.assertTrue(s.path.exists())
+
+
+class FakeNativeProvider(Provider):
+    name = "fakenative"
+
+    def __init__(self, scripted):
+        super().__init__()
+        self.scripted = list(scripted)
+        self.seen = []
+
+    def supports_tools(self):
+        return True
+
+    def chat_tools(self, messages, tool_specs, **kw):
+        self.seen.append(list(messages))
+        return self.scripted.pop(0)
+
+    def chat(self, messages, **kw):
+        return "n/a"
+
+
+class TestNativeTools(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = load_config(self.tmp.name)
+        self.mem = Memory(self.cfg.db_path)
+        self.skills = SkillRegistry(self.cfg)
+        self.tools = build_default_registry()
+
+    def tearDown(self):
+        self.mem.close()
+        self.tmp.cleanup()
+
+    def test_native_loop_roundtrips_tool_results(self):
+        prov = FakeNativeProvider([
+            {"text": "先看时间", "tool_calls": [{"id": "c1", "name": "now", "args": {}}]},
+            {"text": "好的，记住了", "tool_calls": []},
+        ])
+        self.cfg.set("native_tools", True)
+        agent = Agent(prov, self.tools, self.mem, self.skills, self.cfg)
+        out = agent.run("你好，我叫阿强")
+        self.assertEqual(out, "好的，记住了")
+        self.assertEqual(self.mem.get_profile("name"), "阿强")
+        second = prov.seen[1]
+        self.assertTrue(any(getattr(m, "tool_call_id", None) == "c1" for m in second))
+
+    def test_openai_translate(self):
+        msgs = [Message("system", "sys"), Message("user", "hi"),
+                Message("assistant", "", tool_calls=[{"id": "c1", "name": "now", "args": {}}]),
+                Message("tool", "2026", name="now", tool_call_id="c1")]
+        out = OpenAIProvider._to_native(msgs)
+        self.assertEqual(out[2]["tool_calls"][0]["id"], "c1")
+        self.assertEqual(out[3]["role"], "tool")
+        self.assertEqual(out[3]["tool_call_id"], "c1")
+
+    def test_openai_chat_tools_parse(self):
+        prov = OpenAIProvider(api_key="x")
+        orig = openai_mod.http_post_json
+        openai_mod.http_post_json = lambda url, payload, headers=None, timeout=120: {
+            "choices": [{"message": {"content": "", "tool_calls": [
+                {"id": "c1", "type": "function",
+                 "function": {"name": "now", "arguments": "{}"}}]}}]}
+        try:
+            res = prov.chat_tools([Message("user", "几点")],
+                                  [{"name": "now", "description": "时间", "parameters": {}}])
+        finally:
+            openai_mod.http_post_json = orig
+        self.assertEqual(res["tool_calls"][0]["name"], "now")
+
+    def test_anthropic_translate(self):
+        sys, conv = AnthropicProvider._to_native([
+            Message("system", "S"), Message("user", "u"),
+            Message("assistant", "", tool_calls=[{"id": "t1", "name": "now", "args": {}}]),
+            Message("tool", "R", tool_call_id="t1")])
+        self.assertEqual(sys, "S")
+        self.assertEqual(conv[1]["content"][0]["type"], "tool_use")
+        self.assertEqual(conv[2]["content"][0]["type"], "tool_result")
 
 
 class TestParsing(unittest.TestCase):
