@@ -72,11 +72,13 @@ class Agent:
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
     def _hints(self) -> list[str]:
+        from .style import style_hint
         out = []
         if self.emotions is not None:
             out.append(self.emotions.prompt_hint())
         if self.knowledge is not None:
             out.append(self.knowledge.prompt_hint())
+        out.append(style_hint(self.identity))      # 用 TA 本人的口吻说话
         return [h for h in out if h]
 
     def identify_speaker(self, image_path=None, video_path=None, name=None) -> str | None:
@@ -339,7 +341,8 @@ class Agent:
             addr = ""
         mem_part = (" 我想起来：" + "；".join(mems[:2]) + "。") if mems else ""
         tail = "（当前是降级模式：装好 Ollama 并 `ollama pull qwen2.5:7b-instruct` 后，我就能用完整性格和全部记忆回应了。）"
-        return f"{opener}{addr}你说「{utterance}」，我听到了。{mem_part} {tail}"
+        from .style import apply_style
+        return apply_style(f"{opener}{addr}你说「{utterance}」，我听到了。{mem_part}", self.identity) + " " + tail
 
     # ---------- 主动打招呼（由持续感知 presence 触发）----------
     def greet(self, person_name: str) -> str:
