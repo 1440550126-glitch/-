@@ -497,6 +497,41 @@ class TestServe(unittest.TestCase):
             tmp.cleanup()
 
 
+class TestMarketTrust(unittest.TestCase):
+    def test_sign_verify_and_tamper(self):
+        from mnemo import market
+        reg = {"name": "r", "skills": [], "plugins": []}
+        signed = market.sign_registry(reg, "k")
+        self.assertTrue(market.verify_registry(signed, "k"))
+        self.assertFalse(market.verify_registry(signed, "wrong"))
+        signed["skills"].append({"name": "evil"})        # 篡改后签名失效
+        self.assertFalse(market.verify_registry(signed, "k"))
+
+    def test_install_sha256_mismatch(self):
+        from mnemo import market
+        tmp = tempfile.TemporaryDirectory()
+        cfg = load_config(tmp.name)
+        skills = SkillRegistry(cfg)
+        plugins = PluginManager(cfg, build_default_registry(), skills)
+        md = Path(tmp.name) / "s.md"
+        md.write_text("---\nname: x\n---\nbody", encoding="utf-8")
+        reg = {"skills": [{"name": "s", "file": str(md), "sha256": "deadbeef"}], "plugins": []}
+        with self.assertRaises(ValueError):
+            market.install("s", reg, skills, plugins)
+        tmp.cleanup()
+
+    def test_ratings(self):
+        from mnemo import market
+        tmp = tempfile.TemporaryDirectory()
+        cfg = load_config(tmp.name)
+        market.rate(str(cfg.db_path), "hello", 5, "great")
+        market.rate(str(cfg.db_path), "hello", 3)
+        s = market.ratings_summary(str(cfg.db_path))
+        self.assertEqual(s["hello"]["count"], 2)
+        self.assertEqual(s["hello"]["avg"], 4.0)
+        tmp.cleanup()
+
+
 class TestTools(unittest.TestCase):
     def test_read_write_roundtrip(self):
         from mnemo.tools import ToolContext

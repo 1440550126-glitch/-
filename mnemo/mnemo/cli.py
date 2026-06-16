@@ -376,27 +376,55 @@ def cmd_daemon(args):
 
 def cmd_market(args):
     app = build_app(args)
-    from .market import install, load_registry, search
+    from . import market
     source = args.registry or app.cfg.get("registry")
+
+    # 评分不需要 registry
+    if args.action == "rate":
+        market.rate(str(app.cfg.db_path), args.name, args.stars, args.note or "")
+        print(green(f"已评分 {args.name}：{'★' * args.stars}"))
+        return 0
+
     if not source:
         print(red("未配置市场。用 --registry <文件或URL>，或 mnemo config set registry <...>"))
         return 1
     try:
-        reg = load_registry(source)
+        reg = market.load_registry(source)
     except Exception as e:  # noqa: BLE001
         print(red(f"读取市场失败：{e}"))
         return 1
+    key = args.key or app.cfg.get("registry_key")
+
+    if args.action == "sign":
+        signed = market.sign_registry(reg, key)
+        out = Path(args.out or source)
+        out.write_text(json.dumps(signed, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(green(f"已签名并写入：{out}"))
+        return 0
+    if args.action == "verify":
+        ok = market.verify_registry(reg, key) if key else False
+        print(green("✓ 签名有效") if ok else red("✗ 签名无效或缺失/未提供 --key"))
+        return 0 if ok else 1
+
+    # list / search / install
+    sig_state = ("✓已签名" if (key and market.verify_registry(reg, key))
+                 else ("⚠未提供key" if reg.get("signature") else "⚠未签名"))
+    ratings = market.ratings_summary(str(app.cfg.db_path))
     if args.action in ("list", "search"):
-        res = search(reg, getattr(args, "query", "") or "")
-        print(bold("技能"))
-        for s in res["skills"]:
-            print(f"  {bold(s['name'])} — {s.get('description', '')}")
-        print(bold("插件"))
-        for p in res["plugins"]:
-            print(f"  {bold(p['name'])} — {p.get('description', '')}")
+        print(dim(f"来源 {source} · {sig_state}"))
+        res = market.search(reg, getattr(args, "query", "") or "")
+        for kind, items in (("技能", res["skills"]), ("插件", res["plugins"])):
+            print(bold(kind))
+            for it in items:
+                rt = ratings.get(it["name"])
+                star = dim(f"  {rt['avg']}★×{rt['count']}") if rt else ""
+                print(f"  {bold(it['name'])} — {it.get('description', '')}{star}")
     elif args.action == "install":
+        if reg.get("signature") and key and not market.verify_registry(reg, key):
+            print(red("拒绝安装：registry 签名校验失败"))
+            return 1
         try:
-            what = install(args.name, reg, app.skills, app.plugins)
+            what = market.install(args.name, reg, app.skills, app.plugins)
             print(green(f"已从市场安装：{what}"))
         except Exception as e:  # noqa: BLE001
             print(red(f"安装失败：{e}"))
@@ -586,12 +614,18 @@ def build_parser() -> argparse.ArgumentParser:
     pa = sub.add_parser("audit", help="查看工具调用审计日志")
     pa.add_argument("--limit", type=int, default=30)
 
-    pmk = sub.add_parser("market", help="技能/插件市场：搜索与安装")
+    pmk = sub.add_parser("market", help="技能/插件市场：搜索/安装/签名/评分")
     pmk.add_argument("--registry", help="registry 文件或 URL（默认读 config.registry）")
+    pmk.add_argument("--key", help="签名校验/签名用的密钥（或 config.registry_key）")
     pmks = pmk.add_subparsers(dest="action", required=True)
     pmks.add_parser("list")
     mks = pmks.add_parser("search"); mks.add_argument("query")
     mki = pmks.add_parser("install"); mki.add_argument("name")
+    pmks.add_parser("verify", help="校验 registry 签名")
+    msg = pmks.add_parser("sign", help="给 registry 签名"); msg.add_argument("--out")
+    mra = pmks.add_parser("rate", help="给某技能/插件本地评分")
+    mra.add_argument("name"); mra.add_argument("stars", type=int)
+    mra.add_argument("--note", default="")
 
     psy = sub.add_parser("sync", help="跨设备记忆同步：加密导出/导入")
     psys = psy.add_subparsers(dest="action", required=True)

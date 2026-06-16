@@ -52,6 +52,15 @@ def decrypt(blob: bytes, passphrase: str) -> bytes:
     return bytes(a ^ b for a, b in zip(ct, ks))
 
 
+def hmac_sign(data: bytes, key: str) -> str:
+    """对字节串做 HMAC-SHA256 签名（市场 registry 签名等）。"""
+    return hmac.new(key.encode("utf-8"), data, hashlib.sha256).hexdigest()
+
+
+def hmac_verify(data: bytes, sig: str, key: str) -> bool:
+    return hmac.compare_digest(sig, hmac_sign(data, key))
+
+
 def _make_tar(home: Path) -> bytes:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
