@@ -33,7 +33,7 @@ class Agent:
                  tasks=None, reflector=None, planner=None, plan=None, devices=None,
                  scenes=None, triggers=None, sensor_source=None, dreams=None, selflog=None,
                  values=None, values_path=None, curiosity=None, worldmodel=None, calib=None,
-                 memorial=None, llm_router=None, legacy=None, care=None) -> None:
+                 memorial=None, llm_router=None, legacy=None, care=None, family=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -74,6 +74,10 @@ class Agent:
         self.legacy = legacy or {}                                # 嘱托/家训（数字遗产）
         self.care = care or {}                                    # 守护对象的关照项（吃药/复查…）
         self._care_fired: set = set()                             # 当天已念过的守护提醒（去重）
+        self.family = family or {}                                # 多人合一：一宅多位家人
+        self.active_member = None                                # 当前"叫出来"说话的是哪位家人
+        self._home_identity = None                               # 切换前的本尊身份（可还原）
+        self._home_persona = None
         self.llm_router = llm_router                              # 多模型路由（按任务选模型 + 小会面板）
         self._degraded_notice_shown = False                       # 降级提示只提一次
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
@@ -216,6 +220,33 @@ class Agent:
             result["reply"] = reply
             self._log_journal(who, utterance, reply, "habit")
             return result
+
+        # --- 多人合一：报全家 / 把某位家人"叫出来"说话 / 请本尊回来 ---
+        if action is None and who.get("obey") and self.family:
+            from .family import find_member
+            u = utterance or ""
+            if any(k in u for k in ("我们家都有谁", "家里都有谁", "咱家都有谁", "家里有谁",
+                                    "都有哪些人", "全家都有谁", "家里还有谁")):
+                txt = self.family_roster()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "family_roster")
+                    return result
+            if self.active_member and any(k in u for k in ("你回来", "本尊", "换回来",
+                                                           "还是你自己", "你自己来")):
+                txt = self.restore_home()
+                result["reply"] = txt
+                self._log_journal(who, u, txt, "family_restore")
+                return result
+            if any(k in u for k in ("叫来", "叫出来", "想和", "想跟", "我找", "在吗",
+                                    "来说说", "来聊", "说说话", "出来说", "换成")):
+                m = find_member(self.family, u)
+                if m:
+                    txt = self.become(u)
+                    if txt:
+                        result["reply"] = txt
+                        self._log_journal(who, u, txt, f"become:{m.get('name')}")
+                        return result
 
         # --- 编年生平 / 嘱托 / 家训（数字遗产）---
         if action is None and who.get("obey"):
@@ -470,6 +501,35 @@ class Agent:
             self._care_fired.add(key)
             out.append(text)
         return out
+
+    # ---------- 多人合一：一座数字宅里住着不止一个人 ----------
+    def family_roster(self) -> str:
+        from .family import roster_line
+        return roster_line(self.family)
+
+    def become(self, query) -> str:
+        """把某位家人"叫出来"：热切换到 TA 本人的口吻继续对话，并以 TA 的口气打个招呼。"""
+        from .family import find_member, member_identity
+        from .persona import Persona
+        from .style import apply_style
+        m = find_member(self.family, query)
+        if not m:
+            return ""
+        if self._home_identity is None:                # 首次切换前，记下本尊以便还原
+            self._home_identity, self._home_persona = self.identity, self.persona
+        self.identity = member_identity(m, self.family)
+        self.persona = Persona(self.identity)
+        self.active_member = self.identity["name"]
+        hi = m.get("greeting") or f"我是{self.active_member}，来啦，想说点啥？"
+        return apply_style(hi, self.identity)
+
+    def restore_home(self) -> str:
+        """把本尊请回来（结束某位家人的'出场'）。"""
+        if self._home_identity is not None:
+            self.identity, self.persona = self._home_identity, self._home_persona
+            self._home_identity = self._home_persona = None
+        self.active_member = None
+        return f"好，我又是{self.identity.get('name', '我')}了。"
 
     # ---------- 编年生平 + 嘱托（数字遗产）----------
     def life_chronicle(self) -> str:

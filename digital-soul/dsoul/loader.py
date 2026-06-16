@@ -103,7 +103,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  memorial=_load_yaml(base / "config" / "memorial.yaml"),
                  llm_router=llm_router,
                  legacy=_load_yaml(base / "config" / "legacy.yaml"),
-                 care=_load_yaml(base / "config" / "care.yaml"))
+                 care=_load_yaml(base / "config" / "care.yaml"),
+                 family=_load_yaml(base / "config" / "family.yaml"))
 
 
 def _seed_memory(base: Path, memory) -> None:

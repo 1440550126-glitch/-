@@ -32,6 +32,9 @@ class Persona:
             L.append("口头禅（自然地用，别硬塞）：" + " / ".join(p["catchphrases"]))
         if idy.get("daily_life"):
             L.append("你平常的生活：" + "；".join(idy["daily_life"]) + "。")
+        if idy.get("family_others"):
+            L.append("你家里还有：" + "、".join(idy["family_others"]) +
+                     "，你们是一家人，说话时可以自然地提起 TA 们。")
 
         if speaker:
             L.append(

@@ -135,6 +135,7 @@ flowchart TB
 | `photo.py` | 多模态·照片：照片要素→带日期记忆，汇入时间线/图谱 |
 | `legacy.py` | 编年生平 + 嘱托：一生编年成故事，保管临终留言/家训 |
 | `guardian.py` | 守护提醒：惦记家人吃药/复查/重要日子，到点本地生成叮嘱（不碰外部账号设备） |
+| `family.py` | 多人合一：一宅多位家人，可"叫出来"由 TA 本人口吻说话，彼此知道对方存在 |
 | `llm.py` | 大模型：多模型/多服务商(Ollama+OpenAI兼容)，按任务路由 + 小会异质模型 |
 | `webstatus.py` | 手机网页：状态/对话/设备/场景/自动化 + 关系图谱·一生时间线·守护叮嘱 |
 
@@ -166,13 +167,13 @@ flowchart TB
 
 ## 6. 测试
 
-38 套单测、约 190+ 用例，纯标准库、零网络即可跑：
+39 套单测、约 200+ 用例，纯标准库、零网络即可跑：
 
 ```bash
 cd digital-soul
 for t in authority memory annotate presence consolidate emotions skills dispatch tasks reflect plan butler devices orchestrate scenes \
          triggers ha graph voice forgetting entangle dream selfnarrative values monologue curiosity worldmodel anticipate predict swarm \
-         style memorial lifelog habits photo llm legacy guardian; do
+         style memorial lifelog habits photo llm legacy guardian family; do
   python tests/test_$t.py || break
 done
 ```
