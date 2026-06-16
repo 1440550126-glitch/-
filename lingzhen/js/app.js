@@ -91,7 +91,9 @@ function header() {
     h('nav', { class: 'lz-nav' },
       h('a', { onclick: () => nav('#/') }, '团队广场'),
       h('a', { onclick: () => nav('#/kb') }, '知识库'),
-      h('a', { onclick: () => nav('#/history') }, '运行历史'),
+      h('a', { onclick: () => nav('#/triggers') }, '触发器'),
+      h('a', { onclick: () => nav('#/history') }, '历史'),
+      h('a', { onclick: () => nav('#/usage') }, '用量'),
       h('a', { class: 'primary', onclick: () => nav('#/new') }, '＋ 建队')),
     h('div', { class: 'lz-user' },
       state.meta ? h('span', { class: 'lz-quota', title: '今日剩余运行次数' }, `⚡ ${state.meta.quota.left}/${state.meta.quota.limit}`) : null,
@@ -558,6 +560,171 @@ async function renderKBDetail(id) {
   } catch (e) { mount(shell(empty('知识库不存在或无权访问', e.message))); }
 }
 
+// ---------------- 定时触发器 ----------------
+async function renderTriggers() {
+  mount(shell(spinner()));
+  try {
+    await loadMeta();
+    const [{ items, limits }, teamsData] = await Promise.all([GET('/api/triggers'), GET('/api/teams')]);
+    const myTeams = teamsData.mine;
+
+    const teamSel = h('select', { class: 'lz-in' },
+      ...(myTeams.length
+        ? myTeams.map((t) => h('option', { value: t.id }, t.name))
+        : [h('option', {}, '（暂无我的团队）')]));
+    const nameIn = h('input', { class: 'lz-in', placeholder: '任务名（可留空，自动生成）', maxlength: 30 });
+    const taskIn = h('textarea', { class: 'lz-ta', rows: 3, placeholder: '自动执行的任务内容（500 字以内）' });
+
+    let kind = 'daily';
+    const kindRow = h('div', { class: 'lz-trg-kinds' });
+    const hourIn = h('input', { class: 'lz-in tiny', type: 'number', min: 0, max: 23, value: 9 });
+    const minIn = h('input', { class: 'lz-in tiny', type: 'number', min: 0, max: 59, value: 0 });
+    const intIn = h('input', { class: 'lz-in tiny', type: 'number', min: limits.min_interval_min, max: 1440, value: limits.min_interval_min });
+    const dailyBox = h('div', { class: 'lz-trg-time' },
+      h('span', {}, '每天 '), hourIn, h('span', {}, ' 时 '), minIn, h('span', {}, ' 分'));
+    const intBox = h('div', { class: 'lz-trg-time', hidden: true },
+      h('span', {}, '每 '), intIn, h('span', {}, ` 分钟（最少 ${limits.min_interval_min} 分）`));
+
+    function drawKinds() {
+      kindRow.innerHTML = '';
+      for (const [k, lbl] of [['daily', '每天定时'], ['interval', '按间隔']]) {
+        kindRow.append(h('button', {
+          class: 'lz-strat-opt' + (kind === k ? ' on' : ''),
+          onclick: () => { kind = k; drawKinds(); dailyBox.hidden = k !== 'daily'; intBox.hidden = k !== 'interval'; }
+        }, lbl));
+      }
+    }
+    drawKinds();
+
+    const addBtn = h('button', { class: 'lz-btn' }, '＋ 创建触发器');
+    addBtn.addEventListener('click', async () => {
+      if (!myTeams.length) { toast('先创建一个团队再来设触发器', 'warn'); return; }
+      const task = taskIn.value.trim();
+      if (!task) { toast('描述要自动执行的任务', 'warn'); return; }
+      addBtn.disabled = true;
+      try {
+        await POST('/api/triggers', {
+          team_id: Number(teamSel.value), name: nameIn.value.trim() || undefined, task,
+          schedule_kind: kind, at_hour: Number(hourIn.value) || 9,
+          at_minute: Number(minIn.value) || 0, interval_min: Number(intIn.value) || limits.min_interval_min
+        });
+        toast('触发器已创建'); renderTriggers();
+      } catch (e) { toast(e.message, 'warn'); addBtn.disabled = false; }
+    });
+
+    const fmtSched = (t) =>
+      t.schedule_kind === 'daily'
+        ? `每天 ${String(t.at_hour).padStart(2, '0')}:${String(t.at_minute).padStart(2, '0')}`
+        : `每 ${t.interval_min} 分钟`;
+
+    const listEl = h('div', { class: 'lz-trg-list' });
+    if (!items.length) {
+      listEl.append(empty('还没有定时触发器', '创建一个，让 AI 团队按计划自动工作'));
+    } else {
+      for (const t of items) {
+        const tgRow = h('div', { class: 'lz-trg-row' });
+        const togBtn = h('button', { class: 'lz-toggle' + (t.enabled ? ' on' : '') }, t.enabled ? '启用中' : '已停用');
+        togBtn.addEventListener('click', async () => {
+          togBtn.disabled = true;
+          try {
+            const res = await PATCH(`/api/triggers/${t.id}`, { enabled: !t.enabled });
+            t.enabled = res.trigger.enabled;
+            togBtn.className = 'lz-toggle' + (t.enabled ? ' on' : '');
+            togBtn.textContent = t.enabled ? '启用中' : '已停用';
+            toast(t.enabled ? '已启用' : '已停用');
+          } catch (e) { toast(e.message, 'warn'); }
+          togBtn.disabled = false;
+        });
+        const runNowBtn = h('button', { class: 'lz-btn ghost sm' }, '▶ 立即运行');
+        runNowBtn.addEventListener('click', async () => {
+          runNowBtn.disabled = true;
+          try {
+            const { run_id } = await POST(`/api/triggers/${t.id}/run-now`);
+            toast('已触发！'); setTimeout(() => nav(`#/run/${run_id}`), 500);
+          } catch (e) { toast(e.message, 'warn'); runNowBtn.disabled = false; }
+        });
+        const delBtn = h('button', { class: 'lz-btn ghost danger sm' }, '删除');
+        delBtn.addEventListener('click', async () => {
+          if (!confirm('删除这个触发器？')) return;
+          try { await DEL(`/api/triggers/${t.id}`); toast('已删除'); tgRow.remove(); }
+          catch (e) { toast(e.message, 'warn'); }
+        });
+        tgRow.append(
+          h('div', { class: 'lz-trg-info' },
+            h('div', { class: 'lz-trg-name' }, t.name, h('span', { class: 'lz-tag tpl' }, t.team_name)),
+            h('div', { class: 'lz-trg-meta' },
+              fmtSched(t) +
+              (t.next_run_at ? ' · 下次 ' + fmtTime(t.next_run_at) : '') +
+              (t.run_count ? ` · 已跑 ${t.run_count} 次` : '')),
+            h('div', { class: 'lz-trg-task' }, t.task),
+            t.last_run_id ? h('a', { class: 'lz-link', onclick: () => nav(`#/run/${t.last_run_id}`) }, '查看最近一次运行') : null),
+          h('div', { class: 'lz-trg-acts' }, togBtn, runNowBtn, delBtn));
+        listEl.append(tgRow);
+      }
+    }
+
+    mount(shell(
+      h('div', { class: 'lz-sec-t big' }, '⏰ 定时触发器'),
+      h('p', { class: 'lz-intro' }, `让 AI 团队按计划自动执行任务，结果存入运行历史。最多同时启用 ${limits.max_triggers} 个。`),
+      myTeams.length
+        ? h('div', { class: 'lz-kb-new' },
+            h('div', { class: 'lz-sec-t' }, '新建触发器'),
+            h('label', { class: 'lz-form-lbl' }, '团队'), teamSel,
+            h('label', { class: 'lz-form-lbl' }, '任务名（可选）'), nameIn,
+            h('label', { class: 'lz-form-lbl' }, '任务内容'), taskIn,
+            h('label', { class: 'lz-form-lbl' }, '执行计划'), kindRow, dailyBox, intBox,
+            addBtn)
+        : h('div', { class: 'lz-note' }, '💡 需要先有「我的团队」才能创建触发器。',
+            h('a', { class: 'lz-link', onclick: () => nav('#/new') }, ' 去建队 →')),
+      h('div', { class: 'lz-sec-t' }, `我的触发器（${items.length}）`),
+      listEl));
+  } catch (e) { mount(shell(empty('加载失败', e.message))); }
+}
+
+// ---------------- 用量看板 ----------------
+async function renderUsage() {
+  mount(shell(spinner()));
+  try {
+    const u = await GET('/api/agents/usage');
+    const fmtYuan = (micro) => micro ? `¥${(micro / 1e6).toFixed(4)}` : '¥0';
+    const pctBar = (used, limit, col) => {
+      const pct = Math.min(100, Math.round((used / Math.max(1, limit)) * 100));
+      return h('div', { class: 'lz-bar' },
+        h('div', { class: 'lz-bar-fill', style: { width: pct + '%', background: col || 'var(--acc)' } }));
+    };
+    mount(shell(
+      h('div', { class: 'lz-sec-t big' }, '📊 用量看板'),
+      h('p', { class: 'lz-intro' }, u.member
+        ? '会员账号 · 享受更高配额。'
+        : `体验账号，每天最多运行 ${u.quota.run.limit} 次，外部 API 每天 ${u.quota.api.limit} 次。`),
+      h('div', { class: 'lz-usg-grid' },
+        h('div', { class: 'lz-usg-card' },
+          h('div', { class: 'lz-usg-label' }, '今日运行'),
+          h('div', { class: 'lz-usg-val' }, String(u.runs.today), h('span', {}, ` / ${u.quota.run.limit}`)),
+          pctBar(u.runs.today, u.quota.run.limit, 'var(--acc)'),
+          h('div', { class: 'lz-usg-sub' }, `累计已用额度 ${u.quota.run.used} 次`)),
+        h('div', { class: 'lz-usg-card' },
+          h('div', { class: 'lz-usg-label' }, '历史总运行'),
+          h('div', { class: 'lz-usg-val', style: { color: 'var(--acc2)' } }, String(u.runs.total)),
+          h('div', { class: 'lz-usg-sub' }, `成功 ${u.runs.done} 次 · 失败 ${u.runs.failed} 次`)),
+        h('div', { class: 'lz-usg-card' },
+          h('div', { class: 'lz-usg-label' }, '今日花费'),
+          h('div', { class: 'lz-usg-val', style: { color: 'var(--ok)' } }, fmtYuan(u.cost.today_micro)),
+          h('div', { class: 'lz-usg-sub' }, `累计总花费 ${fmtYuan(u.cost.total_micro)}`)),
+        h('div', { class: 'lz-usg-card' },
+          h('div', { class: 'lz-usg-label' }, '对外 API（今日）'),
+          h('div', { class: 'lz-usg-val' }, String(u.quota.api.used), h('span', {}, ` / ${u.quota.api.limit}`)),
+          pctBar(u.quota.api.used, u.quota.api.limit, 'var(--acc2)'),
+          h('div', { class: 'lz-usg-sub' }, '公开 API 调用次数')),
+        h('div', { class: 'lz-usg-card' },
+          h('div', { class: 'lz-usg-label' }, '我的资产'),
+          h('div', { class: 'lz-usg-assets' },
+            h('div', {}, h('div', { class: 'lz-usg-n' }, String(u.assets.teams)), h('small', {}, '团队')),
+            h('div', {}, h('div', { class: 'lz-usg-n' }, String(u.assets.agents)), h('small', {}, '智能体')),
+            h('div', {}, h('div', { class: 'lz-usg-n' }, String(u.assets.kbs)), h('small', {}, '知识库')))))));
+  } catch (e) { mount(shell(empty('加载失败', e.message))); }
+}
+
 // ---------------- 路由 ----------------
 function route() {
   if (!state.me) { renderLogin(); return; }
@@ -570,6 +737,8 @@ function route() {
   if (path === 'edit' && p1) return renderBuilder(p1);
   if (path === 'kb' && p1) return renderKBDetail(p1);
   if (path === 'kb') return renderKB();
+  if (path === 'triggers') return renderTriggers();
+  if (path === 'usage') return renderUsage();
   return renderHome();
 }
 

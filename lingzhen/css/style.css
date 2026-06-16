@@ -234,6 +234,37 @@ a{cursor:pointer;color:inherit}
 .lz-curl-t{color:var(--mut);font-size:12px;margin:12px 0 5px}
 .lz-curl{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:11px;overflow:auto;font-size:12px;color:#cdd5e6;white-space:pre;margin:0}
 
+/* ---- 触发器 ---- */
+.lz-form-lbl{display:block;font-size:13px;color:var(--mut);margin:14px 0 4px;font-weight:600}
+.lz-trg-kinds{display:flex;gap:9px;margin:6px 0}
+.lz-trg-kinds .lz-strat-opt{flex:1}
+.lz-trg-time{display:flex;align-items:center;gap:8px;padding:10px 0;font-size:13px;color:var(--mut)}
+.lz-trg-time .lz-in{margin:0;width:auto}
+.lz-trg-list{display:flex;flex-direction:column;gap:10px}
+.lz-trg-row{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:14px 16px;display:flex;gap:14px;align-items:flex-start}
+.lz-trg-info{flex:1;min-width:0}
+.lz-trg-name{font-weight:600;font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px}
+.lz-trg-meta{font-size:12px;color:var(--mut);margin-bottom:6px}
+.lz-trg-task{font-size:13px;color:var(--dim);margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.lz-trg-acts{display:flex;flex-direction:column;gap:7px;flex:none}
+.lz-toggle{padding:5px 13px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--line);background:var(--bg2);color:var(--mut);white-space:nowrap}
+.lz-toggle.on{background:rgba(70,211,154,.15);border-color:rgba(70,211,154,.4);color:var(--ok)}
+.lz-toggle:disabled{opacity:.55;cursor:default}
+
+/* ---- 用量看板 ---- */
+.lz-usg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-top:12px}
+.lz-usg-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.lz-usg-label{font-size:12px;color:var(--mut);margin-bottom:10px;font-weight:600;letter-spacing:.3px}
+.lz-usg-val{font-size:28px;font-weight:700;color:var(--txt);margin-bottom:8px;line-height:1}
+.lz-usg-val span{font-size:14px;color:var(--mut);font-weight:400}
+.lz-usg-sub{font-size:12px;color:var(--dim);margin-top:6px}
+.lz-bar{height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;margin:8px 0 4px}
+.lz-bar-fill{height:100%;border-radius:3px;transition:.4s}
+.lz-usg-assets{display:flex;gap:20px;margin-top:8px}
+.lz-usg-assets div{text-align:center}
+.lz-usg-n{font-size:24px;font-weight:700;color:var(--acc)}
+.lz-usg-assets small{color:var(--mut);font-size:12px}
+
 /* ---- Toast ---- */
 .lz-toast{position:fixed;left:50%;bottom:34px;background:var(--card2);border:1px solid var(--line);color:var(--txt);padding:11px 18px;border-radius:11px;font-size:14px;box-shadow:var(--sh);opacity:0;transition:.3s;z-index:99;transform:translateX(-50%) translateY(20px)}
 .lz-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
