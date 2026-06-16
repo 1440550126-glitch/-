@@ -73,6 +73,9 @@
 | 本地日程 | 生日/复诊/约定记在本地，"今天有什么事"能报，喂给晨间关怀 | `dsoul/calendar_book.py` |
 | 触景生情 | "说起老房子"，顺着相关记忆与当时情绪说一段回想 | `dsoul/reminisce.py` |
 | 感恩与遗憾 | 回望一生，挑出最感念的与放不下的 | `dsoul/gratitude.py` |
+| 时光胶囊 | 封存一句话给未来，到某日由分身交给某位家人（含错过补送，只送一次） | `dsoul/timecapsule.py` |
+| 临别期许 | TA 对每位家人的一句盼望，问"你希望我怎样"时道来 | `dsoul/wishes.py` |
+| 速记便签 | 随手"记个事"，回头能翻能搜能清 | `dsoul/notes.py` |
 | 家族册导出 | 每位家人各一页(生平/性格/口头禅/记忆)+对谈，编成可打印传家的 HTML | `dsoul/book.py` · `scripts/family_book.py` |
 | 生平上网页 | 手机网页看 TA 的一生/嘱托家训/全家/守护惦记，点全家按钮即唤出某位 | `dsoul/webstatus.py` |
 | 数字纪念册 | 一生/影像/嘱托/家训/全家/时间线导出成一页自包含、可打印的 HTML（照片 base64 内嵌），存得住传得下 | `dsoul/keepsake.py` · `scripts/keepsake.py` |

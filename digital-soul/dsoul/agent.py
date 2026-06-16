@@ -35,7 +35,7 @@ class Agent:
                  scenes=None, triggers=None, sensor_source=None, dreams=None, selflog=None,
                  values=None, values_path=None, curiosity=None, worldmodel=None, calib=None,
                  memorial=None, llm_router=None, legacy=None, care=None, family=None,
-                 calendar=None) -> None:
+                 calendar=None, capsules=None, notes=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -77,6 +77,8 @@ class Agent:
         self.care = care or {}                                    # 守护对象的关照项（吃药/复查…）
         self._care_fired: set = set()                             # 当天已念过的守护提醒（去重）
         self.calendar = calendar                                  # 本地日程本（生日/复诊/约定）
+        self.capsules = capsules                                  # 时光胶囊（封存给未来的话）
+        self.notes = notes                                        # 速记便签（最轻的随手备忘）
         self.family = family or {}                                # 多人合一：一宅多位家人
         self.active_member = None                                # 当前"叫出来"说话的是哪位家人
         self._home_identity = None                               # 切换前的本尊身份（可还原）
@@ -284,6 +286,38 @@ class Agent:
                     result["reply"] = txt
                     self._log_journal(who, u, txt, "precepts")
                     return result
+            if any(k in u for k in ("你希望我", "你对我的期望", "你盼着我", "对我的期许",
+                                    "你希望我怎样", "期望我", "你盼我")):
+                txt = self.deliver_wish(who.get("name") if who.get("known") else None)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "wish")
+                    return result
+
+        # --- 速记便签（"记个事：明天买菜" / "我的便签" / "清空便签"）---
+        if action is None and who.get("obey") and self.notes is not None:
+            u3 = utterance or ""
+            if any(k in u3 for k in ("清空便签", "清空笔记", "删掉便签")):
+                k = self.notes.clear()
+                reply = f"好，{k} 条便签都清掉了。"
+                result["reply"] = reply
+                self._log_journal(who, u3, reply, "notes")
+                return result
+            if any(k in u3 for k in ("我的便签", "我的笔记", "看看便签", "看下便签",
+                                     "便签有啥", "记了些什么")):
+                rs = self.recent_notes()
+                reply = ("便签：" + "；".join(rs)) if rs else "便签还空着呢。"
+                result["reply"] = reply
+                self._log_journal(who, u3, reply, "notes")
+                return result
+            if any(k in u3 for k in ("记个事", "记个笔记", "记条便签", "便签记", "记一笔", "帮我记下")):
+                body = u3
+                for kw in ("记个事", "记个笔记", "记条便签", "便签记", "记一笔", "帮我记下", "：", ":"):
+                    body = body.replace(kw, "")
+                reply = self.jot_note(body.strip("，,。.、 ")) or "想记点啥？说来听听。"
+                result["reply"] = reply
+                self._log_journal(who, u3, reply, "notes")
+                return result
 
         # --- 触景生情 / 睹物思人（"说起老房子" / "看到这个就想起"）---
         if action is None and who.get("obey"):
@@ -301,6 +335,29 @@ class Agent:
                 txt = self.reminisce_about(cue)
                 result["reply"] = txt
                 self._log_journal(who, u, txt, "reminisce")
+                return result
+
+        # --- 时光胶囊（"给孙女留句话，到2035年6月16日：好好长大"）---
+        if action is None and who.get("obey") and self.capsules is not None:
+            u2 = utterance or ""
+            if ("时光胶囊" in u2 or "封存" in u2 or "留给未来" in u2
+                    or ("留" in u2 and ("句话" in u2 or "几句" in u2))):
+                import re as _rec
+                md = _rec.search(r"(\d{4}\s*[-/年]\s*\d{1,2}\s*[-/月]\s*\d{1,2}\s*日?)", u2)
+                msg = ""
+                if "：" in u2 or ":" in u2:
+                    msg = (u2.split("：", 1)[-1] if "：" in u2 else u2.split(":", 1)[-1]).strip()
+                rec_m = _rec.search(r"给(.{1,8}?)(?:留|，|,|说|到|的|：|:|\d)", u2)
+                recipient = rec_m.group(1).strip() if rec_m else (
+                    who.get("name") if who.get("known") else "你")
+                if md and msg:
+                    cap = self.add_capsule(recipient, md.group(1).replace(" ", ""), msg)
+                    reply = (f"好，这句话我替你封存了，到{cap['date']}再交给{cap['recipient']}。"
+                             if cap else "日期没认出来，给个像 2035年6月16日 这样的日子吧。")
+                else:
+                    reply = "可以这样说：给孙女留句话，到2035年6月16日：好好长大。"
+                result["reply"] = reply
+                self._log_journal(who, u2, reply, "capsule")
                 return result
 
         # --- 本地日程（"今天有什么事/日程" / "记一下6月18日去复诊"）---
@@ -564,6 +621,10 @@ class Agent:
         if who.get("obey"):
             for c in self.due_care():
                 text = f"{text} {c}"
+        # 时光胶囊：到开封日了，把封存的话郑重交给该交的人
+        if who.get("obey"):
+            for cap in self.due_capsules():
+                text = f"{text} {cap}"
         self.robot.say(text)
         return text
 
@@ -648,6 +709,40 @@ class Agent:
             when = "明天" if n == 1 else (f"{n}天后" if n else "今天")
             return f"近几天：{when}是{e['title']}。"
         return "今天没什么特别安排，轻松点。"
+
+    # ---------- 时光胶囊：封存给未来的话 ----------
+    def add_capsule(self, recipient, deliver_date, message) -> dict | None:
+        cap = getattr(self, "capsules", None)
+        return cap.add(recipient, deliver_date, message) if cap is not None else None
+
+    def due_capsules(self, now=None) -> list:
+        """到点开封的时光胶囊，说成郑重的交付（只送一次）。"""
+        cap = getattr(self, "capsules", None)
+        if cap is None:
+            return []
+        return [cap.speak(c) for c in cap.due(now)]
+
+    # ---------- 临别期许 ----------
+    def deliver_wish(self, name) -> str:
+        """说出 TA 对某位家人的期望/祝愿（配在 legacy.wishes 或 family 成员 wish）。"""
+        from .style import apply_style
+        from .wishes import collect_wishes, wish_for
+        w = wish_for(collect_wishes(self.legacy, self.family), name)
+        if not w:
+            return ""
+        return apply_style(f"我对你啊，没别的，就盼着：{w}", self.identity)
+
+    # ---------- 速记便签 ----------
+    def jot_note(self, text) -> str:
+        n = getattr(self, "notes", None)
+        if n is None:
+            return ""
+        note = n.add(text)
+        return f"记下了：{note['text']}" if note else ""
+
+    def recent_notes(self, k=8) -> list:
+        n = getattr(self, "notes", None)
+        return n.recent(k) if n is not None else []
 
     # ---------- 触景生情 / 感恩与遗憾 ----------
     def reminisce_about(self, cue) -> str:

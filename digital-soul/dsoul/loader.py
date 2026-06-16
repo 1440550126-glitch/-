@@ -18,6 +18,7 @@ from .journal import Journal
 from .knowledge import Knowledge
 from .llm import build_router
 from .memory import Memory
+from .notes import NoteBook
 from .perception import build_perception
 from .predict import Calibration
 from .persona import Persona
@@ -26,6 +27,7 @@ from .reflect import Reflector
 from .remote_agents import AgentHub
 from .selfnarrative import SelfLog
 from .scenes import SceneBook
+from .timecapsule import CapsuleBook
 from .skills import SkillRegistry
 from .tasks import TaskBook
 from .values import load_values
@@ -108,7 +110,9 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  legacy=_load_yaml(base / "config" / "legacy.yaml"),
                  care=_load_yaml(base / "config" / "care.yaml"),
                  family=family_cfg,
-                 calendar=EventBook(base / "data" / "calendar.json"))
+                 calendar=EventBook(base / "data" / "calendar.json"),
+                 capsules=CapsuleBook(base / "data" / "capsules.json"),
+                 notes=NoteBook(base / "data" / "notes.json"))
 
 
 def _seed_memory(base: Path, memory) -> None:

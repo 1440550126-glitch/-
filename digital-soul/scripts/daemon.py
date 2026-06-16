@@ -133,6 +133,15 @@ def trigger_loop(agent, mouth=None) -> None:
             print(f"[守护] {c}", flush=True)
             if mouth is not None:                       # 用 TA 本人的嗓音叮嘱家人
                 mouth.speak(c, mood=_mood(agent), profile=profile)
+        try:
+            caps = agent.due_capsules()
+        except Exception as e:
+            print(f"[胶囊] 出错：{e}", flush=True)
+            caps = []
+        for cap in caps:
+            print(f"[时光胶囊] {cap}", flush=True)
+            if mouth is not None:
+                mouth.speak(cap, mood=_mood(agent), profile=profile)
 
 
 def think_loop(agent, minutes: float) -> None:

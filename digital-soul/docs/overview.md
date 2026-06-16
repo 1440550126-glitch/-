@@ -142,6 +142,9 @@ flowchart TB
 | `calendar_book.py` | 本地日程本：生日/复诊/约定持久化，支持每年循环日期，喂给晨间关怀 |
 | `reminisce.py` | 触景生情/睹物思人：给一个由头，顺相关记忆与当时情绪说一段回想 |
 | `gratitude.py` | 感恩与遗憾：按记忆情绪挑出最感念的与放不下的，说成第一人称回望 |
+| `timecapsule.py` | 时光胶囊：封存一句话给未来，到某日(含错过补送)由分身交给某位家人，只送一次 |
+| `wishes.py` | 临别期许：TA 对每位家人的一句盼望(legacy.wishes / 成员 wish)，问起时道来 |
+| `notes.py` | 速记便签：随手记/翻/搜/清的最轻备忘，本地持久化 |
 | `keepsake.py` | 数字纪念册：把一生/影像/嘱托/家训/全家/时间线导出成一页自包含、可打印的 HTML（照片 base64 内嵌） |
 | `book.py` | 家族册：每位家人各一页(生平/性格/口头禅/TA 的记忆)+一段对谈，编成可打印传家的一本 HTML |
 | `llm.py` | 大模型：多模型/多服务商(Ollama+OpenAI兼容)，按任务路由 + 小会异质模型 |
@@ -177,14 +180,14 @@ flowchart TB
 
 ## 6. 测试
 
-48 套单测、约 260+ 用例，纯标准库、零网络即可跑：
+51 套单测、约 280+ 用例，纯标准库、零网络即可跑：
 
 ```bash
 cd digital-soul
 for t in authority memory annotate presence consolidate emotions skills dispatch tasks reflect plan butler devices orchestrate scenes \
          triggers ha graph voice forgetting entangle dream selfnarrative values monologue curiosity worldmodel anticipate predict swarm \
          style memorial lifelog habits photo llm legacy guardian family webstatus keepsake converse \
-         briefing book letters calendar reminisce gratitude; do
+         briefing book letters calendar reminisce gratitude timecapsule wishes notes; do
   python tests/test_$t.py || break
 done
 ```
