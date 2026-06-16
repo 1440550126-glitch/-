@@ -229,6 +229,9 @@ const { AudioReactor } = await import('../dolby-visualizer.js');
 const rb = new AudioReactor(vAn);                 // vAn 低频仍强（前面已填 250）
 let bpmV = 0; for (const tm of [1000, 1500, 2000, 2500]) bpmV = rb.read(tm).bpm;   // 每 500ms 一拍 → 120
 ok(bpmV === 120, `AudioReactor BPM 估计=${bpmV}`);
+const viz2 = new DolbyVisualizer(vCanvas, { analyser: vAn, particles: 4 });
+const fakeImg = {}; viz2.setCover(fakeImg); ok(viz2._cover === fakeImg, 'setCover 设置封面背景');
+viz2.clearCover(); ok(viz2._cover === null, 'clearCover 清除封面'); viz2.dispose();
 
 // 15) 预设导入/导出
 const jsonP = store.exportPreset({ id: 'x', label: 'X', p: { bass: { gain: 6 } } });

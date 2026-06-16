@@ -42,6 +42,9 @@
     .file span { display: inline-block; padding: 9px 14px; border-radius: 12px; background: rgba(255,255,255,.12); font-size: 13px; font-weight: 700; }
     .file input { display: none; }
     .label { font-size: 12px; color: rgba(255,255,255,.55); }
+    .immersive .hideable, .immersive h1, .immersive .sub { display: none; }
+    .immersive .wrap { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; }
+    .immersive .now-title { font-size: 26px; }
   </style>
 </head>
 <body>
@@ -51,7 +54,7 @@
     <div class="sub">在杜比引擎之上的播放器层：播放列表 · 上下一首 · 进度 · 音量 · 循环/随机 · 事件，全程经沉浸音效处理。</div>
 
     <div class="card">
-      <div class="now-title" id="title">—</div>
+      <div class="row between"><div class="now-title" id="title">—</div><button id="fs" title="沉浸全屏" style="background:rgba(255,255,255,.12);border-radius:10px;padding:8px 12px;font-size:16px">⛶</button></div>
       <div class="now-artist"><span id="artist"></span><span id="bpm" style="margin-left:8px;opacity:.7"></span></div>
       <div class="row" style="margin:14px 0 6px">
         <span class="time" id="cur">0:00</span>
@@ -70,7 +73,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card hideable">
       <div class="row between" style="margin-bottom:8px">
         <div style="font-weight:800;font-size:15px">播放列表</div>
         <label class="file"><input id="file" type="file" accept="audio/*" multiple /><span>＋ 添加本地文件</span></label>
@@ -79,7 +82,7 @@
       <div class="hint" id="plHint">内置两段合成片段。本仓库严格 CSP 下「添加本地文件」可能无法播放（需站点允许 blob: 媒体或独立托管）。</div>
     </div>
 
-    <div class="card">
+    <div class="card hideable">
       <div class="row between">
         <div><div style="font-weight:800;font-size:15px">杜比音效</div><div class="label" id="dolbyState">已开启 · 音乐厅</div></div>
         <div id="dolbySwitch" class="switch on"></div>

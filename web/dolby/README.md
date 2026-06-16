@@ -221,6 +221,9 @@ viz.start();
 也可直接传 `{ analyser }` 或 `{ node, context }`。`viz.analyze()`（或 `viz.last`）返回
 `{ bass, mid, treble, energy, beat, bpm }`——含**估计的 BPM**，可驱动你自己的动效。
 
+**封面纹理混合**：`viz.setCover(img)`（Image/Canvas，需 CORS 干净）把封面喂进 WebGL 当背景纹理，
+让它随流场"融化"在流体里（Canvas2D 版则作暗淡背景层）；`viz.clearCover()` 取消。
+
 **封面取色换肤**：`coverColor(img)` 从封面取主色，喂给 `viz.setBaseHue()` 让整片视觉随专辑变色：
 
 ```js
@@ -230,7 +233,8 @@ img.onload = () => viz.setBaseHue(coverColor(img).hue);
 img.src = track.cover;
 ```
 
-`player.html` 已用它做整页反应式背景，并随曲目切换变色。
+`player.html` 已用它做整页反应式背景，随曲目切换变色、把（程序化生成的）封面融进流体，
+并有「⛶ 沉浸全屏」按钮进入只剩可视化 + 极简控制的沉浸播放页。
 
 ## 动态、响度与人声
 

@@ -21,11 +21,27 @@ const dolby = player.dolby;
 const viz = createVisualizer($('viz'), { dolby, particles: 120 });
 let vizStarted = false;
 const HUES = [275, 205, 330, 150];
+// 没有真实封面时，按曲目生成一张程序化封面（也用于喂进 WebGL 背景纹理）
+function makeCover(track, index) {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d'), hue = HUES[index % HUES.length];
+  const g = x.createLinearGradient(0, 0, 256, 256);
+  g.addColorStop(0, `hsl(${hue},70%,55%)`); g.addColorStop(1, `hsl(${(hue + 60) % 360},65%,32%)`);
+  x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+  x.globalAlpha = 0.22; x.fillStyle = '#fff';
+  for (let i = 0; i < 6; i++) { x.beginPath(); x.arc(Math.random() * 256, Math.random() * 256, 20 + Math.random() * 70, 0, Math.PI * 2); x.fill(); }
+  x.globalAlpha = 1;
+  const title = (track && typeof track === 'object' && track.title) ? track.title : '♪';
+  x.fillStyle = 'rgba(255,255,255,.92)'; x.font = 'bold 130px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText([...title][0] || '♪', 128, 132);
+  return c;
+}
 function applyTheme(track, index) {
-  const setHue = (hue) => { viz.setBaseHue(hue); document.documentElement.style.setProperty('--hue', String(Math.round(hue))); };
+  const apply = (src, hue) => { if (viz.setCover) viz.setCover(src); viz.setBaseHue(hue); document.documentElement.style.setProperty('--hue', String(Math.round(hue))); };
   const cover = track && typeof track === 'object' ? track.cover : null;
-  if (cover) { const img = new Image(); img.crossOrigin = 'anonymous'; img.onload = () => { try { setHue(coverColor(img).hue); } catch { /* ok */ } }; img.src = cover; }
-  else setHue(HUES[index % HUES.length]);
+  const fallback = () => { const cv = makeCover(track, index); let h = HUES[index % HUES.length]; try { h = coverColor(cv).hue; } catch { /* ok */ } apply(cv, h); };
+  if (cover) { const img = new Image(); img.crossOrigin = 'anonymous'; img.onload = () => { let h = HUES[index % HUES.length]; try { h = coverColor(img).hue; } catch { /* ok */ } apply(img, h); }; img.onerror = fallback; img.src = cover; }
+  else fallback();
 }
 
 // —— 现在播放 + 进度 ——
@@ -99,3 +115,16 @@ $('artist').textContent = cur ? (cur.artist || '') : '';
 refreshDolby();
 applyTheme(cur, Math.max(0, player.index));
 setInterval(() => { const b = viz.last.bpm; $('bpm').textContent = b ? `· ${b} BPM` : ''; }, 400);
+
+// —— 沉浸全屏 ——
+$('fs').addEventListener('click', () => {
+  const el = document.documentElement;
+  if (!document.fullscreenElement) {
+    (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
+    document.body.classList.add('immersive');
+  } else {
+    (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document);
+    document.body.classList.remove('immersive');
+  }
+});
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) document.body.classList.remove('immersive'); });

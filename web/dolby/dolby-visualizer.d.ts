@@ -46,6 +46,8 @@ export class DolbyVisualizer {
   resize(): void;
   setBaseHue(h: number): this;
   setParticles(n: number): this;
+  setCover(img: CanvasImageSource | null): this;
+  clearCover(): this;
   start(): this;
   stop(): this;
   readonly running: boolean;

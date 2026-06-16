@@ -65,7 +65,7 @@ export class DolbyVisualizer {
     this.hueRange = options.hueRange ?? 80;
     this.particleCount = options.particles ?? 90;
     this.bg = options.background ?? [10, 8, 18];
-    this.particles = []; this.rings = [];
+    this.particles = []; this.rings = []; this._cover = null;
     this._t = 0; this._raf = 0; this._running = false; this._hue = this.baseHue; this._pulse = 0;
     this._onResize = () => this.resize();
     if (typeof addEventListener === 'function') addEventListener('resize', this._onResize);
@@ -86,6 +86,9 @@ export class DolbyVisualizer {
   }
   setBaseHue(h) { this.baseHue = ((h % 360) + 360) % 360; return this; }
   setParticles(n) { this.particleCount = Math.max(1, n | 0); this._initParticles(); return this; }
+  /** 设置封面图（Image/Canvas）作为暗淡背景层；接口与 WebGL 版一致 */
+  setCover(img) { this._cover = img || null; return this; }
+  clearCover() { this._cover = null; return this; }
 
   start() {
     if (this._running) return this;
@@ -108,8 +111,9 @@ export class DolbyVisualizer {
     const { bass, mid, treble, energy, beat } = f;
     this._pulse = Math.max(this._pulse * 0.9, beat ? 1 : 0);
     const ctx = this.ctx, w = this.w, h = this.h, t = (this._t += 0.016), pulse = this._pulse;
-    // 半透明拖尾
     ctx.globalCompositeOperation = 'source-over';
+    if (this._cover) { try { ctx.globalAlpha = 0.5; ctx.drawImage(this._cover, 0, 0, w, h); ctx.globalAlpha = 1; } catch { /* ok */ } }
+    // 半透明拖尾（同时把封面压暗）
     ctx.fillStyle = `rgba(${this.bg[0]},${this.bg[1]},${this.bg[2]},0.18)`;
     ctx.fillRect(0, 0, w, h);
     // 色相随频谱倾斜 + 缓慢漂移，节拍时多偏一点

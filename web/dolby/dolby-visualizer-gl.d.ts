@@ -18,6 +18,8 @@ export class DolbyVisualizerGL {
   resize(): void;
   setBaseHue(h: number): this;
   setParticles(n?: number): this;
+  setCover(img: CanvasImageSource | null): this;
+  clearCover(): this;
   analyze(): AudioFrame;
   start(): this;
   stop(): this;

@@ -16,6 +16,8 @@ precision mediump float;
 uniform vec2 u_res;
 uniform float u_t, u_bass, u_mid, u_treble, u_energy, u_beat, u_hue;
 uniform sampler2D u_spec;
+uniform sampler2D u_cover;
+uniform float u_coverMix;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
 float noise(vec2 p){
   vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.0-2.0*f);
@@ -43,6 +45,10 @@ void main(){
   float val = 0.10 + smoothstep(0.2,0.95,f)*(0.45 + u_energy*0.65) + u_beat*0.28;
   vec3 col = hsv2rgb(vec3(fract(hue), sat, clamp(val, 0.0, 1.0)));
   col += smoothstep(0.82,1.0,f) * (0.18 + u_beat*0.45);   // 高光/爆闪
+  // 封面随流场扭曲混入（"融化"在流体里）
+  vec2 cuv = uv + (r - 0.5) * 0.22;
+  vec3 cov = texture2D(u_cover, cuv).rgb;
+  col = mix(col, col*0.35 + cov*0.95, u_coverMix * 0.6);
   // 径向频段光柱（按角度采样频谱，半径随幅度外扩）
   vec2 dd = uv - 0.5;
   float ang = atan(dd.y, dd.x) / 6.2831853 + 0.5;
@@ -77,7 +83,7 @@ export class DolbyVisualizerGL {
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     const loc = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
     this.gl = gl; this.canvas = canvas;
-    this.u = {}; for (const n of ['u_res', 'u_t', 'u_bass', 'u_mid', 'u_treble', 'u_energy', 'u_beat', 'u_hue', 'u_spec']) this.u[n] = gl.getUniformLocation(prog, n);
+    this.u = {}; for (const n of ['u_res', 'u_t', 'u_bass', 'u_mid', 'u_treble', 'u_energy', 'u_beat', 'u_hue', 'u_spec', 'u_cover', 'u_coverMix']) this.u[n] = gl.getUniformLocation(prog, n);
     // 频谱纹理（频段光柱用）：N×1 LUMINANCE，每帧上传
     this._specN = 128; this._spec = new Uint8Array(this._specN);
     this.specTex = gl.createTexture();
@@ -88,6 +94,18 @@ export class DolbyVisualizerGL {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, this._specN, 1, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, this._spec);
     gl.uniform1i(this.u.u_spec, 0);
+    // 封面纹理（背景混合用）：默认 1×1 占位，setCover 上传后才显现
+    this._coverMix = 0; this._coverMixTarget = 0;
+    this.coverTex = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.coverTex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+    gl.uniform1i(this.u.u_cover, 1);
+    gl.uniform1f(this.u.u_coverMix, 0);
+    gl.activeTexture(gl.TEXTURE0);
 
     this.analyser = resolveAnalyser(options);
     this.analyser.fftSize = options.fftSize || 1024;
@@ -108,6 +126,20 @@ export class DolbyVisualizerGL {
   }
   setBaseHue(h) { this.baseHue = ((h % 360) + 360) % 360; return this; }
   setParticles() { return this; }                 // GL 无粒子概念，留空以统一接口
+  /** 把封面图（Image/Canvas，需 CORS 干净）作为背景纹理混入流体 */
+  setCover(img) {
+    const gl = this.gl;
+    try {
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.coverTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.activeTexture(gl.TEXTURE0);
+      this._coverMixTarget = 1;
+    } catch { this._coverMixTarget = 0; }   // 跨域污染等 → 不混入
+    return this;
+  }
+  clearCover() { this._coverMixTarget = 0; return this; }
   analyze() { return this.reactor.read(); }
 
   start() {
@@ -136,6 +168,11 @@ export class DolbyVisualizerGL {
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.specTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, N, 1, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, spec);
     gl.uniform1i(u.u_spec, 0);
+    // 封面混合渐入/渐出
+    this._coverMix += (this._coverMixTarget - this._coverMix) * 0.06;
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.coverTex); gl.uniform1i(u.u_cover, 1);
+    gl.uniform1f(u.u_coverMix, this._coverMix);
+    gl.activeTexture(gl.TEXTURE0);
     gl.uniform2f(u.u_res, this.canvas.width, this.canvas.height);
     gl.uniform1f(u.u_t, (now - this._t0) / 1000);
     gl.uniform1f(u.u_bass, bass); gl.uniform1f(u.u_mid, mid); gl.uniform1f(u.u_treble, treble);
@@ -143,7 +180,7 @@ export class DolbyVisualizerGL {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  dispose() { this.stop(); try { this.gl.deleteTexture(this.specTex); } catch { /* ok */ } if (typeof removeEventListener === 'function') removeEventListener('resize', this._onResize); }
+  dispose() { this.stop(); try { this.gl.deleteTexture(this.specTex); this.gl.deleteTexture(this.coverTex); } catch { /* ok */ } if (typeof removeEventListener === 'function') removeEventListener('resize', this._onResize); }
 }
 
 /** 优先 WebGL，失败（无 WebGL / 编译失败）自动回退到 Canvas2D。renderer:'webgl'|'canvas' 可强制 */
