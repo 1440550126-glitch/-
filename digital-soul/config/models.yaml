@@ -1,0 +1,16 @@
+# 大模型配置（多模型 / 多服务商 / 按任务路由）。不填则用内置默认（本地 Ollama qwen2.5:7b-instruct）。
+#
+# default:                       # 主模型
+#   provider: ollama            # ollama | openai（任何 OpenAI 兼容端点：llama.cpp/LM Studio/vLLM/云）
+#   model: qwen2.5:7b-instruct
+#   host: http://localhost:11434
+#
+# tasks:                         # 按场景换更强/更快的模型（可选）
+#   reflect: { provider: ollama, model: qwen2.5:14b-instruct }
+#   swarm:   { provider: ollama, model: qwen2.5:14b-instruct }
+#
+# panel:                         # 群体小会：让不同模型各出一票（异质认知多样性）
+#   - { provider: ollama, model: qwen2.5:7b-instruct }
+#   - { provider: openai, host: http://localhost:1234/v1, model: local-model }
+#
+# 隐私提醒：逝者/亲人的私密记忆建议只用本地模型（provider: ollama / 本地 OpenAI 端点），别发往云端。

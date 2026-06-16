@@ -15,7 +15,7 @@ from .dream import DreamLog
 from .emotions import EmotionState
 from .journal import Journal
 from .knowledge import Knowledge
-from .llm import LLM
+from .llm import build_router
 from .memory import Memory
 from .perception import build_perception
 from .predict import Calibration
@@ -70,7 +70,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
     authority = Authority(relationships)
     persona = Persona(identity)
     perception = build_perception(base / "data" / "faces", authority)
-    llm = LLM(model=llm_model) if llm_model else LLM()
+    llm_router = build_router(_load_yaml(base / "config" / "models.yaml"), model_override=llm_model)
+    llm = llm_router.default
     robot = robot or SimulationRobot()
     journal = Journal(base / "data" / "journal" / "journal.jsonl")
     emotions = EmotionState()
@@ -99,7 +100,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  curiosity=QuestionLog(base / "data" / "questions.json"),
                  worldmodel=WorldModel(base / "data" / "beliefs.json"),
                  calib=Calibration(base / "data" / "calibration.json"),
-                 memorial=_load_yaml(base / "config" / "memorial.yaml"))
+                 memorial=_load_yaml(base / "config" / "memorial.yaml"),
+                 llm_router=llm_router)
 
 
 def _seed_memory(base: Path, memory) -> None:

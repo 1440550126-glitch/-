@@ -33,7 +33,7 @@ class Agent:
                  tasks=None, reflector=None, planner=None, plan=None, devices=None,
                  scenes=None, triggers=None, sensor_source=None, dreams=None, selflog=None,
                  values=None, values_path=None, curiosity=None, worldmodel=None, calib=None,
-                 memorial=None) -> None:
+                 memorial=None, llm_router=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -71,6 +71,7 @@ class Agent:
         self._last_prediction = None                              # 最近一次预感（供你反馈校准）
         self._pending_offer = None                                # 已主动提出、待你点头的预感
         self.memorial = memorial or {}                            # 重要日子（缅怀/纪念）
+        self.llm_router = llm_router                              # 多模型路由（按任务选模型 + 小会面板）
         self._degraded_notice_shown = False                       # 降级提示只提一次
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
 
@@ -801,7 +802,19 @@ class Agent:
         日后想弄明白（可被自学/问回来）。
         """
         from .swarm import forecast
-        fc = forecast(question, llm=self.llm)
+        extra = []
+        router = getattr(self, "llm_router", None)
+        if router is not None:                       # 多模型：让不同模型各出一票（异质认知多样性）
+            for m in router.panel():
+                if not getattr(m, "available", False):
+                    continue
+                try:
+                    ans = m.chat("只回一行：先说 会/悬/观望，再加一句简短理由。", question)
+                    lean = 1 if "会" in ans else (-1 if ("悬" in ans or "不" in ans) else 0)
+                    extra.append((f"模型·{m.model}", lean, ans[:18]))
+                except Exception:
+                    pass
+        fc = forecast(question, llm=self.llm, extra=extra)
         if fc.get("diversity", 0) >= 0.5 and getattr(self, "curiosity", None) is not None:
             q = f"「{(question or '')[:18]}」这事我心里几种思路打架，挺想弄明白。"
             self.curiosity.add((question or "?")[:12] or "?", q, priority=0.9)
