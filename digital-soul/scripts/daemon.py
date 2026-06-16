@@ -33,7 +33,7 @@ def start_vision(agent, mouth=None) -> bool:
         text = agent.greet(name)   # 清晨第一次见到主人会自动带上"晨间简报"
         print(f"[感知] {name} 进入画面 → {me}: {text}", flush=True)
         if mouth is not None:
-            mouth.speak(text, mood=_mood(agent))
+            mouth.speak(text, mood=_mood(agent), profile=agent.identity.get("voice"))
         for n in agent.fire_event("enter", name):   # 进门自动化（"我一进门就开灯"）
             print(f"[自动化] {n}", flush=True)
             if mouth is not None:
@@ -93,7 +93,7 @@ def voice_loop(agent, ears, mouth, monitor, wake=None) -> None:
         print(f"[语音] {speaker}: {text}", flush=True)
         res = agent.handle(speaker, text)
         print(f"[语音] {me}: {res['reply']}", flush=True)
-        mouth.speak(res["reply"], mood=_mood(agent))
+        mouth.speak(res["reply"], mood=_mood(agent), profile=agent.identity.get("voice"))
 
 
 def sleep_loop(agent, hours: float) -> None:

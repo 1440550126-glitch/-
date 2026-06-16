@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from dsoul.voice import Mouth, emotion_to_voice  # noqa: E402
+from dsoul.voice import Mouth, emotion_to_voice, voice_params  # noqa: E402
 
 
 def test_emotion_to_voice_mapping():
@@ -25,6 +25,26 @@ def test_mouth_print_fallback_carries_tone():
     with contextlib.redirect_stdout(buf):
         m.speak("你好", mood="哀")
     assert "低落" in buf.getvalue()
+
+
+def test_voice_params_persona_plus_emotion():
+    prof = {"rate": 160, "volume": 0.9, "voice": "zh-cn"}     # 慢嗓门的外公
+    base = voice_params(prof, None)
+    assert base["rate"] == 160 and base["voice"] == "zh-cn"
+    sad = voice_params(prof, "哀")
+    assert sad["rate"] < base["rate"] and sad["volume"] < base["volume"]   # 低落更慢更轻
+    happy = voice_params(prof, "喜")
+    assert happy["rate"] > base["rate"]                       # 高兴更快
+    assert 80 <= sad["rate"] <= 320                           # 有界
+
+
+def test_external_tts_cmd_invoked():
+    import os
+    import tempfile
+    mark = tempfile.mktemp()
+    Mouth().speak("你好", profile={"tts_cmd": f"touch '{mark}'  # {{text}}"})
+    assert os.path.exists(mark)                               # 外部克隆嗓音命令被调用
+    os.remove(mark)
 
 
 if __name__ == "__main__":

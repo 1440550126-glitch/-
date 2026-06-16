@@ -26,6 +26,29 @@ def emotion_to_voice(mood) -> dict:
     return _VOICE.get(mood, {"rate": 200, "volume": 1.0, "tone": ""})
 
 
+# 在"本人嗓音档案"之上，情绪带来的增量（语速 Δ、音量 Δ）
+_EMO_DELTA = {
+    "喜": (25, 0.0), "怒": (15, 0.0), "哀": (-35, -0.2), "惧": (-15, -0.25),
+    "爱": (-10, -0.05), "恶": (-5, -0.15), "欲": (-20, -0.1),
+}
+
+
+def voice_params(profile, mood=None) -> dict:
+    """以"本人嗓音档案"为基底（语速/音量/系统嗓音），叠加当下情绪增量。
+
+    profile 形如 {rate:170, volume:0.9, voice:"<系统嗓音id>", tts_cmd:"<外部克隆嗓音命令，含{text}>"}。
+    """
+    profile = profile or {}
+    dr, dv = _EMO_DELTA.get(mood, (0, 0.0))
+    return {
+        "rate": max(80, min(320, int(profile.get("rate", 200)) + dr)),
+        "volume": max(0.3, min(1.0, float(profile.get("volume", 1.0)) + dv)),
+        "voice": profile.get("voice"),
+        "tts_cmd": profile.get("tts_cmd"),
+        "tone": _VOICE.get(mood, {}).get("tone", ""),
+    }
+
+
 class Ears:
     def __init__(self, model_size: str = "base") -> None:
         self.backend: str | None = None
@@ -74,19 +97,33 @@ class Mouth:
     def available(self) -> bool:
         return self.backend is not None
 
-    def speak(self, text: str, mood=None) -> None:
-        """播报。传入当前情绪 mood（七情之一）则让语速/音量随之变化。"""
-        v = emotion_to_voice(mood)
+    def speak(self, text: str, mood=None, profile=None) -> None:
+        """播报。mood 让语速/音量随情绪变化；profile 是"本人嗓音档案"。
+
+        若 profile.tts_cmd 配了外部命令（含 {text}），就交给它——可接你本地的声音克隆 CLI，
+        用接近本人的嗓音说话。否则用系统 TTS（pyttsx3），再不行就打印。
+        """
+        v = voice_params(profile, mood) if profile else emotion_to_voice(mood)
+        cmd = v.get("tts_cmd")
+        if cmd:
+            import subprocess
+            try:
+                subprocess.run(cmd.replace("{text}", text), shell=True, check=False, timeout=60)
+                return
+            except Exception:
+                pass
         if self.available:
             try:
                 self._engine.setProperty("rate", v["rate"])
                 self._engine.setProperty("volume", v["volume"])
+                if v.get("voice"):
+                    self._engine.setProperty("voice", v["voice"])
             except Exception:
                 pass
             self._engine.say(text)
             self._engine.runAndWait()
         else:
-            tag = f"（语气：{v['tone']}）" if v["tone"] else ""
+            tag = f"（语气：{v.get('tone')}）" if v.get("tone") else ""
             print(f"🔊（未装 TTS，用文字代替）{tag}{text}")
 
 
