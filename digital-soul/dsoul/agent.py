@@ -739,9 +739,17 @@ class Agent:
                                speaker=who.get("name") if who.get("known") else None)
 
     def forecast(self, question) -> str:
-        """群体模拟预测：脑中开个小会，多视角各自表态（有大模型则真展开推理），聚合成预感。"""
+        """群体模拟预测：脑中开个小会，多视角各自表态（有大模型则真展开推理），聚合成预感。
+
+        若几种思路分歧很大（认知多样性高），说明我自己也没把握——就记成高优先好奇，
+        日后想弄明白（可被自学/问回来）。
+        """
         from .swarm import forecast
-        return forecast(question, llm=self.llm)["text"]
+        fc = forecast(question, llm=self.llm)
+        if fc.get("diversity", 0) >= 0.5 and getattr(self, "curiosity", None) is not None:
+            q = f"「{(question or '')[:18]}」这事我心里几种思路打架，挺想弄明白。"
+            self.curiosity.add((question or "?")[:12] or "?", q, priority=0.9)
+        return fc["text"]
 
     def proactive_prediction(self, now=None, min_conf: float = 0.7) -> str:
         """高置信预感主动提一句（并挂起，等你点头）。已提过未回应则不重复。"""

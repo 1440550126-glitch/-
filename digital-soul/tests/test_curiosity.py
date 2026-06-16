@@ -43,6 +43,19 @@ def test_questionlog_lifecycle():
     assert all(it["term"] != "书法" for it in ql.items)
 
 
+def test_divergent_forecast_feeds_curiosity():
+    import tempfile
+
+    from dsoul.agent import Agent
+    from dsoul.curiosity import QuestionLog
+    a = object.__new__(Agent)
+    a.llm = type("L", (), {"available": False})()
+    a.curiosity = QuestionLog(tempfile.mktemp(suffix=".json"))
+    a.forecast("会不会成")                                # 含糊问题 → 思路分歧大
+    op = a.curiosity.open()
+    assert op and op[0]["priority"] >= 0.8               # 分歧 → 高优先好奇
+
+
 if __name__ == "__main__":
     for _n, _f in sorted(globals().items()):
         if _n.startswith("test_") and callable(_f):
