@@ -42,6 +42,9 @@ export OPENAI_API_KEY=sk-... OPENAI_BASE_URL=https://api.deepseek.com/v1 OPENAI_
 | **多模态 + 语音** | `see`/`view_image`（视觉）、`speak`（TTS）、`transcribe`（whisper STT），按能力探测优雅降级 |
 | **安全沙箱** | 全量工具**审计日志**（`mnemo audit`）+ 审批策略（`tools.confirm_danger` / `tools.deny`）+ 高危命令拦截 |
 | **跨设备同步** | `sync export/import` 口令加密打包 `~/.mnemo`，换机也"还是那个懂你的它" |
+| **图形界面 + 团队共享** | `serve` 本地 Web UI（手机/电脑），`--host 0.0.0.0 --token` 局域网多人共用一份记忆 |
+| **记忆图谱** | `memory graph` 导出可拖拽的关系图 HTML；语义检索叠加 **LSH 近似最近邻**加速 |
+| **容器沙箱** | `sandbox.engine=docker/podman` 时 `run_shell` 在容器内 `--network none` 隔离执行 |
 
 ---
 
@@ -74,14 +77,29 @@ mnemo plugin install ./examples/plugins/hello
 mnemo market --registry ./examples/registry.json list
 mnemo market --registry ./examples/registry.json install hello
 
+# 图形界面（手机/电脑浏览器）与团队共享
+mnemo serve                              # 本地 Web UI：http://127.0.0.1:8765
+mnemo serve --host 0.0.0.0 --token 口令  # 局域网团队共享（多人共用一份记忆）
+
+# 记忆图谱（自包含 HTML，可拖拽）
+mnemo memory graph --out mnemo-graph.html
+
 # 多模态与语音
 mnemo see photo.jpg --prompt "图里有什么"
+mnemo see clip.mp4                        # 视频：抽关键帧逐帧理解（需 ffmpeg）
 mnemo speak "你好，我是 Mnemo"
+mnemo voice                               # 语音对话：录音→转写→回答→朗读
+
+# 市场信任链
+mnemo market --registry r.json --key K sign     # 给 registry 签名
+mnemo market --registry r.json --key K verify    # 校验签名
+mnemo market rate hello 5 --note 好用            # 本地评分
 
 # 7×24 守护、安全、同步
 mnemo task add --name 每日简报 --every "@daily 08:30" --prompt "用 daily-briefing 技能做今日简报"
 mnemo daemon                # 启动守护进程（到点跑任务 + 触发提醒 + 每日巩固记忆）
 mnemo audit                 # 工具调用审计日志
+mnemo config set sandbox.engine docker     # run_shell 改为容器内隔离执行
 mnemo sync export backup.mnemo --passphrase 你的口令
 mnemo sync import backup.mnemo --passphrase 你的口令
 
@@ -101,8 +119,12 @@ mnemo/
 ├─ tools.py        工具：文件/Shell/网页/记忆/提醒/委派/视觉/语音；审批与拦截
 ├─ skills.py       技能：Markdown 加载、相关性注入、learn 学习、distill 自我进化
 ├─ plugins.py      插件：本地/git 安装，register(ctx) 注入 工具/技能/Provider
-├─ market.py       技能/插件市场：registry 搜索与按名安装
+├─ market.py       市场：registry 搜索/安装 + HMAC 签名校验 + sha256 完整性 + 本地评分
 ├─ sync.py         跨设备同步：打包 + 口令加密（PBKDF2 + SHA256 流 + HMAC）
+├─ serve.py        本地 Web 图形界面 + JSON API（团队共享）
+├─ viz.py          记忆图谱渲染（内联力导向 HTML）
+├─ media.py        视频关键帧抽取（ffmpeg）
+├─ voice.py        语音对话：录音 / whisper 转写 / TTS
 ├─ daemon.py       守护进程：任务调度 + 主动提醒 + 每日记忆巩固
 ├─ providers/      大模型后端：base 抽象 + anthropic/openai/ollama/offline + 注册表(auto)
 └─ skills_builtin/ 内置技能
@@ -136,19 +158,20 @@ mnemo plugin install ./my-plugin
 ## 测试
 
 ```bash
-python -m unittest discover -s tests -v   # 36 项全链路冒烟，全部通过
+python -m unittest discover -s tests -v   # 47 项全链路冒烟，全部通过
 ```
 
-覆盖：记忆/画像、语义检索、巩固/遗忘、提醒、工具循环、原生 function-calling（含消息往返与
-OpenAI/Anthropic 翻译）、自我进化技能、多 Agent 委派、安全审计/策略、市场、加密同步、多模态/语音。
+覆盖：记忆/画像、语义检索+LSH ANN、巩固/遗忘、提醒、工具循环、原生 function-calling、
+自我进化技能、多 Agent 委派、安全审计/策略、容器沙箱、市场签名/评分、加密同步、
+记忆图谱、Web 服务（含鉴权）、多模态/语音。
 
-## 路线图（继续"别人没有的"）
+## 路线图（已大量落地，继续推进）
 
-- 官方去中心化技能/插件市场托管 + 评分与签名校验
-- 向量索引加速（ANN）与记忆图谱可视化
-- 桌面/移动 GUI、团队共享记忆
-- 实时语音流（边说边答）与视频理解
-- 工具执行容器化沙箱（更强隔离）
+已实现：主动式记忆、自我进化技能、向量+ANN、原生工具调用、多 Agent、市场签名评分、
+加密同步、多模态+语音、安全沙箱、记忆图谱、Web GUI、局域网团队共享。
+
+继续探索：官方去中心化市场托管、记忆图谱的因果/时间维度、桌面/移动原生端、
+实时语音流（边说边答）、多用户权限与共享记忆的细粒度隔离。
 
 ## 数据与隐私
 
