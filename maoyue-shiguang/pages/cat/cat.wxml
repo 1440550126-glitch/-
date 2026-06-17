@@ -1,0 +1,55 @@
+<!-- 猫窝：你们一起养的猫 -->
+<view class="theme-{{theme}} page-root">
+<view class="page">
+
+  <!-- 猫咪舞台 -->
+  <view class="stage fade-in">
+    <view class="stage-glow"></view>
+    <view class="cat-big breathe">{{cat.mood.e}}</view>
+    <view class="row gap-s center mt-s" bindtap="rename">
+      <text class="cat-name">{{cat.name}}</text>
+      <text class="tag">Lv.{{cat.level}}</text>
+      <text class="sub">✎</text>
+    </view>
+    <text class="cat-mood">{{cat.mood.t}}</text>
+  </view>
+
+  <!-- 状态 -->
+  <view class="card fade-in">
+    <view class="stat-line">
+      <text class="stat-label">亲密度 💞</text>
+      <view class="bar grow"><view class="bar-fill" style="width:{{cat.intimacy}}%"></view></view>
+      <text class="stat-val">{{cat.intimacy}}%</text>
+    </view>
+    <view class="stat-line">
+      <text class="stat-label">饱食度 🍚</text>
+      <view class="bar grow"><view class="bar-fill" style="width:{{cat.fullness}}%;background:linear-gradient(90deg,#FFD79A,#FFB36B);"></view></view>
+      <text class="stat-val">{{cat.fullness}}%</text>
+    </view>
+    <view class="stat-line">
+      <text class="stat-label">成长值 ✨</text>
+      <view class="bar grow"><view class="bar-fill" style="width:{{expPct}}%;background:linear-gradient(90deg,#C9B6F0,#9B82E0);"></view></view>
+      <text class="stat-val">{{cat.exp}}/{{cat.expMax}}</text>
+    </view>
+  </view>
+
+  <!-- 互动 -->
+  <view class="card fade-in">
+    <view class="card-title"><view class="dot"></view><text class="title">陪它玩一会儿</text></view>
+    <view class="cat-actions">
+      <view class="ca-item" bindtap="pet"><view class="ca-emoji">🫳</view><text>摸摸</text></view>
+      <view class="ca-item" bindtap="feed"><view class="ca-emoji">🍚</view><text>喂食</text></view>
+      <view class="ca-item" bindtap="play"><view class="ca-emoji">🎀</view><text>逗它</text></view>
+    </view>
+    <view class="msg-line" wx:if="{{msg}}">{{msg}}</view>
+  </view>
+
+  <view class="card soft tip-card fade-in">
+    <text class="sub">🐾 这只猫是你们俩一起养的。你们每一次想念、抱抱、留言，都会让它更亲近你们——不需要花一分钱，陪伴就是最好的猫粮。</text>
+  </view>
+
+  <!-- 升级轻提示 -->
+  <view wx:if="{{levelBanner}}" class="level-banner fade-in">{{levelText}}</view>
+  <view wx:if="{{floatHeart}}" class="float-heart">{{floatEmoji}}</view>
+</view>
+</view>

@@ -1,0 +1,84 @@
+<!-- 我的 -->
+<view class="theme-{{theme}} page-root">
+<view class="page">
+
+  <!-- 头部 -->
+  <view class="card profile-head fade-in">
+    <view class="ph-avatars">
+      <view class="avatar lg" bindtap="pickAvatar" data-who="self">{{couple.selfAvatar}}</view>
+      <view class="ph-heart breathe">💞</view>
+      <view class="avatar lg" bindtap="pickAvatar" data-who="partner">{{couple.partnerAvatar}}</view>
+    </view>
+    <view class="ph-status">
+      <block wx:if="{{couple.bound}}">已经在一起 <text class="accent strong">{{loveDays}}</text> 天啦</block>
+      <block wx:else>还没有绑定，点下方按钮开始</block>
+    </view>
+    <view class="row center gap-s mt-s">
+      <view class="badge {{verified ? 'badge-v' : 'badge-u'}}">{{verified ? '✓ 已实名' : '未实名'}}</view>
+      <view wx:if="{{isMember}}" class="badge" style="background:rgba(242,101,138,.14);color:var(--c-primary2);">👑 会员</view>
+    </view>
+  </view>
+
+  <!-- 我们的关系 -->
+  <view class="card fade-in">
+    <view class="card-title"><view class="dot"></view><text class="title">我们的关系</text></view>
+    <view class="set-row" bindtap="editName" data-who="self"><text class="set-label">我的昵称</text><view class="set-val">{{couple.selfName}} <text class="arrow">›</text></view></view>
+    <view class="set-row" bindtap="editName" data-who="partner"><text class="set-label">TA的昵称</text><view class="set-val">{{couple.partnerName}} <text class="arrow">›</text></view></view>
+    <picker mode="date" value="{{couple.startDate}}" bindchange="onStartDate">
+      <view class="set-row"><text class="set-label">在一起的日子</text><view class="set-val">{{couple.startDate}} <text class="arrow">›</text></view></view>
+    </picker>
+    <view wx:if="{{waitingInvite}}" class="hint-box mt-m">⏳ 等待 TA 加入 · 你的邀请码 <text class="accent strong">{{inviteCode}}</text>，点下方按钮可再次查看</view>
+    <button class="btn {{couple.bound ? 'btn-ghost' : 'btn-primary'}} btn-block mt-m" bindtap="toggleBind">{{couple.bound ? '解除绑定' : (waitingInvite ? '查看 / 输入邀请码' : '💞 绑定我们的关系')}}</button>
+    <button class="btn btn-soft btn-block mt-s" wx:if="{{!couple.bound}}" bindtap="inviteTa">复制邀请语发给TA</button>
+  </view>
+
+  <!-- 个性化 / 账户 -->
+  <view class="card fade-in">
+    <view class="card-title"><view class="dot"></view><text class="title">个性化与账户</text></view>
+    <view class="set-row" bindtap="pickTheme"><text class="set-label">🎨 主题皮肤</text><view class="set-val">{{themeName}} <text class="arrow">›</text></view></view>
+    <view class="set-row" bindtap="goMembership"><text class="set-label">👑 会员中心</text><view class="set-val">{{isMember ? '已开通' : '未开通'}} <text class="arrow">›</text></view></view>
+    <view class="set-row" bindtap="goVerify"><text class="set-label">🪪 实名认证</text><view class="set-val">{{verified ? '已实名' : '去认证'}} <text class="arrow">›</text></view></view>
+  </view>
+
+  <!-- 设置 -->
+  <view class="card fade-in">
+    <view class="card-title"><view class="dot"></view><text class="title">设置</text></view>
+    <view class="set-row" bindtap="about"><text class="set-label">关于 猫约时光</text><view class="set-val"><text class="arrow">›</text></view></view>
+    <view class="set-row" bindtap="goLegal" data-doc="privacy"><text class="set-label">隐私政策</text><view class="set-val"><text class="arrow">›</text></view></view>
+    <view class="set-row" bindtap="goLegal" data-doc="terms"><text class="set-label">用户协议</text><view class="set-val"><text class="arrow">›</text></view></view>
+    <view class="set-row" bindtap="goLegal" data-doc="community"><text class="set-label">社区规范</text><view class="set-val"><text class="arrow">›</text></view></view>
+    <view class="set-row" bindtap="goLegal" data-doc="minors"><text class="set-label">未成年人保护</text><view class="set-val"><text class="arrow">›</text></view></view>
+    <view class="set-row" bindtap="clearData"><text class="set-label" style="color:#E8779A;">清空所有数据</text><view class="set-val"><text class="arrow">›</text></view></view>
+    <view class="set-row"><text class="set-label">版本</text><view class="set-val muted">3.0.0 · 陪伴社交版</view></view>
+  </view>
+
+  <view class="footer-note center">🐾 用心记录每一段关系</view>
+
+  <!-- 鹊桥相会 · 绑定过场 -->
+  <view wx:if="{{showBindCine}}" class="cine" bindtap="skipCine">
+    <view class="cine-cam">
+      <view class="milkyway"></view>
+      <view class="star s1"></view><view class="star s2"></view><view class="star s3"></view><view class="star s4"></view><view class="star s5"></view><view class="star s6"></view><view class="star s7"></view><view class="star s8"></view>
+      <view class="moon">🌕</view>
+
+      <!-- 鹊桥（拱） -->
+      <view class="bridge"></view>
+
+      <!-- 主角：情侣双方头像，从两端走近相会 -->
+      <view class="niulang">{{couple.selfAvatar}}</view>
+      <view class="zhinv">{{couple.partnerAvatar}}</view>
+      <!-- 相遇时浮现两颗爱心 -->
+      <view class="meet-hearts"><text class="mh mh-l">❤️</text><text class="mh mh-r">❤️</text></view>
+
+      <!-- 脚下生出鲜花 -->
+      <view class="flowers">
+        <text class="fl f1">🌸</text><text class="fl f2">🌷</text><text class="fl f3">🌹</text>
+        <text class="fl f4">🌼</text><text class="fl f5">🌸</text><text class="fl f6">🌷</text>
+      </view>
+      <view class="cine-title">我们在鹊桥相遇</view>
+      <view class="cine-sub">从此，朝朝暮暮</view>
+    </view>
+    <view class="cine-skip">轻触跳过</view>
+  </view>
+</view>
+</view>

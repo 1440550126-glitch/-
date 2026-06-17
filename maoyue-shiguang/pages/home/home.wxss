@@ -1,0 +1,39 @@
+/* 家 */
+.couple-card { text-align: center; padding-top: 40rpx; }
+.couple-avatars { display: flex; align-items: center; justify-content: center; gap: 28rpx; }
+.link-heart { font-size: 40rpx; }
+.couple-days { margin: 22rpx 0 8rpx; }
+.couple-days .d-num { font-size: 88rpx; font-weight: 800; color: var(--c-primary2); line-height: 1; }
+.couple-days .d-unit { font-size: 30rpx; color: var(--c-primary2); margin-left: 8rpx; }
+.couple-days .d-tip { font-size: 34rpx; font-weight: 700; color: var(--c-text2); }
+
+/* 单身引导 */
+.match-banner { display: flex; align-items: center; gap: 22rpx; }
+.mb-emoji { font-size: 64rpx; }
+
+/* TA 状态概览 */
+.status-mini { display: flex; align-items: center; gap: 22rpx; }
+
+/* 金刚区 */
+.kong { display: flex; justify-content: space-between; }
+.kong-item { display: flex; flex-direction: column; align-items: center; gap: 12rpx; width: 19%; font-size: 23rpx; color: var(--c-text2); }
+.kong-ic { width: 96rpx; height: 96rpx; border-radius: 28rpx; display: flex; align-items: center; justify-content: center; font-size: 48rpx; background: var(--c-soft); transition: transform .12s ease; }
+.kong-item:active .kong-ic { transform: scale(0.9); }
+
+/* 一键传情 */
+.affection-row { display: flex; justify-content: space-between; }
+.aff-item { display: flex; flex-direction: column; align-items: center; gap: 12rpx; width: 23%; padding: 8rpx 0; }
+.aff-emoji { width: 104rpx; height: 104rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 50rpx; background: var(--c-soft); box-shadow: 0 8rpx 20rpx var(--c-shadow); transition: transform .12s ease; }
+.aff-item:active .aff-emoji { transform: scale(0.9); }
+.aff-word { font-size: 24rpx; color: var(--c-text2); }
+
+/* 心情 */
+.mood-row { display: flex; align-items: center; }
+.mood-box { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8rpx; padding: 16rpx; background: var(--c-input); border-radius: 24rpx; position: relative; }
+.mood-emoji { font-size: 64rpx; }
+.mood-who { position: absolute; top: 12rpx; right: 18rpx; font-size: 22rpx; color: var(--c-muted); }
+.mood-mid { padding: 0 20rpx; font-size: 32rpx; }
+
+/* 今日一问 */
+.q-text { font-size: 32rpx; font-weight: 600; color: var(--c-text); line-height: 1.6; }
+.footer-tip { color: var(--c-muted); font-size: 24rpx; padding: 16rpx 0 8rpx; }

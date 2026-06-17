@@ -1,0 +1,29 @@
+/* 陪伴 */
+.poke-card { text-align: center; }
+.poke-emoji { font-size: 92rpx; }
+.poke-card:active { transform: scale(0.98); }
+
+/* 心情 */
+.mood-now { display: flex; align-items: center; justify-content: center; gap: 28rpx; margin-bottom: 24rpx; }
+.mn-box { display: flex; flex-direction: column; align-items: center; gap: 8rpx; min-width: 180rpx; padding: 20rpx; background: var(--c-input); border-radius: 24rpx; }
+.mn-emoji { font-size: 64rpx; }
+.mn-link { font-size: 30rpx; }
+.mood-picker { display: flex; flex-wrap: wrap; gap: 14rpx; justify-content: space-between; }
+.mp-item { width: 110rpx; height: 96rpx; border-radius: 22rpx; background: var(--c-soft); display: flex; align-items: center; justify-content: center; transition: transform .12s ease; }
+.mp-item:active { transform: scale(0.9); }
+.mp-e { font-size: 48rpx; }
+
+/* 每日一问 */
+.q-text { font-size: 32rpx; font-weight: 600; line-height: 1.6; color: var(--c-text); }
+.answer-bubble { margin-top: 18rpx; padding: 22rpx 26rpx; border-radius: 24rpx; background: var(--c-input); color: var(--c-text); }
+.answer-bubble.mine { background: linear-gradient(135deg, var(--c-soft), var(--c-soft)); }
+.ab-who { display: block; font-size: 22rpx; color: var(--c-primary2); opacity: .8; margin-bottom: 8rpx; }
+
+/* 纸条 */
+.note-input-row { display: flex; align-items: center; gap: 16rpx; margin-bottom: 24rpx; }
+.notes { display: flex; flex-direction: column; gap: 16rpx; }
+.note { max-width: 80%; padding: 22rpx 26rpx; border-radius: 24rpx; position: relative; }
+.note.ta { align-self: flex-start; background: var(--c-card); border: 2rpx solid var(--c-line); border-bottom-left-radius: 8rpx; color: var(--c-text); }
+.note.mine { align-self: flex-end; background: linear-gradient(135deg, var(--c-primary), var(--c-primary2)); color: #fff; border-bottom-right-radius: 8rpx; }
+.note-text { font-size: 28rpx; line-height: 1.55; }
+.note-meta { font-size: 20rpx; opacity: .7; margin-top: 8rpx; }

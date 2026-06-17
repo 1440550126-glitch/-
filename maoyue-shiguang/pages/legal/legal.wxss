@@ -1,0 +1,42 @@
+page { background: #FAF7F8; }
+.legal { padding: 0 0 60rpx; }
+
+/* 顶部文档切换 */
+.tabs {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; background: #FFFFFF;
+  border-bottom: 1rpx solid #F0E8EC;
+  box-shadow: 0 2rpx 10rpx rgba(0,0,0,.03);
+}
+.tab {
+  flex: 1; text-align: center; padding: 24rpx 0;
+  font-size: 26rpx; color: #9A8E94; position: relative;
+}
+.tab.on { color: #F2658A; font-weight: 600; }
+.tab.on::after {
+  content: ''; position: absolute; left: 50%; bottom: 8rpx;
+  width: 40rpx; height: 5rpx; border-radius: 3rpx;
+  background: #FF7E9D; transform: translateX(-50%);
+}
+
+/* 正文 */
+.doc { padding: 36rpx 40rpx; }
+.h1 { font-size: 38rpx; font-weight: 700; color: #3A3338; }
+.upd { margin-top: 12rpx; font-size: 24rpx; color: #B0A6AC; }
+.intro {
+  margin-top: 24rpx; font-size: 28rpx; line-height: 1.85;
+  color: #6E646A; background: #FFF3F6; padding: 24rpx 26rpx;
+  border-radius: 18rpx;
+}
+.h2 {
+  margin-top: 40rpx; margin-bottom: 14rpx;
+  font-size: 30rpx; font-weight: 600; color: #3A3338;
+}
+.p {
+  font-size: 28rpx; line-height: 1.9; color: #5E555B;
+  margin-bottom: 8rpx; text-align: justify;
+}
+.foot {
+  margin-top: 56rpx; text-align: center;
+  font-size: 24rpx; color: #C7BEC3;
+}

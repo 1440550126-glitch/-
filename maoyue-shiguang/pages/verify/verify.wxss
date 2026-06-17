@@ -1,0 +1,4 @@
+/* 实名认证 */
+.verify-hero { text-align: center; padding: 30rpx 0 20rpx; }
+.v-emoji { font-size: 120rpx; }
+.v-title { font-size: 38rpx; font-weight: 800; color: var(--c-text); margin-top: 8rpx; }

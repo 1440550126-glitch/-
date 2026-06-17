@@ -1,0 +1,18 @@
+<view class="legal">
+  <view class="tabs">
+    <view class="tab {{cur===item.id?'on':''}}" wx:for="{{order}}" wx:key="id" data-id="{{item.id}}" bindtap="switchDoc">{{item.tab}}</view>
+  </view>
+
+  <view class="doc">
+    <view class="h1">{{doc.title}}</view>
+    <view class="upd">{{doc.updated}}</view>
+    <view class="intro">{{doc.intro}}</view>
+
+    <block wx:for="{{doc.sections}}" wx:key="h" wx:for-item="sec">
+      <view class="h2">{{sec.h}}</view>
+      <view class="p" wx:for="{{sec.p}}" wx:key="*this" wx:for-item="para">{{para}}</view>
+    </block>
+
+    <view class="foot">© 猫约时光</view>
+  </view>
+</view>

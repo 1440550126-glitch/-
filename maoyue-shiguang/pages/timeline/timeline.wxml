@@ -1,0 +1,97 @@
+<!-- 时光：纪念日 / 回忆 / 愿望 -->
+<view class="theme-{{theme}} page-root">
+<view class="page">
+
+  <view class="hero fade-in">
+    <view class="greet">时光 📖</view>
+    <view class="date">把每一个值得记住的日子，都收好</view>
+  </view>
+
+  <!-- 重要日子 -->
+  <view class="card fade-in">
+    <view class="between">
+      <view class="card-title" style="margin:0;"><view class="dot"></view><text class="title">重要的日子</text></view>
+      <text class="accent strong" bindtap="toggleAnnivForm">{{showAnnivForm ? '收起' : '＋ 添加'}}</text>
+    </view>
+
+    <view class="form fade-in" wx:if="{{showAnnivForm}}">
+      <input class="input" placeholder="日子的名字（如：表白纪念日）" value="{{annivName}}" bindinput="onAnnivName" maxlength="20" />
+      <picker mode="date" value="{{annivDate}}" bindchange="onAnnivDate">
+        <view class="picker-row"><text class="sub">日期</text><text class="picker-val">{{annivDate || '请选择'}}</text></view>
+      </picker>
+      <view class="picker-row" bindtap="toggleRepeat">
+        <text class="sub">每年重复</text>
+        <view class="switch {{annivRepeat ? 'on' : ''}}"><view class="switch-dot"></view></view>
+      </view>
+      <button class="btn btn-primary btn-block" bindtap="saveAnniv">记下来</button>
+    </view>
+
+    <view class="anniv-list">
+      <view class="anniv-item" wx:for="{{annivs}}" wx:key="id" bindlongpress="delAnniv" data-id="{{item.id}}">
+        <view class="grow">
+          <view class="title">{{item.name}}</view>
+          <text class="sub">{{item.date}}{{item.repeatYearly ? ' · 每年' : ''}}</text>
+        </view>
+        <view class="anniv-count">
+          <block wx:if="{{item.diff > 0}}"><text class="ac-num">{{item.diff}}</text><text class="ac-u">天后</text></block>
+          <block wx:elif="{{item.diff === 0}}"><text class="ac-today">今天 🎉</text></block>
+          <block wx:else><text class="ac-num">{{item.passedDays}}</text><text class="ac-u">天</text></block>
+        </view>
+      </view>
+    </view>
+    <text class="sub center-text" style="display:block;" wx:if="{{annivs.length > 0}}">长按可删除</text>
+  </view>
+
+  <!-- 共同愿望清单 -->
+  <view class="card fade-in">
+    <view class="card-title"><view class="dot"></view><text class="title">想一起做的事</text></view>
+    <view class="note-input-row">
+      <input class="input grow" placeholder="一起去看海 / 学做一道菜…" value="{{wishInput}}" bindinput="onWishInput" maxlength="30" confirm-type="done" bindconfirm="addWish" />
+      <button class="btn btn-primary btn-sm" bindtap="addWish">添加</button>
+    </view>
+    <view class="wish-list">
+      <view class="wish-item {{item.done ? 'done' : ''}}" wx:for="{{wishes}}" wx:key="id">
+        <view class="wish-check" bindtap="toggleWish" data-id="{{item.id}}">{{item.done ? '✓' : ''}}</view>
+        <text class="grow" bindtap="toggleWish" data-id="{{item.id}}">{{item.text}}</text>
+        <text class="wish-del" bindtap="delWish" data-id="{{item.id}}">✕</text>
+      </view>
+      <view class="empty" wx:if="{{wishes.length === 0}}"><text class="em">🌈</text>还没有愿望，许一个吧</view>
+    </view>
+  </view>
+
+  <!-- 时光轴 -->
+  <view class="card fade-in">
+    <view class="between">
+      <view class="card-title" style="margin:0;"><view class="dot"></view><text class="title">时光轴</text></view>
+      <text class="accent strong" bindtap="toggleMemoForm">{{showMemoForm ? '收起' : '＋ 记录'}}</text>
+    </view>
+    <view class="pill" style="margin-bottom:20rpx;" bindtap="goAlbum">🖼️ 翻开手工相册 · 蝴蝶在等你 →</view>
+
+    <view class="form fade-in" wx:if="{{showMemoForm}}">
+      <textarea class="textarea" placeholder="今天发生了什么值得记住的事？" value="{{memoText}}" bindinput="onMemoText" maxlength="200" />
+      <picker mode="date" value="{{memoDate}}" bindchange="onMemoDate">
+        <view class="picker-row"><text class="sub">日期</text><text class="picker-val">{{memoDate}}</text></view>
+      </picker>
+      <view class="photo-pick" bindtap="chooseMemoPhoto">
+        <image wx:if="{{memoPhoto}}" src="{{memoPhoto}}" mode="aspectFill" class="photo-thumb" />
+        <view wx:else class="photo-add">＋ 加一张照片</view>
+      </view>
+      <button class="btn btn-primary btn-block" bindtap="saveMemo">收进时光轴</button>
+    </view>
+
+    <view class="timeline">
+      <view class="tl-item" wx:for="{{memories}}" wx:key="id" bindlongpress="delMemo" data-id="{{item.id}}">
+        <view class="tl-dot"></view>
+        <view class="tl-body">
+          <text class="tl-date">{{item.date}}</text>
+          <view class="tl-text">{{item.text}}</view>
+          <image wx:if="{{item.photo}}" src="{{item.photo}}" mode="widthFix" class="tl-photo" catchtap="previewPhoto" data-src="{{item.photo}}" />
+        </view>
+      </view>
+      <view class="empty" wx:if="{{memories.length === 0}}"><text class="em">📷</text>还没有回忆，从今天开始记录吧</view>
+    </view>
+    <text class="sub center-text" style="display:block;" wx:if="{{memories.length > 0}}">长按可删除</text>
+  </view>
+
+</view>
+</view>

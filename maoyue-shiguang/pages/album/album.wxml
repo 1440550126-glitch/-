@@ -1,0 +1,64 @@
+<!-- 手工剪纸 3D 相册 -->
+<view class="theme-{{theme}} page-root">
+<view class="page">
+
+  <view class="hero fade-in">
+    <view class="greet">手工相册 🖼️</view>
+    <view class="date">把两人的点点滴滴，一张张裁下来收好</view>
+  </view>
+
+  <view class="album-stage">
+    <!-- 背景纸（最远层） -->
+    <view class="paper-bg" style="transform:{{pBg}}"></view>
+    <view class="vignette"></view>
+
+    <!-- 封面 -->
+    <view wx:if="{{!opened}}" class="cover" bindtap="open">
+      <view class="cover-inner" style="transform:{{pMid}}">
+        <view class="cover-heart">💞</view>
+        <view class="cover-title">我们的手工相册</view>
+        <view class="cover-sub">轻触翻开</view>
+      </view>
+    </view>
+
+    <!-- 内页：被裁下来的相片 + 剪纸 -->
+    <block wx:else>
+      <view class="cut-deco d1" style="transform:{{pMid}}"></view>
+      <view class="cut-deco d2" style="transform:{{pMid}}"></view>
+      <view class="cut-deco d3" style="transform:{{pMid}}"></view>
+
+      <view class="photo-card {{flipping ? 'flipping ' + flipDir : ''}}" style="transform:{{pFront}} rotateX(4deg) rotate(-3deg)">
+        <view class="tape tape-tl"></view>
+        <view class="tape tape-br"></view>
+        <image wx:if="{{cur.photo}}" class="photo" src="{{cur.photo}}" mode="aspectFill" />
+        <view wx:else class="photo placeholder"><text class="ph-emoji">📷</text></view>
+        <view class="curl"></view>
+      </view>
+
+      <view class="caption" style="transform:{{pFront}}">
+        <text class="cap-date">{{cur.date}}</text>
+        <text class="cap-text">{{cur.text}}</text>
+      </view>
+    </block>
+
+    <!-- 蝴蝶层（最上） -->
+    <view class="bfly-layer">
+      <view class="bfly" wx:for="{{butterflies}}" wx:key="id"
+        style="left:{{item.x}}%;top:{{item.y}}%;opacity:{{scattered?0:1}};filter:hue-rotate({{item.hue}}deg);transform:{{scattered?item.fly:'rotate('+item.rot+'deg) scale('+item.scale+')'}};transition:left {{scattered?'1.8s':'3.2s'}} ease,top {{scattered?'1.8s':'3.2s'}} ease,transform {{scattered?'1.8s':'3.2s'}} ease,opacity 1.2s ease;">
+        <text class="bemoji" style="animation-duration:{{item.dur}}s">🦋</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 翻页 -->
+  <view wx:if="{{opened}}" class="nav">
+    <view class="nav-btn" bindtap="prev">‹</view>
+    <text class="nav-idx">{{idx+1}} / {{memories.length}}</text>
+    <view class="nav-btn" bindtap="next">›</view>
+  </view>
+
+  <view class="album-tip center">{{opened ? '轻触左右翻页 · 停一会儿蝴蝶会飞回来 🦋' : '轻触相册 · 蝴蝶会四散飞走 🦋'}}</view>
+  <button wx:if="{{!memories.length}}" class="btn btn-soft btn-block mt-s" bindtap="goTimeline">还没有回忆 · 去时光轴添加</button>
+
+</view>
+</view>

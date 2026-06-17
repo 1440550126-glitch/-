@@ -1,0 +1,99 @@
+/* 手工剪纸 3D 相册 */
+.album-stage {
+  position: relative; height: 900rpx; margin-top: 12rpx;
+  border-radius: 32rpx; overflow: hidden;
+  perspective: 1000rpx;
+  box-shadow: 0 20rpx 60rpx rgba(120,90,70,.22), inset 0 0 0 2rpx rgba(255,255,255,.5);
+}
+/* 背景牛皮纸 + 纹理 */
+.paper-bg {
+  position: absolute; inset: -40rpx;
+  background:
+    repeating-linear-gradient(0deg, rgba(120,90,70,.07) 0 1rpx, transparent 1rpx 34rpx),     /* 格纹横 */
+    repeating-linear-gradient(90deg, rgba(120,90,70,.07) 0 1rpx, transparent 1rpx 34rpx),    /* 格纹竖 */
+    repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 3rpx, rgba(0,0,0,.012) 3rpx 6rpx),  /* 布纹斜织 */
+    repeating-linear-gradient(-45deg, rgba(255,255,255,.05) 0 3rpx, transparent 3rpx 7rpx),
+    radial-gradient(120% 120% at 30% 20%, #FBF2E4 0%, #EFE1C9 58%, #E2D1B4 100%);
+  will-change: transform;
+}
+.vignette { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 120rpx rgba(90,60,40,.28); border-radius: 32rpx; }
+
+/* 封面 */
+.cover { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 12; }
+.cover-inner {
+  width: 520rpx; height: 600rpx; border-radius: 22rpx;
+  background: linear-gradient(135deg, #fff 0%, #FBEFF2 100%);
+  box-shadow: 0 26rpx 50rpx rgba(120,90,70,.3), inset 0 0 0 14rpx #fff, inset 0 0 0 16rpx rgba(255,126,157,.25);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18rpx;
+  border: 2rpx solid rgba(0,0,0,.04);
+}
+.cover-heart { font-size: 96rpx; filter: drop-shadow(0 8rpx 10rpx rgba(255,126,157,.4)); }
+.cover-title { font-size: 40rpx; font-weight: 800; color: #6b5560; letter-spacing: 2rpx; }
+.cover-sub { font-size: 24rpx; color: #B7A; opacity: .8; }
+
+/* 中层剪纸装饰（不同深度） */
+.cut-deco { position: absolute; z-index: 6; filter: drop-shadow(0 10rpx 8rpx rgba(0,0,0,.12)); will-change: transform; }
+.cut-deco.d1 { left: 8%; top: 16%; width: 80rpx; height: 80rpx; background: rgba(255,154,176,.55); border-radius: 80% 0 80% 80%; transform-origin: center; }
+.cut-deco.d2 { right: 10%; top: 22%; width: 60rpx; height: 60rpx; background: rgba(201,182,240,.55); border-radius: 50% 50% 50% 0; }
+.cut-deco.d3 { right: 16%; bottom: 14%; width: 100rpx; height: 64rpx; background: rgba(154,208,194,.5); border-radius: 50% 50% 50% 50%/70% 70% 30% 30%; }
+
+/* 被裁下来的相片（前层 · 立体） */
+.photo-card {
+  position: absolute; left: 50%; margin-left: -240rpx; top: 130rpx; z-index: 10;
+  width: 480rpx; padding: 22rpx 22rpx 64rpx; background: #fff; border-radius: 10rpx;
+  box-shadow: 0 30rpx 50rpx rgba(80,50,40,.3), 0 6rpx 0 rgba(0,0,0,.04);
+  transform-style: preserve-3d; transform-origin: left center; will-change: transform;
+}
+/* 翻书：下一页从左书脊翻入；上一页镜像，从右侧翻入（方向相反） */
+.photo-card.flipping.next { transform-origin: left center; animation: pageTurnNext .58s cubic-bezier(.34,.7,.3,1); }
+.photo-card.flipping.prev { transform-origin: right center; animation: pageTurnPrev .58s cubic-bezier(.34,.7,.3,1); }
+@keyframes pageTurnNext {
+  0% { transform: perspective(1200rpx) rotateY(-105deg) rotate(-3deg); opacity: .2; box-shadow: 50rpx 30rpx 70rpx rgba(80,50,40,.45); }
+  55% { opacity: 1; }
+  100% { transform: perspective(1200rpx) rotateY(0deg) rotate(-3deg); }
+}
+@keyframes pageTurnPrev {
+  0% { transform: perspective(1200rpx) rotateY(105deg) rotate(-3deg); opacity: .2; box-shadow: -50rpx 30rpx 70rpx rgba(80,50,40,.45); }
+  55% { opacity: 1; }
+  100% { transform: perspective(1200rpx) rotateY(0deg) rotate(-3deg); }
+}
+/* 翻起的卷角（折页） */
+.curl { position: absolute; right: 6rpx; bottom: 48rpx; width: 0; height: 0; border-style: solid; border-width: 0 0 48rpx 48rpx; border-color: transparent transparent rgba(255,255,255,.95) transparent; filter: drop-shadow(-5rpx -5rpx 7rpx rgba(0,0,0,.2)); }
+/* 背后再垫一层错位的"剪纸"，强化立体裁切感 */
+.photo-card::before {
+  content: ''; position: absolute; left: -16rpx; top: 10rpx; right: 8rpx; bottom: 14rpx;
+  background: #FFF6EE; border-radius: 10rpx; transform: rotate(2.5deg); z-index: -1;
+  box-shadow: 0 12rpx 24rpx rgba(80,50,40,.18);
+}
+.photo { display: block; width: 100%; height: 440rpx; border-radius: 6rpx; }
+.photo.placeholder { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFE7C2, #FFB9C6 70%, #C9B6F0); }
+.ph-emoji { font-size: 150rpx; filter: drop-shadow(0 6rpx 8rpx rgba(0,0,0,.15)); }
+
+/* 和纸胶带 */
+.tape { position: absolute; width: 110rpx; height: 44rpx; background: rgba(255,210,120,.55); box-shadow: 0 2rpx 6rpx rgba(0,0,0,.12); }
+.tape-tl { left: -22rpx; top: 20rpx; transform: rotate(-38deg); }
+.tape-br { right: -22rpx; bottom: 70rpx; transform: rotate(-40deg); background: rgba(255,154,176,.5); }
+
+/* 手写标签 */
+.caption {
+  position: absolute; left: 50%; margin-left: -230rpx; top: 640rpx; width: 460rpx; z-index: 11;
+  background: #FFFDF6; padding: 18rpx 24rpx; border-radius: 6rpx; text-align: center;
+  box-shadow: 0 10rpx 22rpx rgba(80,50,40,.2); transform-origin: center; will-change: transform;
+}
+.caption::after { content: ''; position: absolute; left: 50%; top: -14rpx; width: 60rpx; height: 26rpx; margin-left: -30rpx; background: rgba(255,210,120,.6); transform: rotate(-6deg); }
+.cap-date { display: block; font-size: 22rpx; color: #B79; letter-spacing: 1rpx; }
+.cap-text { display: block; font-size: 30rpx; color: #5b4b54; font-style: italic; line-height: 1.5; margin-top: 6rpx; }
+
+/* 蝴蝶层（🦋 + 横向挤压模拟扇翅膀） */
+.bfly-layer { position: absolute; inset: 0; z-index: 22; pointer-events: none; }
+.bfly { position: absolute; width: 52rpx; height: 52rpx; will-change: transform, left, top, opacity; }
+.bemoji { display: inline-block; font-size: 48rpx; line-height: 1; transform-origin: center; animation: flutter .5s ease-in-out infinite alternate; filter: drop-shadow(0 6rpx 5rpx rgba(0,0,0,.2)); }
+@keyframes flutter { from { transform: scaleX(1) translateY(0); } to { transform: scaleX(.55) translateY(-3rpx); } }
+
+/* 翻页 */
+.nav { display: flex; align-items: center; justify-content: center; gap: 40rpx; margin-top: 26rpx; }
+.nav-btn { width: 88rpx; height: 88rpx; border-radius: 50%; background: var(--c-card); box-shadow: 0 10rpx 24rpx var(--c-shadow); display: flex; align-items: center; justify-content: center; font-size: 52rpx; color: var(--c-primary2); }
+.nav-btn:active { transform: scale(.92); }
+.nav-idx { font-size: 26rpx; color: var(--c-muted); min-width: 110rpx; text-align: center; }
+
+.album-tip { color: var(--c-muted); font-size: 23rpx; padding: 18rpx 0 4rpx; }

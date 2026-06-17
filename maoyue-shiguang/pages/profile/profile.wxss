@@ -1,0 +1,93 @@
+/* 我的 */
+.profile-head { text-align: center; padding-top: 40rpx; }
+.ph-avatars { display: flex; align-items: center; justify-content: center; gap: 28rpx; }
+.ph-heart { font-size: 40rpx; }
+.ph-status { font-size: 32rpx; font-weight: 700; color: var(--c-text); margin: 22rpx 0 8rpx; }
+
+.set-row { display: flex; align-items: center; justify-content: space-between; padding: 26rpx 4rpx; border-bottom: 2rpx solid var(--c-line); }
+.set-row:last-child { border-bottom: none; }
+.set-label { font-size: 28rpx; color: var(--c-text); }
+.set-val { font-size: 28rpx; color: var(--c-muted); display: flex; align-items: center; gap: 10rpx; }
+.set-val .arrow { color: var(--c-muted); font-size: 34rpx; }
+
+.footer-note { color: var(--c-muted); font-size: 24rpx; padding: 24rpx 0; }
+
+/* ───────── 鹊桥相会 · 绑定过场 ───────── */
+.cine { position: fixed; inset: 0; z-index: 999; overflow: hidden; background: radial-gradient(120% 90% at 50% 14%, #2b3c70 0%, #182550 44%, #0c1230 100%); animation: cineIn .5s ease both; }
+@keyframes cineIn { from { opacity: 0; } to { opacity: 1; } }
+.cine-cam { position: absolute; inset: 0; transform-origin: 50% 46%; animation: cam 6.6s cubic-bezier(.4,.1,.3,1) both; }
+@keyframes cam {
+  0% { transform: scale(1.12) translateY(-20rpx); }
+  30% { transform: scale(1) translateY(0); }
+  65% { transform: scale(1.3) translateY(40rpx); }
+  100% { transform: scale(1.18) translateY(28rpx); }
+}
+
+.milkyway { position: absolute; left: -10%; top: 140rpx; width: 120%; height: 520rpx; background: linear-gradient(115deg, transparent 32%, rgba(190,205,255,.20) 48%, rgba(225,215,255,.10) 56%, transparent 72%); filter: blur(8rpx); transform: rotate(-12deg); }
+.moon { position: absolute; top: 120rpx; left: 50%; transform: translateX(-50%); font-size: 168rpx; animation: moonGlow 4s ease-in-out infinite; }
+@keyframes moonGlow { 0%,100% { filter: drop-shadow(0 0 34rpx rgba(255,246,205,.8)); } 50% { filter: drop-shadow(0 0 64rpx rgba(255,246,205,1)); } }
+
+.star { position: absolute; width: 8rpx; height: 8rpx; border-radius: 50%; background: #fff; box-shadow: 0 0 12rpx #fff; animation: tw 2.4s ease-in-out infinite; }
+.s1 { left: 14%; top: 190rpx; } .s2 { left: 30%; top: 120rpx; animation-delay: .3s; } .s3 { left: 68%; top: 150rpx; animation-delay: .6s; } .s4 { left: 84%; top: 230rpx; animation-delay: .9s; }
+.s5 { left: 20%; top: 330rpx; animation-delay: 1.2s; } .s6 { left: 76%; top: 350rpx; animation-delay: .5s; } .s7 { left: 46%; top: 96rpx; animation-delay: 1.5s; } .s8 { left: 60%; top: 290rpx; animation-delay: .2s; }
+@keyframes tw { 0%,100% { opacity: .25; transform: scale(.7); } 50% { opacity: 1; transform: scale(1.3); } }
+
+/* 喜鹊群飞来（前奏，飞过画面） */
+.flock .fm { position: absolute; left: 0; font-size: 34rpx; opacity: 0; filter: drop-shadow(0 4rpx 6rpx rgba(0,0,0,.4)); animation: flyAcross 2.2s ease-in both; }
+@keyframes flyAcross {
+  0% { transform: translate(-220rpx,40rpx) scale(.6); opacity: 0; }
+  18% { opacity: 1; } 82% { opacity: 1; }
+  100% { transform: translate(820rpx,-60rpx) scale(.95); opacity: 0; }
+}
+
+/* 鹊桥：喜鹊从天而降，落下连成桥 */
+.bridge { position: absolute; left: 6%; right: 6%; top: 700rpx; height: 130rpx; background: linear-gradient(180deg, rgba(140,100,60,0), rgba(120,85,55,.4)); border-top: 6rpx solid rgba(255,212,150,.55); border-radius: 50% 50% 0 0 / 100% 100% 0 0; box-shadow: 0 10rpx 34rpx rgba(0,0,0,.35); opacity: 0; transform-origin: bottom center; animation: bridgeForm 1.8s ease both; }
+@keyframes bridgeForm { 0% { opacity: 0; transform: scaleY(.15); } 55% { opacity: .5; } 100% { opacity: 1; transform: scaleY(1); } }
+.magpies .mp { position: absolute; margin-left: -20rpx; opacity: 0; transform-origin: center; }
+.magpies .mp.from-l { animation: flyInL 1.6s ease both; }
+.magpies .mp.from-r { animation: flyInR 1.6s ease both; }
+.magpies .mp .w { display: inline-block; font-size: 38rpx; filter: drop-shadow(0 3rpx 6rpx rgba(255,110,150,.45)); animation: heartbeat 1.2s ease-in-out infinite; }
+@keyframes flyInL { 0% { transform: translate(-540rpx,-50rpx) rotate(-18deg); opacity: 0; } 55% { opacity: 1; } 100% { transform: translate(0,0) rotate(0); opacity: 1; } }
+@keyframes flyInR { 0% { transform: translate(540rpx,-50rpx) rotate(18deg); opacity: 0; } 55% { opacity: 1; } 100% { transform: translate(0,0) rotate(0); opacity: 1; } }
+@keyframes heartbeat { 0%,100% { transform: scale(1); } 50% { transform: scale(1.16); } }
+
+/* 主角：情侣双方头像，从两端走近相会 */
+.niulang, .zhinv { position: absolute; top: 556rpx; left: 50%; width: 120rpx; height: 120rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 72rpx; background: radial-gradient(circle at 50% 40%, #fff, #ffe9d6); box-shadow: 0 0 30rpx rgba(255,236,180,.85), 0 10rpx 22rpx rgba(0,0,0,.4); }
+.niulang { animation: walkL 6.6s ease-in-out both; }
+.zhinv { animation: walkR 6.6s ease-in-out both; }
+@keyframes walkL {
+  0%,27% { transform: translate(-490rpx,0); }
+  60% { transform: translate(-130rpx,0); }
+  64% { transform: translate(-130rpx,-16rpx); } 68% { transform: translate(-130rpx,0); }
+  100% { transform: translate(-130rpx,0); }
+}
+@keyframes walkR {
+  0%,27% { transform: translate(490rpx,0); }
+  60% { transform: translate(10rpx,0); }
+  64% { transform: translate(10rpx,-16rpx); } 68% { transform: translate(10rpx,0); }
+  100% { transform: translate(10rpx,0); }
+}
+.meet-hearts { position: absolute; top: 500rpx; left: 50%; opacity: 0; animation: heartsPop 6.6s ease both; }
+.meet-hearts .mh { position: absolute; top: 0; font-size: 50rpx; filter: drop-shadow(0 4rpx 10rpx rgba(255,90,120,.55)); animation: mhBeat 1.2s ease-in-out infinite; }
+.meet-hearts .mh-l { left: -58rpx; }
+.meet-hearts .mh-r { left: 8rpx; animation-delay: .25s; }
+@keyframes heartsPop {
+  0%,58% { opacity: 0; transform: translate(-50%,12rpx) scale(.5); }
+  68% { opacity: 1; transform: translate(-50%,-14rpx) scale(1.12); }
+  84% { opacity: 1; transform: translate(-50%,-34rpx) scale(1); }
+  100% { opacity: .95; transform: translate(-50%,-54rpx) scale(1); }
+}
+@keyframes mhBeat { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+
+/* 脚下慢慢生出鲜花 */
+.flowers .fl { position: absolute; top: 700rpx; font-size: 46rpx; transform: scale(0); transform-origin: bottom center; opacity: 0; animation: bloom 1.2s ease both; }
+.flowers .f1 { left: 34%; animation-delay: 4.6s; } .flowers .f2 { left: 42%; animation-delay: 4.8s; } .flowers .f3 { left: 50%; animation-delay: 5.0s; }
+.flowers .f4 { left: 58%; animation-delay: 5.2s; } .flowers .f5 { left: 66%; animation-delay: 5.4s; } .flowers .f6 { left: 30%; animation-delay: 4.7s; }
+@keyframes bloom { 0% { transform: scale(0); opacity: 0; } 70% { transform: scale(1.18); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+
+.cine-title { position: absolute; top: 1000rpx; left: 0; right: 0; text-align: center; color: #fff; font-size: 46rpx; font-weight: 800; letter-spacing: 4rpx; text-shadow: 0 4rpx 20rpx rgba(0,0,0,.5); opacity: 0; animation: titleIn 6.6s ease both; }
+.cine-sub { position: absolute; top: 1070rpx; left: 0; right: 0; text-align: center; color: #ffe9c8; font-size: 26rpx; opacity: 0; animation: titleIn 6.6s ease both; }
+@keyframes titleIn { 0%,82% { opacity: 0; transform: translateY(16rpx); } 92% { opacity: 1; transform: none; } 100% { opacity: 1; } }
+.cine-skip { position: absolute; right: 30rpx; bottom: 64rpx; color: rgba(255,255,255,.6); font-size: 24rpx; z-index: 2; }
+
+.hint-box { background: rgba(0,0,0,.04); border: 1rpx dashed rgba(0,0,0,.12); border-radius: 16rpx; padding: 18rpx 22rpx; font-size: 26rpx; color: #7a6f74; line-height: 1.6; }

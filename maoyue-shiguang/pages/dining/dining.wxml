@@ -1,0 +1,36 @@
+<!-- 情侣点餐：今天吃什么 -->
+<view class="theme-{{theme}} page-root">
+<view class="page">
+
+  <view class="hero fade-in">
+    <view class="greet">今天吃什么 🍜</view>
+    <view class="date">选择困难就交给缘分吧</view>
+  </view>
+
+  <!-- 转盘结果 -->
+  <view class="card decider fade-in">
+    <view class="dish-emoji {{spinning ? 'spin' : ''}}">{{current ? current.emoji : '🍽️'}}</view>
+    <view class="dish-name">{{current ? current.name : '点下面的按钮'}}</view>
+    <view class="result-tip" wx:if="{{result && !spinning}}">就决定是「{{result.name}}」啦！</view>
+    <button class="btn btn-primary btn-block mt-m" bindtap="spin">{{spinning ? '转动中…' : '帮我们决定'}}</button>
+    <button class="btn btn-soft btn-block mt-s" wx:if="{{result && !spinning}}" bindtap="sendToPartner">把结果发给TA</button>
+  </view>
+
+  <!-- 自定义菜单 -->
+  <view class="card fade-in">
+    <view class="card-title"><view class="dot"></view><text class="title">我们的菜单</text></view>
+    <view class="note-input-row">
+      <input class="input grow" placeholder="加一道你们爱吃的…" value="{{newDish}}" bindinput="onNewDish" maxlength="12" confirm-type="done" bindconfirm="addDish" />
+      <button class="btn btn-primary btn-sm" bindtap="addDish">添加</button>
+    </view>
+    <view class="dish-chips">
+      <view class="dish-chip" wx:for="{{menu}}" wx:key="id">
+        <text>{{item.emoji}} {{item.name}}</text>
+        <text class="chip-x" bindtap="removeDish" data-id="{{item.id}}">✕</text>
+      </view>
+      <view class="empty" wx:if="{{menu.length === 0}}"><text class="em">🍽️</text>菜单空空，加几道吧</view>
+    </view>
+  </view>
+
+</view>
+</view>

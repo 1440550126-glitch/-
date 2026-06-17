@@ -1,0 +1,82 @@
+<!-- 陪伴：情侣日常互动 -->
+<view class="theme-{{theme}} page-root">
+<view class="page">
+
+  <view class="hero fade-in">
+    <view class="greet">陪伴 💞</view>
+    <view class="date">今天已经互动了 {{todayCount}} 次，继续呀</view>
+  </view>
+
+  <!-- 戳一戳 -->
+  <view class="card poke-card fade-in" bindtap="poke">
+    <view class="poke-emoji breathe">👉🐱</view>
+    <view class="title mt-s">戳一戳 TA</view>
+    <text class="sub">轻轻一戳，让TA知道你在想ta</text>
+    <view class="pill mt-s" wx:if="{{pokeCount > 0}}">今天戳了 {{pokeCount}} 下</view>
+  </view>
+
+  <!-- 今日心情 -->
+  <view class="card fade-in">
+    <view class="card-title"><view class="dot"></view><text class="title">今日心情同步</text></view>
+    <view class="mood-now">
+      <view class="mn-box">
+        <text class="mn-emoji">{{mood.self ? mood.self.e : '＋'}}</text>
+        <text class="sub">我 · {{mood.self ? mood.self.t : '选一个'}}</text>
+      </view>
+      <text class="mn-link">💗</text>
+      <view class="mn-box">
+        <text class="mn-emoji">{{mood.partner ? mood.partner.e : '🌷'}}</text>
+        <text class="sub">TA · {{mood.partner ? mood.partner.t : '等待中'}}</text>
+      </view>
+    </view>
+    <view class="mood-picker">
+      <view class="mp-item" wx:for="{{moods}}" wx:key="t" data-i="{{index}}" bindtap="chooseMood">
+        <text class="mp-e">{{item.e}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 每日一问 -->
+  <view class="card fade-in">
+    <view class="card-title"><view class="dot"></view><text class="title">每日一问</text></view>
+    <view class="q-text">{{dailyQ.question}}</view>
+
+    <block wx:if="{{dailyQ.selfAnswer}}">
+      <view class="answer-bubble mine">
+        <text class="ab-who">我的回答</text>
+        <text>{{dailyQ.selfAnswer}}</text>
+      </view>
+      <view class="answer-bubble" wx:if="{{dailyQ.partnerAnswer}}">
+        <text class="ab-who">TA的回答</text>
+        <text>{{dailyQ.partnerAnswer}}</text>
+      </view>
+      <text class="sub center-text mt-s" style="display:block;">明天还有新的问题哦 🌙</text>
+    </block>
+
+    <block wx:else>
+      <textarea class="textarea mt-s" placeholder="写下你的答案，TA也会回答～" value="{{answerInput}}" bindinput="onAnswerInput" maxlength="120" />
+      <button class="btn btn-primary btn-block mt-s" bindtap="submitAnswer">回答</button>
+    </block>
+  </view>
+
+  <!-- 爱的小纸条 -->
+  <view class="card fade-in">
+    <view class="card-title"><view class="dot"></view><text class="title">爱的小纸条</text></view>
+    <view class="note-input-row">
+      <input class="input grow" placeholder="给TA留一句话…" value="{{noteInput}}" bindinput="onNoteInput" maxlength="60" confirm-type="send" bindconfirm="sendNote" />
+      <button class="btn btn-primary btn-sm" bindtap="sendNote">贴上</button>
+    </view>
+
+    <view class="notes">
+      <view class="note {{item.mine ? 'mine' : 'ta'}}" wx:for="{{notes}}" wx:key="id" bindlongpress="delNote" data-id="{{item.id}}">
+        <view class="note-text">{{item.text}}</view>
+        <view class="note-meta">{{item.mine ? '我' : 'TA'}} · {{item.timeStr}}</view>
+      </view>
+      <view class="empty" wx:if="{{notes.length === 0}}"><text class="em">💌</text>还没有纸条，写第一句吧</view>
+    </view>
+    <text class="sub center-text" style="display:block;" wx:if="{{notes.length > 0}}">长按纸条可以撕掉</text>
+  </view>
+
+  <view wx:if="{{floatHeart}}" class="float-heart">{{floatEmoji}}</view>
+</view>
+</view>

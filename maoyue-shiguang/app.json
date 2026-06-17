@@ -1,0 +1,42 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/interact/interact",
+    "pages/vault/vault",
+    "pages/profile/profile",
+    "pages/cat/cat",
+    "pages/timeline/timeline",
+    "pages/dining/dining",
+    "pages/membership/membership",
+    "pages/verify/verify",
+    "pages/status/status",
+    "pages/album/album",
+    "pages/legal/legal"
+  ],
+  "permission": {
+    "scope.userLocation": { "desc": "用于在地图上显示你和TA之间的距离" }
+  },
+  "requiredPrivateInfos": ["getLocation"],
+  "window": {
+    "navigationBarBackgroundColor": "#FFF6F3",
+    "navigationBarTitleText": "猫约时光",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#FFF1EC",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#C2B8BE",
+    "selectedColor": "#FF7E9D",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/home/home", "text": "家" },
+      { "pagePath": "pages/interact/interact", "text": "陪伴" },
+      { "pagePath": "pages/timeline/timeline", "text": "时光" },
+      { "pagePath": "pages/vault/vault", "text": "金库" },
+      { "pagePath": "pages/profile/profile", "text": "我的" }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

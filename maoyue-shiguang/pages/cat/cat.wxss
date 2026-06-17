@@ -1,0 +1,21 @@
+/* 猫窝 */
+.stage { position: relative; text-align: center; padding: 40rpx 0 28rpx; }
+.stage-glow { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -55%); width: 360rpx; height: 360rpx; border-radius: 50%; background: radial-gradient(circle, var(--c-soft) 0%, rgba(255,255,255,0) 70%); }
+.cat-big { font-size: 200rpx; position: relative; }
+.cat-name { font-size: 38rpx; font-weight: 800; color: var(--c-text); }
+.cat-mood { display: block; margin-top: 10rpx; color: var(--c-muted); font-size: 26rpx; }
+
+.stat-line { display: flex; align-items: center; gap: 18rpx; margin-bottom: 22rpx; }
+.stat-line:last-child { margin-bottom: 0; }
+.stat-label { width: 150rpx; font-size: 26rpx; color: var(--c-text2); }
+.stat-val { width: 110rpx; text-align: right; font-size: 24rpx; color: var(--c-muted); }
+
+.cat-actions { display: flex; justify-content: space-around; }
+.ca-item { display: flex; flex-direction: column; align-items: center; gap: 12rpx; font-size: 26rpx; color: var(--c-text2); }
+.ca-emoji { width: 130rpx; height: 130rpx; border-radius: 36rpx; display: flex; align-items: center; justify-content: center; font-size: 60rpx; background: var(--c-soft); box-shadow: 0 10rpx 24rpx var(--c-shadow); transition: transform .12s ease; }
+.ca-item:active .ca-emoji { transform: scale(0.9); }
+.msg-line { margin-top: 24rpx; text-align: center; color: var(--c-primary2); font-weight: 600; font-size: 28rpx; }
+
+.tip-card { padding: 26rpx 30rpx; }
+
+.level-banner { position: fixed; left: 50%; top: 30%; transform: translateX(-50%); background: linear-gradient(135deg, var(--c-primary), var(--c-primary2)); color: #fff; padding: 24rpx 44rpx; border-radius: 999rpx; font-weight: 700; font-size: 30rpx; box-shadow: 0 16rpx 40rpx var(--c-shadow); z-index: 99; }

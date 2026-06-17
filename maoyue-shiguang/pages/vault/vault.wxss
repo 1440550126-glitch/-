@@ -1,0 +1,130 @@
+/* 小金库 */
+.vault-hero { text-align: center; padding: 30rpx 0 10rpx; }
+.vault-jar { display: inline-flex; flex-direction: column; align-items: center; }
+.jar-emoji { font-size: 150rpx; filter: drop-shadow(0 12rpx 24rpx var(--c-shadow)); }
+.jar-tap { font-size: 24rpx; color: var(--c-primary2); margin-top: 6rpx; }
+.vault-balance { margin: 14rpx 0 6rpx; }
+.vb-sym { font-size: 40rpx; font-weight: 700; color: #E0A000; vertical-align: 14rpx; margin-right: 6rpx; }
+.vb-num { font-size: 92rpx; font-weight: 800; color: #E0A000; letter-spacing: 1rpx; }
+
+.vault-stats { display: flex; align-items: center; justify-content: center; gap: 40rpx; margin-top: 24rpx; padding: 24rpx; background: var(--c-card); border-radius: 28rpx; box-shadow: 0 12rpx 40rpx var(--c-shadow); }
+.vs-item { display: flex; flex-direction: column; align-items: center; gap: 6rpx; }
+.vs-num { font-size: 38rpx; font-weight: 800; }
+.vs-divider { width: 2rpx; height: 56rpx; background: var(--c-line); }
+
+/* 记一笔 */
+.amount-row { display: flex; align-items: center; gap: 12rpx; padding: 8rpx 28rpx; background: var(--c-input); border-radius: 24rpx; }
+.amount-sym { font-size: 44rpx; font-weight: 700; color: var(--c-text2); }
+.amount-input { flex: 1; font-size: 60rpx; font-weight: 800; color: var(--c-text); height: 96rpx; }
+
+/* 流水 */
+.tx-list { display: flex; flex-direction: column; }
+.tx-item { display: flex; align-items: center; gap: 18rpx; padding: 22rpx 0; border-bottom: 2rpx solid var(--c-line); }
+.tx-item:last-child { border-bottom: none; }
+.tx-ic { width: 72rpx; height: 72rpx; border-radius: 22rpx; display: flex; align-items: center; justify-content: center; font-size: 36rpx; background: var(--c-soft); }
+.tx-note { font-size: 28rpx; color: var(--c-text); }
+.tx-amt { font-size: 32rpx; font-weight: 800; }
+.tx-amt.in { color: #2FA866; }
+.tx-amt.out { color: #E8779A; }
+.footer-note { color: var(--c-muted); font-size: 23rpx; padding: 16rpx 0; }
+
+/* ───── 投币掉落动画 ───── */
+.coin-layer { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 90; overflow: hidden; }
+/* CSS 绘制的金币：金色径向渐变 + 内阴影立体感 + 斜向高光，比 emoji 更金更有光泽 */
+.coin {
+  position: absolute; top: -80rpx; width: 54rpx; height: 54rpx; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  background: radial-gradient(circle at 35% 28%, #FFF7CC 0%, #FFE283 26%, #F3C12C 58%, #C9870E 100%);
+  border: 2rpx solid #E0A019;
+  box-shadow: inset 0 2rpx 4rpx rgba(255,255,255,.9), inset 0 -4rpx 7rpx rgba(150,90,0,.5), 0 5rpx 10rpx rgba(120,80,0,.4);
+  animation-name: coinFall; animation-timing-function: cubic-bezier(.4,.2,.7,1); animation-fill-mode: forwards;
+}
+.coin-mark { color: #A8690A; font-size: 30rpx; font-weight: 800; line-height: 1; text-shadow: 0 1rpx 0 rgba(255,255,255,.55); }
+/* 斜向高光扫过 = 金属光泽 */
+.coin::after { content: ''; position: absolute; top: -50%; left: -70%; width: 45%; height: 200%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.92), transparent); transform: skewX(-18deg); animation: coinShine 1.05s ease-in-out infinite; }
+@keyframes coinShine { 0% { left: -70%; } 55%, 100% { left: 150%; } }
+@keyframes coinFall {
+  0% { transform: translateY(-80rpx) rotate(0deg); opacity: 0; }
+  12% { opacity: 1; }
+  100% { transform: translateY(1500rpx) rotate(540deg); opacity: .25; }
+}
+
+/* ───── 刷卡动画 ───── */
+.swipe-layer { position: fixed; top: 42%; left: 0; right: 0; z-index: 95; display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+.swipe-reader { width: 360rpx; height: 24rpx; border-radius: 12rpx; background: var(--c-text); opacity: .85; position: relative; }
+.swipe-slot { position: absolute; top: 8rpx; left: 30rpx; right: 30rpx; height: 8rpx; border-radius: 8rpx; background: #FFD24D; }
+.swipe-card { font-size: 90rpx; margin-top: -20rpx; animation: swipeMove 1s ease-in-out forwards; }
+@keyframes swipeMove {
+  0% { transform: translateX(-300rpx) rotate(-8deg); opacity: 0; }
+  25% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translateX(300rpx) rotate(8deg); opacity: 0; }
+}
+
+/* ───── 开库金光（第一人称）───── */
+.vault-overlay { position: fixed; inset: 0; z-index: 999; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 45%, #7a5a00 0%, #2a1d00 55%, #140d00 100%); overflow: hidden; }
+.vo-flash { position: absolute; top: 45%; left: 50%; width: 200rpx; height: 200rpx; margin: -100rpx 0 0 -100rpx; border-radius: 50%; background: radial-gradient(circle, #FFFDF0 0%, #FFE680 40%, rgba(255,210,77,0) 72%); animation: flashBoom .8s ease-out forwards; }
+@keyframes flashBoom { 0% { transform: scale(0); opacity: 1; } 55% { opacity: .95; } 100% { transform: scale(7); opacity: 0; } }
+
+.vo-scene { text-align: center; animation: vaultZoom 1s cubic-bezier(.2,.7,.3,1) both; animation-delay: .25s; }
+@keyframes vaultZoom { 0% { transform: scale(.5) translateY(70rpx); opacity: 0; } 100% { transform: scale(1) translateY(0); opacity: 1; } }
+
+.gold-pile { display: flex; flex-direction: column; align-items: center; }
+.gold-bar { position: relative; overflow: hidden; height: 66rpx; border-radius: 12rpx; background: linear-gradient(135deg, #FFF6BF 0%, #FFD84D 42%, #E0A000 100%); box-shadow: 0 8rpx 20rpx rgba(120,80,0,.55), inset 0 2rpx 6rpx rgba(255,255,255,.6); margin-bottom: 16rpx; }
+/* 金砖流光（闪闪发光有光泽） */
+.gold-bar::after { content: ''; position: absolute; top: 0; left: -70%; width: 55%; height: 100%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.95), transparent); transform: skewX(-20deg); animation: barShine 2.2s ease-in-out infinite; }
+.gb1 { width: 180rpx; } .gb1::after { animation-delay: 0s; }
+.gb2 { width: 280rpx; } .gb2::after { animation-delay: .35s; }
+.gb3 { width: 380rpx; } .gb3::after { animation-delay: .7s; }
+@keyframes barShine { 0% { left: -70%; } 55%, 100% { left: 150%; } }
+/* 百万皇冠 */
+.gold-crown { font-size: 92rpx; line-height: 1; margin-bottom: 10rpx; filter: drop-shadow(0 0 24rpx rgba(255,214,77,.9)); animation: crownFloat 2.4s ease-in-out infinite; }
+@keyframes crownFloat { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-12rpx) scale(1.06); } }
+.gold-cash { font-size: 70rpx; margin-top: 10rpx; letter-spacing: 8rpx; }
+.gold-coins { font-size: 64rpx; letter-spacing: 8rpx; }
+.vo-balance { margin-top: 28rpx; font-size: 76rpx; font-weight: 800; color: #FFE680; text-shadow: 0 0 30rpx rgba(255,214,77,.9); }
+.vo-tip { margin-top: 20rpx; color: #F6E2A0; font-size: 24rpx; line-height: 1.8; opacity: .9; }
+
+.vo-sparkles .spk { position: absolute; font-size: 40rpx; animation: twinkle 1.4s ease-in-out infinite; }
+.vo-sparkles .s1 { top: 22%; left: 20%; } .vo-sparkles .s2 { top: 30%; right: 18%; animation-delay: .3s; }
+.vo-sparkles .s3 { bottom: 26%; left: 24%; animation-delay: .6s; } .vo-sparkles .s4 { bottom: 30%; right: 22%; animation-delay: .9s; }
+@keyframes twinkle { 0%,100% { opacity: .3; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.3); } }
+
+/* 各档背景 */
+.vault-overlay.tier-empty { background: radial-gradient(circle at 50% 42%, #4b5560 0%, #272c33 56%, #14171c 100%); }
+
+/* 硬币 / 纸钞 排布 */
+.cash-row { font-size: 92rpx; letter-spacing: 12rpx; margin-bottom: 12rpx; filter: drop-shadow(0 8rpx 10rpx rgba(0,0,0,.3)); }
+@keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12rpx); } }
+
+/* ───── 金库展示区 CSS 金币 ───── */
+.vo-coin-row { display: flex; align-items: center; justify-content: center; gap: 20rpx; margin: 16rpx 0; animation: floaty 2.4s ease-in-out infinite; }
+.vo-coin {
+  position: relative; width: 72rpx; height: 72rpx; border-radius: 50%; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 35% 28%, #FFF7CC 0%, #FFE283 26%, #F3C12C 58%, #C9870E 100%);
+  border: 3rpx solid #E0A019;
+  box-shadow: inset 0 3rpx 6rpx rgba(255,255,255,.9), inset 0 -5rpx 10rpx rgba(150,90,0,.5), 0 8rpx 16rpx rgba(120,80,0,.5);
+}
+.vo-coin-lg { width: 96rpx; height: 96rpx; }
+.vo-coin .coin-mark { color: #A8690A; font-size: 38rpx; font-weight: 800; line-height: 1; text-shadow: 0 1rpx 0 rgba(255,255,255,.55); }
+.vo-coin-lg .coin-mark { font-size: 50rpx; }
+.vo-coin::after { content: ''; position: absolute; top: -50%; left: -70%; width: 45%; height: 200%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.92), transparent); transform: skewX(-18deg); animation: coinShine 1.6s ease-in-out infinite; }
+.vo-coin:nth-child(2)::after { animation-delay: .3s; }
+.vo-coin:nth-child(3)::after { animation-delay: .6s; }
+
+/* 空库：穿堂风 + 落叶 */
+.empty-title { font-size: 60rpx; font-weight: 800; color: #cfd6dd; letter-spacing: 8rpx; text-shadow: 0 4rpx 20rpx rgba(0,0,0,.4); opacity: .92; }
+.leaf { position: absolute; left: -60rpx; top: 34%; font-size: 64rpx; animation: leafBlow 3.4s linear infinite; }
+@keyframes leafBlow {
+  0% { transform: translate(0,0) rotate(0); opacity: 0; }
+  12% { opacity: 1; }
+  50% { transform: translate(380rpx,-50rpx) rotate(220deg); }
+  88% { opacity: 1; }
+  100% { transform: translate(820rpx,40rpx) rotate(420deg); opacity: 0; }
+}
+.wind-line { position: absolute; height: 3rpx; width: 220rpx; background: linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent); border-radius: 3rpx; animation: windPass 2.8s linear infinite; }
+.wind-line.w1 { top: 30%; animation-delay: 0s; }
+.wind-line.w2 { top: 50%; width: 300rpx; animation-delay: .9s; }
+.wind-line.w3 { top: 66%; width: 180rpx; animation-delay: 1.6s; }
+@keyframes windPass { 0% { transform: translateX(-260rpx); opacity: 0; } 30% { opacity: .9; } 100% { transform: translateX(820rpx); opacity: 0; } }

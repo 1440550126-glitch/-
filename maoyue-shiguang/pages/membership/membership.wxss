@@ -1,0 +1,19 @@
+/* 会员中心 */
+.mem-hero { text-align: center; padding: 30rpx 0 20rpx; }
+.crown { font-size: 120rpx; filter: drop-shadow(0 10rpx 20rpx rgba(224,160,0,.35)); }
+.mem-title { font-size: 40rpx; font-weight: 800; color: var(--c-text); margin-top: 8rpx; }
+
+.perk { display: flex; align-items: center; gap: 18rpx; padding: 20rpx 0; border-bottom: 2rpx solid var(--c-line); font-size: 28rpx; color: var(--c-text); }
+.perk:last-child { border-bottom: none; }
+.perk-e { font-size: 40rpx; }
+.perk-ok { color: var(--c-primary2); font-weight: 800; }
+
+.plan { display: flex; align-items: center; gap: 18rpx; padding: 28rpx; margin-bottom: 18rpx; border: 2rpx solid var(--c-line); border-radius: 24rpx; transition: transform .12s ease; }
+.plan:active { transform: scale(0.98); }
+.plan:last-of-type { border-color: var(--c-primary); background: var(--c-soft); }
+.plan-name { font-size: 30rpx; font-weight: 700; color: var(--c-text); display: flex; align-items: center; gap: 12rpx; }
+.plan-price { color: var(--c-primary2); }
+.pp-sym { font-size: 28rpx; font-weight: 700; }
+.pp-num { font-size: 52rpx; font-weight: 800; }
+
+.cancel-link { color: var(--c-muted); font-size: 24rpx; padding: 20rpx; }

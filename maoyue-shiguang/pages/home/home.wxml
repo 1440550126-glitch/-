@@ -1,0 +1,101 @@
+<!-- 家：情侣的温柔小屋 -->
+<view class="theme-{{theme}} page-root">
+<view class="page">
+
+  <view class="hero fade-in">
+    <view class="greet">{{greet}}</view>
+    <view class="date">{{dateStr}} · {{season.e}} {{season.t}}</view>
+  </view>
+
+  <!-- 情侣卡片 -->
+  <view class="card couple-card fade-in" bindtap="goBind">
+    <view class="couple-avatars">
+      <view class="avatar lg">{{couple.selfAvatar}}</view>
+      <view class="link-heart breathe">💞</view>
+      <view class="avatar lg">{{couple.partnerAvatar}}</view>
+    </view>
+    <block wx:if="{{couple.bound}}">
+      <view class="couple-days"><text class="d-num">{{loveDays}}</text><text class="d-unit">天</text></view>
+      <view class="sub center-text">{{couple.selfName}} & {{couple.partnerName}} · 从 {{couple.startDate}} 起在一起</view>
+    </block>
+    <block wx:else>
+      <view class="couple-days"><text class="d-tip">还没有和TA绑定哦</text></view>
+      <view class="pill" style="margin:0 auto;">点这里 · 绑定我们的关系 →</view>
+    </block>
+  </view>
+
+  <!-- 未绑定引导：邀请TA -->
+  <view wx:if="{{!couple.bound}}" class="card match-banner fade-in" bindtap="goBind">
+    <view class="mb-emoji">💞</view>
+    <view class="grow">
+      <view class="title">还没有和TA绑定？</view>
+      <text class="sub">去「我的」邀请TA，一起记录每一天</text>
+    </view>
+    <view class="pill">去绑定 →</view>
+  </view>
+
+  <!-- TA 的状态概览 -->
+  <view wx:if="{{couple.bound}}" class="card status-mini fade-in" bindtap="goStatus">
+    <view class="avatar">{{couple.partnerAvatar}}</view>
+    <view class="grow">
+      <view class="title">TA 此刻 {{partnerCare ? '💤' : ''}}</view>
+      <text class="sub">🔋 {{partnerStat.waiting ? '—' : partnerStat.battery + '%'}} · {{partnerStat.waiting ? '还没上线过' : (partnerCare ? ('已 ' + partnerStat.lastActiveStr + '没看手机') : (partnerStat.online ? '刚刚还在线' : partnerStat.lastActiveStr + '前看过'))}}</text>
+    </view>
+    <view class="pill">看地图 →</view>
+  </view>
+
+  <!-- 金刚区 -->
+  <view class="card fade-in">
+    <view class="kong">
+      <view class="kong-item" bindtap="goCat"><view class="kong-ic">🐱</view><text>猫窝</text></view>
+      <view class="kong-item" bindtap="goAlbum"><view class="kong-ic">🖼️</view><text>相册</text></view>
+      <view class="kong-item" bindtap="goTimeline"><view class="kong-ic">📖</view><text>时光</text></view>
+      <view class="kong-item" bindtap="goDining"><view class="kong-ic">🍜</view><text>点餐</text></view>
+      <view class="kong-item" bindtap="goStatus"><view class="kong-ic">📍</view><text>TA状态</text></view>
+    </view>
+  </view>
+
+  <!-- 一键传情 -->
+  <view class="card fade-in">
+    <view class="card-title"><view class="dot"></view><text class="title">悄悄告诉TA</text></view>
+    <view class="affection-row">
+      <view class="aff-item" bindtap="sendAffection" data-key="miss"><view class="aff-emoji">💭</view><text class="aff-word">想你</text></view>
+      <view class="aff-item" bindtap="sendAffection" data-key="hug"><view class="aff-emoji">🤗</view><text class="aff-word">抱抱</text></view>
+      <view class="aff-item" bindtap="sendAffection" data-key="kiss"><view class="aff-emoji">😚</view><text class="aff-word">亲亲</text></view>
+      <view class="aff-item" bindtap="sendAffection" data-key="night"><view class="aff-emoji">🌙</view><text class="aff-word">晚安</text></view>
+    </view>
+  </view>
+
+  <!-- 今日心情 -->
+  <view class="card fade-in">
+    <view class="card-title"><view class="dot"></view><text class="title">今天的心情</text></view>
+    <view class="mood-row">
+      <view class="mood-box" bindtap="pickMood">
+        <view class="mood-emoji">{{mood.self ? mood.self.e : '＋'}}</view>
+        <text class="sub">{{mood.self ? mood.self.t : '点我记录'}}</text>
+        <text class="mood-who">我</text>
+      </view>
+      <view class="mood-mid">💗</view>
+      <view class="mood-box">
+        <view class="mood-emoji">{{mood.partner ? mood.partner.e : '🌷'}}</view>
+        <text class="sub">{{mood.partner ? mood.partner.t : '还没分享'}}</text>
+        <text class="mood-who">TA</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 今日一问 -->
+  <view class="card q-card fade-in" bindtap="goInteract">
+    <view class="card-title"><view class="dot"></view><text class="title">今日一问</text></view>
+    <view class="q-text">{{dailyQ.question}}</view>
+    <view class="between mt-s">
+      <text class="sub">{{dailyQ.selfAnswer ? '你们都回答啦 💕' : '和TA一起回答吧'}}</text>
+      <text class="accent strong">{{dailyQ.selfAnswer ? '查看 →' : '去回答 →'}}</text>
+    </view>
+  </view>
+
+  <view class="footer-tip center">愿每一天都被好好珍藏 🐾</view>
+
+  <view wx:if="{{floatHeart}}" class="float-heart">{{floatEmoji}}</view>
+</view>
+</view>

@@ -1,0 +1,120 @@
+<!-- 小金库：两人共同存钱/记账 -->
+<view class="theme-{{theme}} page-root">
+<view class="page">
+
+  <!-- 金库主体 -->
+  <view class="vault-hero fade-in">
+    <view class="vault-jar" bindtap="openVault">
+      <view class="jar-emoji breathe">🏦</view>
+      <view class="jar-tap">点我打开金库 ✨</view>
+    </view>
+    <view class="vault-balance">
+      <text class="vb-sym">¥</text><text class="vb-num">{{balanceStr}}</text>
+    </view>
+    <view class="sub center-text">{{bound ? '你们的共同小金库 · 已互通' : '绑定后将与TA的金库互通'}}</view>
+    <view class="vault-stats">
+      <view class="vs-item"><text class="vs-num" style="color:#2FA866;">+{{stats.totalIn}}</text><text class="sub">累计存入</text></view>
+      <view class="vs-divider"></view>
+      <view class="vs-item"><text class="vs-num" style="color:#E8779A;">-{{stats.totalOut}}</text><text class="sub">累计支出</text></view>
+    </view>
+  </view>
+
+  <!-- 记一笔 -->
+  <view class="card fade-in">
+    <view class="seg">
+      <view class="seg-item {{mode==='in'?'on':''}}" bindtap="switchMode" data-m="in">💰 存钱</view>
+      <view class="seg-item {{mode==='out'?'on':''}}" bindtap="switchMode" data-m="out">💳 记花销</view>
+    </view>
+    <view class="amount-row mt-m">
+      <text class="amount-sym">¥</text>
+      <input class="amount-input" type="digit" placeholder="0.00" value="{{amount}}" bindinput="onAmount" />
+    </view>
+    <input class="input mt-s" placeholder="{{mode==='in' ? '备注：这次为什么存（可选）' : '备注：花在哪了（可选）'}}" value="{{note}}" bindinput="onNote" maxlength="30" />
+    <button class="btn btn-primary btn-block mt-m" bindtap="submit">{{mode==='in' ? '存进小金库' : '记下这笔'}}</button>
+  </view>
+
+  <!-- 流水 -->
+  <view class="card fade-in">
+    <view class="card-title"><view class="dot"></view><text class="title">收支记录</text></view>
+    <view class="tx-list">
+      <view class="tx-item" wx:for="{{txns}}" wx:key="id">
+        <view class="tx-ic {{item.type}}">{{item.type==='in' ? '💰' : '💳'}}</view>
+        <view class="grow"><view class="tx-note">{{item.note}}</view><text class="sub">{{item.timeStr}}</text></view>
+        <text class="tx-amt {{item.type}}">{{item.type==='in' ? '+' : '-'}}¥{{item.amountStr}}</text>
+      </view>
+      <view class="empty" wx:if="{{txns.length === 0}}"><text class="em">🪙</text>还没有记录，存第一笔吧</view>
+    </view>
+  </view>
+
+  <view class="footer-note center">💡 金库只是你们的记账本，金额由你们手动记录</view>
+
+  <!-- 投币掉落动画 -->
+  <view class="coin-layer" wx:if="{{coins.length > 0}}">
+    <view class="coin" wx:for="{{coins}}" wx:key="id" style="left:{{item.left}}%;animation-delay:{{item.delay}}s;animation-duration:{{item.dur}}s;"><text class="coin-mark">¥</text></view>
+  </view>
+
+  <!-- 刷卡动画 -->
+  <view class="swipe-layer" wx:if="{{showSwipe}}">
+    <view class="swipe-reader"><view class="swipe-slot"></view></view>
+    <view class="swipe-card">💳</view>
+  </view>
+
+  <!-- 开库（第一人称，按余额分档） -->
+  <view class="vault-overlay tier-{{vaultTier}}" wx:if="{{showVault}}" bindtap="closeVault">
+    <view wx:if="{{vaultTier !== 'empty'}}" class="vo-flash"></view>
+
+    <!-- 空库：穿堂风 + 落叶 -->
+    <view wx:if="{{vaultTier === 'empty'}}" class="vo-scene">
+      <view class="wind-line w1"></view><view class="wind-line w2"></view><view class="wind-line w3"></view>
+      <view class="leaf">🍂</view>
+      <view class="empty-title">空空如也</view>
+      <view class="vo-tip">连穿堂风都嫌冷清 🍃<br/>存点钱，让金库热闹起来 · 轻触关闭</view>
+    </view>
+
+    <!-- 几十块：几枚硬币 -->
+    <view wx:elif="{{vaultTier === 'coins'}}" class="vo-scene">
+      <view class="vo-sparkles"><text class="spk s1">✨</text><text class="spk s2">✨</text></view>
+      <view class="vo-coin-row">
+        <view class="vo-coin"><text class="coin-mark">¥</text></view>
+        <view class="vo-coin"><text class="coin-mark">¥</text></view>
+        <view class="vo-coin"><text class="coin-mark">¥</text></view>
+      </view>
+      <view class="vo-balance">¥ {{balanceStr}}</view>
+      <view class="vo-tip">几枚硬币，叮叮当当地起步<br/>轻触关闭</view>
+    </view>
+
+    <!-- 几百块：纸钞 -->
+    <view wx:elif="{{vaultTier === 'cash'}}" class="vo-scene">
+      <view class="vo-sparkles"><text class="spk s1">✨</text><text class="spk s2">✨</text><text class="spk s3">✨</text></view>
+      <view class="cash-row">💵 💵 💵</view>
+      <view class="vo-coin-row">
+        <view class="vo-coin"><text class="coin-mark">¥</text></view>
+        <view class="vo-coin vo-coin-lg"><text class="coin-mark">¥</text></view>
+        <view class="vo-coin"><text class="coin-mark">¥</text></view>
+      </view>
+      <view class="vo-balance">¥ {{balanceStr}}</view>
+      <view class="vo-tip">小有积蓄啦 💵<br/>轻触关闭</view>
+    </view>
+
+    <!-- 上万：金砖（闪闪发光） -->
+    <view wx:else class="vo-scene">
+      <view class="vo-sparkles"><text class="spk s1">✨</text><text class="spk s2">✨</text><text class="spk s3">✨</text><text class="spk s4">✨</text></view>
+      <view class="gold-pile">
+        <view wx:if="{{crown}}" class="gold-crown">👑</view>
+        <view wx:if="{{goldBars >= 3}}" class="gold-bar gb1"></view>
+        <view wx:if="{{goldBars >= 2}}" class="gold-bar gb2"></view>
+        <view wx:if="{{goldBars >= 1}}" class="gold-bar gb3"></view>
+        <view class="gold-cash">💵 💵 💵</view>
+        <view class="vo-coin-row">
+          <view class="vo-coin"><text class="coin-mark">¥</text></view>
+          <view class="vo-coin vo-coin-lg"><text class="coin-mark">¥</text></view>
+          <view class="vo-coin"><text class="coin-mark">¥</text></view>
+        </view>
+      </view>
+      <view class="vo-balance">¥ {{balanceStr}}</view>
+      <view class="vo-tip">— 你们的财富金光闪闪 —<br/>轻触关闭</view>
+    </view>
+  </view>
+
+</view>
+</view>

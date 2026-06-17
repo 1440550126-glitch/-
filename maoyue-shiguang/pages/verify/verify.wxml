@@ -1,0 +1,31 @@
+<!-- 实名认证 -->
+<view class="theme-{{theme}} page-root">
+<view class="page">
+
+  <view class="verify-hero fade-in">
+    <view class="v-emoji">{{verified ? '✅' : '🪪'}}</view>
+    <view class="v-title">{{verified ? '已完成实名认证' : '实名认证'}}</view>
+    <view class="sub">{{verified ? '你的账号已标记为「已实名」' : '实名后将获得「已实名」标识，更受信任'}}</view>
+  </view>
+
+  <block wx:if="{{verified}}">
+    <view class="card fade-in center-text">
+      <view class="badge badge-v" style="font-size:26rpx;padding:10rpx 24rpx;">✓ 已实名 · {{name}}</view>
+      <view class="sub mt-m">完成实名后，账号更安全、更受信任 💚</view>
+    </view>
+  </block>
+
+  <block wx:else>
+    <view class="card fade-in">
+      <view class="card-title"><view class="dot"></view><text class="title">填写认证信息</text></view>
+      <input class="input mt-s" placeholder="真实姓名" value="{{nameInput}}" bindinput="onName" maxlength="20" />
+      <input class="input mt-s" placeholder="身份证号" value="{{idInput}}" bindinput="onId" maxlength="18" />
+      <button class="btn btn-primary btn-block mt-m" bindtap="submit">提交认证</button>
+    </view>
+    <view class="card soft fade-in">
+      <text class="sub">🔒 原型说明：当前为模拟认证，信息不会上传也不做真实核验。正式上线需对接后端与权威实名源（如运营商三要素 / 人脸核身），并遵守实名制与隐私合规要求。</text>
+    </view>
+  </block>
+
+</view>
+</view>

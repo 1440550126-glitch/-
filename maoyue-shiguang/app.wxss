@@ -1,0 +1,141 @@
+/* app.wxss — 猫约时光 · 全局设计系统（变量驱动 · 多主题）
+   每个页面根节点加 class="theme-{{theme}} page-root"，下面的组件类用 var() 自动适配主题。 */
+
+/* ───────── 主题调色板 ───────── */
+.theme-coral {
+  --c-primary:#FF7E9D; --c-primary2:#F2658A;
+  --c-bg1:#FFEDE7; --c-bg2:#FFF4F1; --c-bg3:#FBF3F8;
+  --c-card:#FFFFFF; --c-text:#4A3F47; --c-text2:#7C6F77; --c-muted:#ADA0A8;
+  --c-line:#F3E7EC; --c-soft:#FFEDF1; --c-input:#FBF2F5;
+  --c-tagbg:#F4EEFB; --c-tagtext:#8A78C4; --c-shadow:rgba(255,126,157,.12);
+}
+.theme-latte {
+  --c-primary:#C89B6A; --c-primary2:#A9794B;
+  --c-bg1:#F4EBE0; --c-bg2:#FBF5EE; --c-bg3:#F6F0E8;
+  --c-card:#FFFFFF; --c-text:#4A3F36; --c-text2:#7E7060; --c-muted:#A89A8B;
+  --c-line:#EFE6DA; --c-soft:#F2E7D6; --c-input:#F7F0E7;
+  --c-tagbg:#ECE3D6; --c-tagtext:#9A7B52; --c-shadow:rgba(168,138,90,.14);
+}
+.theme-morandi {
+  --c-primary:#86A99B; --c-primary2:#6E8E80;
+  --c-bg1:#E9EEEB; --c-bg2:#F3F6F4; --c-bg3:#EEF1F0;
+  --c-card:#FFFFFF; --c-text:#3F4A45; --c-text2:#6E7B75; --c-muted:#9AA6A0;
+  --c-line:#E2E9E5; --c-soft:#E2ECE7; --c-input:#EFF3F1;
+  --c-tagbg:#E4EBE8; --c-tagtext:#6E8E80; --c-shadow:rgba(110,142,128,.14);
+}
+.theme-macaron {
+  --c-primary:#B79CE0; --c-primary2:#9E80D4;
+  --c-bg1:#F0EAFA; --c-bg2:#F8F5FD; --c-bg3:#F3EEFB;
+  --c-card:#FFFFFF; --c-text:#443F52; --c-text2:#766E86; --c-muted:#A89DB8;
+  --c-line:#ECE5F6; --c-soft:#ECE3F9; --c-input:#F4F0FB;
+  --c-tagbg:#FDE9F1; --c-tagtext:#D06A98; --c-shadow:rgba(158,128,212,.16);
+}
+.theme-night {
+  --c-primary:#FF8FAE; --c-primary2:#FF6E96;
+  --c-bg1:#1E1B24; --c-bg2:#222029; --c-bg3:#1A1720;
+  --c-card:#2C2834; --c-text:#F2ECF2; --c-text2:#C7BFCC; --c-muted:#948B9E;
+  --c-line:#3A3442; --c-soft:#3A3247; --c-input:#332E3D;
+  --c-tagbg:#3A3247; --c-tagtext:#C8B6F0; --c-shadow:rgba(0,0,0,.35);
+}
+
+page { background: #FBF3F8; }
+.page-root {
+  min-height: 100vh;
+  background: linear-gradient(180deg, var(--c-bg1) 0%, var(--c-bg2) 26%, var(--c-bg3) 100%);
+  color: var(--c-text);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  font-size: 28rpx; line-height: 1.6;
+}
+view, text, button, input, textarea { box-sizing: border-box; }
+
+/* ───────── 布局 ───────── */
+.page { padding: 28rpx 28rpx calc(48rpx + env(safe-area-inset-bottom)); }
+.row { display: flex; align-items: center; }
+.col { display: flex; flex-direction: column; }
+.between { display: flex; align-items: center; justify-content: space-between; }
+.center { display: flex; align-items: center; justify-content: center; }
+.wrap { flex-wrap: wrap; }
+.grow { flex: 1; }
+.gap-s { gap: 12rpx; } .gap-m { gap: 20rpx; } .gap-l { gap: 28rpx; }
+.mt-s { margin-top: 16rpx; } .mt-m { margin-top: 28rpx; } .mt-l { margin-top: 44rpx; }
+
+/* ───────── 文字 ───────── */
+.h1 { font-size: 44rpx; font-weight: 700; }
+.h2 { font-size: 34rpx; font-weight: 700; }
+.title { font-size: 30rpx; font-weight: 700; color: var(--c-text); }
+.muted { color: var(--c-muted); }
+.sub { font-size: 24rpx; color: var(--c-muted); }
+.accent { color: var(--c-primary2); }
+.strong { font-weight: 700; }
+.center-text { text-align: center; }
+
+/* ───────── 卡片 ───────── */
+.card {
+  background: var(--c-card); border-radius: 32rpx; padding: 32rpx;
+  box-shadow: 0 12rpx 40rpx var(--c-shadow); margin-bottom: 28rpx;
+}
+.card.soft { background: var(--c-soft); }
+.card-title { display: flex; align-items: center; gap: 14rpx; margin-bottom: 24rpx; }
+.card-title .dot { width: 12rpx; height: 12rpx; border-radius: 50%; background: var(--c-primary); }
+
+/* ───────── 按钮 ───────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 40rpx; height: 84rpx; line-height: 1; border-radius: 999rpx;
+  font-size: 28rpx; font-weight: 600; border: none; transition: transform .12s ease, opacity .12s ease;
+}
+.btn::after { border: none; }
+.btn:active { transform: scale(0.96); opacity: .92; }
+.btn-primary { background: linear-gradient(135deg, var(--c-primary), var(--c-primary2)); color: #fff; box-shadow: 0 12rpx 28rpx var(--c-shadow); }
+.btn-soft { background: var(--c-soft); color: var(--c-primary2); }
+.btn-ghost { background: transparent; color: var(--c-muted); border: 2rpx solid var(--c-line); }
+.btn-block { display: flex; width: 100%; }
+.btn-sm { height: 64rpx; padding: 0 28rpx; font-size: 26rpx; }
+
+.pill { display: inline-flex; align-items: center; gap: 8rpx; padding: 10rpx 22rpx; border-radius: 999rpx; background: var(--c-soft); color: var(--c-primary2); font-size: 24rpx; font-weight: 600; }
+.tag { display: inline-flex; align-items: center; padding: 6rpx 16rpx; border-radius: 999rpx; background: var(--c-tagbg); color: var(--c-tagtext); font-size: 22rpx; }
+
+/* 实名徽章 */
+.badge { display: inline-flex; align-items: center; gap: 4rpx; padding: 4rpx 14rpx; border-radius: 999rpx; font-size: 20rpx; font-weight: 600; }
+.badge-v { background: rgba(70,190,130,.16); color: #2FA866; }
+.badge-u { background: rgba(160,160,160,.16); color: #9B9B9B; }
+
+/* ───────── 头像 ───────── */
+.avatar { width: 96rpx; height: 96rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 52rpx; background: var(--c-soft); box-shadow: inset 0 0 0 4rpx var(--c-card), 0 6rpx 16rpx var(--c-shadow); }
+.avatar.sm { width: 64rpx; height: 64rpx; font-size: 34rpx; }
+.avatar.lg { width: 128rpx; height: 128rpx; font-size: 72rpx; }
+
+/* ───────── 进度条 ───────── */
+.bar { width: 100%; height: 16rpx; border-radius: 999rpx; background: var(--c-line); overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 999rpx; background: linear-gradient(90deg, var(--c-primary), var(--c-primary2)); transition: width .5s ease; }
+
+/* ───────── 输入 ───────── */
+.input, .textarea { width: 100%; background: var(--c-input); border-radius: 24rpx; padding: 24rpx 28rpx; font-size: 28rpx; color: var(--c-text); border: 2rpx solid transparent; }
+.textarea { min-height: 150rpx; }
+
+/* ───────── 分段开关 ───────── */
+.seg { display: flex; background: var(--c-input); border-radius: 20rpx; padding: 6rpx; }
+.seg-item { flex: 1; text-align: center; padding: 18rpx 0; border-radius: 16rpx; font-size: 27rpx; color: var(--c-muted); }
+.seg-item.on { background: var(--c-card); color: var(--c-primary2); font-weight: 700; box-shadow: 0 4rpx 12rpx var(--c-shadow); }
+
+/* ───────── 网格 ───────── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20rpx; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20rpx; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18rpx; }
+
+/* ───────── 顶部问候 ───────── */
+.hero { padding: 8rpx 8rpx 4rpx; }
+.hero .greet { font-size: 40rpx; font-weight: 700; color: var(--c-text); }
+.hero .date { font-size: 24rpx; color: var(--c-muted); margin-top: 6rpx; }
+
+/* ───────── 轻动效 ───────── */
+@keyframes floatUp { 0%{ transform: translateY(0); opacity: .9 } 100%{ transform: translateY(-160rpx); opacity: 0 } }
+.float-heart { position: fixed; left: 50%; bottom: 30%; font-size: 64rpx; animation: floatUp 1.1s ease-out forwards; z-index: 99; pointer-events: none; }
+@keyframes breathe { 0%,100%{ transform: translateY(0) } 50%{ transform: translateY(-12rpx) } }
+.breathe { animation: breathe 3.2s ease-in-out infinite; }
+@keyframes fadeIn { from{ opacity:0; transform: translateY(16rpx) } to{ opacity:1; transform:none } }
+.fade-in { animation: fadeIn .42s ease both; }
+
+/* 空状态 */
+.empty { text-align: center; color: var(--c-muted); padding: 48rpx 0; }
+.empty .em { font-size: 72rpx; display: block; margin-bottom: 16rpx; opacity: .8; }

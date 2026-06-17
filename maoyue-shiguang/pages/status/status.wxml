@@ -1,0 +1,78 @@
+<!-- TA 的状态 -->
+<view class="theme-{{theme}} page-root">
+<view class="page">
+
+  <!-- 地图 -->
+  <view class="card map-card fade-in">
+    <map wx:if="{{hasLoc}}" class="map" latitude="{{mapLat}}" longitude="{{mapLng}}" markers="{{markers}}" scale="13" show-location></map>
+    <view wx:else class="map map-empty" bindtap="reLocate">
+      <text class="em">🗺️</text>
+      <text class="sub">点击开启定位，在地图上看你和TA的距离</text>
+    </view>
+    <view class="map-dist" wx:if="{{distance !== '—'}}">📍 你和TA相距 {{distance}}</view>
+    <view class="set-row" bindtap="toggleLocShare" style="border:none;padding:14rpx 4rpx 4rpx;">
+      <text class="set-label">📍 共享我的位置给 TA</text>
+      <view class="set-val">{{locShare ? '已开启' : '已关闭'}} <text class="arrow">›</text></view>
+    </view>
+  </view>
+
+  <!-- 好久没看手机 · 关心提醒 -->
+  <view wx:if="{{needsCare}}" class="care-card fade-in">
+    <view class="care-emoji">💤</view>
+    <view class="grow">
+      <view class="care-title">TA 已经 {{partner.activeStr}} 没看手机了</view>
+      <text class="care-sub">要不要提醒一下，让TA歇会儿看看你？</text>
+    </view>
+    <view class="btn btn-primary btn-sm" bindtap="remindTa">提醒TA</view>
+  </view>
+
+  <!-- TA 此刻 -->
+  <view class="card fade-in">
+    <view class="card-title"><view class="dot"></view><text class="title">TA 此刻</text></view>
+    <view class="status-row">
+      <view class="avatar">{{couple.partnerAvatar}}</view>
+      <view class="grow">
+        <view class="sr-line">
+          <text class="sr-label">电量</text>
+          <view class="batt"><view class="batt-fill" style="width:{{partner.battery}}%;background:{{partner.battery<20?'#E8779A':'#2FA866'}};"></view></view>
+          <text class="sr-val">{{partner.battery}}%</text>
+        </view>
+        <view class="sr-line">
+          <text class="sr-label">状态</text>
+          <text class="online-dot {{partner.online ? 'on' : ''}}"></text>
+          <text class="sr-val2">{{partner.online ? '刚刚还在线' : (partner.activeStr + '前看过手机')}}</text>
+        </view>
+        <view class="sr-line"><text class="sr-label">距离</text><text class="sr-val2">{{distance}}</text></view>
+      </view>
+    </view>
+    <button class="btn btn-soft btn-block mt-m" bindtap="remindTa">📳 提醒TA看手机</button>
+  </view>
+
+  <!-- 我的状态 -->
+  <view class="card fade-in">
+    <view class="card-title"><view class="dot"></view><text class="title">我的状态</text></view>
+    <view class="sr-line big">
+      <text class="sr-label">我的电量</text>
+      <view class="batt"><view class="batt-fill" style="width:{{self.battery}}%;background:{{self.battery<20?'#E8779A':'#2FA866'}};"></view></view>
+      <text class="sr-val">{{self.battery}}%{{self.charging ? ' ⚡' : ''}}</text>
+    </view>
+    <view class="grid-2 mt-s">
+      <view class="stat-box"><text class="sb-num">{{usage.opensToday}}</text><text class="sub">今日打开</text></view>
+      <view class="stat-box"><text class="sb-num">{{usage.opensTotal}}</text><text class="sub">累计打开</text></view>
+      <view class="stat-box"><text class="sb-num">{{usage.inAppTodayStr}}</text><text class="sub">今日在App</text></view>
+      <view class="stat-box"><text class="sb-num">{{usage.sinceLastStr}}</text><text class="sub">上次离开间隔</text></view>
+    </view>
+  </view>
+
+  <!-- 关心提醒设置 -->
+  <view class="card fade-in">
+    <view class="set-row" bindtap="openRemindSetting" style="border:none;padding:4rpx;">
+      <text class="set-label">⏰ 关心提醒</text>
+      <view class="set-val">TA {{remindLabel}}没看手机就提醒我 <text class="arrow">›</text></view>
+    </view>
+  </view>
+
+  <view class="card soft fade-in"><text class="sub">🔒 绑定并开通云开发后，TA 的电量/在线/位置由双方真实上报同步（位置默认不共享，需各自手动开启）；未绑定时为温柔模拟。小程序无法读取手机里其它 App 的使用情况（系统隐私限制），故展示"在猫约时光的使用情况"。App 关闭时的提醒可后续用订阅消息推送。</text></view>
+
+</view>
+</view>
