@@ -45,6 +45,9 @@ export OPENAI_API_KEY=sk-... OPENAI_BASE_URL=https://api.deepseek.com/v1 OPENAI_
 | **图形界面 + 团队共享** | `serve` 本地 Web UI（手机/电脑），`--host 0.0.0.0 --token` 局域网多人共用一份记忆 |
 | **记忆图谱** | `memory graph` 导出可拖拽的关系图 HTML；语义检索叠加 **LSH 近似最近邻**加速 |
 | **容器沙箱** | `sandbox.engine=docker/podman` 时 `run_shell` 在容器内 `--network none` 隔离执行 |
+| **接入 MCP 生态** | `mnemo mcp add/test`：把任意 Model Context Protocol 服务（文件系统/搜索/GitHub/数据库…）的工具并入 Mnemo（stdio JSON-RPC，纯标准库） |
+| **逐字流式输出** | 交互对话实时打字机效果（`ui.stream`）；工具调用步骤不回显其 JSON，仅最终答案流式 |
+| **用量与成本观测** | `mnemo usage`：今日/7天/累计/按模型 的 token 计量；真实用量优先、拿不到则本地估算；成本仅在 `config.pricing` 配置后才计算 |
 
 ---
 
@@ -70,6 +73,16 @@ mnemo memory backfill       # 为记忆补算语义向量（需后端支持 embe
 mnemo provider list / test
 mnemo config set native_tools true     # 对支持的后端启用原生 function-calling
 mnemo config set memory.semantic true  # 启用向量语义检索
+
+# 接入 MCP 服务（整个 MCP 工具生态为你所用）
+mnemo mcp add filesystem --command npx --arg -y \
+      --arg @modelcontextprotocol/server-filesystem --arg /data
+mnemo mcp test filesystem               # 连接并列出其工具（注册名形如 filesystem.read_file）
+mnemo mcp list
+
+# 用量与成本观测
+mnemo usage                              # 今日/7天/累计/按模型 的 token 用量
+mnemo config set pricing.gpt-4o-mini '{"in":0.15,"out":0.6}'   # 配单价后才显示成本
 
 # 技能与插件
 mnemo skill list / show <名> / new <名> / learn --url <md> / distill --name <名>
@@ -120,6 +133,8 @@ mnemo/
 ├─ skills.py       技能：Markdown 加载、相关性注入、learn 学习、distill 自我进化
 ├─ plugins.py      插件：本地/git 安装，register(ctx) 注入 工具/技能/Provider
 ├─ market.py       市场：registry 搜索/安装 + HMAC 签名校验 + sha256 完整性 + 本地评分
+├─ mcp.py          MCP 客户端：stdio JSON-RPC 接入任意 MCP 服务，工具并入 registry
+├─ usage.py        用量观测：token 计量（真实用量优先 + 本地估算）+ 可选成本
 ├─ sync.py         跨设备同步：打包 + 口令加密（PBKDF2 + SHA256 流 + HMAC）
 ├─ serve.py        本地 Web 图形界面 + JSON API（团队共享）
 ├─ viz.py          记忆图谱渲染（内联力导向 HTML）
@@ -158,20 +173,22 @@ mnemo plugin install ./my-plugin
 ## 测试
 
 ```bash
-python -m unittest discover -s tests -v   # 47 项全链路冒烟，全部通过
+python -m unittest discover -s tests -v   # 67 项全链路冒烟，全部通过
 ```
 
 覆盖：记忆/画像、语义检索+LSH ANN、巩固/遗忘、提醒、工具循环、原生 function-calling、
 自我进化技能、多 Agent 委派、安全审计/策略、容器沙箱、市场签名/评分、加密同步、
-记忆图谱、Web 服务（含鉴权）、多模态/语音。
+记忆图谱、Web 服务（含鉴权）、多模态/语音、**MCP 客户端（自带假服务端到端）**、
+**逐字流式输出**、**用量计量与定价**。
 
 ## 路线图（已大量落地，继续推进）
 
 已实现：主动式记忆、自我进化技能、向量+ANN、原生工具调用、多 Agent、市场签名评分、
-加密同步、多模态+语音、安全沙箱、记忆图谱、Web GUI、局域网团队共享。
+加密同步、多模态+语音、安全沙箱、记忆图谱、Web GUI、局域网团队共享、
+**MCP 客户端（接入整个 MCP 工具生态）**、**逐字流式输出**、**用量与成本观测**。
 
 继续探索：官方去中心化市场托管、记忆图谱的因果/时间维度、桌面/移动原生端、
-实时语音流（边说边答）、多用户权限与共享记忆的细粒度隔离。
+实时语音流（边说边答）、流式响应下的精确用量回传、多用户权限与共享记忆的细粒度隔离。
 
 ## 数据与隐私
 
