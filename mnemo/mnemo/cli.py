@@ -155,11 +155,27 @@ def cmd_chat(args):
             session = f"chat:{int(time.time())}"
             print(dim("已开启新会话"))
             continue
+        streaming = (_TTY and app.cfg.get("ui.stream", True)
+                     and not app.cfg.get("native_tools", False))
+        state = {"started": False}
+
+        def on_token(t):
+            if not state["started"]:
+                sys.stdout.write("\n" + bold("Mnemo › "))
+                state["started"] = True
+            sys.stdout.write(t)
+            sys.stdout.flush()
         try:
             reply = app.agent.run(line, session=session, on_event=on_event,
-                                   auto_approve=not confirm_danger, confirm=_confirm)
-            print(bold("Mnemo › ") + reply)
+                                   auto_approve=not confirm_danger, confirm=_confirm,
+                                   on_token=on_token if streaming else None)
+            if state["started"]:
+                print()                      # 流式收尾换行
+            else:
+                print(bold("Mnemo › ") + reply)
         except ProviderError as e:
+            if state["started"]:
+                print()
             print(red(f"[模型调用失败] {e}"))
 
 

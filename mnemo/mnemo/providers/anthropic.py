@@ -1,7 +1,9 @@
 """Anthropic Claude provider（/v1/messages）。"""
 from __future__ import annotations
 
-from .base import Message, Provider, ProviderError, http_post_json
+import json
+
+from .base import Message, Provider, ProviderError, http_post_json, http_post_sse
 
 
 def _normalize(messages: list[Message]) -> tuple[str, list[dict]]:
@@ -55,6 +57,31 @@ class AnthropicProvider(Provider):
         })
         parts = resp.get("content", [])
         return "".join(p.get("text", "") for p in parts if p.get("type") == "text").strip()
+
+    def stream(self, messages, *, temperature=0.7, max_tokens=2048):
+        if not self.api_key:
+            raise ProviderError("缺少 ANTHROPIC_API_KEY")
+        system, conv = _normalize(messages)
+        url = f"{self.base_url or 'https://api.anthropic.com'}/v1/messages"
+        payload = {"model": self._model(), "max_tokens": max_tokens,
+                   "messages": conv, "stream": True}
+        self._maybe_temp(payload, temperature)
+        if system:
+            payload["system"] = system
+        for data in http_post_sse(url, payload, headers={
+                "x-api-key": self.api_key, "anthropic-version": "2023-06-01"}):
+            if not data or data == "[DONE]":
+                continue
+            try:
+                obj = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            if obj.get("type") == "content_block_delta":
+                delta = obj.get("delta", {})
+                if delta.get("type") == "text_delta" and delta.get("text"):
+                    yield delta["text"]
+            elif obj.get("type") == "error":
+                raise ProviderError(f"Anthropic 流式错误：{obj.get('error')}")
 
     def available(self) -> bool:
         return bool(self.api_key)

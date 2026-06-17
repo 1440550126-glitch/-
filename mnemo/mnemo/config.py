@@ -23,6 +23,7 @@ DEFAULTS: dict[str, Any] = {
     "native_tools": False,    # true 时对支持的后端启用原生 function-calling（更稳）
     "registry": "",           # 技能/插件市场地址（本地文件或 URL）
     "memory": {"enabled": True, "recall_limit": 6, "min_importance": 1, "semantic": False},
+    "ui": {"stream": True},   # 交互对话逐字流式输出（终端可见时生效）
     # 安全：confirm_danger 在交互模式下让写入/执行类工具需确认；deny 永久禁用某些工具
     "tools": {"confirm_danger": False, "deny": []},
     # 沙箱：engine=docker/podman 时 run_shell 在容器内隔离执行（--network none）

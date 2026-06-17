@@ -119,6 +119,51 @@ class TestAgentLoop(unittest.TestCase):
         self.assertTrue(any("生日" in f["text"] for f in self.mem.all_facts()))
 
 
+class TestStreaming(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = load_config(self.tmp.name)
+        self.mem = Memory(self.cfg.db_path)
+        self.skills = SkillRegistry(self.cfg)
+        self.tools = build_default_registry()
+
+    def tearDown(self):
+        self.mem.close()
+        self.tmp.cleanup()
+
+    def test_offline_stream_reconstructs_chat(self):
+        prov = OfflineProvider()
+        msgs = [Message("user", "echo: 你好世界")]
+        streamed = "".join(prov.stream(msgs))
+        self.assertEqual(streamed, prov.chat(msgs))
+        self.assertEqual(streamed, "你好世界")
+
+    def test_base_default_stream_yields_full(self):
+        prov = FakeProvider(["完整回答"])
+        self.assertEqual("".join(prov.stream([Message("user", "x")])), "完整回答")
+
+    def test_on_token_streams_final_answer(self):
+        prov = FakeProvider(["这是最终答案"])
+        agent = Agent(prov, self.tools, self.mem, self.skills, self.cfg)
+        got = []
+        out = agent.run("问题", on_token=got.append)
+        self.assertEqual(out, "这是最终答案")
+        self.assertEqual("".join(got), "这是最终答案")
+
+    def test_on_token_does_not_leak_tool_json(self):
+        prov = FakeProvider([
+            '```tool\n{"name":"now","args":{}}\n```',  # 工具步：不应回显
+            "现在几点已查到。",                          # 最终答案：应回显
+        ])
+        agent = Agent(prov, self.tools, self.mem, self.skills, self.cfg)
+        got = []
+        out = agent.run("几点了", on_token=got.append)
+        self.assertEqual(out, "现在几点已查到。")
+        joined = "".join(got)
+        self.assertEqual(joined, "现在几点已查到。")
+        self.assertNotIn("{", joined)      # 工具调用 JSON 未泄漏给用户
+
+
 class FakeEmbedProvider(Provider):
     name = "fakeembed"
 

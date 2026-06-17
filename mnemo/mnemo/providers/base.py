@@ -10,7 +10,7 @@ import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
+from typing import Iterator, Optional
 
 
 class ProviderError(Exception):
@@ -52,6 +52,30 @@ def http_post_json(url: str, payload: dict, headers: dict | None = None, timeout
         raise ProviderError(f"连接失败 @ {url}: {e}") from e
 
 
+def http_post_sse(url: str, payload: dict, headers: dict | None = None,
+                  timeout: int = 300) -> Iterator[str]:
+    """标准库实现的 SSE 流式 POST：逐条产出 `data:` 行的内容（已去前缀）。"""
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method="POST")
+    req.add_header("Content-Type", "application/json")
+    for k, v in (headers or {}).items():
+        req.add_header(k, v)
+    try:
+        resp = urllib.request.urlopen(req, timeout=timeout)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")
+        raise ProviderError(f"HTTP {e.code} @ {url}: {body[:600]}") from e
+    except urllib.error.URLError as e:
+        raise ProviderError(f"网络错误 @ {url}: {e.reason}") from e
+    except (TimeoutError, OSError) as e:
+        raise ProviderError(f"连接失败 @ {url}: {e}") from e
+    with resp:
+        for raw in resp:
+            line = raw.decode("utf-8", "replace").strip()
+            if line.startswith("data:"):
+                yield line[5:].strip()
+
+
 class Provider(ABC):
     name: str = "base"
 
@@ -66,6 +90,12 @@ class Provider(ABC):
     def chat(self, messages: list[Message], *, temperature: float = 0.7,
              max_tokens: int = 2048) -> str:
         """同步返回模型的完整文本回复。"""
+
+    def stream(self, messages: list[Message], *, temperature: float = 0.7,
+               max_tokens: int = 2048) -> Iterator[str]:
+        """流式产出文本增量。默认退化为一次性产出完整结果，
+        因此所有后端无需改动即可被流式接口调用。"""
+        yield self.chat(messages, temperature=temperature, max_tokens=max_tokens)
 
     def available(self) -> bool:
         """是否具备调用条件（有 key / 服务可达）。auto 选择时据此筛选。"""

@@ -45,5 +45,11 @@ class OfflineProvider(Provider):
             "  或启动本地 Ollama（mnemo 会自动接入）。"
         )
 
+    def stream(self, messages, *, temperature=0.7, max_tokens=2048):
+        # 离线无网络，仍给出打字机式分块，体验与在线后端一致
+        text = self.chat(messages, temperature=temperature, max_tokens=max_tokens)
+        for i in range(0, len(text), 8):
+            yield text[i:i + 8]
+
     def available(self) -> bool:
         return True

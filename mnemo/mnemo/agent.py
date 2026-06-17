@@ -135,6 +135,31 @@ class Agent:
         emit("final", {"text": final})
         return final
 
+    def _stream_or_chat(self, messages, on_token, temperature, max_tokens) -> str:
+        """流式获取一步回复并返回完整文本。
+
+        按通用工具协议判断：若该步是工具调用（文本以 ``` 或 { 开头），其内容是 JSON，
+        不向用户回显；只有最终答案才逐字流式输出。on_token 为 None 时退化为普通 chat。
+        """
+        if on_token is None:
+            return self.provider.chat(messages, temperature=temperature, max_tokens=max_tokens)
+        buf: list[str] = []
+        decided: bool | None = None   # None=未定 / True=工具调用(不回显) / False=最终答案(回显)
+        for chunk in self.provider.stream(messages, temperature=temperature,
+                                          max_tokens=max_tokens):
+            if not chunk:
+                continue
+            buf.append(chunk)
+            if decided is None:
+                head = "".join(buf).lstrip()
+                if head:                       # 见到第一个非空白字符即可判定
+                    decided = head[0] in ("`", "{")
+                    if not decided:
+                        on_token(head)         # 回显去除前导空白后的内容
+            elif decided is False:
+                on_token(chunk)
+        return "".join(buf)
+
     def _audit(self, tool: str, args: dict, result: str) -> None:
         home = getattr(self.config, "home", None)
         if not home:
@@ -152,10 +177,12 @@ class Agent:
     def run(self, user_input: str, *, session: str = "default", max_steps: int | None = None,
             cwd: str = ".", auto_approve: bool = True,
             confirm: Callable[[str], bool] | None = None,
-            on_event: Callable[[str, dict], None] | None = None) -> str:
+            on_event: Callable[[str, dict], None] | None = None,
+            on_token: Callable[[str], None] | None = None) -> str:
         max_steps = max_steps or int(self.config.get("max_steps", 8))
         emit = on_event or (lambda *_: None)
         if self.config.get("native_tools", False) and self.provider.supports_tools():
+            # 原生 function-calling 路径暂不支持逐字流式（工具增量为结构化分片）
             return self._run_native(user_input, session=session, max_steps=max_steps,
                                     cwd=cwd, auto_approve=auto_approve, confirm=confirm, emit=emit)
         deny = tuple(self.config.get("tools.deny", []) or ())
@@ -177,7 +204,7 @@ class Agent:
 
         for step in range(max_steps):
             emit("think", {"step": step + 1})
-            reply = self.provider.chat(messages, temperature=temperature, max_tokens=max_tokens)
+            reply = self._stream_or_chat(messages, on_token, temperature, max_tokens)
             call = parse_tool_call(reply)
             if not call:
                 final = reply
@@ -193,7 +220,7 @@ class Agent:
         else:
             # 步数耗尽，逼出一个总结
             messages.append(Message("user", "请基于以上信息，直接给出最终回答。"))
-            final = self.provider.chat(messages, temperature=temperature, max_tokens=max_tokens)
+            final = self._stream_or_chat(messages, on_token, temperature, max_tokens)
 
         return self._finalize(user_input, final, steps, session, emit)
 
