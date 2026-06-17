@@ -27,6 +27,9 @@ DEFAULTS: dict[str, Any] = {
     "tools": {"confirm_danger": False, "deny": []},
     # 沙箱：engine=docker/podman 时 run_shell 在容器内隔离执行（--network none）
     "sandbox": {"engine": "none", "image": "python:3.11-slim"},
+    # MCP：接入任意 Model Context Protocol 服务，把其工具并入 Mnemo
+    # servers 形如 {"名字": {"command": "npx", "args": [...], "env": {...}}}
+    "mcp": {"servers": {}},
     "providers": {
         "anthropic": {"model": "claude-opus-4-8", "base_url": "https://api.anthropic.com"},
         "openai": {"model": "gpt-4o-mini", "base_url": "https://api.openai.com/v1"},

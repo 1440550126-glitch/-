@@ -41,9 +41,10 @@ class App:
     skills: object
     plugins: object
     agent: object
+    mcp: object = None
 
 
-def build_app(args, check_same_thread: bool = True) -> App:
+def build_app(args, check_same_thread: bool = True, with_mcp: bool = False) -> App:
     cfg = load_config(getattr(args, "home", None))
     if getattr(args, "provider", None):
         cfg.set("provider", args.provider)
@@ -55,9 +56,18 @@ def build_app(args, check_same_thread: bool = True) -> App:
     skills = SkillRegistry(cfg)
     plugins = PluginManager(cfg, tools, skills)
     plugins.load_all()
+    mcp = None
+    if with_mcp and cfg.get("mcp.servers", {}):
+        from .mcp import MCPManager
+        mcp = MCPManager(cfg)
+        counts = mcp.connect_all(tools)
+        for name, n in counts.items():
+            print(dim(f"  ⚙ MCP {name}: 接入 {n} 个工具"))
+        for name, err in mcp.errors.items():
+            print(yellow(f"  ⚠ MCP {name} 连接失败：{err}"))
     provider = build_provider(cfg)
     agent = Agent(provider, tools, memory, skills, cfg)
-    return App(cfg, provider, memory, tools, skills, plugins, agent)
+    return App(cfg, provider, memory, tools, skills, plugins, agent, mcp)
 
 
 def _make_on_event(verbose: bool):
@@ -77,7 +87,7 @@ def _make_on_event(verbose: bool):
 # ---------------- 子命令 ----------------
 
 def cmd_chat(args):
-    app = build_app(args)
+    app = build_app(args, with_mcp=True)
     p = app.provider
     print(bold("✦ Mnemo") + dim(f"  {p.name}/{p.model or 'default'}  ·  /help 命令  ·  /exit 退出"))
     if app.memory:
@@ -154,7 +164,7 @@ def cmd_chat(args):
 
 
 def cmd_run(args):
-    app = build_app(args)
+    app = build_app(args, with_mcp=True)
     try:
         out = app.agent.run(args.prompt, cwd=args.cwd,
                             on_event=_make_on_event(args.verbose))
@@ -331,6 +341,54 @@ def cmd_plugin(args):
     return 0
 
 
+def cmd_mcp(args):
+    cfg = load_config(getattr(args, "home", None))
+    servers = dict(cfg.get("mcp.servers", {}) or {})
+    if args.action == "list":
+        if not servers:
+            print(dim("（尚未配置 MCP 服务）添加：mnemo mcp add <名字> --command npx --arg -y "
+                      "--arg @modelcontextprotocol/server-filesystem --arg /data"))
+            return 0
+        for name, spec in servers.items():
+            cmd = " ".join([spec.get("command", "?"), *spec.get("args", [])])
+            print(f"{green('●')} {bold(name)} — {dim(cmd)}")
+        print(dim("\n用 `mnemo mcp test <名字>` 实际连接并查看其工具。"))
+    elif args.action == "add":
+        env = {}
+        for kv in (args.env or []):
+            k, _, v = kv.partition("=")
+            if k:
+                env[k] = v
+        spec = {"command": args.command, "args": args.arg or []}
+        if env:
+            spec["env"] = env
+        servers[args.name] = spec
+        cfg.set("mcp.servers", servers)
+        cfg.save()
+        print(green(f"已添加 MCP 服务：{args.name}"))
+    elif args.action == "remove":
+        if servers.pop(args.name, None) is None:
+            print(red("未找到")); return 1
+        cfg.set("mcp.servers", servers)
+        cfg.save()
+        print(green(f"已移除 MCP 服务：{args.name}"))
+    elif args.action == "test":
+        from .mcp import MCPError, MCPManager
+        mgr = MCPManager(cfg)
+        try:
+            info = mgr.probe(args.name)
+        except MCPError as e:
+            print(red(f"连接失败：{e}")); return 1
+        si = info.get("server_info", {})
+        print(green(f"已连接 {args.name}") + dim(f"  {si.get('name','?')} v{si.get('version','?')}"))
+        tools = info.get("tools", [])
+        print(dim(f"暴露 {len(tools)} 个工具：") if tools else dim("（无工具）"))
+        for t in tools:
+            print(f"  · {bold(args.name + '.' + t.get('name',''))} — "
+                  f"{(t.get('description') or '').splitlines()[0][:80]}")
+    return 0
+
+
 def cmd_task(args):
     app = build_app(args)
     from .daemon import TaskStore
@@ -366,7 +424,7 @@ def cmd_task(args):
 
 
 def cmd_daemon(args):
-    app = build_app(args)
+    app = build_app(args, with_mcp=True)
     from .daemon import Scheduler, TaskStore
     store = TaskStore(app.cfg.db_path)
     sched = Scheduler(app.agent, store)
@@ -481,7 +539,7 @@ def cmd_audit(args):
 
 
 def cmd_serve(args):
-    app = build_app(args, check_same_thread=False)
+    app = build_app(args, check_same_thread=False, with_mcp=True)
     from .serve import serve
     serve(app, host=args.host, port=args.port, token=args.token)
     return 0
@@ -566,6 +624,9 @@ def cmd_doctor(args):
     print(bold("\n能力") + f"  原生工具 {'✓' if prov.supports_tools() else '—'}  ·  "
           f"视觉 {'✓' if prov.supports_vision() else '—'}  ·  系统TTS {tts or '—'}  ·  "
           f"whisper {_sh.which('whisper') and '✓' or '—'}")
+    mcp_servers = cfg.get("mcp.servers", {}) or {}
+    print(bold("\nMCP") + f"  已配置 {len(mcp_servers)} 个服务" +
+          (f"：{', '.join(mcp_servers)}" if mcp_servers else "（mnemo mcp add 接入）"))
     return 0
 
 
@@ -634,6 +695,17 @@ def build_parser() -> argparse.ArgumentParser:
     pli.add_argument("--name"); pli.add_argument("-y", "--yes", action="store_true")
     plr = pls.add_parser("remove"); plr.add_argument("name")
 
+    pmc = sub.add_parser("mcp", help="MCP：接入任意 Model Context Protocol 服务的工具")
+    pmcs = pmc.add_subparsers(dest="action", required=True)
+    pmcs.add_parser("list")
+    mca = pmcs.add_parser("add", help="添加一个 MCP 服务到配置")
+    mca.add_argument("name")
+    mca.add_argument("--command", required=True, help="启动命令，如 npx / uvx / python")
+    mca.add_argument("--arg", action="append", help="命令参数（可多次）")
+    mca.add_argument("--env", action="append", help="环境变量 K=V（可多次）")
+    mcr = pmcs.add_parser("remove"); mcr.add_argument("name")
+    mct = pmcs.add_parser("test", help="连接某服务并列出其工具"); mct.add_argument("name")
+
     pt = sub.add_parser("task", help="7×24 定时任务")
     pts = pt.add_subparsers(dest="action", required=True)
     ta = pts.add_parser("add")
@@ -694,7 +766,7 @@ _HANDLERS = {
     "memory": cmd_memory, "skill": cmd_skill, "plugin": cmd_plugin, "task": cmd_task,
     "daemon": cmd_daemon, "doctor": cmd_doctor, "audit": cmd_audit,
     "market": cmd_market, "sync": cmd_sync, "speak": cmd_speak, "see": cmd_see,
-    "serve": cmd_serve, "voice": cmd_voice,
+    "serve": cmd_serve, "voice": cmd_voice, "mcp": cmd_mcp,
 }
 
 

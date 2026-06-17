@@ -652,5 +652,90 @@ class TestTools(unittest.TestCase):
         tmp.cleanup()
 
 
+# 一个最小可用的 MCP 服务（stdio JSON-RPC），用于端到端验证客户端，无需任何外部依赖。
+_FAKE_MCP_SERVER = r'''
+import sys, json
+def send(o): sys.stdout.write(json.dumps(o)+"\n"); sys.stdout.flush()
+for line in sys.stdin:
+    line=line.strip()
+    if not line: continue
+    m=json.loads(line); i=m.get("id"); method=m.get("method")
+    if method=="initialize":
+        send({"jsonrpc":"2.0","id":i,"result":{"protocolVersion":"2024-11-05",
+            "capabilities":{"tools":{}},"serverInfo":{"name":"fake","version":"9.9"}}})
+    elif method=="notifications/initialized":
+        pass
+    elif method=="tools/list":
+        send({"jsonrpc":"2.0","id":i,"result":{"tools":[{"name":"echo",
+            "description":"Echo back text","inputSchema":{"type":"object",
+            "properties":{"text":{"type":"string","description":"text to echo"}},
+            "required":["text"]}}]}})
+    elif method=="tools/call":
+        p=m.get("params",{}); a=p.get("arguments",{})
+        if p.get("name")=="echo":
+            send({"jsonrpc":"2.0","id":i,"result":{"content":[{"type":"text",
+                "text":"echo: "+str(a.get("text",""))}]}})
+        else:
+            send({"jsonrpc":"2.0","id":i,"error":{"code":-32601,"message":"unknown tool"}})
+    elif i is not None:
+        send({"jsonrpc":"2.0","id":i,"error":{"code":-32601,"message":"unknown method"}})
+'''
+
+
+class TestMCP(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.server = Path(self.tmp.name) / "fake_mcp.py"
+        self.server.write_text(_FAKE_MCP_SERVER, encoding="utf-8")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _client(self):
+        from mnemo.mcp import MCPClient
+        return MCPClient("fake", sys.executable, [str(self.server)], timeout=15).start()
+
+    def test_client_handshake_list_and_call(self):
+        c = self._client()
+        try:
+            self.assertEqual(c.server_info.get("name"), "fake")
+            tools = c.list_tools()
+            self.assertEqual([t["name"] for t in tools], ["echo"])
+            out = c.call_tool("echo", {"text": "hi"})
+            self.assertEqual(out, "echo: hi")
+        finally:
+            c.close()
+
+    def test_params_from_schema_marks_required(self):
+        from mnemo.mcp import _params_from_schema
+        params = _params_from_schema({"type": "object",
+            "properties": {"text": {"type": "string", "description": "t"}},
+            "required": ["text"]})
+        self.assertIn("（必填）", params["text"])
+
+    def test_manager_registers_into_registry(self):
+        from mnemo.mcp import MCPManager
+        cfg = load_config(self.tmp.name)
+        cfg.set("mcp.servers", {"fake": {"command": sys.executable,
+                                          "args": [str(self.server)]}})
+        reg = build_default_registry()
+        mgr = MCPManager(cfg)
+        try:
+            counts = mgr.connect_all(reg)
+            self.assertEqual(counts.get("fake"), 1)
+            self.assertIn("fake.echo", reg.names())
+            ctx = ToolContext(cwd=self.tmp.name, config=cfg)
+            self.assertEqual(reg.run("fake.echo", {"text": "yo"}, ctx), "echo: yo")
+            # 外部 MCP 工具应被标记为高危（受 confirm_danger 约束）
+            self.assertTrue(reg.get("fake.echo").danger)
+        finally:
+            mgr.close_all()
+
+    def test_missing_command_raises(self):
+        from mnemo.mcp import MCPClient, MCPError
+        with self.assertRaises(MCPError):
+            MCPClient("nope", "definitely-not-a-real-binary-xyz", []).start()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
