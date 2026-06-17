@@ -32,7 +32,13 @@ class OpenAIProvider(Provider):
         choices = resp.get("choices") or []
         if not choices:
             raise ProviderError(f"无返回：{str(resp)[:300]}")
+        self._capture_usage(resp)
         return (choices[0].get("message", {}).get("content") or "").strip()
+
+    def _capture_usage(self, resp: dict) -> None:
+        u = resp.get("usage") or {}
+        self.last_usage = ({"in": u.get("prompt_tokens", 0), "out": u.get("completion_tokens", 0)}
+                           if u else None)
 
     def stream(self, messages, *, temperature=0.7, max_tokens=2048):
         if not self.api_key:
@@ -137,6 +143,7 @@ class OpenAIProvider(Provider):
             "tool_choice": "auto",
         }
         resp = http_post_json(url, payload, headers={"Authorization": f"Bearer {self.api_key}"})
+        self._capture_usage(resp)
         msg = (resp.get("choices") or [{}])[0].get("message", {})
         calls = []
         for tc in (msg.get("tool_calls") or []):

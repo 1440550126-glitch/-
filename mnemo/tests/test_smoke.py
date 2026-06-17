@@ -697,6 +697,92 @@ class TestTools(unittest.TestCase):
         tmp.cleanup()
 
 
+class TestUsage(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = load_config(self.tmp.name)
+        self.mem = Memory(self.cfg.db_path)
+        self.skills = SkillRegistry(self.cfg)
+        self.tools = build_default_registry()
+
+    def tearDown(self):
+        self.mem.close()
+        self.tmp.cleanup()
+
+    def test_estimate_tokens(self):
+        from mnemo.usage import estimate_tokens
+        self.assertEqual(estimate_tokens(""), 0)
+        self.assertEqual(estimate_tokens("你好世界"), 4)        # 4 个 CJK 字
+        self.assertGreaterEqual(estimate_tokens("hello world"), 2)
+
+    def test_price_for_exact_and_prefix(self):
+        from mnemo.usage import price_for
+        self.cfg.set("pricing", {"m1": {"in": 1000, "out": 2000}})
+        self.assertAlmostEqual(price_for(self.cfg, "m1", 100, 20), 0.1 + 0.04)
+        # 前缀匹配
+        self.assertAlmostEqual(price_for(self.cfg, "m1-2026", 100, 0), 0.1)
+        # 未配置 → 0
+        self.assertEqual(price_for(self.cfg, "unknown", 100, 20), 0.0)
+
+    def test_store_record_and_summary(self):
+        from mnemo.usage import UsageStore
+        store = UsageStore(self.cfg.db_path)
+        store.record(session="s", provider="p", model="m1", in_tok=10, out_tok=5,
+                     estimated=True, cost=0.0)
+        store.record(session="s", provider="p", model="m1", in_tok=20, out_tok=8,
+                     estimated=False, cost=0.5)
+        s = store.summary()
+        self.assertEqual(s["calls"], 2)
+        self.assertEqual(s["in_tok"], 30)
+        self.assertEqual(s["out_tok"], 13)
+        self.assertEqual(s["estimated"], 1)
+        self.assertAlmostEqual(s["cost"], 0.5)
+        self.assertEqual(store.by_model()[0]["model"], "m1")
+        store.close()
+
+    def test_agent_records_estimated_usage(self):
+        from mnemo.usage import UsageStore
+        store = UsageStore(self.cfg.db_path)
+        agent = Agent(FakeProvider(["最终答案"]), self.tools, self.mem, self.skills,
+                      self.cfg, usage=store)
+        agent.run("问题一二三")
+        s = store.summary()
+        self.assertEqual(s["calls"], 1)
+        self.assertEqual(s["estimated"], 1)        # FakeProvider 无真实用量 → 估算
+        self.assertGreater(s["in_tok"], 0)
+        store.close()
+
+    def test_agent_uses_real_usage_when_available(self):
+        from mnemo.usage import UsageStore
+
+        class UsageProvider(Provider):
+            name = "usagefake"
+
+            def chat(self, messages, **kw):
+                self.last_usage = {"in": 100, "out": 20}
+                return "答案"
+
+        store = UsageStore(self.cfg.db_path)
+        self.cfg.set("pricing", {"m1": {"in": 1000, "out": 2000}})
+        agent = Agent(UsageProvider(model="m1"), self.tools, self.mem, self.skills,
+                      self.cfg, usage=store)
+        agent.run("hi")
+        s = store.summary()
+        self.assertEqual(s["estimated"], 0)        # 用了真实用量
+        self.assertEqual(s["in_tok"], 100)
+        self.assertEqual(s["out_tok"], 20)
+        self.assertAlmostEqual(s["cost"], 0.14)
+        store.close()
+
+    def test_capture_usage_field_mapping(self):
+        op = OpenAIProvider()
+        op._capture_usage({"usage": {"prompt_tokens": 7, "completion_tokens": 3}})
+        self.assertEqual(op.last_usage, {"in": 7, "out": 3})
+        ap = AnthropicProvider()
+        ap._capture_usage({"usage": {"input_tokens": 11, "output_tokens": 4}})
+        self.assertEqual(ap.last_usage, {"in": 11, "out": 4})
+
+
 # 一个最小可用的 MCP 服务（stdio JSON-RPC），用于端到端验证客户端，无需任何外部依赖。
 _FAKE_MCP_SERVER = r'''
 import sys, json

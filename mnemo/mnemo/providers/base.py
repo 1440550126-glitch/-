@@ -85,6 +85,8 @@ class Provider(ABC):
         self.api_key = api_key
         self.base_url = (base_url or "").rstrip("/")
         self.extra = kw
+        # 最近一次调用的真实用量 {"in": int, "out": int}；拿不到则为 None（上层会估算）
+        self.last_usage: dict | None = None
 
     @abstractmethod
     def chat(self, messages: list[Message], *, temperature: float = 0.7,

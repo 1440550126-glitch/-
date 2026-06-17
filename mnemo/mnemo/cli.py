@@ -42,6 +42,7 @@ class App:
     plugins: object
     agent: object
     mcp: object = None
+    usage: object = None
 
 
 def build_app(args, check_same_thread: bool = True, with_mcp: bool = False) -> App:
@@ -65,9 +66,13 @@ def build_app(args, check_same_thread: bool = True, with_mcp: bool = False) -> A
             print(dim(f"  ⚙ MCP {name}: 接入 {n} 个工具"))
         for name, err in mcp.errors.items():
             print(yellow(f"  ⚠ MCP {name} 连接失败：{err}"))
+    usage = None
+    if cfg.get("usage.enabled", True):
+        from .usage import UsageStore
+        usage = UsageStore(cfg.db_path, check_same_thread=check_same_thread)
     provider = build_provider(cfg)
-    agent = Agent(provider, tools, memory, skills, cfg)
-    return App(cfg, provider, memory, tools, skills, plugins, agent, mcp)
+    agent = Agent(provider, tools, memory, skills, cfg, usage=usage)
+    return App(cfg, provider, memory, tools, skills, plugins, agent, mcp, usage)
 
 
 def _make_on_event(verbose: bool):
@@ -554,6 +559,40 @@ def cmd_audit(args):
     return 0
 
 
+def _fmt_tok(n: int) -> str:
+    return f"{n/1e6:.2f}M" if n >= 1e6 else (f"{n/1e3:.1f}k" if n >= 1000 else str(n))
+
+
+def cmd_usage(args):
+    from .usage import UsageStore
+    cfg = load_config(getattr(args, "home", None))
+    store = UsageStore(cfg.db_path)
+    now = time.time()
+    spans = [("今日", now - 86400), ("近 7 天", now - 7 * 86400), ("累计", None)]
+    print(bold("用量观测") + dim("  （token 计；成本仅在 config.pricing 配置后才计算）"))
+    any_est = False
+    for label, since in spans:
+        s = store.summary(since)
+        if not s["calls"]:
+            print(f"  {label:<6} —")
+            continue
+        any_est = any_est or s["estimated"]
+        cost = f"  ${s['cost']:.4f}" if s["cost"] else ""
+        print(f"  {label:<6} {s['calls']} 次调用 · 入 {_fmt_tok(s['in_tok'])} · "
+              f"出 {_fmt_tok(s['out_tok'])}{cost}")
+    rows = store.by_model()
+    if rows:
+        print(bold("\n按模型（累计）"))
+        for r in rows:
+            cost = f"  ${r['cost']:.4f}" if r["cost"] else ""
+            print(f"  {bold(r['model']):<22} {r['c']} 次 · 入 {_fmt_tok(r['i'])} · "
+                  f"出 {_fmt_tok(r['o'])}{cost}")
+    if any_est:
+        print(dim("\n注：部分记录为本地估算（流式/本地/离线后端无精确用量），仅供趋势参考。"))
+    store.close()
+    return 0
+
+
 def cmd_serve(args):
     app = build_app(args, check_same_thread=False, with_mcp=True)
     from .serve import serve
@@ -643,6 +682,16 @@ def cmd_doctor(args):
     mcp_servers = cfg.get("mcp.servers", {}) or {}
     print(bold("\nMCP") + f"  已配置 {len(mcp_servers)} 个服务" +
           (f"：{', '.join(mcp_servers)}" if mcp_servers else "（mnemo mcp add 接入）"))
+    try:
+        from .usage import UsageStore
+        us = UsageStore(cfg.db_path)
+        tot = us.summary()
+        us.close()
+        print(bold("\n用量") + f"  累计 {tot['calls']} 次调用 · "
+              f"入 {_fmt_tok(tot['in_tok'])} · 出 {_fmt_tok(tot['out_tok'])}"
+              + (f" · ${tot['cost']:.4f}" if tot['cost'] else "") + dim("（mnemo usage 看详情）"))
+    except Exception:  # noqa: BLE001
+        pass
     return 0
 
 
@@ -741,6 +790,8 @@ def build_parser() -> argparse.ArgumentParser:
     pa = sub.add_parser("audit", help="查看工具调用审计日志")
     pa.add_argument("--limit", type=int, default=30)
 
+    sub.add_parser("usage", help="查看 token 用量与成本（今日/7天/累计/按模型）")
+
     pmk = sub.add_parser("market", help="技能/插件市场：搜索/安装/签名/评分")
     pmk.add_argument("--registry", help="registry 文件或 URL（默认读 config.registry）")
     pmk.add_argument("--key", help="签名校验/签名用的密钥（或 config.registry_key）")
@@ -782,7 +833,7 @@ _HANDLERS = {
     "memory": cmd_memory, "skill": cmd_skill, "plugin": cmd_plugin, "task": cmd_task,
     "daemon": cmd_daemon, "doctor": cmd_doctor, "audit": cmd_audit,
     "market": cmd_market, "sync": cmd_sync, "speak": cmd_speak, "see": cmd_see,
-    "serve": cmd_serve, "voice": cmd_voice, "mcp": cmd_mcp,
+    "serve": cmd_serve, "voice": cmd_voice, "mcp": cmd_mcp, "usage": cmd_usage,
 }
 
 

@@ -24,6 +24,9 @@ DEFAULTS: dict[str, Any] = {
     "registry": "",           # 技能/插件市场地址（本地文件或 URL）
     "memory": {"enabled": True, "recall_limit": 6, "min_importance": 1, "semantic": False},
     "ui": {"stream": True},   # 交互对话逐字流式输出（终端可见时生效）
+    # 用量观测：记录每次模型调用的 token；pricing 可选（每百万 token 单价）才算成本
+    "usage": {"enabled": True},
+    "pricing": {},            # 例：{"gpt-4o-mini": {"in": 0.15, "out": 0.6}}
     # 安全：confirm_danger 在交互模式下让写入/执行类工具需确认；deny 永久禁用某些工具
     "tools": {"confirm_danger": False, "deny": []},
     # 沙箱：engine=docker/podman 时 run_shell 在容器内隔离执行（--network none）

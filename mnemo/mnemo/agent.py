@@ -68,13 +68,34 @@ class Agent:
     memory: object
     skills: object
     config: object
+    usage: object = None        # UsageStore，可空；记录每次模型调用的 token 用量
     learn: bool = True          # 子 Agent 设为 False，避免污染主画像
     _depth: int = 0             # 委派深度，防止无限递归
     last_trace: dict = field(default_factory=dict)
 
     def _make_subagent(self) -> "Agent":
         return Agent(self.provider, self.tools, self.memory, self.skills, self.config,
-                     learn=False, _depth=self._depth + 1)
+                     usage=self.usage, learn=False, _depth=self._depth + 1)
+
+    def _track_usage(self, messages, reply, session) -> None:
+        """记录一次模型调用的用量：优先真实用量，否则本地估算（标注 estimated）。"""
+        if not self.usage:
+            return
+        from .usage import estimate_tokens, price_for
+        lu = getattr(self.provider, "last_usage", None)
+        if lu:
+            in_tok, out_tok, estimated = lu.get("in", 0), lu.get("out", 0), False
+        else:
+            in_tok = sum(estimate_tokens(m.content) for m in messages)
+            out_tok = estimate_tokens(reply or "")
+            estimated = True
+        cost = price_for(self.config, self.provider.model or "", in_tok, out_tok)
+        try:
+            self.usage.record(session=session, provider=self.provider.name,
+                              model=self.provider.model or "default", in_tok=in_tok,
+                              out_tok=out_tok, estimated=estimated, cost=cost)
+        except Exception:  # noqa: BLE001
+            pass
 
     def _system_prompt(self, user_input: str, native: bool = False) -> str:
         parts = [self.config.get("persona", "你是 Mnemo，用户的私人 AI 伙伴。")]
@@ -141,6 +162,7 @@ class Agent:
         按通用工具协议判断：若该步是工具调用（文本以 ``` 或 { 开头），其内容是 JSON，
         不向用户回显；只有最终答案才逐字流式输出。on_token 为 None 时退化为普通 chat。
         """
+        self.provider.last_usage = None   # 防止串到上一次调用的真实用量
         if on_token is None:
             return self.provider.chat(messages, temperature=temperature, max_tokens=max_tokens)
         buf: list[str] = []
@@ -205,6 +227,7 @@ class Agent:
         for step in range(max_steps):
             emit("think", {"step": step + 1})
             reply = self._stream_or_chat(messages, on_token, temperature, max_tokens)
+            self._track_usage(messages, reply, session)
             call = parse_tool_call(reply)
             if not call:
                 final = reply
@@ -221,6 +244,7 @@ class Agent:
             # 步数耗尽，逼出一个总结
             messages.append(Message("user", "请基于以上信息，直接给出最终回答。"))
             final = self._stream_or_chat(messages, on_token, temperature, max_tokens)
+            self._track_usage(messages, final, session)
 
         return self._finalize(user_input, final, steps, session, emit)
 
@@ -243,8 +267,10 @@ class Agent:
         final = ""
         for step in range(max_steps):
             emit("think", {"step": step + 1})
+            self.provider.last_usage = None
             res = self.provider.chat_tools(messages, specs, temperature=temperature,
                                            max_tokens=max_tokens)
+            self._track_usage(messages, res.get("text", ""), session)
             calls = res.get("tool_calls") or []
             if not calls:
                 final = res.get("text", "")

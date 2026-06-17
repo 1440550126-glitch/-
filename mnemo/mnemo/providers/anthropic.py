@@ -55,8 +55,14 @@ class AnthropicProvider(Provider):
             "x-api-key": self.api_key,
             "anthropic-version": "2023-06-01",
         })
+        self._capture_usage(resp)
         parts = resp.get("content", [])
         return "".join(p.get("text", "") for p in parts if p.get("type") == "text").strip()
+
+    def _capture_usage(self, resp: dict) -> None:
+        u = resp.get("usage") or {}
+        self.last_usage = ({"in": u.get("input_tokens", 0), "out": u.get("output_tokens", 0)}
+                           if u else None)
 
     def stream(self, messages, *, temperature=0.7, max_tokens=2048):
         if not self.api_key:
@@ -148,6 +154,7 @@ class AnthropicProvider(Provider):
         resp = http_post_json(f"{self.base_url or 'https://api.anthropic.com'}/v1/messages",
                               payload, headers={"x-api-key": self.api_key,
                                                 "anthropic-version": "2023-06-01"})
+        self._capture_usage(resp)
         text, calls = "", []
         for block in resp.get("content", []):
             if block.get("type") == "text":
