@@ -188,6 +188,16 @@ def trigger_loop(agent, mouth=None) -> None:
             print(f"[小确幸] {joy_q}", flush=True)
             if mouth is not None:
                 mouth.speak(joy_q, mood=_mood(agent), profile=profile)
+        # 习惯陪练：傍晚催一句今天还没打卡的好习惯（每天一次）
+        try:
+            hb = agent.habit_evening_reminder()
+        except Exception as e:
+            print(f"[习惯] 出错：{e}", flush=True)
+            hb = ""
+        if hb:
+            print(f"[习惯] {hb}", flush=True)
+            if mouth is not None:
+                mouth.speak(hb, mood=_mood(agent), profile=profile)
 
 
 def think_loop(agent, minutes: float) -> None:

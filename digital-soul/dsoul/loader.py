@@ -17,6 +17,7 @@ from .dream import DreamLog
 from .emotions import EmotionState
 from .favors import FavorBook
 from .goals import GoalBook
+from .habit_goals import HabitBook
 from .heirloom import collect_heirlooms
 from .journal import Journal
 from .joys import JoyLog
@@ -152,7 +153,9 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                                               seed=_load_yaml(base / "config" / "appointments.yaml")),
                  opinions=collect_opinions(
                      _load_yaml(base / "config" / "opinions.yaml"), identity),
-                 joys=JoyLog(base / "data" / "joys.json"))
+                 joys=JoyLog(base / "data" / "joys.json"),
+                 habits_book=HabitBook(base / "data" / "habit_goals.json",
+                                       seed=_load_yaml(base / "config" / "habit_goals.yaml")))
 
 
 def _seed_memory(base: Path, memory) -> None:

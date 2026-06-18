@@ -41,7 +41,7 @@ class Agent:
                  health=None, favors=None, stories=None, teachings=None,
                  spouse=None, preferences=None, humor=None,
                  medications=None, safety=None, appointments=None,
-                 opinions=None, joys=None) -> None:
+                 opinions=None, joys=None, habits_book=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -107,6 +107,8 @@ class Agent:
         self._appt_fired: set = set()                             # 已念过的就医提醒（去重）
         self.joys = joys                                          # 小确幸日记（攒开心事，翻出来念）
         self._joy_asked_day = None                                # 当天是否已主动问过开心事（去重）
+        self.habits_book = habits_book                            # 习惯养成陪练（戒烟/早睡/锻炼打卡）
+        self._habit_reminded_day = None                           # 当天是否已催过打卡（去重）
         self._goodnight_day = None                                # 当晚是否已道过晚安（去重）
         self._ritual_fired: set = set()                           # 当天已唤过的日常默契（去重）
         self._companion_slot = None                               # 本时段是否已主动问候过（去重）
@@ -776,6 +778,31 @@ class Agent:
                 result["reply"] = txt
                 self._log_journal(who, utterance, txt, "gift")
                 return result
+
+        # --- 习惯养成（立目标 / 打卡 / 看坚持得怎样）---
+        if action is None and who.get("obey") and self.habits_book is not None:
+            u = utterance or ""
+            if any(k in u for k in ("打卡情况", "我的习惯", "坚持得怎么样", "坚持几天")):
+                txt = self.habits_status()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "habit_status")
+                    return result
+            txt = self.habit_intent(u) or self.habit_checkin_from(u)
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, u, txt, "habit")
+                return result
+
+        # --- 节日筹备（"过年准备什么" / "中秋要张罗啥"）---
+        if action is None and who.get("obey"):
+            from .festival_prep import detect_festival, is_prep_query
+            if is_prep_query(utterance) and detect_festival(utterance):
+                txt = self.festival_prep(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "festival_prep")
+                    return result
 
         # --- 传统节日（"今天是什么节" / "端午有什么讲究"）---
         if action is None and who.get("obey"):
@@ -1732,6 +1759,63 @@ class Agent:
             return ""
         mems = [it["text"] for _, it in self.memory.recall(person, k=4)]
         return recollect(mems, person=person, seed=seed or person)
+
+    # ---------- 习惯养成陪练 ----------
+    _COMMON_HABITS = ("戒烟", "戒酒", "早睡", "早起", "锻炼", "跑步", "喝水", "读书",
+                      "减肥", "少熬夜", "存钱", "走路", "练字")
+
+    def habit_intent(self, utterance) -> str:
+        """听出"我想戒烟/我要早睡"这类立目标，记下并陪练。"""
+        if self.habits_book is None:
+            return ""
+        u = utterance or ""
+        if not any(m in u for m in ("我想", "我要", "帮我", "养成", "立个", "开始", "陪我")):
+            return ""
+        for h in self._COMMON_HABITS:
+            if h in u:
+                self.habits_book.add(h)
+                return (f"好，{h}这个目标我替你记下了，从今天起我陪你，每天打个卡。 "
+                        + self.habits_book.encourage(h))
+        return ""
+
+    def habit_checkin_from(self, utterance) -> str:
+        """听出"我今天早睡了/锻炼打卡"，记一次并鼓劲。"""
+        if self.habits_book is None or not self.habits_book.habits:
+            return ""
+        u = utterance or ""
+        if "打卡" not in u and not any(d in u for d in ("了", "做到", "完成", "坚持", "搞定")):
+            return ""
+        for name in list(self.habits_book.habits):
+            if name and name in u:
+                self.habits_book.check_in(name)
+                return self.habits_book.encourage(name)
+        return ""
+
+    def habits_status(self) -> str:
+        return self.habits_book.describe() if self.habits_book is not None else ""
+
+    def habit_evening_reminder(self, now=None) -> str:
+        """傍晚催一句今天还没打卡的习惯，每天一次（供守护循环）。"""
+        from datetime import datetime
+        if self.habits_book is None:
+            return ""
+        now = now or datetime.now()
+        if now.hour < 19:
+            return ""
+        today = now.strftime("%Y-%m-%d")
+        if self._habit_reminded_day == today:
+            return ""
+        pend = self.habits_book.pending(now)
+        if not pend:
+            return ""
+        self._habit_reminded_day = today
+        return f"今天的{'、'.join(pend)}还没打卡呢，别断了哈。"
+
+    # ---------- 节日筹备 ----------
+    def festival_prep(self, utterance) -> str:
+        from .festival_prep import detect_festival, prep_text
+        f = detect_festival(utterance)
+        return prep_text(f) if f else ""
 
     def suggest_gift(self, utterance) -> str:
         """按关系/喜好/场合，给几个送礼主意。"""
