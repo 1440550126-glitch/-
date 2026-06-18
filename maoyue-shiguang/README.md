@@ -43,7 +43,7 @@
 
 ## 音效
 
-`assets/audio/` 下的 `coin.wav` / `swipe.wav` / `vault.wav` / `cine.wav` 为**代码合成**的占位音效，可替换成成品（保持文件名即可）。
+`assets/audio/` 下的 `coin.mp3` / `swipe.mp3` / `vault.mp3` / `cine.mp3` 为**代码合成**的占位音效（已压成 MP3，单个均 <200K，满足小程序资源体积要求），可替换成成品（保持文件名即可）。
 
 ## 如何运行
 

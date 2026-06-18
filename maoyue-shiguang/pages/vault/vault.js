@@ -77,14 +77,14 @@ Page({
       this.setData({ amount: '', note: '' });
       this.refresh();
       this.coinRain();                                  // 投币动画
-      playSound('/assets/audio/coin.wav');              // 投币音效
+      playSound('/assets/audio/coin.mp3');              // 投币音效
       wx.showToast({ title: '+ ¥' + fmt(amount) + ' 已存入 💰', icon: 'none' });
     } else {
       store.vaultSpend(amount, note || '一笔支出');
       this.setData({ amount: '', note: '' });
       this.refresh();
       this.swipe();                                     // 刷卡动画
-      playSound('/assets/audio/swipe.wav');             // 刷卡音效
+      playSound('/assets/audio/swipe.mp3');             // 刷卡音效
       wx.showToast({ title: '- ¥' + fmt(amount) + ' 已记账 💳', icon: 'none' });
     }
   },
@@ -115,7 +115,7 @@ Page({
     else if (bal >= 100) tier = 'cash';                                  // 几百：纸钞
     else if (bal >= 1) tier = 'coins';                                   // 几十：硬币
     this.setData({ showVault: true, vaultTier: tier, goldBars: goldBars, crown: crown });
-    playSound(tier === 'empty' ? '/assets/audio/swipe.wav' : '/assets/audio/vault.wav'); // 空库放"风声"
+    playSound(tier === 'empty' ? '/assets/audio/swipe.mp3' : '/assets/audio/vault.mp3'); // 空库放"风声"
   },
   closeVault() { this.setData({ showVault: false }); }
 });

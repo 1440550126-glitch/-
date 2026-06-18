@@ -151,7 +151,7 @@ Page({
   },
 
   playCineAudio() {
-    try { const a = wx.createInnerAudioContext(); a.src = '/assets/audio/cine.wav'; a.volume = 0.9; a.play(); a.onError(() => { try { a.destroy(); } catch (e) {} }); this._cineAudio = a; } catch (e) {}
+    try { const a = wx.createInnerAudioContext(); a.src = '/assets/audio/cine.mp3'; a.volume = 0.9; a.play(); a.onError(() => { try { a.destroy(); } catch (e) {} }); this._cineAudio = a; } catch (e) {}
   },
   stopCineAudio() { if (this._cineAudio) { try { this._cineAudio.stop(); this._cineAudio.destroy(); } catch (e) {} this._cineAudio = null; } },
 
