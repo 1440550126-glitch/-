@@ -42,6 +42,10 @@ export OPENAI_API_KEY=sk-... OPENAI_BASE_URL=https://api.deepseek.com/v1 OPENAI_
 | **可切换人格** | `mnemo persona use 程序员/教练/研究员`，一套记忆多种语气 |
 | **情境感知** | 系统提示自带当前时间 + 到点/逾期提醒，对话中主动提起待办 |
 | **无人值守韧性** | Provider 瞬时错误指数退避重试；`mnemo task history` 看执行历史；`mnemo status` 一屏总览 |
+| **主动通知** | 到点提醒/任务结果经 desktop / webhook 推送（`mnemo notify`、`notify` 工具） |
+| **文件监视** | `mnemo watch add` 路径变化即触发任务（守护进程巡检） |
+| **会话连贯** | 滚动摘要压缩长会话（`session summarize`，守护进程每日自动刷新）；`chat --resume` 续接 |
+| **更多工具** | `edit_file` 精准改写、`http_request` 调任意 REST、`calc` 安全计算、`forget` 自纠记忆 |
 | 学技能 + **自我进化** | Markdown 技能即学即用；**一次成功任务可自动沉淀为新技能**（`skill distill` / `run --distill`） |
 | 下载插件 + **市场** | `plugin install <git/本地>`；**`market search/install`** 从 registry 按名安装技能/插件 |
 | **多 Agent 协作** | `delegate` 工具：主 Agent 把聚焦子任务派给角色化子 Agent |
@@ -132,7 +136,10 @@ mnemo market rate hello 5 --note 好用            # 本地评分
 
 # 7×24 守护、安全、同步
 mnemo task add --name 每日简报 --every "@daily 08:30" --prompt "用 daily-briefing 技能做今日简报"
-mnemo daemon                # 启动守护进程（到点跑任务 + 触发提醒 + 每日巩固记忆）
+mnemo task history          # 任务执行历史（✓/✗）
+mnemo watch add --name 笔记 --path ./notes --prompt "总结新增内容并记入记忆"
+mnemo notify "测试通知"      # 验证 desktop/webhook 通知渠道
+mnemo daemon                # 守护：跑任务 + 文件监视 + 提醒/通知 + 每日巩固/会话摘要
 mnemo audit                 # 工具调用审计日志
 mnemo config set sandbox.engine docker     # run_shell 改为容器内隔离执行
 mnemo sync export backup.mnemo --passphrase 你的口令
@@ -164,7 +171,8 @@ mnemo/
 ├─ viz.py          记忆图谱渲染（内联力导向 HTML）
 ├─ media.py        视频关键帧抽取（ffmpeg）
 ├─ voice.py        语音对话：录音 / whisper 转写 / TTS
-├─ daemon.py       守护进程：任务调度 + 执行历史 + 主动提醒 + 每日记忆巩固
+├─ notify.py       通知推送：desktop / webhook / stdout 兜底
+├─ daemon.py       守护进程：任务调度 + 执行历史 + 文件监视 + 主动提醒/通知 + 每日巩固/摘要
 ├─ providers/      大模型后端：base(含重试) + anthropic/openai/gemini/ollama/offline + 注册表(auto)
 └─ skills_builtin/ 内置技能
 ```
@@ -200,14 +208,15 @@ mnemo plugin install ./my-plugin
 ## 测试
 
 ```bash
-python -m unittest discover -s tests -v   # 98 项全链路冒烟，全部通过
+python -m unittest discover -s tests -v   # 109 项全链路冒烟，全部通过
 ```
 
 覆盖：记忆/画像、语义检索+LSH ANN、巩固/遗忘、提醒、工具循环、原生 function-calling、
 自我进化技能、多 Agent 委派、安全审计/策略、容器沙箱、市场签名/评分、加密同步、
 记忆图谱、Web 服务（含鉴权）、多模态/语音、MCP 客户端（自带假服务端到端）、
-逐字流式输出、用量计量与定价、知识摄入 RAG、联网检索解析、**Gemini 后端**、
-**HTTP 重试**、**任务历史**、**人格切换**、**安全计算器**、**情境感知提醒**、**记忆/会话管理**。
+逐字流式输出、用量计量与定价、知识摄入 RAG、联网检索解析、Gemini 后端、
+HTTP 重试、任务历史、人格切换、安全计算器、情境感知提醒、记忆/会话管理、
+**MCP 资源**、**会话滚动摘要**、**文件监视触发**、**通知推送**、**edit_file/http_request**。
 
 ## 路线图（已大量落地，继续推进）
 
