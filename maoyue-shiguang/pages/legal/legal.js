@@ -2,9 +2,9 @@
 // 通过 ?doc=privacy|terms|community|minors 打开对应文档；页面内可切换。
 // 文本同时导出在 docs/legal/*.md，可用于小程序后台与官网展示，请保持一致。
 
-const CONTACT = 'liuzhishuo953@gmail.com';
-const SUBJECT = '【主体名称（以营业执照为准）】';
-const UPDATED = '生效日期：2026年6月16日';
+const CONTACT = 'zhishiliu057@gmail.com';
+const SUBJECT = '郑州市郑东新区星阙云网络工作室';
+const UPDATED = '生效日期：2026年6月18日';
 
 const DOCS = {
   privacy: {
