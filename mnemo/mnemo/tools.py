@@ -99,6 +99,27 @@ def _t_write_file(args, ctx):
     return f"已写入 {path}（{len(args.get('content', ''))} 字符）"
 
 
+def _t_edit_file(args, ctx):
+    """精准编辑：把文件中唯一出现的 old 替换为 new（比整文件覆盖更安全）。"""
+    path = Path(ctx.cwd) / args.get("path", "")
+    if not path.is_file():
+        return f"[错误] 文件不存在：{path}"
+    old = args.get("old", "")
+    new = args.get("new", "")
+    if not old:
+        return "[错误] 需要 old（要替换的原文）"
+    text = path.read_text(encoding="utf-8", errors="replace")
+    count = text.count(old)
+    if count == 0:
+        return "[错误] 未找到要替换的文本（old 未命中）"
+    all_ = bool(args.get("all"))
+    if count > 1 and not all_:
+        return f"[错误] old 出现 {count} 次，不唯一。提供更长上下文，或设 all=true 全部替换"
+    text = text.replace(old, new) if all_ else text.replace(old, new, 1)
+    path.write_text(text, encoding="utf-8")
+    return f"已编辑 {path}（替换 {count if all_ else 1} 处）"
+
+
 def _t_list_dir(args, ctx):
     path = Path(ctx.cwd) / args.get("path", ".")
     if not path.is_dir():
@@ -353,6 +374,9 @@ def build_default_registry() -> ToolRegistry:
     r.add("read_file", "读取文本文件内容", {"path": "相对/绝对路径"}, _t_read_file)
     r.add("write_file", "写入/覆盖文本文件", {"path": "路径", "content": "内容"},
           _t_write_file, danger=True)
+    r.add("edit_file", "精准编辑：把文件中唯一出现的 old 替换为 new（不覆盖整文件）",
+          {"path": "路径", "old": "原文(需唯一)", "new": "新文本", "all": "可选,true=全部替换"},
+          _t_edit_file, danger=True)
     r.add("list_dir", "列出目录内容", {"path": "目录，默认当前"}, _t_list_dir)
     r.add("run_shell", "执行 shell 命令并返回输出", {"command": "命令"},
           _t_run_shell, danger=True)

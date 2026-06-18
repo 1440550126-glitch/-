@@ -741,6 +741,23 @@ class TestTools(unittest.TestCase):
         self.assertIn("你好 Mnemo", out)
         tmp.cleanup()
 
+    def test_edit_file_tool(self):
+        tmp = tempfile.TemporaryDirectory()
+        reg = build_default_registry()
+        ctx = ToolContext(cwd=tmp.name, config=load_config(tmp.name))
+        reg.run("write_file", {"path": "a.py", "content": "x = 1\ny = 2\n"}, ctx)
+        out = reg.run("edit_file", {"path": "a.py", "old": "x = 1", "new": "x = 42"}, ctx)
+        self.assertIn("已编辑", out)
+        self.assertIn("x = 42", reg.run("read_file", {"path": "a.py"}, ctx))
+        # 不唯一 → 报错
+        reg.run("write_file", {"path": "b.txt", "content": "a a a"}, ctx)
+        dup = reg.run("edit_file", {"path": "b.txt", "old": "a", "new": "z"}, ctx)
+        self.assertIn("不唯一", dup)
+        # all=true 全部替换
+        ok = reg.run("edit_file", {"path": "b.txt", "old": "a", "new": "z", "all": True}, ctx)
+        self.assertIn("3 处", ok)
+        tmp.cleanup()
+
     def test_http_request_tool(self):
         import mnemo.tools as tools_mod
 
