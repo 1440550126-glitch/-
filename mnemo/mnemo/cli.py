@@ -229,13 +229,22 @@ def cmd_chat(args):
 
 def cmd_run(args):
     app = build_app(args, with_mcp=True)
+    as_json = getattr(args, "json", False)
     try:
         out = app.agent.run(args.prompt, cwd=args.cwd,
-                            on_event=_make_on_event(args.verbose))
+                            session=getattr(args, "session", None) or "default",
+                            on_event=None if as_json else _make_on_event(args.verbose))
     except ProviderError as e:
-        print(red(f"[模型调用失败] {e}"), file=sys.stderr)
+        if as_json:
+            print(json.dumps({"error": str(e)}, ensure_ascii=False))
+        else:
+            print(red(f"[模型调用失败] {e}"), file=sys.stderr)
         return 1
-    print(out)
+    if as_json:
+        print(json.dumps({"reply": out, "steps": app.agent.last_trace.get("steps", [])},
+                         ensure_ascii=False, indent=2))
+    else:
+        print(out)
     if getattr(args, "distill", None):
         from .skills import distill_from_trace
         text = distill_from_trace(app.agent.last_trace, app.provider, args.distill)
@@ -475,6 +484,17 @@ def cmd_skill(args):
             print(red("未找到该技能"))
             return 1
         print(bold(s.name) + f"\n描述：{s.description}\n适用：{s.when_to_use}\n\n{s.body}")
+    elif args.action == "run":
+        s = sk.get(args.name)
+        if not s:
+            print(red(f"未找到技能：{args.name}")); return 1
+        prompt = (f"运用技能「{s.name}」完成下面的任务：\n{args.input}\n\n"
+                  f"[技能说明]\n{s.body}")
+        try:
+            out = app.agent.run(prompt, on_event=_make_on_event(args.verbose))
+        except ProviderError as e:
+            print(red(f"[模型调用失败] {e}")); return 1
+        print(out)
     elif args.action == "new":
         print(green(f"已创建技能模板：{sk.scaffold(args.name)}"))
     elif args.action == "learn":
@@ -1005,6 +1025,8 @@ def build_parser() -> argparse.ArgumentParser:
     pr = sub.add_parser("run", help="单次执行一个任务")
     pr.add_argument("prompt", help="任务描述")
     pr.add_argument("--cwd", default=".", help="工作目录")
+    pr.add_argument("--session", help="使用指定会话名")
+    pr.add_argument("--json", action="store_true", help="以 JSON 输出 {reply, steps}（便于脚本）")
     pr.add_argument("--distill", metavar="NAME", help="完成后把过程沉淀为名为 NAME 的技能")
 
     pin = sub.add_parser("ingest", help="把本地文档/目录摄入长期记忆（知识库 RAG）")
@@ -1066,6 +1088,8 @@ def build_parser() -> argparse.ArgumentParser:
     pss = ps.add_subparsers(dest="action", required=True)
     pss.add_parser("list")
     ssh = pss.add_parser("show"); ssh.add_argument("name")
+    srn = pss.add_parser("run", help="显式用某技能完成一个任务")
+    srn.add_argument("name"); srn.add_argument("input")
     sn = pss.add_parser("new"); sn.add_argument("name")
     sl = pss.add_parser("learn")
     sl.add_argument("--name"); sl.add_argument("--file"); sl.add_argument("--url"); sl.add_argument("--text")
