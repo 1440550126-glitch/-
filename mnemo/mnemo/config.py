@@ -37,6 +37,8 @@ DEFAULTS: dict[str, Any] = {
     "providers": {
         "anthropic": {"model": "claude-opus-4-8", "base_url": "https://api.anthropic.com"},
         "openai": {"model": "gpt-4o-mini", "base_url": "https://api.openai.com/v1"},
+        "gemini": {"model": "gemini-2.0-flash",
+                   "base_url": "https://generativelanguage.googleapis.com/v1beta"},
         "ollama": {"model": "llama3.1", "base_url": "http://localhost:11434"},
     },
 }
@@ -50,6 +52,9 @@ ENV_MAP = {
     "OPENAI_API_KEY": "providers.openai.api_key",
     "OPENAI_BASE_URL": "providers.openai.base_url",
     "OPENAI_MODEL": "providers.openai.model",
+    "GEMINI_API_KEY": "providers.gemini.api_key",
+    "GOOGLE_API_KEY": "providers.gemini.api_key",
+    "GEMINI_MODEL": "providers.gemini.model",
     "OLLAMA_BASE_URL": "providers.ollama.base_url",
     "OLLAMA_MODEL": "providers.ollama.model",
 }

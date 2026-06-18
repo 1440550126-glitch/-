@@ -7,6 +7,7 @@ from __future__ import annotations
 from ..config import Config
 from .anthropic import AnthropicProvider
 from .base import Message, Provider, ProviderError
+from .gemini import GeminiProvider
 from .offline import OfflineProvider
 from .ollama import OllamaProvider
 from .openai import OpenAIProvider
@@ -14,12 +15,13 @@ from .openai import OpenAIProvider
 REGISTRY: dict[str, type[Provider]] = {
     "anthropic": AnthropicProvider,
     "openai": OpenAIProvider,
+    "gemini": GeminiProvider,
     "ollama": OllamaProvider,
     "offline": OfflineProvider,
 }
 
 # auto 选择优先级：能力强的在前，离线兜底在最后
-AUTO_ORDER = ["anthropic", "openai", "ollama", "offline"]
+AUTO_ORDER = ["anthropic", "openai", "gemini", "ollama", "offline"]
 
 
 def register_provider(name: str, cls: type[Provider]) -> None:

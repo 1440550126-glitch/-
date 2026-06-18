@@ -356,6 +356,51 @@ class TestNativeTools(unittest.TestCase):
         self.assertEqual(conv[2]["content"][0]["type"], "tool_result")
 
 
+class TestGemini(unittest.TestCase):
+    def test_to_contents_roles(self):
+        from mnemo.providers.gemini import GeminiProvider
+        sysinstr, contents = GeminiProvider._to_contents([
+            Message("system", "S"), Message("user", "hi"),
+            Message("assistant", "yo"), Message("tool", "R", name="now")])
+        self.assertEqual(sysinstr["parts"][0]["text"], "S")
+        self.assertEqual(contents[0]["role"], "user")
+        self.assertEqual(contents[1]["role"], "model")
+        self.assertIn("工具 now 返回", contents[2]["parts"][0]["text"])
+
+    def test_chat_parses_and_usage(self):
+        import mnemo.providers.gemini as gemini_mod
+        prov = gemini_mod.GeminiProvider(api_key="x", model="gemini-2.0-flash")
+        orig = gemini_mod.http_post_json
+        gemini_mod.http_post_json = lambda url, payload, headers=None, timeout=120, retries=2: {
+            "candidates": [{"content": {"parts": [{"text": "你好世界"}]}}],
+            "usageMetadata": {"promptTokenCount": 12, "candidatesTokenCount": 4}}
+        try:
+            out = prov.chat([Message("user", "hi")])
+        finally:
+            gemini_mod.http_post_json = orig
+        self.assertEqual(out, "你好世界")
+        self.assertEqual(prov.last_usage, {"in": 12, "out": 4})
+
+    def test_chat_tools_parses_functioncall(self):
+        import mnemo.providers.gemini as gemini_mod
+        prov = gemini_mod.GeminiProvider(api_key="x")
+        orig = gemini_mod.http_post_json
+        gemini_mod.http_post_json = lambda url, payload, headers=None, timeout=120, retries=2: {
+            "candidates": [{"content": {"parts": [
+                {"functionCall": {"name": "now", "args": {}}}]}}]}
+        try:
+            res = prov.chat_tools([Message("user", "几点")],
+                                  [{"name": "now", "description": "时间", "parameters": {}}])
+        finally:
+            gemini_mod.http_post_json = orig
+        self.assertEqual(res["tool_calls"][0]["name"], "now")
+
+    def test_registered(self):
+        from mnemo.providers import AUTO_ORDER, REGISTRY
+        self.assertIn("gemini", REGISTRY)
+        self.assertIn("gemini", AUTO_ORDER)
+
+
 class TestMultimodalVoice(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
