@@ -44,7 +44,7 @@ class Agent:
                  opinions=None, joys=None, habits_book=None,
                  contacts=None, ledger=None, bedtime=None,
                  music=None, plants=None, touch=None, understanding=None,
-                 messages=None, vitals=None) -> None:
+                 messages=None, vitals=None, board=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -125,6 +125,8 @@ class Agent:
         self._reached: set = set()                                # 当天已主动牵挂过的人（去重）
         self.messages = messages                                  # 捎话：替家人带话，等人来了主动捎到
         self.vitals = vitals                                      # 体征记录（血压/血糖/体重，看趋势、异常提醒）
+        self.board = board                                        # 家庭共享·分工板（谁买菜/谁接孩子）
+        self._chore_reminded: set = set()                         # 当天已提醒过的分工（去重）
         self._noticed: set = set()                                # 已点破过的"门道"（当天去重）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
@@ -646,6 +648,32 @@ class Agent:
                 result["reply"] = reply
                 self._log_journal(who, u3, reply, "notes")
                 return result
+
+        # --- 家庭分工板（"今天小明买菜" / "今天谁接孩子" / "分工"）：先于采买，免得抢"买菜" ---
+        if action is None and who.get("obey") and self.board is not None:
+            from .family_board import CHORES
+            ub = utterance or ""
+            if any(k in ub for k in ("今天的分工", "今天谁", "谁买菜", "谁接孩子", "谁做饭",
+                                     "今天的安排", "家务分工", "派活了吗", "分工")):
+                txt = self.board_today()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, ub, txt, "board")
+                    return result
+            if any(k in ub for k in ("做完了", "干完了", "忙完了", "搞定了", "弄好了")):
+                txt = self.chore_done(ub, speaker=who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, ub, txt, "chore_done")
+                    return result
+            # 派活：出现家务词，且点了名或"让/叫/派/我来/今天"这类派活语气
+            if any(c in ub for c in CHORES) and any(
+                    k in ub for k in ("让", "叫", "派", "负责", "我来", "我去", "今天", "该")):
+                txt = self.assign_chore(ub, speaker=who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, ub, txt, "board_assign")
+                    return result
 
         # --- 采买清单（"买瓶酱油" / "鸡蛋买好了" / "采买清单"）---
         if action is None and who.get("obey") and self.shopping is not None:
@@ -1564,6 +1592,14 @@ class Agent:
         if who.get("known"):
             for msg in self.deliver_messages(who.get("name")):
                 text = f"{text} 对了，{msg}"
+        # 家庭分工：今天轮到这人的活，见面提醒一句（当天去重）
+        if who.get("obey") and self.board is not None:
+            from datetime import date as _d
+            ch = self.chores_for(who.get("name"))
+            key = (_d.today().isoformat(), who.get("name"))
+            if ch and key not in self._chore_reminded:
+                self._chore_reminded.add(key)
+                text = f"{text} {ch}"
         # 看出门道：从近来的对话里看出你反复的烦心事，温柔点破一句（当天同一桩只点一次）
         if who.get("obey"):
             obs = self.notice_about(who.get("name"))
@@ -2291,6 +2327,68 @@ class Agent:
         if self.understanding is None:
             return ""
         return self.understanding.portrait(name)
+
+    # ---------- 家庭共享·分工板 ----------
+    def _parse_chore(self, utterance, speaker=""):
+        from .family import members
+        from .family_board import CHORES
+        u = utterance or ""
+        names = []
+        for m in members(getattr(self, "family", {}) or {}):
+            if m.get("name"):
+                names.append(m["name"])
+        try:
+            for p in self.authority.people.values():
+                if p.get("name"):
+                    names.append(p["name"])
+        except Exception:
+            pass
+        who = ""
+        for nm in sorted({n for n in names if n}, key=len, reverse=True):
+            if nm in u:
+                who = nm
+                break
+        if not who and any(k in u for k in ("我来", "我去", "我负责", "我做", "我接", "我买")):
+            who = speaker
+        what = ""
+        for c in sorted(CHORES, key=len, reverse=True):
+            if c in u:
+                what = c
+                break
+        if not what and who and who in u:
+            what = u[u.find(who) + len(who):].strip("，,。.：: 来去做负责的今天该会儿 ")
+        return (what, who) if what else None
+
+    def assign_chore(self, utterance, speaker="") -> str:
+        if self.board is None:
+            return ""
+        parsed = self._parse_chore(utterance, speaker=speaker)
+        if not parsed:
+            return ""
+        what, who = parsed
+        self.board.assign(what, who=who)
+        return (f"行，记上了：{who}负责{what}。到时候我提醒。" if who
+                else f"行，记上了：{what}。")
+
+    def board_today(self) -> str:
+        return self.board.describe() if self.board is not None else ""
+
+    def chore_done(self, utterance, speaker="") -> str:
+        if self.board is None:
+            return ""
+        it = self.board.done(utterance)
+        if not it and speaker:
+            mine = self.board.for_member(speaker)
+            if mine:
+                it = self.board.done(mine[0]["what"])
+        return (f"好，{it['what']}做完了，给你记上，辛苦啦。") if it else ""
+
+    def chores_for(self, name) -> str:
+        """这人今天该干的活（用于见面提醒）。"""
+        if self.board is None or not name:
+            return ""
+        mine = [it["what"] for it in self.board.for_member(name)]
+        return ("今天轮到你：" + "、".join(mine) + "，别忘了。") if mine else ""
 
     def record_vital(self, utterance) -> str:
         """记一次体征，顺带给个通俗的异常提醒（不诊断）。"""

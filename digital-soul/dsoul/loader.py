@@ -16,6 +16,7 @@ from .curiosity import QuestionLog
 from .devices import build_device_hub, build_sensor_source
 from .dream import DreamLog
 from .emotions import EmotionState
+from .family_board import FamilyBoard
 from .favors import FavorBook
 from .goals import GoalBook
 from .habit_goals import HabitBook
@@ -174,7 +175,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                                 seed=_load_yaml(base / "config" / "keep_in_touch.yaml")),
                  understanding=Understanding(base / "data" / "understanding.json"),
                  messages=Messages(base / "data" / "messages.json"),
-                 vitals=VitalsLog(base / "data" / "vitals.json"))
+                 vitals=VitalsLog(base / "data" / "vitals.json"),
+                 board=FamilyBoard(base / "data" / "family_board.json"))
 
 
 def _seed_memory(base: Path, memory) -> None:
