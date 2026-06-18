@@ -735,6 +735,26 @@ class Agent:
                     self._log_journal(who, utterance, st, "smalltalk")
                     return result
 
+        # --- 陪聊：招呼"陪我聊聊"，主动挑个话头 ---
+        if action is None and who.get("obey"):
+            from .chat_starters import is_invite
+            if is_invite(utterance):
+                s = self.start_chat()
+                if s:
+                    result["reply"] = s
+                    self._log_journal(who, utterance, s, "chat_start")
+                    return result
+
+        # --- 老话俗语（"说句老话" / "俗话说"）：挑句应景的，或成段背 ---
+        if action is None and who.get("obey") and any(
+                k in (utterance or "") for k in ("说句老话", "有什么老话", "老话怎么说",
+                                                 "老人言", "俗话说", "来句谚语", "讲句老话")):
+            txt = self.drop_proverb(utterance) or self.recite_proverbs(utterance)
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "proverb")
+                return result
+
         # --- 传统节日（"今天是什么节" / "端午有什么讲究"）---
         if action is None and who.get("obey"):
             u6 = utterance or ""
@@ -1661,6 +1681,26 @@ class Agent:
         """对人生话题给出一贯的看法。"""
         from .opinions import opine
         return opine(getattr(self, "opinions", None), utterance)
+
+    def start_chat(self, now=None) -> str:
+        """主动挑个话头唠两句（陪聊、破冷场）。"""
+        from datetime import datetime
+        from .chat_starters import starter
+        from .companion import time_of_day
+        from .family import members
+        now = now or datetime.now()
+        people = [m["name"] for m in members(self.family)
+                  if m.get("name") and m.get("relation") != "本人"][:4]
+        return starter(seed=now.strftime("%H%M"), people=people, tod=time_of_day(now))
+
+    def drop_proverb(self, utterance) -> str:
+        """聊到什么，顺口来句应景的老话。"""
+        from .proverbs import proverb_for
+        return proverb_for(utterance, seed=utterance)
+
+    def recite_proverbs(self, utterance="") -> str:
+        from .proverbs import match_theme, recite
+        return recite(match_theme(utterance))
 
     # ---------- 宽慰忧虑 / 小确幸 ----------
     def comfort_worry(self, utterance, name="") -> str:
