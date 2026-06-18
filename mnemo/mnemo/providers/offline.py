@@ -36,6 +36,15 @@ class OfflineProvider(Provider):
             call = json.dumps({"name": "remember", "args": {"text": fact}}, ensure_ascii=False)
             return f"```tool\n{call}\n```"
 
+        m_calc = re.match(r"^\s*(?:calc|计算)[:：]?\s*(.+)$", user)
+        if m_calc:
+            call = json.dumps({"name": "calc", "args": {"expr": m_calc.group(1).strip()}},
+                              ensure_ascii=False)
+            return f"```tool\n{call}\n```"
+
+        if re.search(r"(几点|现在时间|what time|当前时间)", user):
+            return '```tool\n{"name": "now", "args": {}}\n```'
+
         return (
             "（离线模式）我已收到："
             f"「{user[:120]}」。\n"

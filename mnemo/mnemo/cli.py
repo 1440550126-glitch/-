@@ -300,6 +300,20 @@ def cmd_config(args):
         app_cfg.set(args.key, val)
         app_cfg.save()
         print(green(f"已设置 {args.key} = {val!r}"))
+    elif args.action == "unset":
+        parts = args.key.split(".")
+        cur = app_cfg.data
+        for p in parts[:-1]:
+            if not isinstance(cur, dict) or p not in cur:
+                cur = None
+                break
+            cur = cur[p]
+        if isinstance(cur, dict) and parts[-1] in cur:
+            cur.pop(parts[-1])
+            app_cfg.save()
+            print(green(f"已移除配置：{args.key}"))
+        else:
+            print(dim(f"配置不存在：{args.key}"))
     return 0
 
 
@@ -1203,6 +1217,7 @@ def build_parser() -> argparse.ArgumentParser:
     pcs.add_parser("show"); pcs.add_parser("path")
     g = pcs.add_parser("get"); g.add_argument("key")
     s = pcs.add_parser("set"); s.add_argument("key"); s.add_argument("value")
+    u = pcs.add_parser("unset"); u.add_argument("key")
 
     pp = sub.add_parser("provider", help="大模型后端")
     pps = pp.add_subparsers(dest="action", required=True)

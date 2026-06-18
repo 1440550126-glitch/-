@@ -132,6 +132,15 @@ class TestAgentLoop(unittest.TestCase):
         self.assertTrue(any("生日" in f["text"] for f in self.mem.all_facts()))
 
 
+class TestOfflineRouting(unittest.TestCase):
+    def test_routes_calc_and_time_to_tools(self):
+        p = OfflineProvider()
+        self.assertIn('"calc"', p.chat([Message("user", "calc: (3+4)*2")]))
+        self.assertIn('"now"', p.chat([Message("user", "现在几点了")]))
+        # 工具返回后给确认而非再次调用
+        self.assertIn("已完成", p.chat([Message("user", "x"), Message("tool", "14", name="calc")]))
+
+
 class TestStreaming(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
