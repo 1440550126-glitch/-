@@ -202,6 +202,15 @@ class Scheduler:
             if res["merged"] or res["forgotten"]:
                 self.log(f"🧠 记忆巩固：合并 {res['merged']}，淡忘 {res['forgotten']}，"
                          f"保留 {res['kept']}")
+            # 顺带为活跃且较长的会话刷新滚动摘要（在线后端才有效，离线优雅跳过）
+            prov = getattr(self.agent, "provider", None)
+            if prov:
+                for s in mem.sessions()[:5]:
+                    if s["c"] >= 8:
+                        try:
+                            mem.summarize_session(s["session"], prov)
+                        except Exception:  # noqa: BLE001
+                            pass
 
     def run_once(self, now: float | None = None) -> int:
         now = now or time.time()
