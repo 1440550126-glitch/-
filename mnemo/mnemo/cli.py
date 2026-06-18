@@ -459,6 +459,28 @@ def cmd_memory(args):
     return 0
 
 
+def cmd_profile(args):
+    app = build_app(args)
+    m = app.memory
+    if not m:
+        print("记忆未启用"); return 0
+    if args.action == "show":
+        print(m.profile_summary() or dim("(还没积累到画像)"))
+        extra = {k: v for k, v in m.all_profile().items()
+                 if not k.startswith(("lsh_", "summary:", "watch_mtime:"))
+                 and k not in ("first_seen", "last_consolidate")}
+        if extra:
+            print(dim("\n原始字段："))
+            for k, v in extra.items():
+                print(dim(f"  {k} = {v}"))
+    elif args.action == "get":
+        print(m.get_profile(args.key) or dim("(未设置)"))
+    elif args.action == "set":
+        m.set_profile(args.key, args.value)
+        print(green(f"已设置画像 {args.key} = {args.value}"))
+    return 0
+
+
 def cmd_session(args):
     app = build_app(args)
     m = app.memory
@@ -1169,6 +1191,12 @@ def build_parser() -> argparse.ArgumentParser:
     mg = pms.add_parser("graph", help="导出记忆关系图为自包含 HTML")
     mg.add_argument("--out", default="mnemo-graph.html"); mg.add_argument("--limit", type=int, default=80)
 
+    ppr = sub.add_parser("profile", help="画像：查看/直接编辑 Mnemo 对你的了解")
+    pprs = ppr.add_subparsers(dest="action", required=True)
+    pprs.add_parser("show")
+    pprg = pprs.add_parser("get"); pprg.add_argument("key")
+    pprst = pprs.add_parser("set"); pprst.add_argument("key"); pprst.add_argument("value")
+
     pse2 = sub.add_parser("session", help="会话：列出/查看/导出历史对话")
     pse2s = pse2.add_subparsers(dest="action", required=True)
     pse2s.add_parser("list")
@@ -1288,7 +1316,7 @@ def build_parser() -> argparse.ArgumentParser:
 _HANDLERS = {
     "chat": cmd_chat, "run": cmd_run, "ingest": cmd_ingest, "config": cmd_config,
     "provider": cmd_provider, "persona": cmd_persona,
-    "memory": cmd_memory, "session": cmd_session, "skill": cmd_skill,
+    "memory": cmd_memory, "profile": cmd_profile, "session": cmd_session, "skill": cmd_skill,
     "plugin": cmd_plugin, "task": cmd_task, "watch": cmd_watch,
     "daemon": cmd_daemon, "doctor": cmd_doctor, "init": cmd_init, "diary": cmd_diary,
     "status": cmd_status,

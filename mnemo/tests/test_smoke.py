@@ -1177,6 +1177,18 @@ class TestTaskHistory(unittest.TestCase):
         tmp.cleanup()
 
 
+class TestProfileCLI(unittest.TestCase):
+    def test_set_get(self):
+        import types as _types
+        from mnemo.cli import cmd_profile
+        home = tempfile.mkdtemp()
+        cmd_profile(_types.SimpleNamespace(home=home, action="set", key="name",
+                                           value="大硕", provider=None, model=None))
+        m = Memory(Path(home) / "mnemo.db")
+        self.assertEqual(m.get_profile("name"), "大硕")
+        m.close()
+
+
 class TestDiary(unittest.TestCase):
     def test_episodes_since(self):
         tmp = tempfile.TemporaryDirectory()
