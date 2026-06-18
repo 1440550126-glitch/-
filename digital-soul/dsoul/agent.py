@@ -277,7 +277,9 @@ class Agent:
                 return result
 
         # --- 报喜：家人有了好消息，由衷替TA高兴（并记进里程碑）---
-        if action is None and who.get("obey"):
+        # 排除"送什么礼/买什么礼"这类求助——那是要送礼参考，不是报喜
+        if action is None and who.get("obey") and not any(
+                k in (utterance or "") for k in ("送什么", "送啥", "买什么礼", "什么礼物", "挑个礼")):
             from .celebrate import detect_good_news
             if detect_good_news(utterance):
                 txt = self.celebrate_news(utterance, name=who.get("name", ""))
@@ -753,6 +755,26 @@ class Agent:
             if txt:
                 result["reply"] = txt
                 self._log_journal(who, utterance, txt, "proverb")
+                return result
+
+        # --- 一起回忆（"还记得那回吗" / "想想以前"）：翻出和你的旧时光 ---
+        if action is None and who.get("obey"):
+            from .memory_lane import is_recall_invite
+            if is_recall_invite(utterance):
+                txt = self.recollect_with(who.get("name"), seed=utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "memory_lane")
+                    return result
+
+        # --- 送礼参考（"送爸什么礼物好" / "买什么礼"）---
+        if action is None and who.get("obey") and any(
+                k in (utterance or "") for k in ("送什么礼", "送啥礼", "买什么礼", "买啥礼",
+                                                 "送什么好", "挑个礼物", "送点什么", "送TA什么")):
+            txt = self.suggest_gift(utterance)
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "gift")
                 return result
 
         # --- 传统节日（"今天是什么节" / "端午有什么讲究"）---
@@ -1701,6 +1723,27 @@ class Agent:
     def recite_proverbs(self, utterance="") -> str:
         from .proverbs import match_theme, recite
         return recite(match_theme(utterance))
+
+    # ---------- 一起回忆 / 送礼参考 ----------
+    def recollect_with(self, person, seed="") -> str:
+        """翻出一段和这个人有关的旧时光，说得有温度。"""
+        from .memory_lane import recollect
+        if self.memory is None or not person:
+            return ""
+        mems = [it["text"] for _, it in self.memory.recall(person, k=4)]
+        return recollect(mems, person=person, seed=seed or person)
+
+    def suggest_gift(self, utterance) -> str:
+        """按关系/喜好/场合，给几个送礼主意。"""
+        from .family import find_member
+        from .gift_ideas import detect_occasion, gift_ideas
+        m = find_member(self.family, utterance) if self.family else None
+        relation = (m.get("relation") if m else "") or (utterance or "")
+        likes = (m.get("likes") if m else None) or []
+        if not m and getattr(self, "spouse", None) and any(
+                k in (utterance or "") for k in ("老伴", "老婆", "老公", "爱人", "媳妇")):
+            relation = self.spouse.get("relation", "老伴")
+        return gift_ideas(relation=relation, likes=likes, occasion=detect_occasion(utterance))
 
     # ---------- 宽慰忧虑 / 小确幸 ----------
     def comfort_worry(self, utterance, name="") -> str:
