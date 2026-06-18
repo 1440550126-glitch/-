@@ -40,7 +40,8 @@ class Agent:
                  shopping=None, mannerisms=None, heirlooms=None,
                  health=None, favors=None, stories=None, teachings=None,
                  spouse=None, preferences=None, humor=None,
-                 medications=None, safety=None, appointments=None) -> None:
+                 medications=None, safety=None, appointments=None,
+                 opinions=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -98,6 +99,7 @@ class Agent:
         self.preferences = preferences or {}                      # 喜好脾性（爱吃/偏爱/讨厌，答得稳）
         self.humor = humor or {}                                  # 幽默：段子库（讲过的轮换）
         self._told_jokes: set = set()                             # 已讲过的段子（去重）
+        self.opinions = opinions or {}                            # 对人生话题的一贯看法（有主见）
         self.medications = medications                            # 用药守护（按时/续药/吃没吃）
         self.safety = safety or {}                                # 居家安全清单（睡前过一遍）
         self.appointments = appointments                          # 就医/约定提醒
@@ -646,6 +648,26 @@ class Agent:
                     result["reply"] = txt
                     self._log_journal(who, ut, txt, "teaching")
                     return result
+
+        # --- 主见（"你怎么看熬夜" / "你觉得买房好不好"）：一贯的看法 ---
+        if action is None and who.get("obey") and getattr(self, "opinions", None):
+            from .opinions import is_opinion_query, match_topic
+            if is_opinion_query(utterance) and match_topic(self.opinions, utterance):
+                op = self.opine_on(utterance)
+                if op:
+                    result["reply"] = op
+                    self._log_journal(who, utterance, op, "opinion")
+                    return result
+
+        # --- 内心活动（"你在想什么" / "想啥呢"）：把此刻心里的活动说出来 ---
+        if action is None and who.get("obey") and any(
+                k in (utterance or "") for k in ("你在想什么", "想啥呢", "想什么呢",
+                                                 "在想啥", "想什么呢", "发什么呆")):
+            m = self.muse()
+            if m:
+                result["reply"] = m
+                self._log_journal(who, utterance, m, "muse")
+                return result
 
         # --- 脾性喜好（"你爱吃什么" / "你讨厌啥"）：答得稳，像有自己口味的人 ---
         if action is None and who.get("obey") and getattr(self, "preferences", None):
@@ -1589,6 +1611,23 @@ class Agent:
     def chitchat(self, utterance) -> str:
         from .smalltalk import smalltalk_reply
         return smalltalk_reply(utterance, seed=utterance)
+
+    # ---------- 内心活动 / 主见 ----------
+    def muse(self, now=None) -> str:
+        """闲下来心里冒出的一句（惦记着家人、随时段流动）。"""
+        from datetime import datetime
+        from .companion import time_of_day
+        from .family import members
+        from .inner_life import idle_musing
+        now = now or datetime.now()
+        people = [m["name"] for m in members(self.family)
+                  if m.get("name") and m.get("relation") != "本人"][:4]
+        return idle_musing(people=people, tod=time_of_day(now), seed=now.strftime("%H%M"))
+
+    def opine_on(self, utterance) -> str:
+        """对人生话题给出一贯的看法。"""
+        from .opinions import opine
+        return opine(getattr(self, "opinions", None), utterance)
 
     # ---------- 守护：用药 / 居家安全 / 就医 ----------
     def take_med(self, name, now=None) -> str:

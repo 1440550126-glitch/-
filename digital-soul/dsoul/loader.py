@@ -25,6 +25,7 @@ from .mannerisms import load_mannerisms
 from .medication import MedBook
 from .memory import Memory
 from .notes import NoteBook
+from .opinions import collect_opinions
 from .perception import build_perception
 from .preferences import collect_preferences
 from .predict import Calibration
@@ -147,7 +148,9 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                                      seed=_load_yaml(base / "config" / "medications.yaml")),
                  safety=_load_yaml(base / "config" / "safety.yaml"),
                  appointments=AppointmentBook(base / "data" / "appointments.json",
-                                              seed=_load_yaml(base / "config" / "appointments.yaml")))
+                                              seed=_load_yaml(base / "config" / "appointments.yaml")),
+                 opinions=collect_opinions(
+                     _load_yaml(base / "config" / "opinions.yaml"), identity))
 
 
 def _seed_memory(base: Path, memory) -> None:
