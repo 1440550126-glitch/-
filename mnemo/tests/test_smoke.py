@@ -582,6 +582,27 @@ class TestSyncAndMarket(unittest.TestCase):
         tmp.cleanup()
 
 
+class TestExamplePlugins(unittest.TestCase):
+    def test_echo_provider_plugin(self):
+        import shutil
+        tmp = tempfile.TemporaryDirectory()
+        cfg = load_config(tmp.name)
+        src = Path(__file__).resolve().parents[1] / "examples" / "plugins" / "echo-provider"
+        shutil.copytree(src, Path(cfg.plugins_dir) / "echo-provider")
+        reg = build_default_registry()
+        PluginManager(cfg, reg, SkillRegistry(cfg)).load_all()
+        # 插件注入的工具可用
+        self.assertIn("shout", reg.names())
+        self.assertEqual(reg.run("shout", {"text": "hi"}, ToolContext()), "HI!!!")
+        # 插件注册的自定义 Provider 可被构建
+        from mnemo.providers import REGISTRY, build_provider
+        self.assertIn("myecho", REGISTRY)
+        cfg.set("provider", "myecho")
+        prov = build_provider(cfg)
+        self.assertEqual(prov.name, "myecho")
+        tmp.cleanup()
+
+
 class TestSandboxMediaVoice(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
