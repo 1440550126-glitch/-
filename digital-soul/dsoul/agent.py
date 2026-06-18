@@ -337,6 +337,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "comfort_fear")
                     return result
 
+        # --- 老来的宽慰（高优先）：怕成累赘/没用了/记性差，接住并给一句挺直腰板的暖 ---
+        if action is None and who.get("obey"):
+            from .dignity import reassure_dignity, senses_aging_worry
+            if senses_aging_worry(utterance):
+                txt = reassure_dignity(utterance, name=who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="爱", topic="宽慰")
+                    self._log_journal(who, utterance, txt, "dignity")
+                    return result
+
         # --- 和事佬：家人闹别扭，不偏帮、顺顺气、搭个台阶 ---
         if action is None and who.get("obey"):
             from .mediate import senses_conflict
