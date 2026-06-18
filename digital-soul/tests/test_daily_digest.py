@@ -11,10 +11,12 @@ from dsoul.daily_digest import compose, gather, morning_digest  # noqa: E402
 
 
 def test_compose_orders_and_joins():
-    parts = {"festival": "今天是端午", "weather": "天凉加衣", "meds": "该吃降压药"}
+    parts = {"festival": "今天是端午", "weather": "天凉加衣", "meds": "该吃降压药",
+             "chores": "今天的分工：小明—买菜"}
     s = compose(parts, greeting="早呀，")
     assert s.startswith("早呀，")
     assert s.index("端午") < s.index("天凉") < s.index("降压药")   # 节日→天气→药 的顺序
+    assert "今天的分工" in s and s.index("降压药") < s.index("分工")  # 药后接分工
 
 
 def test_compose_empty():

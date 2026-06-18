@@ -39,13 +39,16 @@ def gather(agent, now=None) -> dict:
     d["habits"] = _try(lambda: ("今天的" + "、".join(agent.habits_book.pending(now)) + "还没打卡")
                        if getattr(agent, "habits_book", None) is not None
                        and agent.habits_book.pending(now) else "")
+    d["chores"] = _try(lambda: agent.board.describe()
+                       if getattr(agent, "board", None) is not None
+                       and agent.board.pending() else "")
     return d
 
 
 def compose(parts, greeting="") -> str:
     """把要点串成一段连贯的提要。"""
     order = ["festival", "weather", "birthday", "anniversary", "meds", "appts",
-             "wellness", "plants", "touch", "habits"]
+             "chores", "wellness", "plants", "touch", "habits"]
     body = [str(parts.get(k, "")).strip() for k in order]
     body = [b for b in body if b]
     if not body:
