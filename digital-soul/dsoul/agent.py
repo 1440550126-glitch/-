@@ -121,6 +121,7 @@ class Agent:
         self.touch = touch                                        # 常联系：别让亲情淡了
         self._touch_reminded_day = None                           # 当天是否已提醒联系（去重）
         self.understanding = understanding                        # 我眼里的你：对每个人渐渐形成的理解
+        self._reached: set = set()                                # 当天已主动牵挂过的人（去重）
         self._noticed: set = set()                                # 已点破过的"门道"（当天去重）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
@@ -2231,6 +2232,45 @@ class Agent:
         if self.understanding is None:
             return ""
         return self.understanding.portrait(name)
+
+    def reach_out_intents(self, now=None, within_days=3, max_n=2) -> list:
+        """自己琢磨着该主动找谁：有阵子没见 + 上回有心事/关系近。返回 [(name, 话), ...]。"""
+        from datetime import date, datetime
+        from .reach_out import compose, worth_reaching
+        if self.social is None:
+            return []
+        now = now or datetime.now()
+        today = now.date().isoformat() if hasattr(now, "date") else date.today().isoformat()
+        ts = now.timestamp() if hasattr(now, "timestamp") else None
+        try:
+            cooled = self.social.cooled(days=within_days, now=ts)
+        except Exception:
+            cooled = []
+        out = []
+        for name, days in cooled:
+            if (today, name) in self._reached:
+                continue
+            warmth = 0.5
+            try:
+                warmth = self.social.record(name).get("warmth", 0.5)
+            except Exception:
+                pass
+            concern = None
+            if self.understanding is not None:
+                cs = self.understanding.top_concerns(name, 1)
+                concern = cs[0] if cs else None
+            if not worth_reaching(days, concern=concern, warmth=warmth, threshold_days=within_days):
+                continue
+            relation = ""
+            try:
+                relation = self.authority.resolve(name).get("relation", "")
+            except Exception:
+                relation = ""
+            self._reached.add((today, name))
+            out.append((name, compose(name, days, concern=concern, relation=relation)))
+            if len(out) >= max_n:
+                break
+        return out
 
     # ---------- 今天提要（整合各项主动信息）----------
     def today_digest(self, now=None) -> str:

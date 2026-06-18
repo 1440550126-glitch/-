@@ -231,6 +231,14 @@ def think_loop(agent, minutes: float) -> None:
             continue
         for notice in out.get("notices", []):
             print(f"[自主] {notice}", flush=True)
+        # 主动牵挂：自己琢磨着谁有阵子没露面、上回有心事，捎句话过去
+        try:
+            intents = agent.reach_out_intents()
+        except Exception as e:
+            print(f"[牵挂] 出错：{e}", flush=True)
+            intents = []
+        for _name, msg in intents:
+            print(f"[牵挂] {msg}", flush=True)
 
 
 def main() -> None:
