@@ -219,6 +219,18 @@ class Scheduler:
                             mem.summarize_session(s["session"], prov)
                         except Exception:  # noqa: BLE001
                             pass
+        # 自动日记：到点且当天未写过则写一篇
+        if cfg and cfg.get("diary.auto", False):
+            now_dt = datetime.fromtimestamp(now)
+            today = now_dt.date().isoformat()
+            if now_dt.hour >= int(cfg.get("diary.hour", 22)) \
+                    and mem.get_profile("last_diary", "") != today:
+                try:
+                    if mem.write_diary(getattr(self.agent, "provider", None)):
+                        self.log("📔 已自动写下今日日记")
+                except Exception:  # noqa: BLE001
+                    pass
+                mem.set_profile("last_diary", today)
 
     def _latest_mtime(self, path: Path) -> float:
         if path.is_file():

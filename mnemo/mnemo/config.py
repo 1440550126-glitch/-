@@ -47,6 +47,8 @@ DEFAULTS: dict[str, Any] = {
     "watch": [],
     # 剧本：命名的多步例程，按序执行且共享会话上下文。{名: [步骤prompt, ...]}
     "playbooks": {},
+    # 自动日记：守护进程每天到点(hour)把当天对话沉淀为日记（需在线后端）
+    "diary": {"auto": False, "hour": 22},
     # MCP：接入任意 Model Context Protocol 服务，把其工具并入 Mnemo
     # servers 形如 {"名字": {"command": "npx", "args": [...], "env": {...}}}
     "mcp": {"servers": {}},

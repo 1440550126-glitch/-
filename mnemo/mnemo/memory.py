@@ -272,6 +272,32 @@ class Memory:
             (session, limit)).fetchall()
         return [dict(r) for r in rows]
 
+    def write_diary(self, provider, days: int = 1) -> str | None:
+        """把近 days 天的对话沉淀成日记并入库。返回日记文本；无对话返回 None。
+
+        离线后端用启发式（话题+轮数）；在线后端让模型撰写。可能抛 ProviderError，调用方自理。
+        """
+        import datetime as _dt
+        start = (_dt.datetime.now() - _dt.timedelta(days=days - 1)).replace(
+            hour=0, minute=0, second=0, microsecond=0).timestamp()
+        eps = self.episodes_since(start)
+        if not eps:
+            return None
+        if getattr(provider, "name", "") == "offline":
+            topics = "、".join(t for t, _ in self.top_topics(8))
+            text = f"今天有 {len(eps)} 轮对话" + (f"，聊到：{topics}" if topics else "")
+        else:
+            convo = "\n".join(f"你：{e['user']}\nMnemo：{e['assistant']}" for e in eps)[:6000]
+            from .providers import Message
+            text = (provider.chat([Message(
+                "user", "把下面与用户的互动温暖地写成一段简短日记（120 字内，第三人称），"
+                "提炼当天要点与值得长期记住的事：\n" + convo)], max_tokens=400) or "").strip()
+        if not text:
+            return None
+        date = _dt.date.today().isoformat()
+        self.add_fact(f"[{date} 日记] {text}", kind="diary", importance=3, source=f"diary:{date}")
+        return text
+
     def search_episodes(self, query: str, limit: int = 10) -> list[dict]:
         """按关键词在历史对话里检索（CJK 友好打分），用于"我们之前聊过 X 吗"。"""
         q = set(_tokens(query))

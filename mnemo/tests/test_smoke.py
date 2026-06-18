@@ -1295,6 +1295,17 @@ class TestDiary(unittest.TestCase):
         mem.close()
         tmp.cleanup()
 
+    def test_write_diary_offline(self):
+        tmp = tempfile.TemporaryDirectory()
+        mem = Memory(Path(tmp.name) / "m.db")
+        self.assertIsNone(mem.write_diary(OfflineProvider()))     # 无对话 → None
+        mem.add_episode("default", "我今天去爬山了", "棒")
+        text = mem.write_diary(OfflineProvider())
+        self.assertTrue(text and "对话" in text)
+        self.assertTrue(any(f["kind"] == "diary" for f in mem.all_facts()))
+        mem.close()
+        tmp.cleanup()
+
     def test_diary_cli_stores_fact(self):
         import types as _types
         from mnemo.cli import cmd_diary

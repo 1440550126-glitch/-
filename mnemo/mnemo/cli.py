@@ -1023,28 +1023,13 @@ def cmd_diary(args):
         print("记忆未启用"); return 1
     import datetime as _dt
     days = max(1, getattr(args, "days", 1))
-    start = (_dt.datetime.now() - _dt.timedelta(days=days - 1)).replace(
-        hour=0, minute=0, second=0, microsecond=0).timestamp()
-    eps = m.episodes_since(start)
-    if not eps:
+    try:
+        text = m.write_diary(app.provider, days=days)
+    except ProviderError as e:
+        print(red(f"[模型调用失败] {e}")); return 1
+    if not text:
         print(dim("这段时间还没有对话")); return 0
-    if app.provider.name == "offline":
-        # 离线启发式日记：列话题与轮数，避免存入兜底占位文本
-        topics = "、".join(t for t, _ in m.top_topics(8))
-        text = f"今天有 {len(eps)} 轮对话" + (f"，聊到：{topics}" if topics else "")
-    else:
-        convo = "\n".join(f"你：{e['user']}\nMnemo：{e['assistant']}" for e in eps)[:6000]
-        from .providers import Message
-        try:
-            text = app.provider.chat([Message(
-                "user", "把下面与用户的互动温暖地写成一段简短日记（120 字内，第三人称），"
-                "提炼当天要点与值得长期记住的事：\n" + convo)], max_tokens=400)
-        except ProviderError as e:
-            print(red(f"[模型调用失败] {e}")); return 1
-    date = _dt.date.today().isoformat()
-    text = (text or "").strip()
-    m.add_fact(f"[{date} 日记] {text}", kind="diary", importance=3, source=f"diary:{date}")
-    print(bold(f"📔 {date} 日记") + "\n" + text)
+    print(bold(f"📔 {_dt.date.today().isoformat()} 日记") + "\n" + text)
     return 0
 
 
