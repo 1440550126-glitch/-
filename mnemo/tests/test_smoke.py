@@ -54,6 +54,19 @@ class TestMemory(unittest.TestCase):
         self.mem.close()
         self.tmp.cleanup()
 
+    def test_observe_extracts_new_patterns(self):
+        self.mem.observe("我的生日是 5 月 20 日", "好的")
+        self.mem.observe("我住在杭州", "记住了")
+        self.mem.observe("我的目标是今年跑完马拉松", "加油")
+        self.mem.observe("我女儿叫朵朵", "真可爱")
+        facts = [f["text"] for f in self.mem.all_facts()]
+        self.assertTrue(any("生日" in f for f in facts))
+        self.assertTrue(any("杭州" in f for f in facts))
+        self.assertTrue(any("马拉松" in f for f in facts))
+        self.assertTrue(any("女儿" in f and "朵朵" in f for f in facts))
+        prof = self.mem.profile_summary()
+        self.assertIn("马拉松", prof)             # goal 进画像
+
     def test_fact_and_recall(self):
         self.mem.add_fact("用户在做一个终端 AI 助理项目 Mnemo", importance=4)
         self.mem.add_fact("用户喜欢喝美式咖啡", kind="preference", importance=4)

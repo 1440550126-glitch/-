@@ -338,6 +338,13 @@ class Memory:
         (r"我(?:很)?讨厌\s*([^\s，。,.!！?？]{1,30})", "用户讨厌{0}", 4, "preference", False),
         (r"我不喜欢\s*([^\s，。,.!！?？]{1,30})", "用户不喜欢{0}", 4, "preference", False),
         (r"我(?:在做|从事|是)\s*([^\s，。,.!！?？]{1,30})", "用户职业/身份：{0}", 4, "identity", False),
+        # 高精度补充：生日（限日期格式）、居住地、目标、家人称谓
+        (r"我的?生日(?:是|在)?\s*([0-9]{1,2}\s*月\s*[0-9]{1,2}\s*[日号]|"
+         r"[0-9]{4}[-./][0-9]{1,2}[-./][0-9]{1,2})", "用户生日：{0}", 5, "identity", False),
+        (r"我(?:住在|家在|来自)\s*([^\s，。,.!！?？]{2,20})", "用户所在地：{0}", 4, "identity", False),
+        (r"我的?目标(?:是|为)\s*([^，。,.!！?？]{2,40})", "用户的目标：{0}", 4, "goal", False),
+        (r"我(?:的)?(老婆|老公|妻子|丈夫|女儿|儿子|妈妈|爸爸|母亲|父亲)(?:叫|是|名叫)"
+         r"\s*([^\s，。,.!！?？]{1,12})", "用户的{0}：{1}", 5, "identity", False),
     ]
 
     def observe(self, user_text: str, assistant_text: str, session: str = "default") -> list[str]:
@@ -349,9 +356,10 @@ class Memory:
         for pat, tmpl, imp, kind, is_name in self._PREF_PATTERNS:
             m = re.search(pat, user_text)
             if m:
-                val = m.group(1).strip()
+                groups = [g.strip() for g in m.groups()]
+                val = groups[0]
                 if 1 <= len(val) <= 30:
-                    fact = tmpl.format(val)
+                    fact = tmpl.format(*groups)
                     self.add_fact(fact, kind=kind, importance=imp, source="observed")
                     learned.append(fact)
                     if is_name:
@@ -370,10 +378,10 @@ class Memory:
         lines: list[str] = []
         if p.get("name"):
             lines.append(f"- 称呼：{p['name']}")
-        prefs = [f["text"] for f in self.all_facts(limit=8)
-                 if f["kind"] in ("preference", "identity")]
+        prefs = [f["text"] for f in self.all_facts(limit=12)
+                 if f["kind"] in ("preference", "identity", "goal")]
         if prefs:
-            lines.append("- 已知偏好/身份：" + "；".join(prefs[:6]))
+            lines.append("- 已知偏好/身份：" + "；".join(prefs[:8]))
         topics = [t for t, _ in self.top_topics(6) if len(t) >= 2]
         if topics:
             lines.append("- 常聊话题：" + "、".join(topics))
