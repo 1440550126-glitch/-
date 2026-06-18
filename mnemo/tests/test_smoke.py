@@ -1291,7 +1291,7 @@ for line in sys.stdin:
     m=json.loads(line); i=m.get("id"); method=m.get("method")
     if method=="initialize":
         send({"jsonrpc":"2.0","id":i,"result":{"protocolVersion":"2024-11-05",
-            "capabilities":{"tools":{}},"serverInfo":{"name":"fake","version":"9.9"}}})
+            "capabilities":{"tools":{},"resources":{}},"serverInfo":{"name":"fake","version":"9.9"}}})
     elif method=="notifications/initialized":
         pass
     elif method=="tools/list":
@@ -1299,6 +1299,12 @@ for line in sys.stdin:
             "description":"Echo back text","inputSchema":{"type":"object",
             "properties":{"text":{"type":"string","description":"text to echo"}},
             "required":["text"]}}]}})
+    elif method=="resources/list":
+        send({"jsonrpc":"2.0","id":i,"result":{"resources":[
+            {"uri":"mem://note","name":"note"}]}})
+    elif method=="resources/read":
+        send({"jsonrpc":"2.0","id":i,"result":{"contents":[
+            {"uri":m.get("params",{}).get("uri"),"text":"资源内容X"}]}})
     elif method=="tools/call":
         p=m.get("params",{}); a=p.get("arguments",{})
         if p.get("name")=="echo":
@@ -1372,6 +1378,25 @@ class TestMCP(unittest.TestCase):
         a = tool_alias("my.server", "read-file")
         self.assertEqual(a, "mcp__my_server__read-file")
         self.assertTrue(_re.fullmatch(r"[A-Za-z0-9_-]+", a))   # 无点号，原生可用
+
+    def test_resources_registered_and_readable(self):
+        from mnemo.mcp import MCPManager
+        cfg = load_config(self.tmp.name)
+        cfg.set("mcp.servers", {"fake": {"command": sys.executable,
+                                          "args": [str(self.server)]}})
+        reg = build_default_registry()
+        mgr = MCPManager(cfg)
+        try:
+            mgr.connect_all(reg)
+            alias = "mcp__fake__read_resource"
+            self.assertIn(alias, reg.names())
+            ctx = ToolContext(cwd=self.tmp.name, config=cfg)
+            listing = reg.run(alias, {}, ctx)            # 不传 uri → 列资源
+            self.assertIn("mem://note", listing)
+            content = reg.run(alias, {"uri": "mem://note"}, ctx)
+            self.assertEqual(content, "资源内容X")
+        finally:
+            mgr.close_all()
 
 
 if __name__ == "__main__":

@@ -77,6 +77,7 @@ class MCPClient:
         self._send_lock = threading.Lock()
         self.tools: list[dict] = []
         self.server_info: dict = {}
+        self.capabilities: dict = {}
 
     # ---- 进程与 IO ----
     def start(self) -> "MCPClient":
@@ -97,6 +98,7 @@ class MCPClient:
             "clientInfo": {"name": "mnemo", "version": "0.1.0"},
         })
         self.server_info = init.get("serverInfo", {}) if isinstance(init, dict) else {}
+        self.capabilities = init.get("capabilities", {}) if isinstance(init, dict) else {}
         self._notify("notifications/initialized", {})
         return self
 
@@ -177,6 +179,22 @@ class MCPClient:
         text = "\n".join(p for p in parts if p).strip() or "(无输出)"
         return f"[MCP错误] {text}" if res.get("isError") else text
 
+    def list_resources(self) -> list[dict]:
+        res = self._request("resources/list", {})
+        return res.get("resources", []) if isinstance(res, dict) else []
+
+    def read_resource(self, uri: str) -> str:
+        res = self._request("resources/read", {"uri": uri})
+        parts: list[str] = []
+        for c in (res.get("contents") or []):
+            if not isinstance(c, dict):
+                continue
+            if c.get("text"):
+                parts.append(c["text"])
+            elif c.get("blob"):
+                parts.append(f"(二进制资源 {c.get('mimeType', '')}，{len(c['blob'])} B base64)")
+        return "\n".join(parts).strip() or "(空资源)"
+
     def close(self) -> None:
         if not self.proc:
             return
@@ -200,6 +218,19 @@ class MCPClient:
 def _make_caller(client: MCPClient, tool_name: str):
     def _call(args, ctx):
         return client.call_tool(tool_name, args or {})
+    return _call
+
+
+def _make_resource_caller(client: MCPClient):
+    def _call(args, ctx):
+        uri = (args or {}).get("uri", "")
+        if not uri:
+            res = client.list_resources()
+            if not res:
+                return "(该服务无可读资源)"
+            return "可读资源（再传 uri 读取）：\n" + "\n".join(
+                f"- {r.get('uri')} {r.get('name', '')}" for r in res[:50])
+        return client.read_resource(uri)
     return _call
 
 
@@ -252,6 +283,15 @@ class MCPManager:
                 _params_from_schema(t.get("inputSchema")),
                 _make_caller(client, tname),   # 闭包持有真实 MCP 工具名，回调时用它
                 danger=True,  # 外部服务有副作用，按高危对待
+            )
+        # 若服务暴露资源能力，注册一个"列资源/读资源"工具（不传 uri=列出，传 uri=读取）
+        if client.capabilities.get("resources") is not None:
+            registry.add(
+                tool_alias(name, "read_resource"),
+                f"[MCP:{name}] 列出或读取该服务的资源（不传 uri 则列出可读资源）",
+                {"uri": "资源 URI；留空则列出可读资源"},
+                _make_resource_caller(client),
+                danger=False,  # 读资源是只读
             )
         self.clients[name] = client
         return len(tools)
