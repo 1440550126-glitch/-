@@ -38,7 +38,7 @@ class Agent:
                  calendar=None, capsules=None, notes=None,
                  recipes=None, sayings=None, social=None, goals=None,
                  shopping=None, mannerisms=None, heirlooms=None,
-                 health=None, favors=None) -> None:
+                 health=None, favors=None, stories=None, teachings=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -88,6 +88,9 @@ class Agent:
         self.heirlooms = heirlooms or []                          # 遗物/信物的故事与归属
         self.health = health or {}                                # 家族病史 / 过敏（救命的知识传承）
         self.favors = favors                                      # 人情往来账（礼尚往来）
+        self.stories = stories or {}                              # 讲古：家史/往事故事库（配置）
+        self._told_stories: set = set()                           # 已讲过的故事（轮着讲不重样）
+        self.teachings = teachings or {}                          # 言传身教：道理 + 手艺
         self.social = social                                      # 社交记忆（对每人的亲疏冷暖）
         self.goals = goals                                        # 心愿与目标
         self.shopping = shopping                                  # 采买清单
@@ -480,6 +483,29 @@ class Agent:
                 result["reply"] = txt
                 self._log_journal(who, utterance, txt, "favors")
                 return result
+
+        # --- 讲古 / 故事会（"讲个故事" / "想当年" / "讲个睡前故事"）---
+        if action is None and who.get("obey"):
+            us = utterance or ""
+            if any(k in us for k in ("讲个故事", "讲故事", "讲古", "想当年", "讲讲以前",
+                                     "讲讲过去", "说段往事", "睡前故事", "讲个事听")):
+                bed = any(k in us for k in ("睡前", "睡觉", "哄睡", "哄我睡"))
+                txt = self.tell_story(topic=us, bedtime=bed)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, us, txt, "story")
+                    return result
+
+        # --- 言传身教（"教我做人" / "教我包饺子" / "你有什么手艺"）---
+        if action is None and who.get("obey") and getattr(self, "teachings", None):
+            ut = utterance or ""
+            if any(k in ut for k in ("教我", "教教", "做人的道理", "做人的理", "你那手艺",
+                                     "什么手艺", "什么本事", "传授", "你的本事", "怎么为人")):
+                txt = self.teach(ut)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, ut, txt, "teaching")
+                    return result
 
         # --- 传统节日（"今天是什么节" / "端午有什么讲究"）---
         if action is None and who.get("obey"):
@@ -1125,6 +1151,55 @@ class Agent:
         if self.favors is None:
             return ""
         return self.favors.remind(who)
+
+    # ---------- 讲古 / 家庭故事会 ----------
+    def _all_stories(self) -> list:
+        from .storytelling import collect_stories
+        mem = self.memory.items if self.memory is not None else []
+        return collect_stories(self.stories, mem)
+
+    def tell_story(self, topic=None, bedtime=False) -> str:
+        """挑一个还没讲过的故事娓娓道来；讲完记下，下回换一个。"""
+        from .storytelling import pick_story, tell
+        stories = self._all_stories()
+        if not stories:
+            return ""
+        s = pick_story(stories, topic=topic, exclude=self._told_stories)
+        if not s:
+            return ""
+        self._told_stories.add(s["story"])
+        return tell(s, bedtime=bedtime)
+
+    def story_titles(self) -> list:
+        from .storytelling import titles
+        return titles(self._all_stories())
+
+    # ---------- 言传身教 ----------
+    def teach(self, query) -> str:
+        """教手艺或讲道理：先认手艺名，再认"道理/做人"类提问；都不沾就交给上层。"""
+        from .teaching import (collect_lessons, collect_skills, find_skill,
+                               lesson_on, skill_names, teach_lesson, teach_skill)
+        q = query or ""
+        if any(k in q for k in ("什么手艺", "什么本事", "会教我什么", "都会啥", "会点啥")):
+            names = skill_names(collect_skills(self.teachings))
+            return ("我会的有：" + "、".join(names) + "。想学哪样？") if names else ""
+        sk = find_skill(collect_skills(self.teachings), q)
+        if sk:
+            return teach_skill(sk)
+        lessons = collect_lessons(self.teachings)
+        if lessons and any(k in q for k in ("道理", "为人", "做人", "处世", "教我个",
+                                            "教个", "懂得", "的理")):
+            return teach_lesson(lesson_on(lessons, q))
+        return ""
+
+    def random_teaching(self) -> str:
+        """闲下来主动点拨一句道理（供主动场景调用）。"""
+        from .teaching import collect_lessons, teach_lesson
+        lessons = collect_lessons(self.teachings)
+        if not lessons:
+            return ""
+        import random
+        return teach_lesson(random.choice(lessons))
 
     def kinship(self, text) -> str:
         """算亲戚称呼："我爸的弟弟" → "该叫叔叔"。"""

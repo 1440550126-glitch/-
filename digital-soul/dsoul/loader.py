@@ -131,7 +131,9 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                      _load_yaml(base / "config" / "legacy.yaml")),
                  health=_load_yaml(base / "config" / "health.yaml"),
                  favors=FavorBook(base / "data" / "favors.json",
-                                  seed=_load_yaml(base / "config" / "favors.yaml")))
+                                  seed=_load_yaml(base / "config" / "favors.yaml")),
+                 stories=_load_yaml(base / "config" / "stories.yaml"),
+                 teachings=_load_yaml(base / "config" / "teachings.yaml"))
 
 
 def _seed_memory(base: Path, memory) -> None:
