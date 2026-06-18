@@ -32,6 +32,9 @@ def _agent():
     a.recipes = {"recipes": [{"name": "红烧肉", "steps": ["焯水", "上色"]}]}
     a.legacy = {"last_words": ["好好吃饭"], "precepts": ["多回家"]}
     a.mannerisms = {"particles": ["咯"], "address": {}, "openers": [], "closers": [], "dialect": {}}
+    a.spouse = {"name": "秀兰", "call": "老婆子", "met": "纺织厂相识",
+                "story": ["1975 结婚"], "promises": ["一起看天安门"], "married": "1975-10-01",
+                "endearments": [], "care": [], "self_call": "", "relation": "老伴", "rituals": []}
     a.memory = None
     fav = FavorBook(pathlib.Path(tempfile.mkdtemp()) / "f.json")
     fav.add("老王", 600, direction="收到")
@@ -62,7 +65,7 @@ def test_heritage_data_degrades_on_bare_agent():
 def test_heritage_html_contains_sections():
     html = heritage_html(heritage_data(_agent()))
     for token in ["家珍册", "张伯", "家谱", "怀表", "苦日子", "诚信", "包饺子",
-                  "红烧肉", "高血压", "老王", "家训"]:
+                  "红烧肉", "高血压", "老王", "家训", "我们", "纺织厂", "天安门"]:
         assert token in html, token
     assert html.strip().startswith("<!doctype html>")
 

@@ -65,8 +65,17 @@ def heritage_data(agent) -> dict:
         from .mannerisms import describe
         return describe(getattr(agent, "mannerisms", None))
 
+    def _spouse():
+        from .spouse import love_story, our_promises
+        sp = getattr(agent, "spouse", None) or {}
+        if not sp:
+            return {}
+        return {"name": sp.get("name", ""), "call": sp.get("call", ""),
+                "story": love_story(sp), "promises": our_promises(sp)}
+
     return {
         "name": (getattr(agent, "identity", {}) or {}).get("name", "TA"),
+        "spouse": _try(_spouse, {}),
         "genealogy": _try(_gene, []),
         "heirlooms": _try(_heir, []),
         "health": _try(_health, {"conditions": [], "allergies": []}),
@@ -106,6 +115,16 @@ def heritage_html(data) -> str:
             f'<span class=gennames>{escape("、".join(g["names"]))}</span></div>'
             for g in gene)
         blocks.append(_section("👪 家谱", rows))
+
+    # 我们（夫妻）
+    sp = data.get("spouse") or {}
+    if sp.get("story") or sp.get("promises"):
+        s_inner = ""
+        if sp.get("story"):
+            s_inner += f"<p>{escape(sp['story'])}</p>"
+        if sp.get("promises"):
+            s_inner += "<div class=k>我们说好的</div>" + _ul(sp["promises"])
+        blocks.append(_section("💑 我们", s_inner))
 
     # 遗言 / 家训
     leg = data.get("legacy") or {}
