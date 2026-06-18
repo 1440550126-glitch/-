@@ -486,6 +486,15 @@ def cmd_session(args):
     m = app.memory
     if not m:
         print("记忆已禁用"); return 0
+    if args.action == "search":
+        hits = m.search_episodes(args.query, limit=args.limit)
+        if not hits:
+            print(dim("（没有匹配的历史对话）")); return 0
+        for e in hits:
+            ts = time.strftime("%m-%d %H:%M", time.localtime(e["created_at"]))
+            print(f"{dim(ts)} {dim('['+e['session']+']')} 你：{e['user'][:50]}")
+            print(dim(f"      Mnemo：{(e['assistant'] or '')[:60]}"))
+        return 0
     if args.action == "summarize":
         summ = m.summarize_session(args.session, app.provider)
         if summ:
@@ -1243,6 +1252,8 @@ def build_parser() -> argparse.ArgumentParser:
     sex2.add_argument("--out", default="session.md")
     ssm2 = pse2s.add_parser("summarize", help="把较早对话压缩为滚动摘要（长会话保持连贯）")
     ssm2.add_argument("session")
+    sse3 = pse2s.add_parser("search", help="在历史对话里按关键词检索")
+    sse3.add_argument("query"); sse3.add_argument("--limit", type=int, default=10)
 
     ps = sub.add_parser("skill", help="技能：学习/查看/管理")
     pss = ps.add_subparsers(dest="action", required=True)

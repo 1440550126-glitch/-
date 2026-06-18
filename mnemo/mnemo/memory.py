@@ -253,6 +253,21 @@ class Memory:
             (session, limit)).fetchall()
         return [dict(r) for r in rows]
 
+    def search_episodes(self, query: str, limit: int = 10) -> list[dict]:
+        """按关键词在历史对话里检索（CJK 友好打分），用于"我们之前聊过 X 吗"。"""
+        q = set(_tokens(query))
+        if not q:
+            return []
+        rows = self.db.execute("SELECT * FROM episodes ORDER BY id DESC LIMIT 2000").fetchall()
+        scored = []
+        for r in rows:
+            toks = set(_tokens((r["user"] or "") + " " + (r["assistant"] or "")))
+            hit = len(q & toks)
+            if hit:
+                scored.append((hit, r))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [dict(r) for _, r in scored[:limit]]
+
     def episodes_since(self, ts: float, limit: int = 2000) -> list[dict]:
         """取某时间点以来的全部对话（跨会话），用于生成日记/回顾。"""
         rows = self.db.execute(

@@ -934,6 +934,13 @@ class TestMemoryManagement(unittest.TestCase):
         self.mem.add_episode("s2", "a", "b")
         self.assertIsNone(self.mem.summarize_session("s2", FakeProvider(["x"]), keep_recent=4))
 
+    def test_search_episodes(self):
+        self.mem.add_episode("s1", "我想学习冲浪", "冲浪很有趣")
+        self.mem.add_episode("s1", "今天天气不错", "是的")
+        hits = self.mem.search_episodes("冲浪")
+        self.assertEqual(len(hits), 1)
+        self.assertIn("冲浪", hits[0]["user"])
+
     def test_sessions_listing(self):
         self.mem.add_episode("s1", "你好", "嗨")
         self.mem.add_episode("s1", "再问", "再答")
