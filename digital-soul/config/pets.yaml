@@ -1,0 +1,12 @@
+# 养宠：家里的猫猫狗狗，记着几点喂、要不要遛。到点分身会提醒。
+# 喂了/遛了说一声就记上。首次启动灌进 data/pets.json。
+#
+# pets:
+#   - name: 旺财
+#     kind: 狗
+#     feed_times: ["08:00", "18:00"]
+#     walk: true
+#   - name: 咪咪
+#     kind: 猫
+#     feed_times: ["09:00"]
+#     walk: false

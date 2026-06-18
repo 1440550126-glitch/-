@@ -35,6 +35,7 @@ from .messages import Messages
 from .notes import NoteBook
 from .opinions import collect_opinions
 from .perception import build_perception
+from .pets import PetBook
 from .plant_care import PlantBook
 from .preferences import collect_preferences
 from .predict import Calibration
@@ -178,7 +179,9 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  messages=Messages(base / "data" / "messages.json"),
                  vitals=VitalsLog(base / "data" / "vitals.json"),
                  board=FamilyBoard(base / "data" / "family_board.json"),
-                 growth=GrowthLog(base / "data" / "growth.json"))
+                 growth=GrowthLog(base / "data" / "growth.json"),
+                 pets=PetBook(base / "data" / "pets.json",
+                              seed=_load_yaml(base / "config" / "pets.yaml")))
 
 
 def _seed_memory(base: Path, memory) -> None:

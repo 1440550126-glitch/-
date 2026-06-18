@@ -44,7 +44,8 @@ class Agent:
                  opinions=None, joys=None, habits_book=None,
                  contacts=None, ledger=None, bedtime=None,
                  music=None, plants=None, touch=None, understanding=None,
-                 messages=None, vitals=None, board=None, growth=None) -> None:
+                 messages=None, vitals=None, board=None, growth=None,
+                 pets=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -128,6 +129,8 @@ class Agent:
         self.board = board                                        # 家庭共享·分工板（谁买菜/谁接孩子）
         self._chore_reminded: set = set()                         # 当天已提醒过的分工（去重）
         self.growth = growth                                      # 成长记录（孙辈的成长点滴）
+        self.pets = pets                                          # 养宠：喂食/遛弯提醒
+        self._pet_reminded: set = set()                           # 当天已提醒过的喂宠（去重）
         self._noticed: set = set()                                # 已点破过的"门道"（当天去重）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
@@ -1020,6 +1023,24 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, utterance, txt, "music")
+                    return result
+
+        # --- 养宠（"狗喂了" / "遛过旺财了" / "家里的宠物"）---
+        if action is None and who.get("obey") and self.pets is not None:
+            up = utterance or ""
+            if any(k in up for k in ("养的宠物", "家里的宠物", "小家伙", "我的猫", "我的狗",
+                                     "几只宠物")):
+                txt = self.pets_describe()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, up, txt, "pets")
+                    return result
+            if (("喂" in up and any(k in up for k in ("了", "过", "好", "完")))
+                    or ("遛" in up and ("了" in up or "过" in up))):
+                txt = self.pet_action(up)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, up, txt, "pet_action")
                     return result
 
         # --- 养花（"花浇过了" / "该浇水吗" / "养的花"）---
@@ -2347,6 +2368,42 @@ class Agent:
         if self.understanding is None:
             return ""
         return self.understanding.portrait(name)
+
+    # ---------- 养宠 ----------
+    def pet_action(self, utterance) -> str:
+        if self.pets is None:
+            return ""
+        u = utterance or ""
+        pet = next((p["name"] for p in self.pets.pets if p["name"] in u), None)
+        if "遛" in u and ("了" in u or "过" in u):
+            if pet:
+                self.pets.walked(pet)
+                return f"好，{pet}遛过了，记下了。"
+        if any(k in u for k in ("喂了", "喂过", "喂好", "喂完")):
+            if pet:
+                self.pets.fed(pet)
+                return f"好，{pet}喂过了，记下了。"
+            for p in self.pets.pets:
+                self.pets.fed(p["name"])
+            return "好，都喂过了，记下了。" if self.pets.pets else ""
+        return ""
+
+    def pets_describe(self) -> str:
+        return self.pets.describe() if self.pets is not None else ""
+
+    def pet_due_reminders(self, now=None) -> str:
+        """到点喂宠/该遛了，提醒一句，每天同一句只提一次（供守护循环）。"""
+        from datetime import datetime
+        if self.pets is None:
+            return ""
+        line = self.pets.reminders(now)
+        if not line:
+            return ""
+        key = ((now or datetime.now()).strftime("%Y-%m-%d %H"), line)
+        if key in self._pet_reminded:
+            return ""
+        self._pet_reminded.add(key)
+        return line
 
     # ---------- 成长记录 ----------
     def _child_in(self, utterance):

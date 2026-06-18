@@ -208,6 +208,16 @@ def trigger_loop(agent, mouth=None) -> None:
             print(f"[养花] {pw}", flush=True)
             if mouth is not None:
                 mouth.speak(pw, mood=_mood(agent), profile=profile)
+        # 养宠：到点喂食/该遛了，提醒一句
+        try:
+            pet = agent.pet_due_reminders()
+        except Exception as e:
+            print(f"[养宠] 出错：{e}", flush=True)
+            pet = ""
+        if pet:
+            print(f"[养宠] {pet}", flush=True)
+            if mouth is not None:
+                mouth.speak(pet, mood=_mood(agent), profile=profile)
         # 常联系：好久没联系的亲友，提醒一句（每天一次）
         try:
             kit = agent.touch_due_reminder()
