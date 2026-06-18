@@ -29,6 +29,7 @@ from .llm import build_router
 from .mannerisms import load_mannerisms
 from .medication import MedBook
 from .memory import Memory
+from .messages import Messages
 from .notes import NoteBook
 from .opinions import collect_opinions
 from .perception import build_perception
@@ -170,7 +171,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                                   seed=_load_yaml(base / "config" / "plants.yaml")),
                  touch=TouchLog(base / "data" / "keep_in_touch.json",
                                 seed=_load_yaml(base / "config" / "keep_in_touch.yaml")),
-                 understanding=Understanding(base / "data" / "understanding.json"))
+                 understanding=Understanding(base / "data" / "understanding.json"),
+                 messages=Messages(base / "data" / "messages.json"))
 
 
 def _seed_memory(base: Path, memory) -> None:

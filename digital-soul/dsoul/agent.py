@@ -43,7 +43,8 @@ class Agent:
                  medications=None, safety=None, appointments=None,
                  opinions=None, joys=None, habits_book=None,
                  contacts=None, ledger=None, bedtime=None,
-                 music=None, plants=None, touch=None, understanding=None) -> None:
+                 music=None, plants=None, touch=None, understanding=None,
+                 messages=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -122,6 +123,7 @@ class Agent:
         self._touch_reminded_day = None                           # 当天是否已提醒联系（去重）
         self.understanding = understanding                        # 我眼里的你：对每个人渐渐形成的理解
         self._reached: set = set()                                # 当天已主动牵挂过的人（去重）
+        self.messages = messages                                  # 捎话：替家人带话，等人来了主动捎到
         self._noticed: set = set()                                # 已点破过的"门道"（当天去重）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
@@ -853,6 +855,17 @@ class Agent:
                     self._log_journal(who, utterance, s, "chat_start")
                     return result
 
+        # --- 捎话（"等小明回来跟他说…" / "转告X：…"）：替你把话带给那个人 ---
+        if action is None and who.get("obey") and self.messages is not None and any(
+                k in (utterance or "") for k in ("转告", "告诉", "捎话", "带话", "跟他说", "跟她说",
+                                                 "等他回来", "等她回来", "给他带句", "给她带句",
+                                                 "替我跟", "帮我跟", "带个话", "捎个话")):
+            txt = self.leave_message(utterance, frm=who.get("name", ""))
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "message_leave")
+                return result
+
         # --- 我眼里的你（"你了解我吗" / "在你眼里我是怎样的人"）---
         if action is None and who.get("obey") and self.understanding is not None and any(
                 k in (utterance or "") for k in ("你了解我", "你懂我吗", "在你眼里我", "你眼里的我",
@@ -1505,6 +1518,10 @@ class Agent:
             fu = self.cheer_followup(who.get("name"))
             if fu:
                 text = f"{text} {fu}"
+        # 捎话：这人来了，把攒着要带给TA的话主动捎到
+        if who.get("known"):
+            for msg in self.deliver_messages(who.get("name")):
+                text = f"{text} 对了，{msg}"
         # 看出门道：从近来的对话里看出你反复的烦心事，温柔点破一句（当天同一桩只点一次）
         if who.get("obey"):
             obs = self.notice_about(who.get("name"))
@@ -2232,6 +2249,60 @@ class Agent:
         if self.understanding is None:
             return ""
         return self.understanding.portrait(name)
+
+    # ---------- 捎话 ----------
+    def _parse_message(self, utterance):
+        """从"等小明回来跟他说妈喊吃饭"里抽出 (收件人, 要带的话)。"""
+        from .family import members
+        u = utterance or ""
+        cands = []
+        for m in members(getattr(self, "family", {}) or {}):
+            cands += [m.get("name"), m.get("relation")]
+        try:
+            for p in self.authority.people.values():
+                cands += [p.get("name"), p.get("relation")]
+        except Exception:
+            pass
+        target = None
+        for nm in sorted({c for c in cands if c}, key=len, reverse=True):
+            if nm in u:
+                target = nm
+                break
+        if not target:                       # 配置里没有的人，也从句式里把收件人抠出来
+            import re
+            m = re.search(r"(?:转告|告诉|跟|给|捎话给|带话给|带个话给|带句话给|替我跟|帮我跟|等)"
+                          r"([一-鿿]{1,4}?)(?:说|讲|：|:|，|,|回来|带|捎|一声)", u)
+            if m:
+                target = m.group(1)
+        if not target:
+            return None
+        rest = u[u.find(target) + len(target):]
+        for lead in ("回来以后", "回来后", "回来", "以后", "之后", "等会儿", "等会"):
+            if rest.startswith(lead):
+                rest = rest[len(lead):]
+        seps = [(rest.find(s), s) for s in ("说", "：", ":", "，", ",") if rest.find(s) != -1]
+        if seps:
+            pos, s = min(seps)
+            cut = rest[pos + len(s):].strip("，,。.：:！!？?、 　")
+            if cut:
+                rest = cut
+        rest = rest.strip("，,。.：:！!？?、 　一声")
+        return (target, rest) if rest else None
+
+    def leave_message(self, utterance, frm="") -> str:
+        if self.messages is None:
+            return ""
+        parsed = self._parse_message(utterance)
+        if not parsed:
+            return ""
+        to, text = parsed
+        self.messages.leave(to, text, frm=frm)
+        return f"行，等{to}来了我替你捎到：「{text}」。"
+
+    def deliver_messages(self, name) -> list:
+        if self.messages is None:
+            return []
+        return self.messages.deliver(name)
 
     def reach_out_intents(self, now=None, within_days=3, max_n=2) -> list:
         """自己琢磨着该主动找谁：有阵子没见 + 上回有心事/关系近。返回 [(name, 话), ...]。"""
