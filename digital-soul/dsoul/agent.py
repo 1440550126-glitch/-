@@ -120,6 +120,7 @@ class Agent:
         self._plant_reminded_day = None                           # 当天是否已提醒浇水（去重）
         self.touch = touch                                        # 常联系：别让亲情淡了
         self._touch_reminded_day = None                           # 当天是否已提醒联系（去重）
+        self._noticed: set = set()                                # 已点破过的"门道"（当天去重）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
         self._game_mode = None                                    # 正在玩的游戏（如"接龙"）
@@ -820,7 +821,8 @@ class Agent:
                 return result
 
         # --- 唠家常（"吃了吗" / "在吗" / "最近咋样"）：自然接住，别一本正经检索 ---
-        if action is None and who.get("obey"):
+        if action is None and who.get("obey") and not any(
+                k in (utterance or "") for k in ("你看我", "你觉得我", "你瞧我")):  # 这些是"看出门道"
             from .smalltalk import is_smalltalk
             if is_smalltalk(utterance):
                 st = self.chitchat(utterance)
@@ -838,6 +840,16 @@ class Agent:
                     result["reply"] = s
                     self._log_journal(who, utterance, s, "chat_start")
                     return result
+
+        # --- 看出门道（"你看我最近怎么样" / "你觉得我"）：说出从对话里上心察觉到的 ---
+        if action is None and who.get("obey") and any(
+                k in (utterance or "") for k in ("你看我最近", "你觉得我最近", "你瞧我",
+                                                 "你看我怎么", "我最近是不是")):
+            obs = self.notice_about(who.get("name"))
+            txt = obs or "我瞧着你最近挺好的，就是别太累着，照顾好自己。"
+            result["reply"] = txt
+            self._log_journal(who, utterance, txt, "observe")
+            return result
 
         # --- 今天提要（"说说今天" / "今天有啥事"）：把要紧事汇成一段 ---
         if action is None and who.get("obey") and any(
@@ -1462,6 +1474,11 @@ class Agent:
             fu = self.cheer_followup(who.get("name"))
             if fu:
                 text = f"{text} {fu}"
+        # 看出门道：从近来的对话里看出你反复的烦心事，温柔点破一句（当天同一桩只点一次）
+        if who.get("obey"):
+            obs = self.notice_about(who.get("name"))
+            if obs:
+                text = f"{text} {obs}"
         # 陪伴：按这个时候，顺口关心一句（本时段当天只问一次，不啰嗦）
         if who.get("obey"):
             ci = self.companion_checkin()
@@ -2159,6 +2176,25 @@ class Agent:
                 self._game_mode = None
                 return "哎，这个字我一时接不上，你赢啦！"
         return ""
+
+    def notice_about(self, name, now=None) -> str:
+        """从近来和这个人的对话里看出门道，温柔点破一句（当天同一桩只点一次）。"""
+        from datetime import date
+        from .observe import observation, recurring_themes
+        if self.journal is None or not name:
+            return ""
+        utts = [e.get("utterance", "") for e in self.journal._all()[-30:]
+                if e.get("speaker") == name]
+        themes = recurring_themes(utts, min_count=2)
+        obs = observation(themes, name="")
+        if not obs:
+            return ""
+        today = now.date().isoformat() if hasattr(now, "date") else date.today().isoformat()
+        key = (today, themes[0][0])
+        if key in self._noticed:
+            return ""
+        self._noticed.add(key)
+        return obs
 
     # ---------- 今天提要（整合各项主动信息）----------
     def today_digest(self, now=None) -> str:
