@@ -42,7 +42,7 @@ class Agent:
                  spouse=None, preferences=None, humor=None,
                  medications=None, safety=None, appointments=None,
                  opinions=None, joys=None, habits_book=None,
-                 contacts=None) -> None:
+                 contacts=None, ledger=None, bedtime=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -111,6 +111,9 @@ class Agent:
         self.habits_book = habits_book                            # 习惯养成陪练（戒烟/早睡/锻炼打卡）
         self._habit_reminded_day = None                           # 当天是否已催过打卡（去重）
         self.contacts = contacts                                  # 重要联系人电话本（要紧时找得到）
+        self.ledger = ledger                                      # 家庭账本（随口记账、月底算清）
+        self.bedtime = bedtime or {}                              # 睡前故事库（给孙辈哄睡）
+        self._told_bedtime: set = set()                           # 已讲过的睡前故事（轮换）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
         self._game_mode = None                                    # 正在玩的游戏（如"接龙"）
@@ -597,7 +600,8 @@ class Agent:
                 return result
             buy_kw = next((k for k in ("买瓶", "买袋", "买盒", "买点", "买个", "买斤", "买把",
                                        "记得买", "要买", "买") if k in us), None)
-            if buy_kw and ("买" in us):
+            from .household_ledger import is_money_record
+            if buy_kw and ("买" in us) and not is_money_record(us):  # "买菜花了30"是记账，不是采买
                 item = us
                 for kw in ("记得", "帮我", "顺便", "记一下", "再来", "再", "还", "也", "给我",
                            "我想", "想", "要", "买瓶", "买袋", "买盒", "买点", "买个", "买斤",
@@ -814,6 +818,34 @@ class Agent:
                 if s:
                     result["reply"] = s
                     self._log_journal(who, utterance, s, "chat_start")
+                    return result
+
+        # --- 睡前故事（"给娃讲个睡前故事" / "哄睡"）---
+        if action is None and who.get("obey"):
+            from .bedtime_stories import is_request
+            if is_request(utterance):
+                txt = self.tell_bedtime(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "bedtime")
+                    return result
+
+        # --- 家庭账本（记一笔 / 月底算账）---
+        if action is None and who.get("obey") and self.ledger is not None:
+            u = utterance or ""
+            if any(k in u for k in ("这个月账", "月底算", "这月花了多少", "账本", "记账情况",
+                                    "这个月花", "本月开销")):
+                txt = self.month_account(u)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "ledger_month")
+                    return result
+            from .household_ledger import is_money_record
+            if is_money_record(u):
+                txt = self.record_money(u)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "ledger")
                     return result
 
         # --- 玩游戏（"陪我玩个游戏" / "成语接龙" / "猜谜"）---
@@ -2015,6 +2047,33 @@ class Agent:
                 self._game_mode = None
                 return "哎，这个字我一时接不上，你赢啦！"
         return ""
+
+    # ---------- 家庭账本 / 睡前故事 ----------
+    def record_money(self, utterance) -> str:
+        if self.ledger is None:
+            return ""
+        it = self.ledger.parse_and_record(utterance)
+        if not it:
+            return ""
+        verb = "进账" if it["kind"] == "收" else "花了"
+        return f"记下了：{it['category']}{verb}{int(it['amount'])}。"
+
+    def month_account(self, utterance="") -> str:
+        if self.ledger is None:
+            return ""
+        import re
+        m = re.search(r"(\d{4})[年-](\d{1,2})", utterance or "")
+        ym = f"{m.group(1)}-{int(m.group(2)):02d}" if m else None
+        return self.ledger.describe_month(ym)
+
+    def tell_bedtime(self, utterance="") -> str:
+        from .bedtime_stories import collect, find, pick, tell
+        stories = collect(getattr(self, "bedtime", None))
+        s = find(stories, utterance) or pick(stories, exclude=self._told_bedtime)
+        if not s:
+            return ""
+        self._told_bedtime.add(s["title"])
+        return tell(s)
 
     # ---------- 应急 / 联系人 ----------
     def emergency_help(self, utterance="", name="") -> str:

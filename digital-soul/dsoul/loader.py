@@ -19,6 +19,7 @@ from .emotions import EmotionState
 from .favors import FavorBook
 from .goals import GoalBook
 from .habit_goals import HabitBook
+from .household_ledger import Ledger
 from .heirloom import collect_heirlooms
 from .journal import Journal
 from .joys import JoyLog
@@ -158,7 +159,9 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  habits_book=HabitBook(base / "data" / "habit_goals.json",
                                        seed=_load_yaml(base / "config" / "habit_goals.yaml")),
                  contacts=ContactBook(base / "data" / "contacts.json",
-                                      seed=_load_yaml(base / "config" / "contacts.yaml")))
+                                      seed=_load_yaml(base / "config" / "contacts.yaml")),
+                 ledger=Ledger(base / "data" / "ledger.json"),
+                 bedtime=_load_yaml(base / "config" / "bedtime.yaml"))
 
 
 def _seed_memory(base: Path, memory) -> None:
