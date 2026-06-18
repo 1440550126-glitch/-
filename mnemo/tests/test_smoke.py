@@ -758,6 +758,19 @@ class TestTools(unittest.TestCase):
         self.assertIn("你好 Mnemo", out)
         tmp.cleanup()
 
+    def test_search_files_tool(self):
+        tmp = tempfile.TemporaryDirectory()
+        reg = build_default_registry()
+        ctx = ToolContext(cwd=tmp.name, config=load_config(tmp.name))
+        reg.run("write_file", {"path": "a.py", "content": "def foo():\n    return 42\n"}, ctx)
+        reg.run("write_file", {"path": "b.txt", "content": "no match here\n"}, ctx)
+        out = reg.run("search_files", {"pattern": r"def \w+", "glob": "*.py"}, ctx)
+        self.assertIn("a.py", out)
+        self.assertIn("def foo", out)
+        self.assertNotIn("b.txt", out)
+        self.assertIn("无匹配", reg.run("search_files", {"pattern": "zzz_nope"}, ctx))
+        tmp.cleanup()
+
     def test_edit_file_tool(self):
         tmp = tempfile.TemporaryDirectory()
         reg = build_default_registry()

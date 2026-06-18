@@ -128,6 +128,45 @@ def _t_list_dir(args, ctx):
     return "\n".join(items[:200]) or "(空目录)"
 
 
+def _t_search_files(args, ctx):
+    """在目录中按正则搜索文件内容（grep 风格），返回 文件:行号: 片段。只读、有界。"""
+    pattern = args.get("pattern", "")
+    if not pattern:
+        return "[错误] 缺少 pattern"
+    try:
+        rx = re.compile(pattern)
+    except re.error as e:
+        return f"[错误] 非法正则：{e}"
+    base = Path(ctx.cwd) / args.get("path", ".")
+    if not base.exists():
+        return f"[错误] 路径不存在：{base}"
+    glob = args.get("glob") or "*"
+    targets = [base] if base.is_file() else base.rglob(glob)
+    results: list[str] = []
+    scanned = 0
+    for p in targets:
+        if not p.is_file():
+            continue
+        rel = p.relative_to(base if base.is_dir() else base.parent)
+        if any(seg.startswith(".") for seg in rel.parts):
+            continue                       # 跳过隐藏目录/文件（.git/.venv 等）
+        scanned += 1
+        if scanned > 3000:
+            break
+        try:
+            if p.stat().st_size > 1_000_000:
+                continue
+            for i, line in enumerate(p.read_text(encoding="utf-8", errors="replace")
+                                     .splitlines(), 1):
+                if rx.search(line):
+                    results.append(f"{p}:{i}: {line.strip()[:160]}")
+                    if len(results) >= 50:
+                        return "\n".join(results) + "\n…(已截断)"
+        except OSError:
+            continue
+    return "\n".join(results) if results else "(无匹配)"
+
+
 def _t_run_shell(args, ctx):
     cmd = args.get("command", "")
     if ctx.config and not ctx.config.get("allow_shell", True):
@@ -378,6 +417,8 @@ def build_default_registry() -> ToolRegistry:
           {"path": "路径", "old": "原文(需唯一)", "new": "新文本", "all": "可选,true=全部替换"},
           _t_edit_file, danger=True)
     r.add("list_dir", "列出目录内容", {"path": "目录，默认当前"}, _t_list_dir)
+    r.add("search_files", "在目录中按正则搜索文件内容（grep 风格）",
+          {"pattern": "正则", "path": "目录，默认当前", "glob": "可选,如 *.py"}, _t_search_files)
     r.add("run_shell", "执行 shell 命令并返回输出", {"command": "命令"},
           _t_run_shell, danger=True)
     r.add("web_search", "用搜索引擎检索网页，返回标题/链接/摘要（再用 web_fetch 抓正文）",
