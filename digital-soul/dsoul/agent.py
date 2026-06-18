@@ -109,6 +109,9 @@ class Agent:
         self._joy_asked_day = None                                # 当天是否已主动问过开心事（去重）
         self.habits_book = habits_book                            # 习惯养成陪练（戒烟/早睡/锻炼打卡）
         self._habit_reminded_day = None                           # 当天是否已催过打卡（去重）
+        self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
+        self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
+        self._game_mode = None                                    # 正在玩的游戏（如"接龙"）
         self._goodnight_day = None                                # 当晚是否已道过晚安（去重）
         self._ritual_fired: set = set()                           # 当天已唤过的日常默契（去重）
         self._companion_slot = None                               # 本时段是否已主动问候过（去重）
@@ -276,6 +279,14 @@ class Agent:
                 if self.social is not None:
                     self.social.note(who.get("name"), emotion="爱", topic=topic)
                 self._log_journal(who, utterance, txt, mark)
+                return result
+
+        # --- 游戏进行中：先看这句是不是在接龙 / 报谜底（仅当真在玩时才接管）---
+        if action is None and who.get("obey") and (self._pending_riddle or self._game_mode):
+            g = self.try_resolve_game(utterance)
+            if g:
+                result["reply"] = g
+                self._log_journal(who, utterance, g, "game")
                 return result
 
         # --- 安抚惊惧（高优先）：怕黑/噩梦/独自在家，立刻稳住给安全感 ---
@@ -791,6 +802,26 @@ class Agent:
                 if s:
                     result["reply"] = s
                     self._log_journal(who, utterance, s, "chat_start")
+                    return result
+
+        # --- 玩游戏（"陪我玩个游戏" / "成语接龙" / "猜谜"）---
+        if action is None and who.get("obey"):
+            from .games import is_game_request
+            if is_game_request(utterance):
+                g = self.play_game(utterance)
+                if g:
+                    result["reply"] = g
+                    self._log_journal(who, utterance, g, "game")
+                    return result
+
+        # --- 解闷（"好无聊" / "干点啥好"）：挑个事陪你打发 ---
+        if action is None and who.get("obey"):
+            from .boredom import senses_boredom
+            if senses_boredom(utterance):
+                b = self.relieve_boredom()
+                if b:
+                    result["reply"] = b
+                    self._log_journal(who, utterance, b, "boredom")
                     return result
 
         # --- 老话俗语（"说句老话" / "俗话说"）：挑句应景的，或成段背 ---
@@ -1912,6 +1943,57 @@ class Agent:
         from .exercise_coach import find_routine, guide, suggest
         name = find_routine(utterance)
         return guide(name) if name else suggest()
+
+    # ---------- 玩游戏 / 解闷 ----------
+    def play_game(self, utterance="") -> str:
+        from .games import a_brainteaser, a_riddle, detect_game
+        g = detect_game(utterance)
+        self._pending_riddle = None        # 同一时间只玩一个游戏，先清掉别的状态
+        self._game_mode = None
+        if g == "成语接龙":
+            self._game_mode = "接龙"
+            start = "万事如意"
+            return f"好嘞，成语接龙！我先来——「{start}」，该你接「{start[-1]}」字开头的。"
+        if g == "脑筋急转弯":
+            q, a = a_brainteaser(self._told_riddles)
+            self._told_riddles.add(q)
+            self._pending_riddle = (q, a)
+            return f"脑筋急转弯：{q}（想想看，想不出就说「答案」）"
+        q, a = a_riddle(self._told_riddles)
+        self._told_riddles.add(q)
+        self._pending_riddle = (q, a)
+        return f"猜个谜：{q}（猜猜看，想不出就说「答案」）"
+
+    def try_resolve_game(self, utterance) -> str:
+        """这句是不是在回应正在玩的游戏（猜谜答案 / 成语接龙）。不是则空。"""
+        u = utterance or ""
+        if self._pending_riddle:
+            q, a = self._pending_riddle
+            if a and a in u:
+                self._pending_riddle = None
+                return f"哎哟，答对了！就是「{a}」，你真聪明。"
+            if any(k in u for k in ("答案", "不知道", "猜不", "揭晓", "是什么", "不会")):
+                self._pending_riddle = None
+                return f"谜底是「{a}」，下回再来！"
+        if self._game_mode == "接龙":
+            from .games import chain_from, looks_like_idiom
+            if any(k in u for k in ("不玩", "结束", "停", "不接了")):
+                self._game_mode = None
+                return "好，不玩咯，随时找我。"
+            if looks_like_idiom(u):
+                nxt = chain_from(u)
+                if nxt:
+                    return f"接得好！我接——「{nxt}」，到你了，接「{nxt[-1]}」字。"
+                self._game_mode = None
+                return "哎，这个字我一时接不上，你赢啦！"
+        return ""
+
+    def relieve_boredom(self, now=None) -> str:
+        from datetime import datetime
+        from .boredom import suggest
+        from .companion import time_of_day
+        now = now or datetime.now()
+        return suggest(seed=now.strftime("%H%M"), tod=time_of_day(now))
 
     # ---------- 节日筹备 ----------
     def festival_prep(self, utterance) -> str:
