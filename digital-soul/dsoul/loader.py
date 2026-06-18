@@ -50,6 +50,7 @@ from .spouse import spouse_profile
 from .tasks import TaskBook
 from .understanding import Understanding
 from .values import load_values
+from .vitals import VitalsLog
 from .worldmodel import WorldModel
 from .triggers import TriggerBook
 
@@ -172,7 +173,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  touch=TouchLog(base / "data" / "keep_in_touch.json",
                                 seed=_load_yaml(base / "config" / "keep_in_touch.yaml")),
                  understanding=Understanding(base / "data" / "understanding.json"),
-                 messages=Messages(base / "data" / "messages.json"))
+                 messages=Messages(base / "data" / "messages.json"),
+                 vitals=VitalsLog(base / "data" / "vitals.json"))
 
 
 def _seed_memory(base: Path, memory) -> None:

@@ -44,7 +44,7 @@ class Agent:
                  opinions=None, joys=None, habits_book=None,
                  contacts=None, ledger=None, bedtime=None,
                  music=None, plants=None, touch=None, understanding=None,
-                 messages=None) -> None:
+                 messages=None, vitals=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -124,6 +124,7 @@ class Agent:
         self.understanding = understanding                        # 我眼里的你：对每个人渐渐形成的理解
         self._reached: set = set()                                # 当天已主动牵挂过的人（去重）
         self.messages = messages                                  # 捎话：替家人带话，等人来了主动捎到
+        self.vitals = vitals                                      # 体征记录（血压/血糖/体重，看趋势、异常提醒）
         self._noticed: set = set()                                # 已点破过的"门道"（当天去重）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
@@ -444,6 +445,24 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, u, txt, "med_list")
+                    return result
+
+        # --- 守护·体征（"血压140 90" 记一笔；"我的血压" 看趋势）---
+        if action is None and who.get("obey") and self.vitals is not None:
+            from .vitals import _numbers, detect_kind
+            u = utterance or ""
+            if any(k in u for k in ("我的血压", "血压趋势", "我的血糖", "血糖趋势", "体征",
+                                    "血压怎么样", "血糖怎么样", "体重变化", "最近血压")):
+                txt = self.vitals.describe(detect_kind(u))
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "vitals_view")
+                    return result
+            if detect_kind(u) and _numbers(u):
+                txt = self.record_vital(u)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "vitals")
                     return result
 
         # --- 守护·居家安全（"睡前检查一下" / "门窗关了吗"）---
@@ -2272,6 +2291,17 @@ class Agent:
         if self.understanding is None:
             return ""
         return self.understanding.portrait(name)
+
+    def record_vital(self, utterance) -> str:
+        """记一次体征，顺带给个通俗的异常提醒（不诊断）。"""
+        from .vitals import flag
+        if self.vitals is None:
+            return ""
+        it = self.vitals.parse_and_record(utterance)
+        if not it:
+            return ""
+        f = flag(it["kind"], it["value"])
+        return f"记下了：{it['kind']} {it['value']}。" + (" " + f if f else "")
 
     def weekly_review(self, name="") -> str:
         """陪你把这一周回望一遍：开心事 + 坚持的 + 操心的。"""
