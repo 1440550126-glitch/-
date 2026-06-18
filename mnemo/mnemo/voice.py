@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -70,12 +71,22 @@ def converse_once(app, seconds: int = 5) -> str:
     miss = missing()
     if "录音(arecord/sox/ffmpeg)" in miss or "识别(whisper)" in miss:
         return "语音输入不可用，缺少：" + "、".join(miss) + "。可改用文本对话。"
-    wav = tempfile.mktemp(suffix=".wav")
-    if not record(seconds, wav):
-        return "录音失败。"
-    text = transcribe(wav)
-    if not text:
-        return "没听清（转写为空）。"
-    reply = app.agent.run(text, session="voice")
-    spoke = speak(reply)
-    return f"你说：{text}\nMnemo：{reply}" + ("" if spoke else "\n（无 TTS，仅文字）")
+    fd, wav = tempfile.mkstemp(suffix=".wav")
+    os.close(fd)
+    try:
+        if not record(seconds, wav):
+            return "录音失败。"
+        text = transcribe(wav)
+        if not text:
+            return "没听清（转写为空）。"
+        # 与终端/Web 一致：开启 confirm_danger 时不自动放行高危工具（无确认通道 → 拦下）
+        cfg = getattr(app, "cfg", None)
+        confirm_danger = bool(cfg and cfg.get("tools.confirm_danger", False))
+        reply = app.agent.run(text, session="voice", auto_approve=not confirm_danger)
+        spoke = speak(reply)
+        return f"你说：{text}\nMnemo：{reply}" + ("" if spoke else "\n（无 TTS，仅文字）")
+    finally:
+        try:                          # 录音是隐私数据，用完即删，避免残留 /tmp
+            os.unlink(wav)
+        except OSError:
+            pass

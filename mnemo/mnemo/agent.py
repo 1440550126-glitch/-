@@ -45,9 +45,19 @@ def _extract_json(text: str) -> str | None:
 
 
 def parse_tool_call(text: str):
-    """返回 (name, args) 或 None。优先解析 ```tool 代码块，回退裸 JSON。"""
+    """返回 (name, args) 或 None。
+
+    仅在「显式工具围栏」或「整条响应本身就是一个 JSON 对象」时才识别为工具调用，
+    避免把最终答案里举例/展示的 JSON（含 name 字段）误当成工具执行。
+    """
     fences = _FENCE.findall(text)
-    candidate = fences[-1] if fences else text
+    if fences:
+        candidate = fences[-1]
+    else:
+        stripped = text.strip()
+        if not (stripped.startswith("{") and stripped.endswith("}")):
+            return None
+        candidate = stripped
     js = _extract_json(candidate)
     if not js:
         return None
@@ -284,6 +294,12 @@ class Agent:
                 steps.append({"tool": tc["name"], "args": tc["args"], "result": str(result)[:500]})
                 messages.append(Message("tool", result, name=tc["name"], tool_call_id=tc["id"]))
         else:
-            final = res.get("text", "") or "(已达最大步数)"
+            # 步数耗尽：再追问一次逼出基于已有观察的最终回答，避免丢弃全部工具结果
+            messages.append(Message("user", "请基于以上信息，直接给出最终回答。"))
+            self.provider.last_usage = None
+            summary = self.provider.chat_tools(messages, specs, temperature=temperature,
+                                               max_tokens=max_tokens)
+            self._track_usage(messages, summary.get("text", ""), session)
+            final = summary.get("text", "") or res.get("text", "") or "(已达最大步数)"
 
         return self._finalize(user_input, final, steps, session, emit)

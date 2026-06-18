@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import queue
+import re
 import shutil
 import subprocess
 import threading
@@ -28,6 +29,13 @@ from collections import deque
 
 class MCPError(Exception):
     """MCP 通信 / 协议 / 进程错误。"""
+
+
+def tool_alias(server: str, tool: str) -> str:
+    """生成 provider 安全的工具名：OpenAI/Anthropic 的函数名只允许 [A-Za-z0-9_-]，
+    不接受点号。用 mcp__<server>__<tool> 形式并清洗非法字符，原生/文本两条路径都可用。
+    """
+    return re.sub(r"[^A-Za-z0-9_-]", "_", f"mcp__{server}__{tool}")
 
 
 def _params_from_schema(schema: dict | None) -> dict:
@@ -239,10 +247,10 @@ class MCPManager:
             if not tname:
                 continue
             registry.add(
-                f"{name}.{tname}",
+                tool_alias(name, tname),    # provider 安全名（无点号），原生调用也可用
                 f"[MCP:{name}] " + (t.get("description") or tname),
                 _params_from_schema(t.get("inputSchema")),
-                _make_caller(client, tname),
+                _make_caller(client, tname),   # 闭包持有真实 MCP 工具名，回调时用它
                 danger=True,  # 外部服务有副作用，按高危对待
             )
         self.clients[name] = client

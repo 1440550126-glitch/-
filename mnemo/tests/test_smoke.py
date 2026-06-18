@@ -754,6 +754,72 @@ class TestIngest(unittest.TestCase):
         self.assertNotIn("技术文档", prof)            # 知识块不进画像
 
 
+class TestReviewFixes2(unittest.TestCase):
+    """第二轮自动评审（2026-06-17）的修复回归。"""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = load_config(self.tmp.name)
+        self.mem = Memory(self.cfg.db_path)
+        self.skills = SkillRegistry(self.cfg)
+        self.tools = build_default_registry()
+
+    def tearDown(self):
+        self.mem.close()
+        self.tmp.cleanup()
+
+    def test_skill_name_traversal_rejected(self):
+        with self.assertRaises(ValueError):
+            self.skills.learn(name="../evil", text="x")
+        with self.assertRaises(ValueError):
+            self.skills.scaffold("/abs/pwn")
+
+    def test_pricing_longest_prefix_wins(self):
+        from mnemo.usage import price_for
+        self.cfg.set("pricing", {"gpt-4": {"in": 1000, "out": 1000},
+                                 "gpt-4o-mini": {"in": 1, "out": 1}})
+        cost = price_for(self.cfg, "gpt-4o-mini-2024-07-18", 1_000_000, 0)
+        self.assertAlmostEqual(cost, 1.0)            # 命中更长的 gpt-4o-mini
+
+    def test_daily_schedule_validation(self):
+        from mnemo.daemon import parse_schedule
+        self.assertEqual(parse_schedule("@daily"), ("daily", (9, 0)))
+        self.assertEqual(parse_schedule("@daily 09:30"), ("daily", (9, 30)))
+        with self.assertRaises(ValueError):
+            parse_schedule("@daily 25:00")
+        with self.assertRaises(ValueError):
+            parse_schedule("@daily nonsense")
+
+    def test_json_in_prose_not_executed(self):
+        # 围栏内、整条 JSON → 识别为工具调用
+        self.assertEqual(parse_tool_call('```tool\n{"name":"now","args":{}}\n```'), ("now", {}))
+        self.assertEqual(parse_tool_call('{"name":"now","args":{}}'), ("now", {}))
+        # 正文里举例的 JSON（前后有散文）→ 不执行
+        self.assertIsNone(
+            parse_tool_call('示例：{"name":"write_file","args":{"path":"a"}} 仅供参考'))
+
+    def test_native_summary_after_exhaustion(self):
+        class AlwaysToolProvider(Provider):
+            name = "alwaystool"
+
+            def chat(self, messages, **kw):
+                return "x"
+
+            def supports_tools(self):
+                return True
+
+            def chat_tools(self, messages, specs, **kw):
+                if messages and messages[-1].role == "user" \
+                        and "最终回答" in messages[-1].content:
+                    return {"text": "基于观察的总结", "tool_calls": []}
+                return {"text": "", "tool_calls": [{"id": "1", "name": "now", "args": {}}]}
+
+        self.cfg.set("native_tools", True)
+        self.cfg.set("max_steps", 2)
+        agent = Agent(AlwaysToolProvider(), self.tools, self.mem, self.skills, self.cfg)
+        out = agent.run("几点了")
+        self.assertEqual(out, "基于观察的总结")
+
+
 _DDG_SAMPLE = '''<html><body>
 <div class="result results_links web-result">
  <h2 class="result__title">
@@ -969,11 +1035,12 @@ class TestMCP(unittest.TestCase):
         try:
             counts = mgr.connect_all(reg)
             self.assertEqual(counts.get("fake"), 1)
-            self.assertIn("fake.echo", reg.names())
+            self.assertIn("mcp__fake__echo", reg.names())   # provider 安全名（无点号）
+            self.assertNotIn("fake.echo", reg.names())
             ctx = ToolContext(cwd=self.tmp.name, config=cfg)
-            self.assertEqual(reg.run("fake.echo", {"text": "yo"}, ctx), "echo: yo")
+            self.assertEqual(reg.run("mcp__fake__echo", {"text": "yo"}, ctx), "echo: yo")
             # 外部 MCP 工具应被标记为高危（受 confirm_danger 约束）
-            self.assertTrue(reg.get("fake.echo").danger)
+            self.assertTrue(reg.get("mcp__fake__echo").danger)
         finally:
             mgr.close_all()
 
@@ -981,6 +1048,13 @@ class TestMCP(unittest.TestCase):
         from mnemo.mcp import MCPClient, MCPError
         with self.assertRaises(MCPError):
             MCPClient("nope", "definitely-not-a-real-binary-xyz", []).start()
+
+    def test_tool_alias_is_provider_safe(self):
+        import re as _re
+        from mnemo.mcp import tool_alias
+        a = tool_alias("my.server", "read-file")
+        self.assertEqual(a, "mcp__my_server__read-file")
+        self.assertTrue(_re.fullmatch(r"[A-Za-z0-9_-]+", a))   # 无点号，原生可用
 
 
 if __name__ == "__main__":

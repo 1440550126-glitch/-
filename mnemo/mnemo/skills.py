@@ -5,6 +5,7 @@ Agent 会在系统提示中注入"与当前任务相关"的技能正文，从而
 """
 from __future__ import annotations
 
+import os
 import shutil
 import urllib.request
 from dataclasses import dataclass
@@ -13,6 +14,14 @@ from pathlib import Path
 from .memory import _tokens
 
 BUILTIN_DIR = Path(__file__).parent / "skills_builtin"
+
+
+def _safe_skill_name(name: str) -> str:
+    """技能名必须是单层文件名，禁止 .. / 路径分隔符 / 绝对路径，防止写出 skills 目录。"""
+    if (not name or name in (".", "..") or "/" in name or "\\" in name
+            or os.sep in name or (os.altsep and os.altsep in name) or os.path.isabs(name)):
+        raise ValueError(f"非法技能名：{name!r}")
+    return name
 
 
 @dataclass
@@ -143,6 +152,7 @@ class SkillRegistry:
             sk.name = name
         if not sk.description:
             sk.description = sk.body.splitlines()[0][:80] if sk.body else sk.name
+        _safe_skill_name(sk.name)
         dest = self.user_dir / f"{sk.name}.md"
         front = (f"---\nname: {sk.name}\ndescription: {sk.description}\n"
                  f"when_to_use: {sk.when_to_use}\n---\n\n")
@@ -152,6 +162,7 @@ class SkillRegistry:
         return sk
 
     def scaffold(self, name: str) -> Path:
+        _safe_skill_name(name)
         dest = self.user_dir / f"{name}.md"
         if dest.exists():
             return dest

@@ -38,10 +38,13 @@ def price_for(config, model: str, in_tok: int, out_tok: int) -> float:
     pricing = (config.get("pricing", {}) if hasattr(config, "get") else {}) or {}
     spec = pricing.get(model)
     if spec is None:
-        for key, val in pricing.items():
-            if model.startswith(key):
-                spec = val
-                break
+        # 取最长匹配前缀，避免 gpt-4 抢在 gpt-4o-mini 之前命中带日期的版本名
+        best_key = None
+        for key in pricing:
+            if model.startswith(key) and (best_key is None or len(key) > len(best_key)):
+                best_key = key
+        if best_key is not None:
+            spec = pricing[best_key]
     if not isinstance(spec, dict):
         return 0.0
     return (in_tok / 1e6) * float(spec.get("in", 0)) + (out_tok / 1e6) * float(spec.get("out", 0))

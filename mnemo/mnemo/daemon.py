@@ -26,8 +26,16 @@ def parse_schedule(spec: str):
     if s == "@hourly":
         return ("interval", 3600)
     if s.startswith("@daily"):
-        m = re.search(r"(\d{1,2}):(\d{2})", s)
-        return ("daily", (int(m.group(1)), int(m.group(2))) if m else (9, 0))
+        suffix = s[len("@daily"):].strip()
+        if not suffix:
+            return ("daily", (9, 0))
+        m = re.fullmatch(r"(\d{1,2}):(\d{2})", suffix)
+        if not m:
+            raise ValueError(f"无法解析调度语法：{spec}")
+        hh, mm = int(m.group(1)), int(m.group(2))
+        if hh > 23 or mm > 59:
+            raise ValueError(f"非法时间（HH:MM 越界）：{spec}")
+        return ("daily", (hh, mm))
     m = re.match(r"(?:every\s+)?(\d+)\s*([smhd])$", s)
     if m:
         return ("interval", int(m.group(1)) * _UNIT[m.group(2)])

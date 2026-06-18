@@ -252,6 +252,8 @@ def cmd_provider(args):
         cfg.set("provider", args.provider)
     if getattr(args, "model", None):
         cfg.set("model", args.model)
+    # 加载插件，使其注册的自定义 provider 也能被 list/test 看到（与 build_app 行为一致）
+    PluginManager(cfg, build_default_registry(), SkillRegistry(cfg)).load_all()
     if args.action == "list":
         for st in provider_status(cfg):
             mark = green("● 就绪") if st["available"] else dim("○ 未就绪")
@@ -420,7 +422,7 @@ def cmd_mcp(args):
         cfg.save()
         print(green(f"已移除 MCP 服务：{args.name}"))
     elif args.action == "test":
-        from .mcp import MCPError, MCPManager
+        from .mcp import MCPError, MCPManager, tool_alias
         mgr = MCPManager(cfg)
         try:
             info = mgr.probe(args.name)
@@ -431,7 +433,7 @@ def cmd_mcp(args):
         tools = info.get("tools", [])
         print(dim(f"暴露 {len(tools)} 个工具：") if tools else dim("（无工具）"))
         for t in tools:
-            print(f"  · {bold(args.name + '.' + t.get('name',''))} — "
+            print(f"  · {bold(tool_alias(args.name, t.get('name','')))} — "
                   f"{(t.get('description') or '').splitlines()[0][:80]}")
     return 0
 
@@ -441,7 +443,10 @@ def cmd_task(args):
     from .daemon import TaskStore
     store = TaskStore(app.cfg.db_path)
     if args.action == "add":
-        tid = store.add(args.name, args.prompt, args.every)
+        try:
+            tid = store.add(args.name, args.prompt, args.every)
+        except ValueError as e:
+            print(red(f"调度无效：{e}")); return 1
         print(green(f"已创建任务 #{tid}：{args.name}（{args.every}）"))
     elif args.action == "list":
         rows = store.list()
