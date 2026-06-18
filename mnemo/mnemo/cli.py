@@ -389,6 +389,30 @@ def cmd_memory(args):
         out = Path(args.out)
         out.write_text(m.export_markdown(), encoding="utf-8")
         print(green(f"已导出记忆 → {out}"))
+    elif args.action == "import":
+        p = Path(args.file)
+        if not p.is_file():
+            print(red(f"文件不存在：{p}")); return 1
+        n = 0
+        if p.suffix == ".json":
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as e:
+                print(red(f"JSON 解析失败：{e}")); return 1
+            for it in (data if isinstance(data, list) else []):
+                if isinstance(it, str) and it.strip():
+                    m.add_fact(it.strip(), source="import"); n += 1
+                elif isinstance(it, dict) and it.get("text"):
+                    m.add_fact(it["text"], kind=it.get("kind", "fact"),
+                               importance=int(it.get("importance", 3)),
+                               tags=it.get("tags", ""), source=it.get("source", "import"))
+                    n += 1
+        else:
+            for line in p.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    m.add_fact(line, source="import"); n += 1
+        print(green(f"已导入 {n} 条记忆"))
     elif args.action == "search":
         for f in m.recall(args.query, limit=args.limit):
             print(f"#{f['id']:<4} {f['text']}")
@@ -1065,6 +1089,8 @@ def build_parser() -> argparse.ArgumentParser:
     mfs.add_argument("source")
     mex = pms.add_parser("export", help="导出记忆为 Markdown")
     mex.add_argument("--out", default="mnemo-memory.md")
+    mim = pms.add_parser("import", help="批量导入事实（.json 列表或每行一条的文本）")
+    mim.add_argument("file")
     pms.add_parser("profile"); pms.add_parser("stats")
     pms.add_parser("consolidate", help="主动巩固：合并近重复、淡忘陈旧低价值记忆")
     pms.add_parser("backfill", help="为记忆补算语义向量（需后端支持 embed）")

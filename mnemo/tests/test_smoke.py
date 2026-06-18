@@ -1146,6 +1146,23 @@ class TestTaskHistory(unittest.TestCase):
         tmp.cleanup()
 
 
+class TestMemoryImportCLI(unittest.TestCase):
+    def test_import_json_and_text(self):
+        import types as _types
+        from mnemo.cli import cmd_memory
+        home = tempfile.mkdtemp()
+        jf = Path(home) / "f.json"
+        jf.write_text(_json.dumps(["事实A", {"text": "事实B", "importance": 4}]),
+                      encoding="utf-8")
+        cmd_memory(_types.SimpleNamespace(home=home, action="import", file=str(jf),
+                                          provider=None, model=None))
+        m = Memory(Path(home) / "mnemo.db")
+        got = [f["text"] for f in m.facts_by(source="import")]
+        self.assertIn("事实A", got)
+        self.assertIn("事实B", got)
+        m.close()
+
+
 class TestReviewFixes2(unittest.TestCase):
     """第二轮自动评审（2026-06-17）的修复回归。"""
     def setUp(self):
