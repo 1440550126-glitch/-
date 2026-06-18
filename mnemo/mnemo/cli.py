@@ -100,7 +100,12 @@ def cmd_chat(args):
         if prof:
             print(dim("我对你的了解：\n" + prof))
     on_event = _make_on_event(args.verbose)
-    session = "default"
+    session = getattr(args, "session", None) or "default"
+    if getattr(args, "resume", False) and app.memory:
+        sess = app.memory.sessions()
+        if sess:
+            session = sess[0]["session"]
+            print(dim(f"↩ 续接会话：{session}（{sess[0]['c']} 轮）"))
     confirm_danger = app.cfg.get("tools.confirm_danger", False) and _TTY
 
     def _confirm(msg):
@@ -925,7 +930,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=f"Mnemo {__version__}")
     sub = p.add_subparsers(dest="cmd")
 
-    sub.add_parser("chat", help="进入交互对话（默认）")
+    pch = sub.add_parser("chat", help="进入交互对话（默认）")
+    pch.add_argument("--session", help="使用/创建指定会话名")
+    pch.add_argument("--resume", action="store_true", help="续接最近一次会话")
 
     pr = sub.add_parser("run", help="单次执行一个任务")
     pr.add_argument("prompt", help="任务描述")
