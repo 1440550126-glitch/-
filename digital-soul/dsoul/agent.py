@@ -45,7 +45,7 @@ class Agent:
                  contacts=None, ledger=None, bedtime=None,
                  music=None, plants=None, touch=None, understanding=None,
                  messages=None, vitals=None, board=None, growth=None,
-                 pets=None, reminders=None) -> None:
+                 pets=None, reminders=None, countdown=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -135,6 +135,7 @@ class Agent:
         self.pets = pets                                          # 养宠：喂食/遛弯提醒
         self._pet_reminded: set = set()                           # 当天已提醒过的喂宠（去重）
         self.reminders = reminders                                # 随口提醒（"提醒我三点吃药"）
+        self.countdown = countdown                                # 倒计时（离过年/退休/高考还有几天）
         self._noticed: set = set()                                # 已点破过的"门道"（当天去重）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
@@ -511,6 +512,22 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, u, txt, "med_list")
+                    return result
+
+        # --- 倒计时（"离过年还有几天" / "记一下十月一号是去旅行"）---
+        if action is None and who.get("obey") and self.countdown is not None:
+            uc = utterance or ""
+            if ("记" in uc and "是" in uc):
+                txt = self.add_countdown(uc)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, uc, txt, "countdown_add")
+                    return result
+            if (("离" in uc or "距离" in uc) and any(k in uc for k in ("还有", "多久", "几天", "多少天"))):
+                txt = self.countdown_query(uc)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, uc, txt, "countdown")
                     return result
 
         # --- 随口提醒（"提醒我下午三点吃药" / "半小时后叫我关火"）---
@@ -2720,6 +2737,37 @@ class Agent:
             return ""
         mine = [it["what"] for it in self.board.for_member(name)]
         return ("今天轮到你：" + "、".join(mine) + "，别忘了。") if mine else ""
+
+    # ---------- 倒计时 ----------
+    def _countdown_name(self, utterance):
+        import re
+        u = utterance or ""
+        m = re.search(r"(?:离|距离)(.+?)(?:还有|还剩|多久|几天|多少天)", u)
+        if m:
+            return m.group(1).strip("还 ")
+        m = re.search(r"(.+?)还有(?:多久|几天|多少天)", u)
+        return m.group(1).strip("距离还 ") if m else ""
+
+    def countdown_query(self, utterance) -> str:
+        if self.countdown is None:
+            return ""
+        name = self._countdown_name(utterance)
+        return self.countdown.describe(name) if name else ""
+
+    def add_countdown(self, utterance) -> str:
+        from .countdown import parse_date
+        if self.countdown is None:
+            return ""
+        md = parse_date(utterance)
+        if not md or "是" not in (utterance or ""):
+            return ""
+        name = (utterance or "").split("是", 1)[1].strip("，,。.的那天 ")
+        if not name:
+            return ""
+        when = f"{md[2]}-{md[0]}-{md[1]}" if md[2] else f"{md[0]}-{md[1]}"
+        self.countdown.add(name, when)
+        d = self.countdown.days_for(name)
+        return f"记下了，「{name}」" + (f"还有 {d} 天。" if d is not None else "我记着了。")
 
     # ---------- 随口提醒 ----------
     def set_reminder(self, utterance) -> str:

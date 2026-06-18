@@ -12,6 +12,7 @@ from .appointments import AppointmentBook
 from .authority import Authority
 from .calendar_book import EventBook
 from .contacts import ContactBook
+from .countdown import CountdownBook
 from .curiosity import QuestionLog
 from .devices import build_device_hub, build_sensor_source
 from .dream import DreamLog
@@ -183,7 +184,9 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  growth=GrowthLog(base / "data" / "growth.json"),
                  pets=PetBook(base / "data" / "pets.json",
                               seed=_load_yaml(base / "config" / "pets.yaml")),
-                 reminders=ReminderBook(base / "data" / "reminders.json"))
+                 reminders=ReminderBook(base / "data" / "reminders.json"),
+                 countdown=CountdownBook(base / "data" / "countdown.json",
+                                         seed=_load_yaml(base / "config" / "countdown.yaml")))
 
 
 def _seed_memory(base: Path, memory) -> None:
