@@ -826,6 +826,16 @@ class Agent:
                     self._log_journal(who, utterance, s, "chat_start")
                     return result
 
+        # --- 今天提要（"说说今天" / "今天有啥事"）：把要紧事汇成一段 ---
+        if action is None and who.get("obey") and any(
+                k in (utterance or "") for k in ("说说今天", "今天提要", "今天有啥事",
+                                                 "今天要注意", "今儿个咋样", "今天怎么安排")):
+            txt = self.today_digest()
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "digest")
+                return result
+
         # --- 节气养生（"这季节怎么养生" / "该补补了"）---
         if action is None and who.get("obey"):
             from .tcm_wellness import is_wellness_query
@@ -2105,6 +2115,14 @@ class Agent:
                 self._game_mode = None
                 return "哎，这个字我一时接不上，你赢啦！"
         return ""
+
+    # ---------- 今天提要（整合各项主动信息）----------
+    def today_digest(self, now=None) -> str:
+        from datetime import datetime
+        from .companion import greeting_for
+        from .daily_digest import morning_digest
+        now = now or datetime.now()
+        return morning_digest(self, now, greeting=greeting_for(now))
 
     # ---------- 节气养生 / 常联系 ----------
     def wellness_tip(self, now=None) -> str:
