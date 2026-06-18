@@ -96,6 +96,8 @@ class Agent:
         self._spouse_nag_day = None                               # 当天是否已对老伴唠叨过（去重）
         self._goodnight_day = None                                # 当晚是否已道过晚安（去重）
         self._ritual_fired: set = set()                           # 当天已唤过的日常默契（去重）
+        self._companion_slot = None                               # 本时段是否已主动问候过（去重）
+        self._wb_fired: set = set()                               # 当天各时段健康守护是否已提醒（去重）
         self.social = social                                      # 社交记忆（对每人的亲疏冷暖）
         self.goals = goals                                        # 心愿与目标
         self.shopping = shopping                                  # 采买清单
@@ -259,6 +261,18 @@ class Agent:
                     self.social.note(who.get("name"), emotion="爱", topic=topic)
                 self._log_journal(who, utterance, txt, mark)
                 return result
+
+        # --- 陪伴安慰（任何家人累了/难过了，以"我就在身边"接住，present-tense）---
+        if action is None and who.get("obey"):
+            from .companion import senses_down
+            if senses_down(utterance):
+                txt = self.present_comfort(utterance, name=who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="哀", topic="陪伴")
+                    self._log_journal(who, utterance, txt, "companion_comfort")
+                    return result
 
         # --- 我们的故事 / 约定（"咱俩怎么认识的" / "我们的约定"）---
         if action is None and who.get("obey") and getattr(self, "spouse", None):
@@ -905,15 +919,11 @@ class Agent:
             if follow:
                 text = f"{text} {follow}"
                 self._await_retry_confirm = True
-        # 缅怀：今天是重要的日子，主动提起
+        # 纪念日：温和地提一句"今天是个特别的日子"，不主动提及生死、不念临别赠言（免得吓到人）
         if who.get("obey"):
             occ = self.memorial_today()
             if occ:
-                text = f"{text} 对了，今天是{'、'.join(occ)}呢。"
-                from .legacy import last_words
-                lw = last_words(self.legacy)
-                if lw:
-                    text += f" 我一直想对你说：「{lw[0]}」"
+                text = f"{text} 对了，今天是{'、'.join(occ)}，是个值得记着的日子。"
         # 主动预感：见到你时，高置信的预感主动提一句
         if who.get("obey"):
             po = self.proactive_prediction()
@@ -952,6 +962,11 @@ class Agent:
             st = self.solar_term_line()
             if st:
                 text = f"{text} {st}"
+        # 陪伴：按这个时候，顺口关心一句（本时段当天只问一次，不啰嗦）
+        if who.get("obey"):
+            ci = self.companion_checkin()
+            if ci:
+                text = f"{text} {ci}"
         self.robot.say(text)
         return text
 
@@ -1354,6 +1369,48 @@ class Agent:
         if not getattr(self, "spouse", None):
             return ""
         return anniversary_reminder(self.spouse, now, within)
+
+    # ---------- 陪伴与守护（present-tense，让分身有人味儿、更主动）----------
+    def _weather_hint(self) -> str:
+        """从传感器气温粗略给个天气提示（冷/热），用于贴心关照。"""
+        t = (getattr(self, "sensors", None) or {}).get("temperature")
+        if t is None:
+            return ""
+        try:
+            t = float(t)
+        except (TypeError, ValueError):
+            return ""
+        return "降温" if t <= 10 else ("高温" if t >= 30 else "")
+
+    def companion_checkin(self, now=None) -> str:
+        """按时段的主动问候（看天气加一句关照）；同一时段当天只问一次。"""
+        from datetime import datetime
+        from .companion import checkin, time_of_day
+        now = now or datetime.now()
+        slot = (now.strftime("%Y-%m-%d"), time_of_day(now))
+        if self._companion_slot == slot:
+            return ""
+        self._companion_slot = slot
+        return checkin(now, weather=self._weather_hint(), seed=now.strftime("%H"))
+
+    def wellbeing_nudge(self, now=None) -> str:
+        """按时段的健康守护（吃饭/活动/睡觉）；同一时段当天只提醒一次。"""
+        from datetime import datetime
+        from .companion import time_of_day, wellbeing_nudge
+        now = now or datetime.now()
+        line = wellbeing_nudge(now)
+        if not line:
+            return ""
+        slot = (now.strftime("%Y-%m-%d"), time_of_day(now))
+        if slot in self._wb_fired:
+            return ""
+        self._wb_fired.add(slot)
+        return line
+
+    def present_comfort(self, utterance="", name="") -> str:
+        """有人累了/难过了，以"我就在身边"的暖意接住。"""
+        from .companion import comfort
+        return comfort(utterance, name=name or "")
 
     def spouse_anniversary(self, now=None) -> str:
         from .spouse import anniversary_words

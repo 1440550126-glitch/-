@@ -158,6 +158,16 @@ def trigger_loop(agent, mouth=None) -> None:
             print(f"[老伴] {line}", flush=True)
             if mouth is not None:
                 mouth.speak(line, mood=_mood(agent), profile=profile)
+        # 陪伴守护：到点了主动提醒吃饭/活动/睡觉（present-tense，每时段一次）
+        try:
+            wb = agent.wellbeing_nudge()
+        except Exception as e:
+            print(f"[陪伴] 出错：{e}", flush=True)
+            wb = ""
+        if wb:
+            print(f"[陪伴] {wb}", flush=True)
+            if mouth is not None:
+                mouth.speak(wb, mood=_mood(agent), profile=profile)
 
 
 def think_loop(agent, minutes: float) -> None:
