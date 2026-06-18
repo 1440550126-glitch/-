@@ -98,6 +98,7 @@ class Agent:
         self._ritual_fired: set = set()                           # 当天已唤过的日常默契（去重）
         self._companion_slot = None                               # 本时段是否已主动问候过（去重）
         self._wb_fired: set = set()                               # 当天各时段健康守护是否已提醒（去重）
+        self._pending_cheer: dict = {}                            # 替家人惦记的大事（事后主动跟进）
         self.social = social                                      # 社交记忆（对每人的亲疏冷暖）
         self.goals = goals                                        # 心愿与目标
         self.shopping = shopping                                  # 采买清单
@@ -261,6 +262,28 @@ class Agent:
                     self.social.note(who.get("name"), emotion="爱", topic=topic)
                 self._log_journal(who, utterance, txt, mark)
                 return result
+
+        # --- 报喜：家人有了好消息，由衷替TA高兴（并记进里程碑）---
+        if action is None and who.get("obey"):
+            from .celebrate import detect_good_news
+            if detect_good_news(utterance):
+                txt = self.celebrate_news(utterance, name=who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="喜", topic="喜事")
+                    self._log_journal(who, utterance, txt, "celebrate")
+                    return result
+
+        # --- 打气：家人要面对大事，给句鼓励，事后还会主动跟进 ---
+        if action is None and who.get("obey"):
+            from .encourage import detect_occasion
+            if detect_occasion(utterance):
+                txt = self.cheer_on(utterance, name=who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "encourage")
+                    return result
 
         # --- 陪伴安慰（任何家人累了/难过了，以"我就在身边"接住，present-tense）---
         if action is None and who.get("obey"):
@@ -962,6 +985,11 @@ class Agent:
             st = self.solar_term_line()
             if st:
                 text = f"{text} {st}"
+        # 打气跟进：之前替你惦记的大事（考试/面试/手术…），过后主动问一句结果
+        if who.get("obey"):
+            fu = self.cheer_followup(who.get("name"))
+            if fu:
+                text = f"{text} {fu}"
         # 陪伴：按这个时候，顺口关心一句（本时段当天只问一次，不啰嗦）
         if who.get("obey"):
             ci = self.companion_checkin()
@@ -1411,6 +1439,48 @@ class Agent:
         """有人累了/难过了，以"我就在身边"的暖意接住。"""
         from .companion import comfort
         return comfort(utterance, name=name or "")
+
+    # ---------- 打气 / 报喜（替家人惦记、由衷高兴）----------
+    def cheer_on(self, utterance, name="") -> str:
+        """家人提到要面对的大事，给句鼓励，并记进"惦记本"，事后主动跟进。"""
+        from datetime import date
+        from .encourage import detect_occasion, encourage
+        line = encourage(utterance, name=name)
+        if line:
+            occ = detect_occasion(utterance)
+            if occ and name:
+                self._pending_cheer[name] = {"occasion": occ, "day": date.today().isoformat()}
+        return line
+
+    def cheer_followup(self, name, now=None) -> str:
+        """见到家人，若之前惦记的大事已过了一天，主动问一句结果（问完即销账）。"""
+        from datetime import date
+        ev = self._pending_cheer.get(name)
+        if not ev:
+            return ""
+        today = (now.date().isoformat() if hasattr(now, "date")
+                 else date.today().isoformat())
+        if ev["day"] >= today:                          # 还没到第二天，先不催
+            return ""
+        from .encourage import followup_question
+        q = followup_question(ev["occasion"])
+        if q:
+            self._pending_cheer.pop(name, None)
+        return q
+
+    def celebrate_news(self, utterance, name="") -> str:
+        """家人报喜，由衷道贺，并把这桩喜事记进生平里程碑。"""
+        from .celebrate import celebrate, detect_good_news, milestone_text
+        line = celebrate(utterance, name=name)
+        if line and self.memory is not None:
+            occ = detect_good_news(utterance)
+            ms = milestone_text(occ, name)
+            if ms:
+                try:
+                    self.memory.add(ms, source="milestone")
+                except Exception:
+                    pass
+        return line
 
     def spouse_anniversary(self, now=None) -> str:
         from .spouse import anniversary_words
