@@ -295,6 +295,15 @@ def _t_delegate(args, ctx):
     return f"[{role} 的结果]\n{out}"[:2500]
 
 
+def _t_notify(args, ctx):
+    from .notify import notify
+    msg = (args.get("message") or args.get("text") or "").strip()
+    if not msg:
+        return "[notify] 缺少 message"
+    ch = notify(ctx.config, msg, title=args.get("title", "Mnemo"))
+    return f"已通过 {ch} 渠道通知：{msg[:60]}"
+
+
 def _t_remind(args, ctx):
     if not ctx.memory:
         return "[错误] 记忆不可用"
@@ -328,6 +337,8 @@ def build_default_registry() -> ToolRegistry:
           {"expr": "如 (3+4)*2 或 sqrt(2)*pi"}, _t_calc)
     r.add("remind", "设置一个定时提醒（守护进程到点会主动触发）",
           {"text": "提醒内容", "when": "时间：in 2h / 18:30 / 2026-06-17 09:00"}, _t_remind)
+    r.add("notify", "立即推送一条通知给用户（桌面/webhook）",
+          {"message": "通知内容", "title": "标题，默认 Mnemo"}, _t_notify)
     r.add("delegate", "把一个聚焦子任务交给子 Agent 处理并拿回结果（多 Agent 协作）",
           {"role": "子 Agent 的角色，如 研究员/程序员/审阅者", "task": "子任务描述"},
           _t_delegate)

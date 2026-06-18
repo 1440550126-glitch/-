@@ -766,6 +766,14 @@ def cmd_voice(args):
     return 0
 
 
+def cmd_notify(args):
+    cfg = load_config(getattr(args, "home", None))
+    from .notify import notify
+    ch = notify(cfg, args.message, title=args.title)
+    print(green(f"已通过 {ch} 渠道发送") if ch != "none" else yellow("通知已禁用（notify.channel=none）"))
+    return 0
+
+
 def cmd_status(args):
     app = build_app(args)
     cfg = app.cfg
@@ -1016,6 +1024,9 @@ def build_parser() -> argparse.ArgumentParser:
     pvo = sub.add_parser("voice", help="语音对话：录音→转写→回答→朗读")
     pvo.add_argument("--seconds", type=int, default=5); pvo.add_argument("--once", action="store_true")
 
+    pn = sub.add_parser("notify", help="推送一条通知（测试 desktop/webhook 渠道）")
+    pn.add_argument("message"); pn.add_argument("--title", default="Mnemo")
+
     sub.add_parser("status", help="一览：后端/记忆/用量/提醒/任务/会话/MCP")
     sub.add_parser("doctor", help="环境自检")
     return p
@@ -1026,7 +1037,8 @@ _HANDLERS = {
     "provider": cmd_provider, "persona": cmd_persona,
     "memory": cmd_memory, "session": cmd_session, "skill": cmd_skill,
     "plugin": cmd_plugin, "task": cmd_task,
-    "daemon": cmd_daemon, "doctor": cmd_doctor, "status": cmd_status, "audit": cmd_audit,
+    "daemon": cmd_daemon, "doctor": cmd_doctor, "status": cmd_status,
+    "notify": cmd_notify, "audit": cmd_audit,
     "market": cmd_market, "sync": cmd_sync, "speak": cmd_speak, "see": cmd_see,
     "serve": cmd_serve, "voice": cmd_voice, "mcp": cmd_mcp, "usage": cmd_usage,
 }

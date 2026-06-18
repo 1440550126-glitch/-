@@ -170,10 +170,14 @@ class Scheduler:
     def _run_task(self, task: Task) -> None:
         ts = datetime.now().strftime("%H:%M:%S")
         self.log(f"[{ts}] ▶ 运行任务 #{task.id} {task.name}")
+        cfg = getattr(self.agent, "config", None)
         try:
             out = self.agent.run(task.prompt, session=f"daemon:{task.name}", auto_approve=True)
             self.store.mark_run(task, True, out)
             self.log(f"[{ts}] ✓ 完成 #{task.id}: {out[:160].strip()}")
+            if cfg and cfg.get("notify.on_task", False):
+                from .notify import notify
+                notify(cfg, f"{task.name}：{out[:120]}", title="Mnemo 任务完成")
         except Exception as e:  # noqa: BLE001
             self.store.mark_run(task, False, f"ERROR: {e}")
             self.log(f"[{ts}] ✗ 任务 #{task.id} 失败：{e}")
@@ -183,9 +187,13 @@ class Scheduler:
         mem = getattr(self.agent, "memory", None)
         if not mem:
             return
+        cfg = getattr(self.agent, "config", None)
         for rem in mem.due_reminders(now):
             ts = datetime.now().strftime("%H:%M")
             self.log(f"[{ts}] 🔔 提醒：{rem['text']}")
+            if cfg and cfg.get("notify.on_reminder", True):
+                from .notify import notify
+                notify(cfg, rem["text"], title="Mnemo 提醒")
             mem.mark_reminder_done(rem["id"])
         last = float(mem.get_profile("last_consolidate", "0") or 0)
         if now - last > 86400:

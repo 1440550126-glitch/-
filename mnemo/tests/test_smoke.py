@@ -845,6 +845,56 @@ class TestMemoryManagement(unittest.TestCase):
         self.assertEqual(eps[0]["user"], "你好")
 
 
+class TestNotify(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = load_config(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_channel_none(self):
+        from mnemo.notify import notify
+        self.cfg.set("notify.channel", "none")
+        self.assertEqual(notify(self.cfg, "hi"), "none")
+
+    def test_webhook_used_when_configured(self):
+        import mnemo.notify as nt
+        sent = {}
+
+        def fake_post(url, title, message, timeout=10):
+            sent["url"], sent["msg"] = url, message
+            return True
+        orig = nt.webhook
+        nt.webhook = fake_post
+        self.cfg.set("notify.channel", "webhook")
+        self.cfg.set("notify.webhook", "http://example/hook")
+        try:
+            ch = nt.notify(self.cfg, "提醒你喝水", title="T")
+        finally:
+            nt.webhook = orig
+        self.assertEqual(ch, "webhook")
+        self.assertEqual(sent["url"], "http://example/hook")
+        self.assertEqual(sent["msg"], "提醒你喝水")
+
+    def test_stdout_fallback(self):
+        from mnemo.notify import notify
+        self.cfg.set("notify.channel", "webhook")   # 但未配 webhook → 回退
+        self.cfg.set("notify.webhook", "")
+        self.assertEqual(notify(self.cfg, "hi"), "stdout")
+
+    def test_notify_tool(self):
+        import mnemo.notify as nt
+        tools = build_default_registry()
+        orig = nt.desktop
+        nt.desktop = lambda t, m: False             # 强制走 stdout
+        try:
+            out = tools.run("notify", {"message": "测试"}, ToolContext(config=self.cfg))
+        finally:
+            nt.desktop = orig
+        self.assertIn("通知", out)
+
+
 class TestCalcAndPersona(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
