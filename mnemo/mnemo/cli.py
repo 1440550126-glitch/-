@@ -500,6 +500,15 @@ def cmd_task(args):
             state = green("on") if t.enabled else dim("off")
             print(f"#{t.id:<3} [{state}] {bold(t.name):<16} {t.schedule:<14} 下次:{nxt}  "
                   f"{dim((t.last_result or '')[:40])}")
+    elif args.action == "history":
+        rows = store.runs(task_id=getattr(args, "id", None), limit=args.limit)
+        if not rows:
+            print(dim("（暂无执行历史）")); return 0
+        for r in rows:
+            ts = time.strftime("%m-%d %H:%M", time.localtime(r["started_at"]))
+            mark = green("✓") if r["ok"] else red("✗")
+            out = (r["output"] or "").replace("\n", " ")[:60]
+            print(f"{ts} {mark} #{r['task_id']} {bold(r.get('name') or '?'):<14} {dim(out)}")
     elif args.action == "rm":
         print(green("已删除") if store.remove(args.id) else red("未找到"))
     elif args.action in ("enable", "disable"):
@@ -870,6 +879,8 @@ def build_parser() -> argparse.ArgumentParser:
     ta.add_argument("--every", required=True, help="调度：every 30m / @hourly / @daily 09:00 / @startup")
     ta.add_argument("--prompt", required=True)
     pts.add_parser("list")
+    th = pts.add_parser("history", help="查看任务执行历史")
+    th.add_argument("id", type=int, nargs="?"); th.add_argument("--limit", type=int, default=30)
     trm = pts.add_parser("rm"); trm.add_argument("id", type=int)
     te = pts.add_parser("enable"); te.add_argument("id", type=int)
     td = pts.add_parser("disable"); td.add_argument("id", type=int)

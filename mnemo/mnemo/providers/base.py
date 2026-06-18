@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
@@ -15,6 +16,32 @@ from typing import Iterator, Optional
 
 class ProviderError(Exception):
     """Provider 调用失败（网络、鉴权、配额等）。"""
+
+
+# 可重试的瞬时 HTTP 状态（限流 / 网关 / 服务暂不可用）——为 7×24 无人值守增加韧性
+_RETRYABLE_STATUS = {408, 425, 429, 500, 502, 503, 504}
+
+
+def _open_with_retry(req, timeout: int, retries: int, url: str):
+    """对瞬时网络错误/5xx 做指数退避重试；4xx（鉴权/参数）不重试，立即抛出。"""
+    delay = 1.0
+    last: Exception | None = None
+    for attempt in range(retries + 1):
+        try:
+            return urllib.request.urlopen(req, timeout=timeout)
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", "replace")
+            last = ProviderError(f"HTTP {e.code} @ {url}: {body[:600]}")
+            if e.code in _RETRYABLE_STATUS and attempt < retries:
+                time.sleep(delay); delay *= 2; continue
+            raise last from e
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            reason = getattr(e, "reason", e)
+            last = ProviderError(f"网络错误 @ {url}: {reason}")
+            if attempt < retries:
+                time.sleep(delay); delay *= 2; continue
+            raise last from e
+    raise last or ProviderError(f"请求失败 @ {url}")  # 理论不可达
 
 
 @dataclass
@@ -33,42 +60,30 @@ class Message:
         return d
 
 
-def http_post_json(url: str, payload: dict, headers: dict | None = None, timeout: int = 120) -> dict:
-    """标准库实现的 JSON POST，避免引入 requests 等第三方依赖。"""
+def http_post_json(url: str, payload: dict, headers: dict | None = None,
+                   timeout: int = 120, retries: int = 2) -> dict:
+    """标准库实现的 JSON POST（含瞬时错误重试），避免引入 requests 等第三方依赖。"""
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, method="POST")
     req.add_header("Content-Type", "application/json")
     for k, v in (headers or {}).items():
         req.add_header(k, v)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", "replace")
-        raise ProviderError(f"HTTP {e.code} @ {url}: {body[:600]}") from e
-    except urllib.error.URLError as e:
-        raise ProviderError(f"网络错误 @ {url}: {e.reason}") from e
-    except (TimeoutError, OSError) as e:
-        raise ProviderError(f"连接失败 @ {url}: {e}") from e
+    with _open_with_retry(req, timeout, retries, url) as resp:
+        return json.loads(resp.read().decode("utf-8"))
 
 
 def http_post_sse(url: str, payload: dict, headers: dict | None = None,
-                  timeout: int = 300) -> Iterator[str]:
-    """标准库实现的 SSE 流式 POST：逐条产出 `data:` 行的内容（已去前缀）。"""
+                  timeout: int = 300, retries: int = 2) -> Iterator[str]:
+    """标准库实现的 SSE 流式 POST：逐条产出 `data:` 行的内容（已去前缀）。
+
+    仅对建连阶段重试；一旦开始接收流则不再中途重试（语义安全）。
+    """
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, method="POST")
     req.add_header("Content-Type", "application/json")
     for k, v in (headers or {}).items():
         req.add_header(k, v)
-    try:
-        resp = urllib.request.urlopen(req, timeout=timeout)
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", "replace")
-        raise ProviderError(f"HTTP {e.code} @ {url}: {body[:600]}") from e
-    except urllib.error.URLError as e:
-        raise ProviderError(f"网络错误 @ {url}: {e.reason}") from e
-    except (TimeoutError, OSError) as e:
-        raise ProviderError(f"连接失败 @ {url}: {e}") from e
+    resp = _open_with_retry(req, timeout, retries, url)
     with resp:
         for raw in resp:
             line = raw.decode("utf-8", "replace").strip()

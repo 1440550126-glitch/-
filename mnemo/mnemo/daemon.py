@@ -147,6 +147,18 @@ class TaskStore:
         )
         self.db.commit()
 
+    def runs(self, task_id: int | None = None, limit: int = 30) -> list[dict]:
+        """近期任务执行历史（可按任务过滤），最新在前。"""
+        if task_id is not None:
+            rows = self.db.execute(
+                "SELECT r.*, t.name FROM runs r LEFT JOIN tasks t ON t.id=r.task_id"
+                " WHERE r.task_id=? ORDER BY r.id DESC LIMIT ?", (task_id, limit)).fetchall()
+        else:
+            rows = self.db.execute(
+                "SELECT r.*, t.name FROM runs r LEFT JOIN tasks t ON t.id=r.task_id"
+                " ORDER BY r.id DESC LIMIT ?", (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
 
 class Scheduler:
     def __init__(self, agent, store: TaskStore, log=print):

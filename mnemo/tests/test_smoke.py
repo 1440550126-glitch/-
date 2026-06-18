@@ -800,6 +800,71 @@ class TestMemoryManagement(unittest.TestCase):
         self.assertEqual(eps[0]["user"], "你好")
 
 
+class TestHttpRetry(unittest.TestCase):
+    def test_retries_transient_then_succeeds(self):
+        import mnemo.providers.base as base_mod
+        calls = {"n": 0}
+
+        class FakeResp:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self): return b'{"ok": true}'
+
+        def flaky(req, timeout=0):
+            calls["n"] += 1
+            if calls["n"] < 3:
+                raise urllib.error.URLError("temporary")
+            return FakeResp()
+
+        o_open, o_sleep = base_mod.urllib.request.urlopen, base_mod.time.sleep
+        base_mod.urllib.request.urlopen = flaky
+        base_mod.time.sleep = lambda s: None
+        try:
+            out = base_mod.http_post_json("http://x", {}, retries=3)
+        finally:
+            base_mod.urllib.request.urlopen = o_open
+            base_mod.time.sleep = o_sleep
+        self.assertEqual(out, {"ok": True})
+        self.assertEqual(calls["n"], 3)
+
+    def test_no_retry_on_client_error(self):
+        import io
+        import mnemo.providers.base as base_mod
+        calls = {"n": 0}
+
+        def client_err(req, timeout=0):
+            calls["n"] += 1
+            raise urllib.error.HTTPError("http://x", 400, "Bad", {}, io.BytesIO(b"bad"))
+
+        o_open, o_sleep = base_mod.urllib.request.urlopen, base_mod.time.sleep
+        base_mod.urllib.request.urlopen = client_err
+        base_mod.time.sleep = lambda s: None
+        try:
+            with self.assertRaises(base_mod.ProviderError):
+                base_mod.http_post_json("http://x", {}, retries=3)
+        finally:
+            base_mod.urllib.request.urlopen = o_open
+            base_mod.time.sleep = o_sleep
+        self.assertEqual(calls["n"], 1)        # 4xx 不重试
+
+
+class TestTaskHistory(unittest.TestCase):
+    def test_runs_recorded_and_queried(self):
+        from mnemo.daemon import TaskStore
+        tmp = tempfile.TemporaryDirectory()
+        store = TaskStore(Path(tmp.name) / "m.db")
+        tid = store.add("t1", "do x", "@hourly")
+        t = store.get(tid)
+        store.mark_run(t, True, "done ok")
+        store.mark_run(t, False, "ERROR: boom")
+        runs = store.runs()
+        self.assertEqual(len(runs), 2)
+        self.assertEqual(runs[0]["ok"], 0)      # 最新在前（失败那条）
+        self.assertEqual(runs[0]["name"], "t1")
+        self.assertEqual(len(store.runs(task_id=tid)), 2)
+        tmp.cleanup()
+
+
 class TestReviewFixes2(unittest.TestCase):
     """第二轮自动评审（2026-06-17）的修复回归。"""
     def setUp(self):
