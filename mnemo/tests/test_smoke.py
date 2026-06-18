@@ -593,6 +593,10 @@ class TestServe(unittest.TestCase):
             h = _json.loads(urllib.request.urlopen(
                 f"http://127.0.0.1:{port}/api/health", timeout=5).read())
             self.assertTrue(h["ok"])
+            st = _json.loads(urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/api/status", timeout=5).read())
+            self.assertEqual(st["provider"], "fake")
+            self.assertIn("memory", st)
             req = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/chat",
                 data=_json.dumps({"message": "你好我叫小测"}).encode("utf-8"),

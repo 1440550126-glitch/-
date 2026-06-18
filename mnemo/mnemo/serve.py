@@ -34,6 +34,7 @@ padding:11px 14px;font:inherit;resize:none}#inp:focus{outline:1px solid #2b5cff}
 #send:disabled{opacity:.5}@media(max-width:680px){#side{display:none}}
 </style></head><body>
 <div id=side><h1>✦ Mnemo</h1><div class=sub id=meta>连接中…</div>
+<div class=sub id=stat></div>
 <h2>我对你的了解</h2><div id=prof>—</div></div>
 <div id=main><div id=log></div>
 <div id=bar><textarea id=inp rows=1 placeholder="跟 Mnemo 说点什么…（Enter 发送）"></textarea>
@@ -49,6 +50,10 @@ document.getElementById('prof').textContent=j.profile||'（还没积累到画像
 const s=j.stats||{};document.getElementById('meta').dataset.s=JSON.stringify(s)}catch(e){}}
 async function health(){try{const j=await (await fetch(api('/api/health'))).json();
 document.getElementById('meta').textContent=j.provider+'/'+(j.model||'default')}catch(e){}}
+async function stat(){try{const j=await (await fetch(api('/api/status'))).json();
+const u=j.usage_today,r=j.reminders||0;let s=[];if(r)s.push('待办 '+r);
+if(u&&u.calls)s.push('今日 '+u.calls+'次·'+(u.in_tok+u.out_tok)+'tok');
+document.getElementById('stat').textContent=s.join('　·　')}catch(e){}}
 async function go(){const m=inp.value.trim();if(!m)return;inp.value='';add(m,'me');
 send.disabled=true;const t=add('思考中…','sys');
 try{const r=await fetch(api('/api/chat'),{method:'POST',headers:{'Content-Type':'application/json'},
@@ -56,7 +61,8 @@ body:JSON.stringify({message:m,session:'web'})});const j=await r.json();
 t.remove();add(j.reply||('[错误] '+(j.error||'未知')),'ai');refresh()}
 catch(e){t.remove();add('[网络错误] '+e,'sys')}finally{send.disabled=false;inp.focus()}}
 send.onclick=go;inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();go()}});
-health();refresh();add('你好，我是 Mnemo——你的本地 AI 伙伴，会记住你、越来越懂你。','ai');
+health();refresh();stat();setInterval(stat,30000);
+add('你好，我是 Mnemo——你的本地 AI 伙伴，会记住你、越来越懂你。','ai');
 </script></body></html>"""
 
 
@@ -97,6 +103,22 @@ def make_handler(app, lock, token):
                                         "stats": app.memory.stats()})
             if path == "/api/facts" and app.memory:
                 return self._json(200, {"facts": app.memory.all_facts(50)})
+            if path == "/api/sessions" and app.memory:
+                return self._json(200, {"sessions": app.memory.sessions()})
+            if path == "/api/usage" and getattr(app, "usage", None):
+                import time as _t
+                return self._json(200, {"today": app.usage.summary(_t.time() - 86400),
+                                        "total": app.usage.summary(),
+                                        "by_model": app.usage.by_model()})
+            if path == "/api/status":
+                import time as _t
+                out = {"provider": app.provider.name, "model": app.provider.model}
+                if app.memory:
+                    out["memory"] = app.memory.stats()
+                    out["reminders"] = len(app.memory.pending_reminders())
+                if getattr(app, "usage", None):
+                    out["usage_today"] = app.usage.summary(_t.time() - 86400)
+                return self._json(200, out)
             return self._json(404, {"error": "not found"})
 
         def do_POST(self):
