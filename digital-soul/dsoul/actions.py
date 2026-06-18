@@ -22,6 +22,14 @@ class RobotInterface(ABC):
     @abstractmethod
     def protect(self, target: str) -> None: ...
 
+    def gesture(self, name: str, detail: str = "") -> None:
+        """表情 / 体态动作（默认不做；有身体的机器人可实现成驱动头部/舵机/灯效）。
+
+        这是给机器身体"注入灵魂"的通道：随情绪点头、垂首、倾身、戒备……
+        非抽象，旧的机器人实现不强制改动即可继续用。
+        """
+        return None
+
 
 class SimulationRobot(RobotInterface):
     """把动作打印到控制台，便于在没有硬件时调试。"""
@@ -37,3 +45,6 @@ class SimulationRobot(RobotInterface):
 
     def protect(self, target: str) -> None:
         print(f"🛡️  [守护] 进入守护模式，全力保护 {target}")
+
+    def gesture(self, name: str, detail: str = "") -> None:
+        print(f"🤖 [体态] {name}" + (f"（{detail}）" if detail else ""))

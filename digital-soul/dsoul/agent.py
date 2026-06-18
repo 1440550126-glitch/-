@@ -190,6 +190,11 @@ class Agent:
             self._execute(action, who)
             result["executed"] = action
 
+        # --- 注入灵魂的身体：有人说话，转头看向 TA（专注地听）---
+        if who.get("known") and action is None:
+            from .embodiment import attend
+            attend(getattr(self, "robot", None), who.get("name"))
+
         # --- 社交记忆：跟"认识的人"每打一次交道，更新这段关系的亲疏冷暖 ---
         if who.get("known") and getattr(self, "social", None) is not None:
             try:
@@ -1744,6 +1749,12 @@ class Agent:
             ci = self.companion_checkin()
             if ci:
                 text = f"{text} {ci}"
+        # 注入灵魂的身体：看向TA、带着此刻的情绪做出体态（守护对象则挡在身前）
+        from .embodiment import express, guard_stance
+        mood = self.emotions.mood()[0] if getattr(self, "emotions", None) else None
+        express(self.robot, mood, who.get("name"))
+        if who.get("guard"):
+            guard_stance(self.robot, who.get("name"))
         self.robot.say(text)
         return text
 
@@ -3493,6 +3504,9 @@ class Agent:
         po = self.proactive_prediction()
         if po:
             out["notices"].append("（预感）" + po)
+        # 11) 注入灵魂的身体：闲下来也"活着"——像呼吸般轻动、环顾，不是僵着的铁疙瘩
+        from .embodiment import idle
+        idle(getattr(self, "robot", None), seed=(now or datetime.now()).strftime("%M"))
         return out
 
     # ---------- 好奇心与世界模型 ----------

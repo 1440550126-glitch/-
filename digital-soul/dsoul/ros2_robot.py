@@ -43,6 +43,7 @@ class Ros2Robot(RobotInterface):
         self.pub_look = self.node.create_publisher(String, "/soul/look_at", 10)
         self.pub_mode = self.node.create_publisher(String, "/soul/mode", 10)
         self.pub_cmd = self.node.create_publisher(Twist, "/cmd_vel", 10)
+        self.pub_gesture = self.node.create_publisher(String, "/soul/gesture", 10)
 
     def say(self, text: str) -> None:
         msg = self._String()
@@ -66,6 +67,11 @@ class Ros2Robot(RobotInterface):
         msg.data = f"guard:{target}"
         self.pub_mode.publish(msg)
         self.node.get_logger().info(f"protect {target}")
+
+    def gesture(self, name: str, detail: str = "") -> None:
+        msg = self._String()
+        msg.data = f"{name}|{detail}"          # 下游订阅 /soul/gesture，映射成头部/舵机/灯效
+        self.pub_gesture.publish(msg)
 
     def shutdown(self) -> None:
         self.node.destroy_node()
