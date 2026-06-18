@@ -514,6 +514,16 @@ class Agent:
                 self._log_journal(who, utterance, txt, "appointments")
                 return result
 
+        # --- 说说我自己（"你今天怎么样" / "你过得好吗"）：双向地聊，再把话转回给你 ---
+        if action is None and who.get("obey"):
+            from .self_share import is_about_me_query
+            if is_about_me_query(utterance):
+                txt = self.share_my_day()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "self_share")
+                    return result
+
         # --- 说出我的感受（"你什么心情" / "你开心吗"）：袒露自己的心情，像个有真心的人 ---
         if action is None and who.get("obey"):
             from .express_feelings import is_feeling_query
@@ -946,7 +956,9 @@ class Agent:
         # --- 唠家常（"吃了吗" / "在吗" / "最近咋样"）：自然接住，别一本正经检索 ---
         if action is None and who.get("obey") and not any(
                 k in (utterance or "") for k in ("你看我", "你觉得我", "你瞧我",   # 看出门道
-                                                 "这周", "这一周", "这礼拜", "回顾")):  # 一周回望
+                                                 "这周", "这一周", "这礼拜", "回顾",  # 一周回望
+                                                 "你今天", "你过得", "你还好", "你这一天",
+                                                 "你好吗", "你怎么样啊")):  # 说说我自己
             from .smalltalk import is_smalltalk
             if is_smalltalk(utterance):
                 st = self.chitchat(utterance)
@@ -2130,6 +2142,15 @@ class Agent:
         """有人累了/难过了，以"我就在身边"的暖意接住。"""
         from .companion import comfort
         return comfort(utterance, name=name or "")
+
+    def share_my_day(self, now=None) -> str:
+        """说说我自己的一天，再把话头转回给你（像个有自己日子的人）。"""
+        from datetime import datetime
+        from .companion import time_of_day
+        from .self_share import my_day
+        daily = (self.identity or {}).get("daily_life")
+        now = now or datetime.now()
+        return my_day(daily_life=daily, tod=time_of_day(now), seed=now.strftime("%H%M"))
 
     def voice_my_feeling(self) -> str:
         """把分身此刻的心情说出来（七情随互动起伏，这里袒露给家人）。"""
