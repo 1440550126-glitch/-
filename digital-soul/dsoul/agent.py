@@ -43,7 +43,7 @@ class Agent:
                  medications=None, safety=None, appointments=None,
                  opinions=None, joys=None, habits_book=None,
                  contacts=None, ledger=None, bedtime=None,
-                 music=None, plants=None, touch=None) -> None:
+                 music=None, plants=None, touch=None, understanding=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -120,6 +120,7 @@ class Agent:
         self._plant_reminded_day = None                           # 当天是否已提醒浇水（去重）
         self.touch = touch                                        # 常联系：别让亲情淡了
         self._touch_reminded_day = None                           # 当天是否已提醒联系（去重）
+        self.understanding = understanding                        # 我眼里的你：对每个人渐渐形成的理解
         self._noticed: set = set()                                # 已点破过的"门道"（当天去重）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
@@ -183,6 +184,16 @@ class Agent:
                 emo = self.emotions.mood()[0] if getattr(self, "emotions", None) else None
                 topic = (utterance or "").strip()[:10] or None
                 self.social.note(who["name"], emotion=emo, topic=topic)
+            except Exception:
+                pass
+
+        # --- 我眼里的你：把这次互动沉淀进对TA的理解（越处越懂）---
+        if who.get("known") and getattr(self, "understanding", None) is not None:
+            try:
+                from .annotate import classify_emotion
+                emo2 = classify_emotion(utterance).get("label")
+                self.understanding.observe(who["name"], utterance,
+                                           emotion=None if emo2 == "平静" else emo2)
             except Exception:
                 pass
 
@@ -840,6 +851,16 @@ class Agent:
                     result["reply"] = s
                     self._log_journal(who, utterance, s, "chat_start")
                     return result
+
+        # --- 我眼里的你（"你了解我吗" / "在你眼里我是怎样的人"）---
+        if action is None and who.get("obey") and self.understanding is not None and any(
+                k in (utterance or "") for k in ("你了解我", "你懂我吗", "在你眼里我", "你眼里的我",
+                                                 "我是怎样的人", "你了解我吗", "你知道我是")):
+            txt = self.portrait_of(who.get("name"))
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "understanding")
+                return result
 
         # --- 看出门道（"你看我最近怎么样" / "你觉得我"）：说出从对话里上心察觉到的 ---
         if action is None and who.get("obey") and any(
@@ -2195,6 +2216,12 @@ class Agent:
             return ""
         self._noticed.add(key)
         return obs
+
+    def portrait_of(self, name) -> str:
+        """说说"在我眼里你是怎样的人"（越处越懂）。"""
+        if self.understanding is None:
+            return ""
+        return self.understanding.portrait(name)
 
     # ---------- 今天提要（整合各项主动信息）----------
     def today_digest(self, now=None) -> str:
