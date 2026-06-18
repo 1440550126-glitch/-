@@ -34,7 +34,8 @@ DEFAULTS: dict[str, Any] = {
     # 通知推送：让到点提醒/任务结果触达用户（desktop / webhook / 兜底 stdout）
     "notify": {"channel": "auto", "webhook": "", "on_reminder": True, "on_task": False},
     # 用量观测：记录每次模型调用的 token；pricing 可选（每百万 token 单价）才算成本
-    "usage": {"enabled": True},
+    # daily_token_limit>0 时，今日用量达上限即暂停调用（无人值守的成本护栏）
+    "usage": {"enabled": True, "daily_token_limit": 0},
     "pricing": {},            # 例：{"gpt-4o-mini": {"in": 0.15, "out": 0.6}}
     # 安全：confirm_danger 在交互模式下让写入/执行类工具需确认；deny 永久禁用某些工具
     "tools": {"confirm_danger": False, "deny": []},

@@ -87,6 +87,21 @@ class Agent:
         return Agent(self.provider, self.tools, self.memory, self.skills, self.config,
                      usage=self.usage, learn=False, _depth=self._depth + 1)
 
+    def _budget_block(self) -> str | None:
+        """每日 token 预算护栏：今日用量达上限则暂停调用（无人值守成本控制）。"""
+        if not self.usage:
+            return None
+        limit = int(self.config.get("usage.daily_token_limit", 0) or 0)
+        if limit <= 0:
+            return None
+        import time as _t
+        s = self.usage.summary(_t.time() - 86400)
+        used = s["in_tok"] + s["out_tok"]
+        if used >= limit:
+            return (f"（已达每日 token 预算上限 {limit}，为控制成本暂停调用；今日已用 {used}。"
+                    f"可调高 usage.daily_token_limit 或明日再试。）")
+        return None
+
     def _track_usage(self, messages, reply, session) -> None:
         """记录一次模型调用的用量：优先真实用量，否则本地估算（标注 estimated）。"""
         if not self.usage:
@@ -237,6 +252,10 @@ class Agent:
             on_token: Callable[[str], None] | None = None) -> str:
         max_steps = max_steps or int(self.config.get("max_steps", 8))
         emit = on_event or (lambda *_: None)
+        blocked = self._budget_block()
+        if blocked:
+            emit("final", {"text": blocked})
+            return blocked
         if self.config.get("native_tools", False) and self.provider.supports_tools():
             # 原生 function-calling 路径暂不支持逐字流式（工具增量为结构化分片）
             return self._run_native(user_input, session=session, max_steps=max_steps,

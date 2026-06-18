@@ -1347,6 +1347,23 @@ class TestUsage(unittest.TestCase):
         self.assertAlmostEqual(s["cost"], 0.14)
         store.close()
 
+    def test_daily_budget_blocks_calls(self):
+        from mnemo.usage import UsageStore
+        store = UsageStore(self.cfg.db_path)
+        store.record(session="s", provider="p", model="m", in_tok=60, out_tok=60,
+                     estimated=True)
+        self.cfg.set("usage.daily_token_limit", 10)
+
+        class BoomProvider(Provider):
+            name = "boom"
+            def chat(self, messages, **kw):
+                raise AssertionError("over budget: must not call provider")
+
+        agent = Agent(BoomProvider(), self.tools, self.mem, self.skills, self.cfg, usage=store)
+        out = agent.run("hi")
+        self.assertIn("预算", out)               # 友好提示，未触发 BoomProvider
+        store.close()
+
     def test_capture_usage_field_mapping(self):
         op = OpenAIProvider()
         op._capture_usage({"usage": {"prompt_tokens": 7, "completion_tokens": 3}})

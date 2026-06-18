@@ -810,6 +810,13 @@ def cmd_usage(args):
         cost = f"  ${s['cost']:.4f}" if s["cost"] else ""
         print(f"  {label:<6} {s['calls']} 次调用 · 入 {_fmt_tok(s['in_tok'])} · "
               f"出 {_fmt_tok(s['out_tok'])}{cost}")
+    limit = int(cfg.get("usage.daily_token_limit", 0) or 0)
+    if limit > 0:
+        today = store.summary(now - 86400)
+        used = today["in_tok"] + today["out_tok"]
+        bar = green if used < limit else red
+        print(bold("\n每日预算") + f"  {bar(str(used))} / {limit} tokens"
+              + (red("　已超限，调用暂停") if used >= limit else ""))
     rows = store.by_model()
     if rows:
         print(bold("\n按模型（累计）"))
