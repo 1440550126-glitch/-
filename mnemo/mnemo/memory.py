@@ -253,6 +253,13 @@ class Memory:
             (session, limit)).fetchall()
         return [dict(r) for r in rows]
 
+    def episodes_since(self, ts: float, limit: int = 2000) -> list[dict]:
+        """取某时间点以来的全部对话（跨会话），用于生成日记/回顾。"""
+        rows = self.db.execute(
+            "SELECT * FROM episodes WHERE created_at>=? ORDER BY id LIMIT ?",
+            (ts, limit)).fetchall()
+        return [dict(r) for r in rows]
+
     def get_session_summary(self, session: str) -> str | None:
         return self.get_profile(f"summary:{session}")
 

@@ -1177,6 +1177,32 @@ class TestTaskHistory(unittest.TestCase):
         tmp.cleanup()
 
 
+class TestDiary(unittest.TestCase):
+    def test_episodes_since(self):
+        tmp = tempfile.TemporaryDirectory()
+        mem = Memory(Path(tmp.name) / "m.db")
+        mem.add_episode("s", "今天聊了登山", "好的")
+        recent = mem.episodes_since(time.time() - 3600)
+        self.assertEqual(len(recent), 1)
+        self.assertEqual(mem.episodes_since(time.time() + 3600), [])  # 未来 → 空
+        mem.close()
+        tmp.cleanup()
+
+    def test_diary_cli_stores_fact(self):
+        import types as _types
+        from mnemo.cli import cmd_diary
+        home = tempfile.mkdtemp()
+        # 先制造一条今日对话
+        m0 = Memory(Path(home) / "mnemo.db")
+        m0.add_episode("default", "我今天去爬山了", "真棒")
+        m0.close()
+        cmd_diary(_types.SimpleNamespace(home=home, days=1, provider="offline",
+                                         model=None, verbose=False))
+        m = Memory(Path(home) / "mnemo.db")
+        self.assertTrue(any(f["kind"] == "diary" for f in m.all_facts()))
+        m.close()
+
+
 class TestMemoryImportCLI(unittest.TestCase):
     def test_import_json_and_text(self):
         import types as _types

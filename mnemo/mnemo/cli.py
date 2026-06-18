@@ -936,6 +936,33 @@ def cmd_notify(args):
     return 0
 
 
+def cmd_diary(args):
+    app = build_app(args)
+    m = app.memory
+    if not m:
+        print("记忆未启用"); return 1
+    import datetime as _dt
+    days = max(1, getattr(args, "days", 1))
+    start = (_dt.datetime.now() - _dt.timedelta(days=days - 1)).replace(
+        hour=0, minute=0, second=0, microsecond=0).timestamp()
+    eps = m.episodes_since(start)
+    if not eps:
+        print(dim("这段时间还没有对话")); return 0
+    convo = "\n".join(f"你：{e['user']}\nMnemo：{e['assistant']}" for e in eps)[:6000]
+    from .providers import Message
+    try:
+        text = app.provider.chat([Message(
+            "user", "把下面与用户的互动温暖地写成一段简短日记（120 字内，第三人称），"
+            "提炼当天要点与值得长期记住的事：\n" + convo)], max_tokens=400)
+    except ProviderError as e:
+        print(red(f"[模型调用失败] {e}")); return 1
+    date = _dt.date.today().isoformat()
+    text = (text or "").strip()
+    m.add_fact(f"[{date} 日记] {text}", kind="diary", importance=3, source=f"diary:{date}")
+    print(bold(f"📔 {date} 日记") + "\n" + text)
+    return 0
+
+
 def cmd_init(args):
     cfg = load_config(getattr(args, "home", None))
     print(bold("✦ Mnemo 初始化向导"))
@@ -1250,6 +1277,8 @@ def build_parser() -> argparse.ArgumentParser:
     pn = sub.add_parser("notify", help="推送一条通知（测试 desktop/webhook 渠道）")
     pn.add_argument("message"); pn.add_argument("--title", default="Mnemo")
 
+    pdi = sub.add_parser("diary", help="把今天(或近 N 天)的对话写成日记并存入记忆")
+    pdi.add_argument("--days", type=int, default=1)
     sub.add_parser("init", help="初始化向导：选后端/人格/称呼")
     sub.add_parser("status", help="一览：后端/记忆/用量/提醒/任务/会话/MCP")
     sub.add_parser("doctor", help="环境自检")
@@ -1261,7 +1290,8 @@ _HANDLERS = {
     "provider": cmd_provider, "persona": cmd_persona,
     "memory": cmd_memory, "session": cmd_session, "skill": cmd_skill,
     "plugin": cmd_plugin, "task": cmd_task, "watch": cmd_watch,
-    "daemon": cmd_daemon, "doctor": cmd_doctor, "init": cmd_init, "status": cmd_status,
+    "daemon": cmd_daemon, "doctor": cmd_doctor, "init": cmd_init, "diary": cmd_diary,
+    "status": cmd_status,
     "notify": cmd_notify, "audit": cmd_audit,
     "market": cmd_market, "sync": cmd_sync, "speak": cmd_speak, "see": cmd_see,
     "serve": cmd_serve, "voice": cmd_voice, "mcp": cmd_mcp, "usage": cmd_usage,
