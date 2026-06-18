@@ -12,10 +12,26 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.request
 
 DEFAULT_MODEL = os.environ.get("DSOUL_LLM_MODEL", "qwen2.5:7b-instruct")
 DEFAULT_HOST = os.environ.get("DSOUL_LLM_HOST", "http://localhost:11434")
+
+# 推理模型（Qwen3 / Gemma 等）会先输出一段 <think>…</think> 思考，再给答案。
+# 这块思考不该展示给家人，要剥掉，只留最终回答。
+_THINK_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL | re.IGNORECASE)
+
+
+def strip_think(text: str) -> str:
+    """剥掉推理模型输出里的 <think>…</think> 思考块，只留最终回答。"""
+    if not text:
+        return text or ""
+    out = _THINK_RE.sub("", text)
+    if "</think>" in out:                 # 开标签在更早的分片里、只剩闭标签：取其后的答案
+        out = out.split("</think>")[-1]
+    out = re.sub(r"</?think>", "", out)   # 去掉任何残留标签
+    return out.strip()
 
 
 class LLM:
@@ -55,11 +71,11 @@ class LLM:
         if self.provider == "ollama":
             data = self._post("/api/chat", {"model": self.model, "messages": msgs,
                                             "stream": False, "options": {"temperature": self.temperature}})
-            return data["message"]["content"].strip()
+            return strip_think(data["message"]["content"].strip())
         # OpenAI 兼容（host 应含 /v1，如 http://localhost:1234/v1）
         data = self._post("/chat/completions", {"model": self.model, "messages": msgs,
                                                 "temperature": self.temperature})
-        return data["choices"][0]["message"]["content"].strip()
+        return strip_think(data["choices"][0]["message"]["content"].strip())
 
 
 def _llm_from(spec) -> LLM:

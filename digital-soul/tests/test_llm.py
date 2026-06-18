@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from dsoul.llm import LLM, LLMRouter, build_router  # noqa: E402
+from dsoul.llm import LLM, LLMRouter, build_router, strip_think  # noqa: E402
 
 
 class _Cap(LLM):
@@ -14,12 +14,32 @@ class _Cap(LLM):
     def _ping(self):
         return True
 
+    content = "好的"
+
     def _post(self, path, payload):
         self.calls = getattr(self, "calls", [])
         self.calls.append((path, payload))
         if "completions" in path:
-            return {"choices": [{"message": {"content": "好的"}}]}
-        return {"message": {"content": "好的"}}
+            return {"choices": [{"message": {"content": self.content}}]}
+        return {"message": {"content": self.content}}
+
+
+def test_strip_think_removes_reasoning():
+    assert strip_think("<think>我先想想该怎么答</think>你好呀") == "你好呀"
+    assert strip_think("<THINK>x</THINK>\n\n答案在这") == "答案在这"
+    # 多行思考
+    assert strip_think("<think>\n第一步\n第二步\n</think>结论") == "结论"
+    # 没有思考块就原样
+    assert strip_think("直接回答") == "直接回答"
+    # 只剩闭标签（开标签在更早分片）：取其后
+    assert strip_think("剩下的思考</think>这才是答案") == "这才是答案"
+    assert strip_think("") == ""
+
+
+def test_chat_strips_think_block():
+    m = _Cap(provider="ollama", model="qwen3")
+    m.content = "<think>琢磨一下</think>孙女，奶奶在呢。"
+    assert m.chat("s", "u") == "孙女，奶奶在呢。"          # 思考块不外露
 
 
 def test_ollama_chat_shape():
