@@ -19,6 +19,7 @@ from .favors import FavorBook
 from .goals import GoalBook
 from .heirloom import collect_heirlooms
 from .journal import Journal
+from .joys import JoyLog
 from .knowledge import Knowledge
 from .llm import build_router
 from .mannerisms import load_mannerisms
@@ -150,7 +151,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  appointments=AppointmentBook(base / "data" / "appointments.json",
                                               seed=_load_yaml(base / "config" / "appointments.yaml")),
                  opinions=collect_opinions(
-                     _load_yaml(base / "config" / "opinions.yaml"), identity))
+                     _load_yaml(base / "config" / "opinions.yaml"), identity),
+                 joys=JoyLog(base / "data" / "joys.json"))
 
 
 def _seed_memory(base: Path, memory) -> None:

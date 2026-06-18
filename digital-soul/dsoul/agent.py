@@ -41,7 +41,7 @@ class Agent:
                  health=None, favors=None, stories=None, teachings=None,
                  spouse=None, preferences=None, humor=None,
                  medications=None, safety=None, appointments=None,
-                 opinions=None) -> None:
+                 opinions=None, joys=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -105,6 +105,8 @@ class Agent:
         self.appointments = appointments                          # 就医/约定提醒
         self._med_fired: set = set()                              # 已念过的吃药提醒（去重）
         self._appt_fired: set = set()                             # 已念过的就医提醒（去重）
+        self.joys = joys                                          # 小确幸日记（攒开心事，翻出来念）
+        self._joy_asked_day = None                                # 当天是否已主动问过开心事（去重）
         self._goodnight_day = None                                # 当晚是否已道过晚安（去重）
         self._ritual_fired: set = set()                           # 当天已唤过的日常默契（去重）
         self._companion_slot = None                               # 本时段是否已主动问候过（去重）
@@ -284,6 +286,37 @@ class Agent:
                     if self.social is not None:
                         self.social.note(who.get("name"), emotion="喜", topic="喜事")
                     self._log_journal(who, utterance, txt, "celebrate")
+                    return result
+
+        # --- 小确幸：家人分享开心事，替TA记下、暖暖回应；问"念念开心事"则翻出来 ---
+        if action is None and who.get("obey") and self.joys is not None:
+            if any(k in (utterance or "") for k in ("念念开心", "最近开心的事", "有什么开心",
+                                                    "翻翻开心", "回味", "开心的事")):
+                txt = self.reflect_joys()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "joys_reflect")
+                    return result
+            from .joys import is_sharing_joy
+            if is_sharing_joy(utterance):
+                txt = self.record_joy(utterance, who=who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="喜", topic="开心事")
+                    self._log_journal(who, utterance, txt, "joy")
+                    return result
+
+        # --- 宽慰忧虑：家人说出担心/害怕，先认同那份不安，再轻轻宽慰 ---
+        if action is None and who.get("obey"):
+            from .worries import senses_worry
+            if senses_worry(utterance):
+                txt = self.comfort_worry(utterance, name=who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="惧", topic="宽慰")
+                    self._log_journal(who, utterance, txt, "worry")
                     return result
 
         # --- 打气：家人要面对大事，给句鼓励，事后还会主动跟进 ---
@@ -1628,6 +1661,36 @@ class Agent:
         """对人生话题给出一贯的看法。"""
         from .opinions import opine
         return opine(getattr(self, "opinions", None), utterance)
+
+    # ---------- 宽慰忧虑 / 小确幸 ----------
+    def comfort_worry(self, utterance, name="") -> str:
+        from .worries import soothe_worry
+        return soothe_worry(utterance, name=name, seed=utterance)
+
+    def record_joy(self, utterance, who="") -> str:
+        """记下一件开心事，暖暖回应一句。"""
+        if self.joys is None:
+            return ""
+        self.joys.add(utterance, who=who)
+        return self.joys.acknowledge(utterance)
+
+    def reflect_joys(self) -> str:
+        return self.joys.reflect() if self.joys is not None else ""
+
+    def joy_evening_prompt(self, now=None) -> str:
+        """傍晚主动问一句今天的开心事，每天只问一次（供守护循环调用）。"""
+        from datetime import datetime
+        from .joys import evening_prompt
+        if self.joys is None:
+            return ""
+        line = evening_prompt(now)
+        if not line:
+            return ""
+        today = (now or datetime.now()).strftime("%Y-%m-%d")
+        if self._joy_asked_day == today:
+            return ""
+        self._joy_asked_day = today
+        return line
 
     # ---------- 守护：用药 / 居家安全 / 就医 ----------
     def take_med(self, name, now=None) -> str:
