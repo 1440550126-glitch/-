@@ -178,7 +178,20 @@ def _t_recall(args, ctx):
     hits = ctx.memory.recall(args["query"], limit=int(args.get("limit", 6)))
     if not hits:
         return "(没有相关记忆)"
-    return "\n".join(f"- {h['text']}" for h in hits)
+    return "\n".join(f"#{h['id']} {h['text']}" for h in hits)
+
+
+def _t_forget(args, ctx):
+    if not ctx.memory:
+        return "[错误] 记忆不可用"
+    fid = args.get("id")
+    if fid is None:
+        return "[错误] 需要 id（先用 recall 查到记忆编号）"
+    try:
+        ok = ctx.memory.forget(int(fid))
+    except (ValueError, TypeError):
+        return f"[错误] 非法 id：{fid!r}"
+    return f"已删除记忆 #{fid}" if ok else f"未找到记忆 #{fid}"
 
 
 def _t_now(args, ctx):
@@ -268,7 +281,9 @@ def build_default_registry() -> ToolRegistry:
     r.add("web_fetch", "抓取网页并返回纯文本", {"url": "http(s) 链接"}, _t_web_fetch)
     r.add("remember", "把一条信息写入长期记忆",
           {"text": "要记住的内容", "importance": "1-5，默认3"}, _t_remember)
-    r.add("recall", "从长期记忆检索", {"query": "查询词", "limit": "条数"}, _t_recall)
+    r.add("recall", "从长期记忆检索（返回带 #编号）", {"query": "查询词", "limit": "条数"}, _t_recall)
+    r.add("forget", "删除一条过时/错误的长期记忆（先用 recall 查编号）",
+          {"id": "记忆编号"}, _t_forget, danger=True)
     r.add("now", "获取当前日期时间", {}, _t_now)
     r.add("remind", "设置一个定时提醒（守护进程到点会主动触发）",
           {"text": "提醒内容", "when": "时间：in 2h / 18:30 / 2026-06-17 09:00"}, _t_remind)

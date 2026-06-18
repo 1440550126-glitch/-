@@ -108,9 +108,20 @@ class Agent:
             pass
 
     def _system_prompt(self, user_input: str, native: bool = False) -> str:
+        import datetime as _dt
         parts = [self.config.get("persona", "你是 Mnemo，用户的私人 AI 伙伴。")]
+        parts.append(f"## 当前情境\n现在是 {_dt.datetime.now():%Y-%m-%d %H:%M %A}。")
 
         if self.memory and self.config.get("memory.enabled", True):
+            # 主动提醒：到点/逾期的事项，在对话中主动提起（不止靠守护进程）
+            if self.config.get("memory.proactive_reminders", True):
+                try:
+                    due = self.memory.due_reminders()
+                except Exception:  # noqa: BLE001
+                    due = []
+                if due:
+                    parts.append("## ⏰ 到点/逾期提醒（请在回复中自然地提醒用户）\n"
+                                 + "\n".join(f"- {r['text']}" for r in due[:5]))
             prof = self.memory.profile_summary()
             if prof:
                 parts.append("## 我对你的了解（持续积累）\n" + prof)

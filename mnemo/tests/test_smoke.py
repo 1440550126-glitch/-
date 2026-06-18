@@ -845,6 +845,37 @@ class TestMemoryManagement(unittest.TestCase):
         self.assertEqual(eps[0]["user"], "你好")
 
 
+class TestAwareness(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = load_config(self.tmp.name)
+        self.mem = Memory(self.cfg.db_path)
+        self.skills = SkillRegistry(self.cfg)
+        self.tools = build_default_registry()
+
+    def tearDown(self):
+        self.mem.close()
+        self.tmp.cleanup()
+
+    def test_due_reminder_injected_into_prompt(self):
+        self.mem.add_reminder("给妈妈打电话", time.time() - 60)   # 已逾期
+        agent = Agent(FakeProvider(["ok"]), self.tools, self.mem, self.skills, self.cfg)
+        sp = agent._system_prompt("你好")
+        self.assertIn("给妈妈打电话", sp)
+        self.assertIn("当前情境", sp)
+
+    def test_forget_tool(self):
+        fid = self.mem.add_fact("一条会被删除的记忆")
+        out = self.tools.run("forget", {"id": fid}, ToolContext(memory=self.mem))
+        self.assertIn("已删除", out)
+        self.assertFalse(any(f["id"] == fid for f in self.mem.all_facts()))
+
+    def test_recall_tool_shows_ids(self):
+        self.mem.add_fact("用户喜欢喝美式", importance=4)
+        out = self.tools.run("recall", {"query": "美式"}, ToolContext(memory=self.mem))
+        self.assertRegex(out, r"#\d+")
+
+
 class TestHttpRetry(unittest.TestCase):
     def test_retries_transient_then_succeeds(self):
         import mnemo.providers.base as base_mod

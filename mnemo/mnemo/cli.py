@@ -730,6 +730,51 @@ def cmd_voice(args):
     return 0
 
 
+def cmd_status(args):
+    app = build_app(args)
+    cfg = app.cfg
+    print(bold("✦ Mnemo 状态"))
+    p = app.provider
+    print(f"  后端     {p.name}/{p.model or 'default'}")
+    if app.memory:
+        s = app.memory.stats()
+        know = len(app.memory.facts_by(kind="knowledge", limit=100000))
+        print(f"  记忆     事实 {s['facts']}（知识 {know}） · 对话 {s['episodes']} · 话题 {s['topics']}")
+        prof = app.memory.profile_summary()
+        if prof:
+            print(dim("  画像     " + prof.replace("\n", "\n           ")))
+        pend = app.memory.pending_reminders()
+        if pend:
+            nr = pend[0]
+            when = time.strftime("%m-%d %H:%M", time.localtime(nr["remind_at"]))
+            print(f"  提醒     {len(pend)} 条待办（最近 {when}：{nr['text'][:30]}）")
+    try:
+        from .usage import UsageStore
+        us = UsageStore(cfg.db_path)
+        t = us.summary(time.time() - 86400)
+        us.close()
+        if t["calls"]:
+            line = f"  今日用量 {t['calls']} 次 · 入 {_fmt_tok(t['in_tok'])} · 出 {_fmt_tok(t['out_tok'])}"
+            print(line + (f" · ${t['cost']:.4f}" if t["cost"] else ""))
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from .daemon import TaskStore
+        ts = TaskStore(cfg.db_path)
+        tasks = ts.list()
+        if tasks:
+            print(f"  任务     {len(tasks)} 个（启用 {sum(1 for t in tasks if t.enabled)}）")
+        sess = app.memory.sessions() if app.memory else []
+        if sess:
+            print(f"  会话     {len(sess)} 个")
+    except Exception:  # noqa: BLE001
+        pass
+    mcp = cfg.get("mcp.servers", {}) or {}
+    if mcp:
+        print(f"  MCP      {len(mcp)} 个服务：{', '.join(mcp)}")
+    return 0
+
+
 def cmd_doctor(args):
     cfg = load_config(getattr(args, "home", None))
     print(bold("Mnemo 自检"))
@@ -927,6 +972,7 @@ def build_parser() -> argparse.ArgumentParser:
     pvo = sub.add_parser("voice", help="语音对话：录音→转写→回答→朗读")
     pvo.add_argument("--seconds", type=int, default=5); pvo.add_argument("--once", action="store_true")
 
+    sub.add_parser("status", help="一览：后端/记忆/用量/提醒/任务/会话/MCP")
     sub.add_parser("doctor", help="环境自检")
     return p
 
@@ -936,7 +982,7 @@ _HANDLERS = {
     "provider": cmd_provider,
     "memory": cmd_memory, "session": cmd_session, "skill": cmd_skill,
     "plugin": cmd_plugin, "task": cmd_task,
-    "daemon": cmd_daemon, "doctor": cmd_doctor, "audit": cmd_audit,
+    "daemon": cmd_daemon, "doctor": cmd_doctor, "status": cmd_status, "audit": cmd_audit,
     "market": cmd_market, "sync": cmd_sync, "speak": cmd_speak, "see": cmd_see,
     "serve": cmd_serve, "voice": cmd_voice, "mcp": cmd_mcp, "usage": cmd_usage,
 }
