@@ -741,6 +741,36 @@ class TestTools(unittest.TestCase):
         self.assertIn("你好 Mnemo", out)
         tmp.cleanup()
 
+    def test_http_request_tool(self):
+        import mnemo.tools as tools_mod
+
+        class FakeResp:
+            status = 201
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self, n=None): return b'{"ok":true}'
+
+        captured = {}
+
+        def fake_open(req, timeout=0):
+            captured["method"] = req.get_method()
+            captured["data"] = req.data
+            return FakeResp()
+
+        orig = tools_mod.urllib.request.urlopen
+        tools_mod.urllib.request.urlopen = fake_open
+        try:
+            reg = build_default_registry()
+            out = reg.run("http_request",
+                          {"url": "https://api.x/1", "method": "post", "body": {"a": 1}},
+                          ToolContext())
+        finally:
+            tools_mod.urllib.request.urlopen = orig
+        self.assertIn("201", out)
+        self.assertIn("ok", out)
+        self.assertEqual(captured["method"], "POST")
+        self.assertIn(b'"a": 1', captured["data"])
+
 
 class TestIngest(unittest.TestCase):
     def setUp(self):

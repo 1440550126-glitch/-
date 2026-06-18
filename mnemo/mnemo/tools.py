@@ -7,6 +7,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -162,6 +163,37 @@ def _t_web_search(args, ctx):
     return "\n".join(
         f"{i}. {r['title']}\n   {r['url']}" + (f"\n   {r['snippet']}" if r["snippet"] else "")
         for i, r in enumerate(results, 1))
+
+
+def _t_http_request(args, ctx):
+    """通用 REST 调用：支持方法/请求头/JSON 或文本 body。比 web_fetch 更通用。"""
+    import json as _json
+    url = args.get("url", "")
+    if not re.match(r"^https?://", url):
+        return "[错误] 仅支持 http(s) URL"
+    method = (args.get("method") or "GET").upper()
+    headers = dict(args.get("headers") or {})
+    body = args.get("body")
+    data = None
+    if body is not None:
+        if isinstance(body, (dict, list)):
+            data = _json.dumps(body).encode("utf-8")
+            headers.setdefault("Content-Type", "application/json")
+        else:
+            data = str(body).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method=method)
+    req.add_header("User-Agent", "Mnemo/0.1")
+    for k, v in headers.items():
+        req.add_header(k, str(v))
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read(1_000_000).decode("utf-8", "replace")
+        return f"[{getattr(resp, 'status', 200)}]\n{raw[:6000]}" + (
+            "\n…(已截断)" if len(raw) > 6000 else "")
+    except urllib.error.HTTPError as e:
+        return f"[HTTP {e.code}] {e.read().decode('utf-8', 'replace')[:2000]}"
+    except Exception as e:  # noqa: BLE001
+        return f"[http_request] 失败：{e}"
 
 
 def _t_remember(args, ctx):
@@ -327,6 +359,9 @@ def build_default_registry() -> ToolRegistry:
     r.add("web_search", "用搜索引擎检索网页，返回标题/链接/摘要（再用 web_fetch 抓正文）",
           {"query": "搜索词", "limit": "结果条数，默认6"}, _t_web_search)
     r.add("web_fetch", "抓取网页并返回纯文本", {"url": "http(s) 链接"}, _t_web_fetch)
+    r.add("http_request", "调用任意 REST API（GET/POST/PUT…，可带 headers 与 JSON body）",
+          {"url": "链接", "method": "默认GET", "headers": "可选对象", "body": "可选，对象自动转JSON"},
+          _t_http_request, danger=True)
     r.add("remember", "把一条信息写入长期记忆",
           {"text": "要记住的内容", "importance": "1-5，默认3"}, _t_remember)
     r.add("recall", "从长期记忆检索（返回带 #编号）", {"query": "查询词", "limit": "条数"}, _t_recall)
