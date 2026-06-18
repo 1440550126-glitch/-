@@ -31,8 +31,10 @@ DEFAULTS: dict[str, Any] = {
     "registry": "",           # 技能/插件市场地址（本地文件或 URL）
     "memory": {"enabled": True, "recall_limit": 6, "min_importance": 1, "semantic": False},
     "ui": {"stream": True},   # 交互对话逐字流式输出（终端可见时生效）
-    # 通知推送：让到点提醒/任务结果触达用户（desktop / webhook / 兜底 stdout）
-    "notify": {"channel": "auto", "webhook": "", "on_reminder": True, "on_task": False},
+    # 通知推送：让到点提醒/任务结果触达用户（desktop / webhook / email / 兜底 stdout）
+    "notify": {"channel": "auto", "webhook": "", "on_reminder": True, "on_task": False,
+               "email": {"smtp_host": "", "port": 587, "user": "", "password": "",
+                         "to": "", "from": "", "starttls": True}},
     # 用量观测：记录每次模型调用的 token；pricing 可选（每百万 token 单价）才算成本
     # daily_token_limit>0 时，今日用量达上限即暂停调用（无人值守的成本护栏）
     "usage": {"enabled": True, "daily_token_limit": 0},

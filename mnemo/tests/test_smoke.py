@@ -952,6 +952,24 @@ class TestNotify(unittest.TestCase):
         self.assertEqual(sent["url"], "http://example/hook")
         self.assertEqual(sent["msg"], "提醒你喝水")
 
+    def test_email_channel_used_when_configured(self):
+        import mnemo.notify as nt
+        sent = {}
+
+        def fake_email(cfg, title, message):
+            sent["to"] = cfg.get("to"); sent["msg"] = message
+            return True
+        orig = nt.email
+        nt.email = fake_email
+        self.cfg.set("notify.channel", "email")
+        self.cfg.set("notify.email", {"smtp_host": "smtp.x", "to": "me@x.com"})
+        try:
+            ch = nt.notify(self.cfg, "每日简报", title="T")
+        finally:
+            nt.email = orig
+        self.assertEqual(ch, "email")
+        self.assertEqual(sent["to"], "me@x.com")
+
     def test_stdout_fallback(self):
         from mnemo.notify import notify
         self.cfg.set("notify.channel", "webhook")   # 但未配 webhook → 回退

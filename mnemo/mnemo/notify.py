@@ -38,6 +38,30 @@ def desktop(title: str, message: str) -> bool:
     return False
 
 
+def email(cfg: dict, title: str, message: str) -> bool:
+    """通过 SMTP 发邮件（stdlib smtplib）。cfg: {smtp_host,port,user,password,to,from,starttls}。"""
+    import smtplib
+    from email.message import EmailMessage
+    host, to = cfg.get("smtp_host"), cfg.get("to")
+    if not host or not to:
+        return False
+    msg = EmailMessage()
+    msg["Subject"] = title
+    msg["From"] = cfg.get("from") or cfg.get("user") or "mnemo@localhost"
+    msg["To"] = to
+    msg.set_content(message)
+    try:
+        with smtplib.SMTP(host, int(cfg.get("port", 587)), timeout=15) as s:
+            if cfg.get("starttls", True):
+                s.starttls()
+            if cfg.get("user"):
+                s.login(cfg["user"], cfg.get("password", ""))
+            s.send_message(msg)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def webhook(url: str, title: str, message: str, timeout: int = 10) -> bool:
     """POST 通用 JSON；同时带 text/content/title 字段以兼容主流 IM webhook。"""
     text = f"{title}: {message}" if title else message
@@ -58,9 +82,12 @@ def notify(config, message: str, title: str = "Mnemo") -> str:
     if channel == "none":
         return "none"
     hook = config.get("notify.webhook") if config else None
+    email_cfg = (config.get("notify.email") if config else None) or {}
 
     if channel in ("auto", "webhook") and hook and webhook(hook, title, message):
         return "webhook"
+    if channel in ("auto", "email") and email_cfg.get("smtp_host") and email(email_cfg, title, message):
+        return "email"
     if channel in ("auto", "desktop") and desktop(title, message):
         return "desktop"
     print(f"🔔 {title}：{message}")                    # 始终兜底
