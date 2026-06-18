@@ -49,6 +49,7 @@ from .selfnarrative import SelfLog
 from .scenes import SceneBook
 from .shopping import ShoppingList
 from .timecapsule import CapsuleBook
+from .todo import TodoList
 from .skills import SkillRegistry
 from .social import SocialLog
 from .spouse import spouse_profile
@@ -186,7 +187,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                               seed=_load_yaml(base / "config" / "pets.yaml")),
                  reminders=ReminderBook(base / "data" / "reminders.json"),
                  countdown=CountdownBook(base / "data" / "countdown.json",
-                                         seed=_load_yaml(base / "config" / "countdown.yaml")))
+                                         seed=_load_yaml(base / "config" / "countdown.yaml")),
+                 todo=TodoList(base / "data" / "todo.json"))
 
 
 def _seed_memory(base: Path, memory) -> None:

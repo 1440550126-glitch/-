@@ -45,7 +45,7 @@ class Agent:
                  contacts=None, ledger=None, bedtime=None,
                  music=None, plants=None, touch=None, understanding=None,
                  messages=None, vitals=None, board=None, growth=None,
-                 pets=None, reminders=None, countdown=None) -> None:
+                 pets=None, reminders=None, countdown=None, todo=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -136,6 +136,7 @@ class Agent:
         self._pet_reminded: set = set()                           # 当天已提醒过的喂宠（去重）
         self.reminders = reminders                                # 随口提醒（"提醒我三点吃药"）
         self.countdown = countdown                                # 倒计时（离过年/退休/高考还有几天）
+        self.todo = todo                                          # 个人待办清单（自己的一张小清单）
         self._noticed: set = set()                                # 已点破过的"门道"（当天去重）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
@@ -525,6 +526,14 @@ class Agent:
                     result["reply"] = txt
                     self._log_journal(who, u, txt, "med_list")
                     return result
+
+        # --- 待办清单（"待办加交电费" / "我的待办" / "待办交电费办好了"）---
+        if action is None and who.get("obey") and self.todo is not None and "待办" in (utterance or ""):
+            txt = self.todo_handle(utterance)
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "todo")
+                return result
 
         # --- 倒计时（"离过年还有几天" / "记一下十月一号是去旅行"）---
         if action is None and who.get("obey") and self.countdown is not None:
@@ -2749,6 +2758,26 @@ class Agent:
             return ""
         mine = [it["what"] for it in self.board.for_member(name)]
         return ("今天轮到你：" + "、".join(mine) + "，别忘了。") if mine else ""
+
+    # ---------- 待办清单 ----------
+    def todo_handle(self, utterance) -> str:
+        if self.todo is None:
+            return ""
+        u = utterance or ""
+        if any(k in u for k in ("我的待办", "待办清单", "待办还剩", "还有什么要做", "还有啥要办",
+                                "待办都有啥")):
+            return self.todo.describe()
+        if "待办" in u and any(k in u for k in ("完成", "划掉", "办好了", "做完了", "搞定")):
+            for done_kw in ("完成", "划掉", "办好了", "做完了", "搞定"):
+                u = u.replace(done_kw, "")
+            task = u[u.find("待办") + 2:].strip("，,：: 把的 ")
+            it = self.todo.done(task)
+            return f"好，「{it['task']}」办好了，划掉。" if it else "这条待办我没找着。"
+        if "待办" in u and any(k in u for k in ("加", "记", "：", ":", "添")):
+            task = u[u.find("待办") + 2:].strip("，,：: 加记一下要做的别忘了添个件 ")
+            it = self.todo.add(task)
+            return f"记下了，待办里加上「{it['task']}」。" if it else ""
+        return ""
 
     # ---------- 倒计时 ----------
     def _countdown_name(self, utterance):
