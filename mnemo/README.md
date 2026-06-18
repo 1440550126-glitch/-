@@ -46,7 +46,11 @@ export OPENAI_API_KEY=sk-... OPENAI_BASE_URL=https://api.deepseek.com/v1 OPENAI_
 | **主动通知** | 到点提醒/任务结果经 desktop / webhook 推送（`mnemo notify`、`notify` 工具） |
 | **文件监视** | `mnemo watch add` 路径变化即触发任务（守护进程巡检） |
 | **会话连贯** | 滚动摘要压缩长会话（`session summarize`，守护进程每日自动刷新）；`chat --resume` 续接 |
-| **更多工具** | `edit_file` 精准改写、`http_request` 调任意 REST、`calc` 安全计算、`forget` 自纠记忆 |
+| **更多工具** | `edit_file` 精准改写、`search_files` grep 检索、`http_request` 调任意 REST、`calc` 安全计算、`forget` 自纠记忆 |
+| **周期提醒** | `memory remind --repeat daily/weekly/every 3d`，守护进程到点滚动到下一次 |
+| **自动日记/回顾** | `mnemo diary`（可 `diary.auto` 每天自动写）+ 内置 `weekly-review` 技能 |
+| **多步剧本** | `mnemo playbook` 命名例程按序共享上下文执行（如晨间例程） |
+| **对话检索** | `mnemo session search <词>` 在历史对话里找"我们之前聊过 X 吗" |
 | **成本护栏** | `usage.daily_token_limit` 到达即暂停调用，保护无人值守不超支 |
 | **脚本友好** | `mnemo run --json` 输出 `{reply, steps}`；`mnemo init` 初始化向导 |
 | **导入导出** | `memory export/import`（Markdown/JSON）、`ingest <url>` 摄入网页、邮件通知投递简报 |
@@ -79,7 +83,9 @@ mnemo memory profile        # 看"它对你的了解"
 mnemo memory add "我女儿生日 5/20" --importance 5
 mnemo memory search 生日
 mnemo memory remind "给妈妈打电话" --when "in 2h"    # 守护进程到点主动提醒
+mnemo memory remind "吃药" --when 08:00 --repeat daily  # 周期提醒
 mnemo memory reminders
+mnemo session search 冲浪                     # 在历史对话里检索
 mnemo memory consolidate    # 主动巩固：合并近重复、淡忘陈旧
 mnemo memory backfill       # 为记忆补算语义向量（需后端支持 embed）
 
@@ -149,7 +155,9 @@ mnemo market rate hello 5 --note 好用            # 本地评分
 mnemo task add --name 每日简报 --every "@daily 08:30" --prompt "用 daily-briefing 技能做今日简报"
 mnemo task history          # 任务执行历史（✓/✗）
 mnemo watch add --name 笔记 --path ./notes --prompt "总结新增内容并记入记忆"
-mnemo notify "测试通知"      # 验证 desktop/webhook 通知渠道
+mnemo playbook add --name 晨间 --step "看今日要点" --step "列三件最重要的事"
+mnemo playbook run 晨间      # 多步例程，步骤间共享上下文
+mnemo notify "测试通知"      # 验证 desktop/webhook/email 通知渠道
 mnemo daemon                # 守护：跑任务 + 文件监视 + 提醒/通知 + 每日巩固/会话摘要
 mnemo audit                 # 工具调用审计日志
 mnemo config set sandbox.engine docker     # run_shell 改为容器内隔离执行
@@ -169,7 +177,8 @@ mnemo/
 ├─ agent.py        核心循环：文本工具协议 / 原生 function-calling 双路径 + 记忆固化 + 轨迹
 ├─ config.py       分层配置：默认 < config.json < .mnemo.json < 环境变量
 ├─ memory.py       永久记忆：facts/episodes/profile/topics/reminders；关键词+向量检索；巩固/遗忘
-├─ tools.py        工具：文件/Shell/搜索+抓取/记忆(记/查/忘)/计算/提醒/委派/视觉/语音；审批与拦截
+├─ tools.py        工具(20)：文件读写/改/搜、Shell、网页搜索+抓取、http、记忆记/查/忘、
+│                  计算、提醒、通知、委派、视觉、语音；审批与拦截
 ├─ websearch.py    联网检索：DuckDuckGo 解析（零 Key），供 web_search 工具
 ├─ ingest.py       知识摄入（RAG）：文档分块 + 灌入长期记忆
 ├─ skills.py       技能：Markdown 加载、相关性注入、learn 学习、distill 自我进化
@@ -219,7 +228,7 @@ mnemo plugin install ./my-plugin
 ## 测试
 
 ```bash
-python -m unittest discover -s tests -v   # 118 项全链路冒烟，全部通过
+python -m unittest discover -s tests -v   # 126 项全链路冒烟，全部通过
 ```
 
 覆盖：记忆/画像、语义检索+LSH ANN、巩固/遗忘、提醒、工具循环、原生 function-calling、
