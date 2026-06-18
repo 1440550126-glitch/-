@@ -37,7 +37,7 @@ class Agent:
                  memorial=None, llm_router=None, legacy=None, care=None, family=None,
                  calendar=None, capsules=None, notes=None,
                  recipes=None, sayings=None, social=None, goals=None,
-                 shopping=None) -> None:
+                 shopping=None, mannerisms=None, heirlooms=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -83,6 +83,8 @@ class Agent:
         self.notes = notes                                        # 速记便签（最轻的随手备忘）
         self.recipes = recipes or {}                              # 家传菜谱
         self.sayings = sayings or {}                              # 口头语录 / 老话
+        self.mannerisms = mannerisms or {}                        # 说话习惯（神似：称呼/语气词/方言）
+        self.heirlooms = heirlooms or []                          # 遗物/信物的故事与归属
         self.social = social                                      # 社交记忆（对每人的亲疏冷暖）
         self.goals = goals                                        # 心愿与目标
         self.shopping = shopping                                  # 采买清单
@@ -403,6 +405,49 @@ class Agent:
             if txt:
                 result["reply"] = txt
                 self._log_journal(who, utterance, txt, "sayings")
+                return result
+
+        # --- 说话习惯（"你说话有什么习惯" / "你的口音"）---
+        if action is None and who.get("obey") and getattr(self, "mannerisms", None) and any(
+                k in (utterance or "") for k in ("说话有什么习惯", "说话习惯", "怎么说话",
+                                                 "你的口音", "你说话像", "口头习惯")):
+            txt = self.speech_habits()
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "mannerisms")
+                return result
+
+        # --- 遗物 / 信物（"爷爷那块表呢" / "有什么念想留给我"）---
+        if action is None and who.get("obey"):
+            uh = utterance or ""
+            if (any(k in uh for k in ("遗物", "信物", "念想", "留给我", "传给我", "留了什么"))
+                    or self._heirloom_hit(uh)):
+                txt = self.heirloom_story(uh)
+                if not txt and ("留给我" in uh or "传给我" in uh):
+                    txt = self.bequests_for(who.get("name"))
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, uh, txt, "heirloom")
+                    return result
+
+        # --- 家谱 / 辈分（"咱家几辈人" / "家谱"）---
+        if action is None and who.get("obey") and self.family and any(
+                k in (utterance or "") for k in ("家谱", "几辈人", "辈分", "家族树", "排排辈")):
+            txt = self.family_tree_line()
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "genealogy")
+                return result
+
+        # --- 纪念仪式（"带我们悼念" / "今天怎么纪念"）---
+        if action is None and who.get("obey") and any(
+                k in (utterance or "") for k in ("纪念仪式", "悼念", "怎么纪念", "走个仪式",
+                                                 "祭奠", "祭拜", "缅怀一下")):
+            steps = self.remembrance_ritual()
+            if steps:
+                txt = "\n".join(steps)
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "anniversary")
                 return result
 
         # --- 传统节日（"今天是什么节" / "端午有什么讲究"）---
@@ -770,6 +815,11 @@ class Agent:
         if who.get("obey"):
             for cap in self.due_capsules():
                 text = f"{text} {cap}"
+        # 家谱生日：见到你时，若近几天有家人过生日，主动提醒一句别忘了
+        if who.get("obey") and self.family:
+            bday = self.birthday_reminders(within=7)
+            if bday:
+                text = f"{text} {bday}"
         self.robot.say(text)
         return text
 
@@ -909,6 +959,98 @@ class Agent:
     def recite_sayings(self, topic=None) -> str:
         from .sayings import collect_sayings, recite
         return recite(collect_sayings(self.sayings, self.identity))
+
+    # ---------- 说话习惯（神似）----------
+    def _deceased_name(self) -> str:
+        """这具分身所承载的人的名字（缅怀/仪式里称呼用）。"""
+        return (self.identity or {}).get("name") or "TA"
+
+    def speak_like(self, text, *, particle=True) -> str:
+        """给一句回复"上色"，让它更像 TA 本人说的；没配说话习惯则原样返回。"""
+        from .mannerisms import apply_style
+        if not getattr(self, "mannerisms", None):
+            return text
+        return apply_style(text, self.mannerisms, particle=particle)
+
+    def speech_habits(self) -> str:
+        """自述说话习惯（"你说话有什么习惯"）。"""
+        from .mannerisms import describe
+        return describe(getattr(self, "mannerisms", None))
+
+    def call_person(self, key) -> str | None:
+        """TA 生前怎么称呼这个人（按名字或关系）。"""
+        from .mannerisms import address_for
+        return address_for(getattr(self, "mannerisms", None), key)
+
+    # ---------- 周年祭 / 纪念仪式 ----------
+    def anniversaries_today(self, now=None) -> list:
+        from .anniversary import anniversaries_today
+        return anniversaries_today((self.memorial or {}).get("dates", {}), now)
+
+    def upcoming_anniversaries(self, within=30, now=None) -> list:
+        from .anniversary import days_until
+        return days_until((self.memorial or {}).get("dates", {}), now, within)
+
+    def remembrance_ritual(self, name=None, now=None) -> list:
+        """走一遍纪念仪式：默认取今天的纪念日；name 可指定某个。返回一句句步骤话。"""
+        from .anniversary import anniversaries_today, ritual_steps, who_of
+        from .legacy import last_words
+        today = anniversaries_today((self.memorial or {}).get("dates", {}), now)
+        if name:
+            today = [(n, y) for n, y in today if name in n] or [(name, None)]
+        if not today:
+            return []
+        label, years = today[0]
+        who = who_of(label) or self._deceased_name()       # "张爸的忌日"→"张爸"，否则用本尊名
+        lw = last_words(self.legacy)
+        mems = []
+        if self.memory is not None:
+            mems = [it["text"] for _, it in self.memory.recall(who or label, k=2)]
+        return ritual_steps(label, who, last_words=lw[0] if lw else None,
+                            memories=mems, years=years)
+
+    # ---------- 遗物 / 信物 ----------
+    def _heirloom_items(self) -> list:
+        from .heirloom import collect_heirlooms
+        return collect_heirlooms(getattr(self, "heirlooms", None), self.legacy)
+
+    def _heirloom_hit(self, text) -> bool:
+        """问话里点到了某件信物名（至少两字，避免"表/书"这类单字误触）。"""
+        from .heirloom import find_heirloom
+        it = find_heirloom(self._heirloom_items(), text)
+        return bool(it and len(it["item"]) >= 2)
+
+    def heirloom_story(self, query) -> str:
+        """讲一件信物的来历；问"有什么念想"则报清单。"""
+        from .heirloom import find_heirloom, list_items, story_of, where_is
+        items = self._heirloom_items()
+        if not items:
+            return ""
+        if any(k in (query or "") for k in ("有什么遗物", "什么念想", "哪些遗物", "哪些信物",
+                                            "什么信物", "什么东西留", "留了什么")):
+            return list_items(items)
+        it = find_heirloom(items, query)
+        if not it:
+            return ""
+        s, w = story_of(it), where_is(it)
+        return (s + (" " + w if w else "")).strip()
+
+    def bequests_for(self, name) -> str:
+        """这个人该得的信物（"有什么留给我"）。"""
+        from .heirloom import bequest_to, story_of
+        got = bequest_to(self._heirloom_items(), name)
+        if not got:
+            return ""
+        return "有些东西，我想留给你：" + "；".join(story_of(it) for it in got)
+
+    # ---------- 家谱 ----------
+    def family_tree_line(self) -> str:
+        from .genealogy import build_tree, roster_by_gen
+        return roster_by_gen(build_tree(self.family))
+
+    def birthday_reminders(self, within=30, now=None) -> str:
+        from .genealogy import birthday_line, build_tree
+        return birthday_line(build_tree(self.family), now, within)
 
     def kinship(self, text) -> str:
         """算亲戚称呼："我爸的弟弟" → "该叫叔叔"。"""
@@ -1120,11 +1262,13 @@ class Agent:
             return "你好，请问您是哪位？"
         if not who.get("obey"):
             return f"（看了一眼{name}，没有说话。）"
+        # 神似：若 TA 生前对这人有专属称呼（如管孙子叫"乖乖"），就用 TA 的叫法
+        call = self.call_person(name) or self.call_person(who.get("relation")) or name
         if who.get("guard"):
-            return f"{name}回来啦！我一直在等你呢。"
+            return self.speak_like(f"{call}回来啦！我一直在等你呢。")
         if who.get("trust") == "family":
-            return f"{name}，你来啦！"
-        return f"嘿，{name}，好久不见！"
+            return self.speak_like(f"{call}，你来啦！")
+        return self.speak_like(f"嘿，{call}，好久不见！")
 
     # ---------- 技能：做饭 / 家务等（走授权闸门）----------
     def run_skill(self, speaker_name, skill_name, **params) -> dict:

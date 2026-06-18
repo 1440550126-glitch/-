@@ -15,9 +15,11 @@ from .devices import build_device_hub, build_sensor_source
 from .dream import DreamLog
 from .emotions import EmotionState
 from .goals import GoalBook
+from .heirloom import collect_heirlooms
 from .journal import Journal
 from .knowledge import Knowledge
 from .llm import build_router
+from .mannerisms import load_mannerisms
 from .memory import Memory
 from .notes import NoteBook
 from .perception import build_perception
@@ -120,7 +122,12 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  sayings=_load_yaml(base / "config" / "sayings.yaml"),
                  social=SocialLog(base / "data" / "social.json"),
                  goals=GoalBook(base / "data" / "goals.json"),
-                 shopping=ShoppingList(base / "data" / "shopping.json"))
+                 shopping=ShoppingList(base / "data" / "shopping.json"),
+                 mannerisms=load_mannerisms(
+                     _load_yaml(base / "config" / "mannerisms.yaml"), identity),
+                 heirlooms=collect_heirlooms(
+                     _load_yaml(base / "config" / "heirlooms.yaml"),
+                     _load_yaml(base / "config" / "legacy.yaml")))
 
 
 def _seed_memory(base: Path, memory) -> None:
