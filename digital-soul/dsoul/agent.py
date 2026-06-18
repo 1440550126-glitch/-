@@ -77,6 +77,7 @@ class Agent:
         self.values = values                                      # 价值观（抉择时据此权衡）
         self.values_path = values_path                            # 演化后的价值权重持久化路径
         self.thoughts: deque = deque(maxlen=12)                   # 内心独白（近期心声）
+        self.dialogue: deque = deque(maxlen=6)                    # 这一席话的近几句（对话连贯·像人）
         self.curiosity = curiosity                                # 好奇心：对陌生事物的疑问本
         self.worldmodel = worldmodel                              # 世界模型：带置信度的信念，会自我修正
         self.calib = calib                                        # 预测校准（从"猜对/没猜对"学习）
@@ -196,6 +197,10 @@ class Agent:
                 self.social.note(who["name"], emotion=emo, topic=topic)
             except Exception:
                 pass
+
+        # --- 对话连贯：把这句存进"这一席话"的缓冲，回应时能接着前面的话头（像人）---
+        if who.get("known") and action is None and getattr(self, "dialogue", None) is not None:
+            self.dialogue.append((utterance or "").strip())
 
         # --- 我眼里的你：把这次互动沉淀进对TA的理解（越处越懂）---
         if who.get("known") and getattr(self, "understanding", None) is not None:
@@ -1500,6 +1505,10 @@ class Agent:
         hint = thinking_hint(utterance)          # 把读出的弦外之音喂给大模型
         if hint:
             hints = hints + [hint]
+        from .continuity import recent_context_hint   # 让它记着这一席话的前几句（像人一样接话）
+        ch = recent_context_hint(list(self.dialogue)[:-1]) if getattr(self, "dialogue", None) else ""
+        if ch:
+            hints = hints + [ch]
         if knows:                                 # 把"我对TA的了解"也喂给大模型，回得更贴心
             hints = hints + [f"（我对{who['name']}的了解：{knows}。回应时照顾到这层。）"]
 
@@ -1560,12 +1569,16 @@ class Agent:
                 addr = f"{who['name']}（放心，有我在）"
         else:
             addr = ""
+        from .continuity import callback
         from .followup import followup, is_sharing
         from .style import apply_style
-        # 像人一样接话：对方在分享一件事，就顺着问一句，显出真在听（而不是干巴巴复述记忆）
+        # 像人一样接话：先看能不能接上刚才的话头，再看是不是在分享、顺口问一句
+        cb = callback(utterance, list(self.dialogue)[:-1]) if getattr(self, "dialogue", None) else ""
         fu = followup(utterance) if is_sharing(utterance) else ""
-        if fu:
-            body = f"{opener}{addr}{fu}"
+        if cb and mems:
+            body = f"{opener}{addr}{cb}我记得——{mems[0].rstrip('。.')}。"
+        elif fu:
+            body = f"{opener}{addr}{cb}{fu}"
         elif mems:
             body = f"{opener}{addr}我记得——{mems[0].rstrip('。.')}。" + \
                    (f" 还有，{mems[1].rstrip('。.')}。" if len(mems) > 1 else "")
