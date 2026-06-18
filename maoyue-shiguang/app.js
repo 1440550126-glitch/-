@@ -5,7 +5,7 @@ const realtime = require('./utils/realtime.js');
 
 // 云开发环境 ID：在微信后台开通「云开发」后填入（留空则用默认环境）。
 // 云数据库/云存储/云函数（含内容安全 secCheck）都依赖它。
-const CLOUD_ENV = '';
+const CLOUD_ENV = 'cloud1-d7gpe7xa5720e6963';
 
 App({
   globalData: {
