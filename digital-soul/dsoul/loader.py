@@ -19,6 +19,7 @@ from .emotions import EmotionState
 from .family_board import FamilyBoard
 from .favors import FavorBook
 from .goals import GoalBook
+from .growth_log import GrowthLog
 from .habit_goals import HabitBook
 from .household_ledger import Ledger
 from .heirloom import collect_heirlooms
@@ -176,7 +177,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  understanding=Understanding(base / "data" / "understanding.json"),
                  messages=Messages(base / "data" / "messages.json"),
                  vitals=VitalsLog(base / "data" / "vitals.json"),
-                 board=FamilyBoard(base / "data" / "family_board.json"))
+                 board=FamilyBoard(base / "data" / "family_board.json"),
+                 growth=GrowthLog(base / "data" / "growth.json"))
 
 
 def _seed_memory(base: Path, memory) -> None:

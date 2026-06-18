@@ -44,7 +44,7 @@ class Agent:
                  opinions=None, joys=None, habits_book=None,
                  contacts=None, ledger=None, bedtime=None,
                  music=None, plants=None, touch=None, understanding=None,
-                 messages=None, vitals=None, board=None) -> None:
+                 messages=None, vitals=None, board=None, growth=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -127,6 +127,7 @@ class Agent:
         self.vitals = vitals                                      # 体征记录（血压/血糖/体重，看趋势、异常提醒）
         self.board = board                                        # 家庭共享·分工板（谁买菜/谁接孩子）
         self._chore_reminded: set = set()                         # 当天已提醒过的分工（去重）
+        self.growth = growth                                      # 成长记录（孙辈的成长点滴）
         self._noticed: set = set()                                # 已点破过的"门道"（当天去重）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
@@ -417,6 +418,25 @@ class Agent:
                     if self.social is not None:
                         self.social.note(who.get("name"), emotion="喜", topic="肯定")
                     self._log_journal(who, utterance, txt, "praise")
+                    return result
+
+        # --- 成长记录：孙辈的成长点滴，记一笔；问"X长大的事"则一桩桩讲 ---
+        if action is None and who.get("obey") and self.growth is not None:
+            ug = utterance or ""
+            if any(k in ug for k in ("的成长", "长大的事", "成长记录", "成长点滴")) and self._child_in(ug):
+                txt = self.growth_recall(self._child_in(ug))
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, ug, txt, "growth_recall")
+                    return result
+            from .growth_log import detect_milestone
+            if detect_milestone(ug) and self._child_in(ug):
+                txt = self.record_growth(ug)
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="喜", topic="成长")
+                    self._log_journal(who, ug, txt, "growth")
                     return result
 
         # --- 打气：家人要面对大事，给句鼓励，事后还会主动跟进 ---
@@ -2327,6 +2347,41 @@ class Agent:
         if self.understanding is None:
             return ""
         return self.understanding.portrait(name)
+
+    # ---------- 成长记录 ----------
+    def _child_in(self, utterance):
+        from .family import members
+        u = utterance or ""
+        names = [m["name"] for m in members(getattr(self, "family", {}) or {}) if m.get("name")]
+        try:
+            names += [p["name"] for p in self.authority.people.values() if p.get("name")]
+        except Exception:
+            pass
+        for nm in sorted({n for n in names if n}, key=len, reverse=True):
+            if nm in u:
+                return nm
+        return ""
+
+    def record_growth(self, utterance) -> str:
+        if self.growth is None:
+            return ""
+        child = self._child_in(utterance)
+        if not child:
+            return ""
+        ms = (utterance or "").replace(child, "", 1).strip("，,。.：:！!？? 　")
+        for lead in ("今天", "昨天", "前天", "刚刚", "今儿", "刚", "这孩子", "这娃", "都"):
+            if ms.startswith(lead):
+                ms = ms[len(lead):]
+        ms = ms.strip("，,。.：:！!？? 　")
+        if not ms:
+            return ""
+        self.growth.record(child, ms)
+        return f"记下了——{child}{ms}。这成长的点滴，我替你好好攒着。"
+
+    def growth_recall(self, name) -> str:
+        if self.growth is None:
+            return ""
+        return self.growth.recall(name) or self.growth.describe(name)
 
     # ---------- 家庭共享·分工板 ----------
     def _parse_chore(self, utterance, speaker=""):
