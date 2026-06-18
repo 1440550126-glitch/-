@@ -1262,11 +1262,12 @@ class Agent:
             self._log_journal(who, utterance, fc, "forecast")
             return result
 
-        # --- 价值抉择（"我该不该…/怎么选"）：据价值观给有立场的建议 ---
+        # --- 价值抉择（"我该不该…/怎么选"）：像人一样掂量——初念→转念→连上三观/过往→落定 ---
         if action is None and who.get("obey") and any(
                 k in utterance for k in ("该不该", "应不应该", "纠结", "怎么选", "选哪个",
-                                         "值得吗", "值不值", "两难", "该选", "怎么办好")):
-            adv = self.deliberate(utterance)
+                                         "值得吗", "值不值", "两难", "该选", "怎么办好",
+                                         "要不要", "拿不准", "拿不定主意")):
+            adv = self.think_it_through(utterance)
             if adv:
                 result["reply"] = adv
                 self._log_journal(who, utterance, adv, "deliberate")
@@ -3053,6 +3054,39 @@ class Agent:
         from .values import deliberate as _deliberate
         return apply_style(_deliberate(text, values=self.values,
                                        guarded=self.authority.guarded_people(), llm=self.llm), self.identity)
+
+    def think_it_through(self, utterance) -> str:
+        """像人一样想通一件事：摆出两面、连上自己最看重的三观和一段过往、落定一个想法。"""
+        from .reason_through import reason_through
+        from .style import apply_style
+        value = None
+        try:
+            from .values import relevant_values
+            rv = relevant_values(utterance, self.values) if self.values is not None else []
+            if rv:
+                value = rv[0][0]
+        except Exception:
+            value = None
+        mem = None
+        if self.memory is not None:
+            try:
+                hits = self.memory.recall(utterance, k=1)
+                if hits:
+                    mem = hits[0][1]["text"]
+            except Exception:
+                mem = None
+        mood = None
+        if getattr(self, "emotions", None) is not None:
+            try:
+                from .emotions import _DESC
+                top, val = self.emotions.mood()
+                if val >= self.emotions.baseline + 0.08:
+                    mood = _DESC.get(top)
+            except Exception:
+                mood = None
+        return apply_style(
+            reason_through(utterance, value=value, memory=mem, mood=mood, seed=utterance),
+            self.identity)
 
     def evolve_values(self) -> None:
         """从近期经历里统计各价值被触动的次数，缓慢演化权重并持久化。"""
