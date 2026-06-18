@@ -14,6 +14,7 @@ from .curiosity import QuestionLog
 from .devices import build_device_hub, build_sensor_source
 from .dream import DreamLog
 from .emotions import EmotionState
+from .favors import FavorBook
 from .goals import GoalBook
 from .heirloom import collect_heirlooms
 from .journal import Journal
@@ -127,7 +128,10 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                      _load_yaml(base / "config" / "mannerisms.yaml"), identity),
                  heirlooms=collect_heirlooms(
                      _load_yaml(base / "config" / "heirlooms.yaml"),
-                     _load_yaml(base / "config" / "legacy.yaml")))
+                     _load_yaml(base / "config" / "legacy.yaml")),
+                 health=_load_yaml(base / "config" / "health.yaml"),
+                 favors=FavorBook(base / "data" / "favors.json",
+                                  seed=_load_yaml(base / "config" / "favors.yaml")))
 
 
 def _seed_memory(base: Path, memory) -> None:

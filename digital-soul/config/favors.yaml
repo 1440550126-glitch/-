@@ -1,0 +1,15 @@
+# 人情往来账：红白喜事、随礼回礼，礼尚往来别失了礼数。
+# 这里填历史往来作"种子"，首次启动会灌进 data/favors.json；之后可随口增减。
+# direction：送出（咱给出去）/ 收到（人家给咱）。
+#
+# records:
+#   - with: 老王家
+#     event: 老王儿子结婚
+#     direction: 送出
+#     amount: 500
+#     date: "2024-05-01"
+#   - with: 老王家
+#     event: 我家添丁
+#     direction: 收到
+#     amount: 600
+#     date: "2023-03-01"

@@ -37,7 +37,8 @@ class Agent:
                  memorial=None, llm_router=None, legacy=None, care=None, family=None,
                  calendar=None, capsules=None, notes=None,
                  recipes=None, sayings=None, social=None, goals=None,
-                 shopping=None, mannerisms=None, heirlooms=None) -> None:
+                 shopping=None, mannerisms=None, heirlooms=None,
+                 health=None, favors=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -85,6 +86,8 @@ class Agent:
         self.sayings = sayings or {}                              # 口头语录 / 老话
         self.mannerisms = mannerisms or {}                        # 说话习惯（神似：称呼/语气词/方言）
         self.heirlooms = heirlooms or []                          # 遗物/信物的故事与归属
+        self.health = health or {}                                # 家族病史 / 过敏（救命的知识传承）
+        self.favors = favors                                      # 人情往来账（礼尚往来）
         self.social = social                                      # 社交记忆（对每人的亲疏冷暖）
         self.goals = goals                                        # 心愿与目标
         self.shopping = shopping                                  # 采买清单
@@ -448,6 +451,34 @@ class Agent:
                 txt = "\n".join(steps)
                 result["reply"] = txt
                 self._log_journal(who, utterance, txt, "anniversary")
+                return result
+
+        # --- 家族病史（"我身体要注意什么" / "咱家有什么遗传病"）---
+        if action is None and who.get("obey") and getattr(self, "health", None) and any(
+                k in (utterance or "") for k in ("身体要注意", "家族病史", "遗传病", "会遗传",
+                                                 "家里有什么病", "要注意什么病", "我要当心什么")):
+            txt = self.health_advice()
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "health")
+                return result
+
+        # --- 节气时令（"今天什么节气" / "这节气要注意啥"）---
+        if action is None and who.get("obey") and "节气" in (utterance or ""):
+            txt = self.solar_term_line() or self.seasonal_wisdom()
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "solar_term")
+                return result
+
+        # --- 人情往来（"人情账" / "咱欠谁的人情"）---
+        if action is None and who.get("obey") and self.favors is not None and any(
+                k in (utterance or "") for k in ("人情账", "人情往来", "欠谁的人情", "随礼往来",
+                                                 "人情债", "礼尚往来")):
+            txt = self.favor_ledger()
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "favors")
                 return result
 
         # --- 传统节日（"今天是什么节" / "端午有什么讲究"）---
@@ -820,6 +851,11 @@ class Agent:
             bday = self.birthday_reminders(within=7)
             if bday:
                 text = f"{text} {bday}"
+        # 节气时令：今天恰逢节气，像家里老人那样顺口叮嘱一句
+        if who.get("obey"):
+            st = self.solar_term_line()
+            if st:
+                text = f"{text} {st}"
         self.robot.say(text)
         return text
 
@@ -1051,6 +1087,44 @@ class Agent:
     def birthday_reminders(self, within=30, now=None) -> str:
         from .genealogy import birthday_line, build_tree
         return birthday_line(build_tree(self.family), now, within)
+
+    # ---------- 家族病史 / 过敏 ----------
+    def health_advice(self) -> str:
+        """把家族病史交代给后人（"我身体要注意什么"）。"""
+        from .health_history import collect_conditions, health_warning
+        return health_warning(collect_conditions(getattr(self, "health", None)))
+
+    def allergy_for(self, name) -> str:
+        """某人对什么过敏（做饭/买东西前的一句提醒）。"""
+        from .health_history import allergy_line
+        return allergy_line(getattr(self, "health", None), name)
+
+    # ---------- 二十四节气 ----------
+    def solar_term_today(self, now=None):
+        """今天是否正逢某个节气（前后一天）。"""
+        from .solar_terms import term_on
+        return term_on(now)
+
+    def seasonal_wisdom(self, now=None) -> str:
+        """当前时令的一句叮嘱。"""
+        from .solar_terms import seasonal_wisdom
+        return seasonal_wisdom(now)
+
+    def solar_term_line(self, now=None) -> str:
+        """赶上节气当天才说的那句（没赶上返回空，供见面时主动提）。"""
+        from .solar_terms import term_on, wisdom
+        return wisdom(term_on(now))
+
+    # ---------- 人情往来 ----------
+    def favor_ledger(self) -> str:
+        if self.favors is None:
+            return ""
+        return self.favors.describe()
+
+    def favor_remind(self, who) -> str:
+        if self.favors is None:
+            return ""
+        return self.favors.remind(who)
 
     def kinship(self, text) -> str:
         """算亲戚称呼："我爸的弟弟" → "该叫叔叔"。"""

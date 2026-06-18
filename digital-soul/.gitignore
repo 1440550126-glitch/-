@@ -46,3 +46,4 @@ venv/
 *.egg-info/
 build/
 dist/
+data/favors.json
