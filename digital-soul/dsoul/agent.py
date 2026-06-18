@@ -45,7 +45,7 @@ class Agent:
                  contacts=None, ledger=None, bedtime=None,
                  music=None, plants=None, touch=None, understanding=None,
                  messages=None, vitals=None, board=None, growth=None,
-                 pets=None) -> None:
+                 pets=None, reminders=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -134,6 +134,7 @@ class Agent:
         self.growth = growth                                      # 成长记录（孙辈的成长点滴）
         self.pets = pets                                          # 养宠：喂食/遛弯提醒
         self._pet_reminded: set = set()                           # 当天已提醒过的喂宠（去重）
+        self.reminders = reminders                                # 随口提醒（"提醒我三点吃药"）
         self._noticed: set = set()                                # 已点破过的"门道"（当天去重）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
@@ -510,6 +511,16 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, u, txt, "med_list")
+                    return result
+
+        # --- 随口提醒（"提醒我下午三点吃药" / "半小时后叫我关火"）---
+        if action is None and who.get("obey") and self.reminders is not None:
+            from .reminders import is_reminder_request
+            if is_reminder_request(utterance):
+                txt = self.set_reminder(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "reminder")
                     return result
 
         # --- 守护·体征（"血压140 90" 记一笔；"我的血压" 看趋势）---
@@ -2709,6 +2720,19 @@ class Agent:
             return ""
         mine = [it["what"] for it in self.board.for_member(name)]
         return ("今天轮到你：" + "、".join(mine) + "，别忘了。") if mine else ""
+
+    # ---------- 随口提醒 ----------
+    def set_reminder(self, utterance) -> str:
+        if self.reminders is None:
+            return ""
+        it = self.reminders.parse_and_add(utterance)
+        if not it:
+            return "你想让我啥时候提醒、提醒啥？说具体点，比如「提醒我下午三点吃药」。"
+        return f"好，到「{it['at'][5:]}」我提醒你{it['task']}。"
+
+    def pop_due_reminders(self, now=None) -> list:
+        """到点的提醒（供守护循环播报）。"""
+        return self.reminders.due(now) if self.reminders is not None else []
 
     def record_vital(self, utterance) -> str:
         """记一次体征，顺带给个通俗的异常提醒（不诊断）。"""

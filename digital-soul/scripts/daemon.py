@@ -127,6 +127,14 @@ def trigger_loop(agent, mouth=None) -> None:
             if mouth is not None:
                 mouth.speak(n, mood=_mood(agent), profile=profile)
         try:
+            for task in agent.pop_due_reminders():       # 随口设的提醒到点了
+                line = f"提醒你：{task}。"
+                print(f"[提醒] {line}", flush=True)
+                if mouth is not None:
+                    mouth.speak(line, mood=_mood(agent), profile=profile)
+        except Exception as e:
+            print(f"[提醒] 出错：{e}", flush=True)
+        try:
             cares = agent.due_care()
         except Exception as e:
             print(f"[守护] 出错：{e}", flush=True)

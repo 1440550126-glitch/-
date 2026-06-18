@@ -42,6 +42,7 @@ from .predict import Calibration
 from .persona import Persona
 from .planner import Planner, PlanBook
 from .reflect import Reflector
+from .reminders import ReminderBook
 from .remote_agents import AgentHub
 from .selfnarrative import SelfLog
 from .scenes import SceneBook
@@ -181,7 +182,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  board=FamilyBoard(base / "data" / "family_board.json"),
                  growth=GrowthLog(base / "data" / "growth.json"),
                  pets=PetBook(base / "data" / "pets.json",
-                              seed=_load_yaml(base / "config" / "pets.yaml")))
+                              seed=_load_yaml(base / "config" / "pets.yaml")),
+                 reminders=ReminderBook(base / "data" / "reminders.json"))
 
 
 def _seed_memory(base: Path, memory) -> None:
