@@ -124,6 +124,20 @@ PATCH('/api/me', async (ctx) => {
   return meView(q.get('SELECT * FROM users WHERE id = ?', u.id));
 }, { auth: true });
 
+// 游客升级为正式账号：在当前用户上补设用户名/密码（保留其全部团队/运行/会员）
+POST('/api/me/bind', async (ctx) => {
+  const u = ctx.user;
+  if (u.username) throw bad('当前账号已是正式账号');
+  if (!rateLimit(`bind:${ctx.ip}`, 5, 3600_000)) throw bad('操作太频繁，请稍后再试');
+  const username = String(ctx.body.username || '').trim().toLowerCase();
+  const password = String(ctx.body.password || '');
+  if (!/^[a-z0-9_]{3,20}$/.test(username)) throw bad('用户名需为 3-20 位字母/数字/下划线');
+  if (password.length < 6) throw bad('密码至少 6 位');
+  if (q.get('SELECT id FROM users WHERE username = ?', username)) throw bad('用户名已被占用');
+  q.run('UPDATE users SET username = ?, pass_hash = ? WHERE id = ?', username, hashPassword(password), u.id);
+  return meView(q.get('SELECT * FROM users WHERE id = ?', u.id));
+}, { auth: true });
+
 // 注销账号：匿名化处理（保留内容骨架但不可识别个人）
 POST('/api/me/deactivate', async (ctx) => {
   if (String(ctx.body.confirm) !== '确认注销') throw bad('请输入「确认注销」以完成操作');
