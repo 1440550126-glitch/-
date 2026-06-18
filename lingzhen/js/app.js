@@ -207,7 +207,19 @@ async function renderTeam(id) {
   mount(shell(spinner()));
   try {
     await loadMeta();
-    const { team, members } = await GET(`/api/teams/${id}`);
+    const [{ team, members }, runsData] = await Promise.all([
+      GET(`/api/teams/${id}`),
+      GET('/api/runs').catch(() => ({ items: [] }))
+    ]);
+    const teamRuns = (runsData.items || []).filter((r) => String(r.team_id) === String(id)).slice(0, 6);
+    const recentRow = (r) => {
+      const [label, cls] = STATUS[r.status] || ['—', ''];
+      return h('div', { class: 'lz-run-row', onclick: () => nav(`#/run/${r.id}`) },
+        h('div', { class: 'lz-run-task', style: { flex: '1' } }, r.task),
+        h('div', { class: 'lz-run-side' },
+          h('span', { class: 'lz-st ' + cls }, label),
+          h('small', {}, `${r.step_count} 步 · ${r.by_llm ? '大模型' : '本地'} · ${fmtTime(r.started_at)}`)));
+    };
 
     const actions = h('div', { class: 'lz-team-actions' });
     if (team.is_template || !team.mine) {
@@ -242,6 +254,11 @@ async function renderTeam(id) {
           (mb.tools || []).length ? h('div', { class: 'lz-tools' }, (mb.tools || []).map((tl) => h('span', { class: 'lz-tool' }, '🔧 ' + tl))) : null)))),
       (team.knowledge || []).length ? h('div', { class: 'lz-kb' }, '📚 挂载知识库：' + team.knowledge.map((k) => k.name).join('、')) : null,
       runBox(id),
+      teamRuns.length ? h('div', { class: 'lz-team-runs' },
+        h('div', { class: 'lz-runs-head' },
+          h('div', { class: 'lz-sec-t', style: { margin: '0' } }, `本团队最近运行（${teamRuns.length}）`),
+          h('a', { class: 'lz-link', onclick: () => nav('#/history') }, '全部历史 →')),
+        h('div', { class: 'lz-runs' }, teamRuns.map(recentRow))) : null,
       actions,
       team.mine && !team.is_template ? apiPanel(team) : null,
       team.mine && !team.is_template ? webhookPanel(team) : null,

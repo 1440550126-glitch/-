@@ -127,6 +127,9 @@ a{cursor:pointer;color:inherit}
 .lz-kb{color:var(--mut);font-size:13px;margin:12px 0}
 .lz-run-box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:18px 0}
 .lz-team-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+.lz-team-runs{margin:18px 0}
+.lz-runs-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:12px}
+.lz-runs-head .lz-link{font-size:13px;white-space:nowrap}
 
 /* ---- 作战室 ---- */
 .lz-run-head{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:8px}
