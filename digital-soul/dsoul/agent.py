@@ -39,7 +39,8 @@ class Agent:
                  recipes=None, sayings=None, social=None, goals=None,
                  shopping=None, mannerisms=None, heirlooms=None,
                  health=None, favors=None, stories=None, teachings=None,
-                 spouse=None, preferences=None, humor=None) -> None:
+                 spouse=None, preferences=None, humor=None,
+                 medications=None, safety=None, appointments=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -97,6 +98,11 @@ class Agent:
         self.preferences = preferences or {}                      # 喜好脾性（爱吃/偏爱/讨厌，答得稳）
         self.humor = humor or {}                                  # 幽默：段子库（讲过的轮换）
         self._told_jokes: set = set()                             # 已讲过的段子（去重）
+        self.medications = medications                            # 用药守护（按时/续药/吃没吃）
+        self.safety = safety or {}                                # 居家安全清单（睡前过一遍）
+        self.appointments = appointments                          # 就医/约定提醒
+        self._med_fired: set = set()                              # 已念过的吃药提醒（去重）
+        self._appt_fired: set = set()                             # 已念过的就医提醒（去重）
         self._goodnight_day = None                                # 当晚是否已道过晚安（去重）
         self._ritual_fired: set = set()                           # 当天已唤过的日常默契（去重）
         self._companion_slot = None                               # 本时段是否已主动问候过（去重）
@@ -287,6 +293,45 @@ class Agent:
                     result["reply"] = txt
                     self._log_journal(who, utterance, txt, "encourage")
                     return result
+
+        # --- 守护·用药（"我吃过药了" 记一笔；"我的药" 报一报）---
+        if action is None and who.get("obey") and self.medications is not None:
+            u = utterance or ""
+            if any(k in u for k in ("我吃药了", "吃过药了", "药吃了", "我吃了药")):
+                txt = self.take_med("降压药") or "好，记下了，吃过药了。"
+                # 尽量认出具体药名
+                for m in self.medications.meds:
+                    if m["name"] in u:
+                        txt = self.take_med(m["name"]) or txt
+                        break
+                result["reply"] = txt
+                self._log_journal(who, u, txt, "med_taken")
+                return result
+            if any(k in u for k in ("我在吃什么药", "我的药", "在吃啥药", "吃哪些药")):
+                txt = self.meds_describe()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "med_list")
+                    return result
+
+        # --- 守护·居家安全（"睡前检查一下" / "门窗关了吗"）---
+        if action is None and who.get("obey"):
+            from .safety_check import is_safety_query
+            if is_safety_query(utterance):
+                txt = self.safety_prompt()
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "safety")
+                return result
+
+        # --- 守护·就医约定（"我最近有什么安排" / "要复诊吗"）---
+        if action is None and who.get("obey") and self.appointments is not None and any(
+                k in (utterance or "") for k in ("有什么安排", "我的预约", "要复诊", "复诊",
+                                                 "体检", "近期安排", "约了什么")):
+            txt = self.appointments_describe()
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "appointments")
+                return result
 
         # --- 陪伴安慰（任何家人累了/难过了，以"我就在身边"接住，present-tense）---
         if action is None and who.get("obey"):
@@ -1544,6 +1589,49 @@ class Agent:
     def chitchat(self, utterance) -> str:
         from .smalltalk import smalltalk_reply
         return smalltalk_reply(utterance, seed=utterance)
+
+    # ---------- 守护：用药 / 居家安全 / 就医 ----------
+    def take_med(self, name, now=None) -> str:
+        if self.medications is None:
+            return ""
+        m = self.medications.take(name, now)
+        if not m:
+            return ""
+        line = f"好，记下了，{m['name']}吃过了。"
+        for nm, stock in self.medications.refill_alerts():
+            if nm == m["name"]:
+                line += f" 对了，只剩{stock}次的量了，记得去配。"
+        return line
+
+    def meds_describe(self) -> str:
+        return self.medications.describe() if self.medications is not None else ""
+
+    def safety_prompt(self) -> str:
+        from .safety_check import checklist, evening_prompt
+        return evening_prompt(checklist(getattr(self, "safety", None)))
+
+    def appointments_describe(self) -> str:
+        return self.appointments.describe() if self.appointments is not None else ""
+
+    def proactive_health_reminders(self, now=None) -> list:
+        """守护循环用：到点吃药 + 临近就医，按天去重（不重复念）。"""
+        from datetime import datetime
+        now = now or datetime.now()
+        day = now.strftime("%Y-%m-%d")
+        out = []
+        if self.medications is not None:
+            for line in self.medications.reminders(now):
+                key = (day, line)
+                if key not in self._med_fired:
+                    self._med_fired.add(key)
+                    out.append(line)
+        if self.appointments is not None:
+            for line in self.appointments.reminders(now):
+                key = (day, line)
+                if key not in self._appt_fired:
+                    self._appt_fired.add(key)
+                    out.append(line)
+        return out
 
     def spouse_anniversary(self, now=None) -> str:
         from .spouse import anniversary_words

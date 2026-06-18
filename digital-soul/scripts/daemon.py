@@ -168,6 +168,16 @@ def trigger_loop(agent, mouth=None) -> None:
             print(f"[陪伴] {wb}", flush=True)
             if mouth is not None:
                 mouth.speak(wb, mood=_mood(agent), profile=profile)
+        # 守护：到点吃药 / 临近就医，主动提醒（按天去重）
+        try:
+            health = agent.proactive_health_reminders()
+        except Exception as e:
+            print(f"[守护] 出错：{e}", flush=True)
+            health = []
+        for line in health:
+            print(f"[守护] {line}", flush=True)
+            if mouth is not None:
+                mouth.speak(line, mood=_mood(agent), profile=profile)
 
 
 def think_loop(agent, minutes: float) -> None:

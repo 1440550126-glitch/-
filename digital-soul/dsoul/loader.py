@@ -8,6 +8,7 @@ import yaml
 
 from .actions import SimulationRobot
 from .agent import Agent
+from .appointments import AppointmentBook
 from .authority import Authority
 from .calendar_book import EventBook
 from .curiosity import QuestionLog
@@ -21,6 +22,7 @@ from .journal import Journal
 from .knowledge import Knowledge
 from .llm import build_router
 from .mannerisms import load_mannerisms
+from .medication import MedBook
 from .memory import Memory
 from .notes import NoteBook
 from .perception import build_perception
@@ -140,7 +142,12 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                                        family_cfg, relationships),
                  preferences=collect_preferences(
                      _load_yaml(base / "config" / "preferences.yaml"), identity),
-                 humor=_load_yaml(base / "config" / "humor.yaml"))
+                 humor=_load_yaml(base / "config" / "humor.yaml"),
+                 medications=MedBook(base / "data" / "medications.json",
+                                     seed=_load_yaml(base / "config" / "medications.yaml")),
+                 safety=_load_yaml(base / "config" / "safety.yaml"),
+                 appointments=AppointmentBook(base / "data" / "appointments.json",
+                                              seed=_load_yaml(base / "config" / "appointments.yaml")))
 
 
 def _seed_memory(base: Path, memory) -> None:

@@ -48,3 +48,5 @@ build/
 dist/
 data/favors.json
 data/heritage.html
+data/medications.json
+data/appointments.json
