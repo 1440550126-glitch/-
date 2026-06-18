@@ -45,6 +45,8 @@ DEFAULTS: dict[str, Any] = {
     "sandbox": {"engine": "none", "image": "python:3.11-slim"},
     # 文件监视：路径变化即触发 prompt（守护进程巡检）。每项 {name, path, prompt}
     "watch": [],
+    # 剧本：命名的多步例程，按序执行且共享会话上下文。{名: [步骤prompt, ...]}
+    "playbooks": {},
     # MCP：接入任意 Model Context Protocol 服务，把其工具并入 Mnemo
     # servers 形如 {"名字": {"command": "npx", "args": [...], "env": {...}}}
     "mcp": {"servers": {}},

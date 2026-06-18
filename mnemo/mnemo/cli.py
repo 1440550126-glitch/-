@@ -590,6 +590,39 @@ def cmd_plugin(args):
     return 0
 
 
+def cmd_playbook(args):
+    cfg = load_config(getattr(args, "home", None))
+    pbs = dict(cfg.get("playbooks", {}) or {})
+    if args.action == "list":
+        if not pbs:
+            print(dim("（暂无剧本）mnemo playbook add --name 晨间 --step \"看天气\" --step \"列今日要点\""))
+        for n, steps in pbs.items():
+            print(f"{green('●')} {bold(n)} — {len(steps)} 步")
+    elif args.action == "add":
+        pbs[args.name] = args.step or []
+        cfg.set("playbooks", pbs); cfg.save()
+        print(green(f"已保存剧本：{args.name}（{len(args.step or [])} 步）"))
+    elif args.action == "remove":
+        if pbs.pop(args.name, None) is None:
+            print(red("未找到")); return 1
+        cfg.set("playbooks", pbs); cfg.save()
+        print(green(f"已删除剧本：{args.name}"))
+    elif args.action == "run":
+        steps = pbs.get(args.name)
+        if not steps:
+            print(red(f"未找到剧本：{args.name}")); return 1
+        app = build_app(args, with_mcp=True)
+        sess = f"playbook:{args.name}"
+        for i, step in enumerate(steps, 1):
+            print(bold(f"\n— 步骤 {i}/{len(steps)}：") + dim(step[:60]))
+            try:
+                out = app.agent.run(step, session=sess, on_event=_make_on_event(args.verbose))
+            except ProviderError as e:
+                print(red(f"[模型调用失败] {e}")); return 1
+            print(out)
+    return 0
+
+
 def cmd_watch(args):
     cfg = load_config(getattr(args, "home", None))
     watches = list(cfg.get("watch", []) or [])
@@ -1226,6 +1259,14 @@ def build_parser() -> argparse.ArgumentParser:
     pli.add_argument("--name"); pli.add_argument("-y", "--yes", action="store_true")
     plr = pls.add_parser("remove"); plr.add_argument("name")
 
+    ppb = sub.add_parser("playbook", help="剧本：命名多步例程，按序执行共享上下文")
+    ppbs = ppb.add_subparsers(dest="action", required=True)
+    ppbs.add_parser("list")
+    ppba = ppbs.add_parser("add"); ppba.add_argument("--name", required=True)
+    ppba.add_argument("--step", action="append", help="一个步骤 prompt（可多次）")
+    ppbr = ppbs.add_parser("remove"); ppbr.add_argument("name")
+    ppbrun = ppbs.add_parser("run"); ppbrun.add_argument("name")
+
     pw = sub.add_parser("watch", help="文件监视：路径变化即触发任务（守护进程生效）")
     pws = pw.add_subparsers(dest="action", required=True)
     pws.add_parser("list")
@@ -1317,7 +1358,7 @@ _HANDLERS = {
     "chat": cmd_chat, "run": cmd_run, "ingest": cmd_ingest, "config": cmd_config,
     "provider": cmd_provider, "persona": cmd_persona,
     "memory": cmd_memory, "profile": cmd_profile, "session": cmd_session, "skill": cmd_skill,
-    "plugin": cmd_plugin, "task": cmd_task, "watch": cmd_watch,
+    "plugin": cmd_plugin, "task": cmd_task, "watch": cmd_watch, "playbook": cmd_playbook,
     "daemon": cmd_daemon, "doctor": cmd_doctor, "init": cmd_init, "diary": cmd_diary,
     "status": cmd_status,
     "notify": cmd_notify, "audit": cmd_audit,

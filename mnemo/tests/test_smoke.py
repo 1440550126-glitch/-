@@ -1133,6 +1133,22 @@ class TestDaemonControl(unittest.TestCase):
         tmp.cleanup()
 
 
+class TestPlaybook(unittest.TestCase):
+    def test_run_executes_all_steps(self):
+        import types as _types
+        from mnemo.cli import cmd_playbook
+        home = tempfile.mkdtemp()
+        cfg = load_config(home)
+        cfg.set("playbooks", {"晨间": ["echo: 第一步", "echo: 第二步"]})
+        cfg.save()
+        cmd_playbook(_types.SimpleNamespace(home=home, action="run", name="晨间",
+                                            provider="offline", model=None, verbose=False))
+        m = Memory(Path(home) / "mnemo.db")
+        eps = m.session_episodes("playbook:晨间")
+        self.assertEqual(len(eps), 2)               # 两步都执行
+        m.close()
+
+
 class TestWatch(unittest.TestCase):
     def test_file_watch_triggers_after_baseline(self):
         import os
