@@ -43,7 +43,7 @@ class Agent:
                  medications=None, safety=None, appointments=None,
                  opinions=None, joys=None, habits_book=None,
                  contacts=None, ledger=None, bedtime=None,
-                 music=None, plants=None) -> None:
+                 music=None, plants=None, touch=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -118,6 +118,8 @@ class Agent:
         self.music = music or {}                                  # 老歌：爱唱的歌 / 按心情点歌
         self.plants = plants                                      # 养花：浇水提醒
         self._plant_reminded_day = None                           # 当天是否已提醒浇水（去重）
+        self.touch = touch                                        # 常联系：别让亲情淡了
+        self._touch_reminded_day = None                           # 当天是否已提醒联系（去重）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
         self._game_mode = None                                    # 正在玩的游戏（如"接龙"）
@@ -822,6 +824,32 @@ class Agent:
                 if s:
                     result["reply"] = s
                     self._log_journal(who, utterance, s, "chat_start")
+                    return result
+
+        # --- 节气养生（"这季节怎么养生" / "该补补了"）---
+        if action is None and who.get("obey"):
+            from .tcm_wellness import is_wellness_query
+            if is_wellness_query(utterance):
+                txt = self.wellness_tip()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "tcm_wellness")
+                    return result
+
+        # --- 常联系（"给闺女打过电话了" / "该联系谁了"）---
+        if action is None and who.get("obey") and self.touch is not None:
+            u = utterance or ""
+            if any(k in u for k in ("打过电话", "联系过", "打了电话", "通过话", "见过面了")):
+                txt = self.mark_contacted(u)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "keep_in_touch")
+                    return result
+            if any(k in u for k in ("该联系谁", "常联系", "好久没联系", "联系名单", "要联系谁")):
+                txt = self.touch_describe()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "keep_in_touch")
                     return result
 
         # --- 老歌（"唱首歌" / "哼一段"）---
@@ -2077,6 +2105,37 @@ class Agent:
                 self._game_mode = None
                 return "哎，这个字我一时接不上，你赢啦！"
         return ""
+
+    # ---------- 节气养生 / 常联系 ----------
+    def wellness_tip(self, now=None) -> str:
+        from datetime import datetime
+        from .tcm_wellness import season_of, wellness
+        return wellness(season_of((now or datetime.now()).month))
+
+    def mark_contacted(self, utterance) -> str:
+        if self.touch is None:
+            return ""
+        name = self.touch.touched(utterance)
+        return (f"好，跟{name}联系过了，记下了，亲情就得常走动。") if name else ""
+
+    def touch_describe(self) -> str:
+        if self.touch is None:
+            return ""
+        return self.touch.reminders() or self.touch.describe()
+
+    def touch_due_reminder(self, now=None) -> str:
+        """该联系亲友时提醒一句，每天一次（供守护循环）。"""
+        from datetime import datetime
+        if self.touch is None:
+            return ""
+        line = self.touch.reminders(now)
+        if not line:
+            return ""
+        today = (now or datetime.now()).strftime("%Y-%m-%d")
+        if self._touch_reminded_day == today:
+            return ""
+        self._touch_reminded_day = today
+        return line
 
     # ---------- 老歌 / 养花 ----------
     def play_music(self, utterance="") -> str:

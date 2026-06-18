@@ -23,6 +23,7 @@ from .household_ledger import Ledger
 from .heirloom import collect_heirlooms
 from .journal import Journal
 from .joys import JoyLog
+from .keep_in_touch import TouchLog
 from .knowledge import Knowledge
 from .llm import build_router
 from .mannerisms import load_mannerisms
@@ -165,7 +166,9 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  bedtime=_load_yaml(base / "config" / "bedtime.yaml"),
                  music=_load_yaml(base / "config" / "music.yaml"),
                  plants=PlantBook(base / "data" / "plants.json",
-                                  seed=_load_yaml(base / "config" / "plants.yaml")))
+                                  seed=_load_yaml(base / "config" / "plants.yaml")),
+                 touch=TouchLog(base / "data" / "keep_in_touch.json",
+                                seed=_load_yaml(base / "config" / "keep_in_touch.yaml")))
 
 
 def _seed_memory(base: Path, memory) -> None:

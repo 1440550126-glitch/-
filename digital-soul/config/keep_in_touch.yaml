@@ -1,0 +1,10 @@
+# 常联系：别让亲情淡了。配上想常联系的人、多久联系一次，到点分身会提醒。
+# 联系过了说一声"给闺女打过电话了"就记上。首次启动灌进 data/keep_in_touch.json。
+#
+# people:
+#   - name: 小芳
+#     relation: 闺女
+#     every_days: 7
+#   - name: 老周
+#     relation: 老战友
+#     every_days: 30
