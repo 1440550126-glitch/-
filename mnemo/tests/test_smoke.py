@@ -948,6 +948,19 @@ class TestIngest(unittest.TestCase):
         self.assertNotIn("技术文档", prof)            # 知识块不进画像
 
 
+class TestVizXSS(unittest.TestCase):
+    def test_graph_html_escapes_script_breakout(self):
+        from mnemo.viz import render_graph_html
+        data = {"nodes": [{"id": 1, "text": "</script><img src=x onerror=alert(1)>",
+                           "kind": "fact", "importance": 3}], "edges": []}
+        html = render_graph_html(data)
+        # 原始的 </script> 不应原样出现在输出里（否则会截断脚本块导致 XSS）
+        self.assertNotIn("</script><img", html)
+        self.assertIn("\\u003c/script", html)        # 已转义为 <
+        # 标题也走 HTML 转义
+        self.assertNotIn("<script>alert", render_graph_html(data, title="<script>alert(1)</script>"))
+
+
 class TestMemoryManagement(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

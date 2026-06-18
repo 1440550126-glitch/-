@@ -1,7 +1,19 @@
 """把记忆图谱渲染成一个自包含 HTML（内联力导向布局，无任何外部依赖）。"""
 from __future__ import annotations
 
+import html as _html
 import json
+
+
+def _js_safe(payload: str) -> str:
+    """把 JSON 文本嵌入 <script> 时，转义 < > & 防止 </script> 截断导致 XSS。
+
+    记忆文本可能来自摄入的网页/被间接提示注入的 remember，必须按数据而非标记渲染。
+    """
+    return (payload.replace("<", "\\u003c")
+                   .replace(">", "\\u003e")
+                   .replace("&", "\\u0026"))
+
 
 _TEMPLATE = """<!doctype html><html lang=zh><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1"><title>__TITLE__</title>
@@ -44,6 +56,7 @@ onmouseup=()=>drag=null;
 
 
 def render_graph_html(data: dict, title: str = "Mnemo 记忆图谱") -> str:
+    # title 走 HTML 转义；data 走 JS 安全转义（防 </script> 截断），均不信任内容
     return (_TEMPLATE
-            .replace("__TITLE__", title)
-            .replace("__DATA__", json.dumps(data, ensure_ascii=False)))
+            .replace("__TITLE__", _html.escape(title))
+            .replace("__DATA__", _js_safe(json.dumps(data, ensure_ascii=False))))
