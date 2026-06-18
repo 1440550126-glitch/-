@@ -47,3 +47,4 @@ venv/
 build/
 dist/
 data/favors.json
+data/heritage.html

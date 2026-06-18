@@ -25,7 +25,7 @@ jobs:
         run: python -m compileall -q dsoul scripts
       - name: Run unit tests
         run: |
-          for t in authority memory annotate presence consolidate emotions skills dispatch tasks reflect plan butler devices orchestrate scenes triggers ha graph voice forgetting entangle dream selfnarrative values monologue curiosity worldmodel anticipate predict swarm style memorial lifelog habits photo llm legacy guardian family webstatus keepsake converse briefing book letters calendar reminisce gratitude timecapsule wishes notes recipes sayings qa_interview social goals kinship festival shopping comfort_stages mannerisms anniversary heirloom genealogy health_history solar_terms favors storytelling teaching; do
+          for t in authority memory annotate presence consolidate emotions skills dispatch tasks reflect plan butler devices orchestrate scenes triggers ha graph voice forgetting entangle dream selfnarrative values monologue curiosity worldmodel anticipate predict swarm style memorial lifelog habits photo llm legacy guardian family webstatus keepsake converse briefing book letters calendar reminisce gratitude timecapsule wishes notes recipes sayings qa_interview social goals kinship festival shopping comfort_stages mannerisms anniversary heirloom genealogy health_history solar_terms favors storytelling teaching heritage; do
             echo "== $t =="
             python tests/test_$t.py
           done
