@@ -204,10 +204,31 @@ class Memory:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def facts_by(self, kind: str | None = None, tag: str | None = None,
+                 source: str | None = None, limit: int = 100) -> list[dict]:
+        """按 kind/tag/source 过滤列出事实（source 支持前缀匹配，便于按来源管理）。"""
+        q = "SELECT * FROM facts WHERE 1=1"
+        params: list = []
+        if kind:
+            q += " AND kind=?"; params.append(kind)
+        if tag:
+            q += " AND tags LIKE ?"; params.append(f"%{tag}%")
+        if source:
+            q += " AND source LIKE ?"; params.append(f"{source}%")
+        q += " ORDER BY importance DESC, last_used_at DESC LIMIT ?"; params.append(limit)
+        return [dict(r) for r in self.db.execute(q, params).fetchall()]
+
     def forget(self, fact_id: int) -> bool:
         cur = self.db.execute("DELETE FROM facts WHERE id=?", (fact_id,))
         self.db.commit()
         return cur.rowcount > 0
+
+    def forget_by_source(self, source: str) -> int:
+        """按来源批量删除（如删掉某次 ingest 的全部知识块）。前缀匹配。返回删除条数。"""
+        cur = self.db.execute("DELETE FROM facts WHERE source=? OR source LIKE ?",
+                              (source, f"{source}%"))
+        self.db.commit()
+        return cur.rowcount
 
     # ---------- episodes ----------
     def add_episode(self, session: str, user: str, assistant: str) -> int:
@@ -217,6 +238,20 @@ class Memory:
         )
         self.db.commit()
         return cur.lastrowid
+
+    def sessions(self) -> list[dict]:
+        """列出所有会话及其轮数与起止时间（最近活跃在前）。"""
+        rows = self.db.execute(
+            "SELECT session, COUNT(*) c, MIN(created_at) first_at, MAX(created_at) last_at"
+            " FROM episodes GROUP BY session ORDER BY last_at DESC").fetchall()
+        return [dict(r) for r in rows]
+
+    def session_episodes(self, session: str, limit: int = 2000) -> list[dict]:
+        """按时间顺序取某会话的全部对话（用于查看/导出）。"""
+        rows = self.db.execute(
+            "SELECT * FROM episodes WHERE session=? ORDER BY id LIMIT ?",
+            (session, limit)).fetchall()
+        return [dict(r) for r in rows]
 
     def recent_episodes(self, limit: int = 6, session: str | None = None) -> list[dict]:
         if session:
@@ -432,6 +467,36 @@ class Memory:
                 if shared >= min_shared:
                     edges.append({"source": ids[i], "target": ids[j], "w": shared})
         return {"nodes": nodes, "edges": edges}
+
+    def export_markdown(self, max_facts: int = 1000) -> str:
+        """把记忆导出为人类可读的 Markdown（画像 + 事实 + 话题）。"""
+        import datetime as _dt
+        p = self.all_profile()
+        lines = ["# Mnemo 记忆导出",
+                 f"_导出时间：{_dt.datetime.now():%Y-%m-%d %H:%M}_", ""]
+        prof = self.profile_summary()
+        if prof:
+            lines += ["## 我对你的了解", prof, ""]
+        facts = self.all_facts(limit=max_facts)
+        if facts:
+            lines.append(f"## 事实与知识（{len(facts)}）")
+            by_kind: dict[str, list] = {}
+            for f in facts:
+                by_kind.setdefault(f["kind"], []).append(f)
+            for kind, items in sorted(by_kind.items()):
+                lines.append(f"### {kind}（{len(items)}）")
+                for f in items:
+                    src = f" _({f['source']})_" if f.get("source") not in (None, "user") else ""
+                    lines.append(f"- [重要度{f['importance']}] {f['text']}{src}")
+                lines.append("")
+        topics = self.top_topics(20)
+        if topics:
+            lines.append("## 常聊话题")
+            lines.append("、".join(f"{t}({c})" for t, c in topics))
+            lines.append("")
+        s = self.stats()
+        lines.append(f"---\n_事实 {s['facts']} · 对话 {s['episodes']} · 话题 {s['topics']}_")
+        return "\n".join(lines)
 
     def stats(self) -> dict:
         f = self.db.execute("SELECT COUNT(*) c FROM facts").fetchone()["c"]

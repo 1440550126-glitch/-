@@ -754,6 +754,52 @@ class TestIngest(unittest.TestCase):
         self.assertNotIn("技术文档", prof)            # 知识块不进画像
 
 
+class TestMemoryManagement(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.mem = Memory(Path(self.tmp.name) / "m.db")
+
+    def tearDown(self):
+        self.mem.close()
+        self.tmp.cleanup()
+
+    def test_facts_by_filters(self):
+        self.mem.add_fact("知识A", kind="knowledge", tags="火星", source="ingest:a.md")
+        self.mem.add_fact("知识B", kind="knowledge", tags="地球", source="ingest:b.md")
+        self.mem.add_fact("偏好C", kind="preference", source="user")
+        self.assertEqual(len(self.mem.facts_by(kind="knowledge")), 2)
+        self.assertEqual(len(self.mem.facts_by(tag="火星")), 1)
+        self.assertEqual(len(self.mem.facts_by(source="ingest:")), 2)
+        self.assertEqual(len(self.mem.facts_by(source="ingest:a")), 1)
+
+    def test_forget_by_source(self):
+        self.mem.add_fact("x1", source="ingest:notes/a.md")
+        self.mem.add_fact("x2", source="ingest:notes/b.md")
+        self.mem.add_fact("keep", source="user")
+        n = self.mem.forget_by_source("ingest:")
+        self.assertEqual(n, 2)
+        self.assertEqual(self.mem.stats()["facts"], 1)
+
+    def test_export_markdown(self):
+        self.mem.set_profile("name", "小红")
+        self.mem.add_fact("用户喜欢咖啡", kind="preference", importance=4)
+        md = self.mem.export_markdown()
+        self.assertIn("# Mnemo 记忆导出", md)
+        self.assertIn("小红", md)
+        self.assertIn("咖啡", md)
+
+    def test_sessions_listing(self):
+        self.mem.add_episode("s1", "你好", "嗨")
+        self.mem.add_episode("s1", "再问", "再答")
+        self.mem.add_episode("s2", "另一个会话", "ok")
+        sess = {r["session"]: r["c"] for r in self.mem.sessions()}
+        self.assertEqual(sess["s1"], 2)
+        self.assertEqual(sess["s2"], 1)
+        eps = self.mem.session_episodes("s1")
+        self.assertEqual(len(eps), 2)
+        self.assertEqual(eps[0]["user"], "你好")
+
+
 class TestReviewFixes2(unittest.TestCase):
     """第二轮自动评审（2026-06-17）的修复回归。"""
     def setUp(self):

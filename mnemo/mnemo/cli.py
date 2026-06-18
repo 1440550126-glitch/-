@@ -280,8 +280,22 @@ def cmd_memory(args):
         print("记忆已禁用（memory.enabled=false）")
         return 0
     if args.action == "list":
-        for f in m.all_facts(limit=args.limit):
-            print(f"#{f['id']:<4} [{f['kind']}] 重要度{f['importance']}  {f['text']}")
+        if getattr(args, "kind", None) or getattr(args, "tag", None) or getattr(args, "source", None):
+            facts = m.facts_by(kind=args.kind, tag=args.tag, source=args.source, limit=args.limit)
+        else:
+            facts = m.all_facts(limit=args.limit)
+        if not facts:
+            print(dim("（无匹配记忆）"))
+        for f in facts:
+            src = dim(f"  «{f['source']}»") if f.get("source") not in (None, "user") else ""
+            print(f"#{f['id']:<4} [{f['kind']}] 重要度{f['importance']}  {f['text'][:80]}{src}")
+    elif args.action == "forget-source":
+        n = m.forget_by_source(args.source)
+        print(green(f"已删除 {n} 条来源以「{args.source}」开头的记忆") if n else yellow("未匹配到记忆"))
+    elif args.action == "export":
+        out = Path(args.out)
+        out.write_text(m.export_markdown(), encoding="utf-8")
+        print(green(f"已导出记忆 → {out}"))
     elif args.action == "search":
         for f in m.recall(args.query, limit=args.limit):
             print(f"#{f['id']:<4} {f['text']}")
@@ -325,6 +339,35 @@ def cmd_memory(args):
         out.write_text(render_graph_html(data), encoding="utf-8")
         print(green(f"已生成记忆图谱：{out}") +
               dim(f"（{len(data['nodes'])} 节点 / {len(data['edges'])} 关联，浏览器打开查看）"))
+    return 0
+
+
+def cmd_session(args):
+    app = build_app(args)
+    m = app.memory
+    if not m:
+        print("记忆已禁用"); return 0
+    if args.action == "list":
+        rows = m.sessions()
+        if not rows:
+            print(dim("（暂无会话记录）")); return 0
+        for r in rows:
+            last = time.strftime("%m-%d %H:%M", time.localtime(r["last_at"])) if r["last_at"] else "—"
+            print(f"{bold(r['session']):<22} {r['c']:>4} 轮   最近 {last}")
+    elif args.action in ("show", "export"):
+        eps = m.session_episodes(args.session)
+        if not eps:
+            print(yellow(f"会话「{args.session}」无记录")); return 1
+        lines = [f"# 会话 {args.session}", ""]
+        for e in eps:
+            ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(e["created_at"]))
+            lines += [f"## {ts}", f"**你**：{e['user']}", "", f"**Mnemo**：{e['assistant']}", ""]
+        text = "\n".join(lines)
+        if args.action == "export":
+            Path(args.out).write_text(text, encoding="utf-8")
+            print(green(f"已导出会话 → {args.out}（{len(eps)} 轮）"))
+        else:
+            print(text)
     return 0
 
 
@@ -765,10 +808,15 @@ def build_parser() -> argparse.ArgumentParser:
     pm = sub.add_parser("memory", help="永久记忆")
     pms = pm.add_subparsers(dest="action", required=True)
     ml = pms.add_parser("list"); ml.add_argument("--limit", type=int, default=30)
+    ml.add_argument("--kind"); ml.add_argument("--tag"); ml.add_argument("--source")
     msr = pms.add_parser("search"); msr.add_argument("query"); msr.add_argument("--limit", type=int, default=10)
     ma = pms.add_parser("add"); ma.add_argument("text")
     ma.add_argument("--kind", default="fact"); ma.add_argument("--importance", type=int, default=3)
     mf = pms.add_parser("forget"); mf.add_argument("id", type=int)
+    mfs = pms.add_parser("forget-source", help="按来源前缀批量删除（如某次 ingest）")
+    mfs.add_argument("source")
+    mex = pms.add_parser("export", help="导出记忆为 Markdown")
+    mex.add_argument("--out", default="mnemo-memory.md")
     pms.add_parser("profile"); pms.add_parser("stats")
     pms.add_parser("consolidate", help="主动巩固：合并近重复、淡忘陈旧低价值记忆")
     pms.add_parser("backfill", help="为记忆补算语义向量（需后端支持 embed）")
@@ -778,6 +826,13 @@ def build_parser() -> argparse.ArgumentParser:
                                              help="in 2h / 18:30 / 2026-06-17 09:00")
     mg = pms.add_parser("graph", help="导出记忆关系图为自包含 HTML")
     mg.add_argument("--out", default="mnemo-graph.html"); mg.add_argument("--limit", type=int, default=80)
+
+    pse2 = sub.add_parser("session", help="会话：列出/查看/导出历史对话")
+    pse2s = pse2.add_subparsers(dest="action", required=True)
+    pse2s.add_parser("list")
+    ssh2 = pse2s.add_parser("show"); ssh2.add_argument("session")
+    sex2 = pse2s.add_parser("export"); sex2.add_argument("session")
+    sex2.add_argument("--out", default="session.md")
 
     ps = sub.add_parser("skill", help="技能：学习/查看/管理")
     pss = ps.add_subparsers(dest="action", required=True)
@@ -868,7 +923,8 @@ def build_parser() -> argparse.ArgumentParser:
 _HANDLERS = {
     "chat": cmd_chat, "run": cmd_run, "ingest": cmd_ingest, "config": cmd_config,
     "provider": cmd_provider,
-    "memory": cmd_memory, "skill": cmd_skill, "plugin": cmd_plugin, "task": cmd_task,
+    "memory": cmd_memory, "session": cmd_session, "skill": cmd_skill,
+    "plugin": cmd_plugin, "task": cmd_task,
     "daemon": cmd_daemon, "doctor": cmd_doctor, "audit": cmd_audit,
     "market": cmd_market, "sync": cmd_sync, "speak": cmd_speak, "see": cmd_see,
     "serve": cmd_serve, "voice": cmd_voice, "mcp": cmd_mcp, "usage": cmd_usage,
