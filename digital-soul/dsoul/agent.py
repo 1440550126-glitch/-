@@ -450,6 +450,19 @@ class Agent:
                     self._log_journal(who, utterance, txt, "companion_comfort")
                     return result
 
+        # --- 听话听音（像人一样多想一层）："我没事/算了/都怪我"等，不被字面骗到 ---
+        if action is None and who.get("obey"):
+            from .thinking import read_subtext, respond_to_subtext
+            cat, _insight = read_subtext(utterance)
+            if cat and len((utterance or "").strip()) <= 12:   # 短句才当弦外之音，长句多半在陈述事
+                txt = respond_to_subtext(utterance, who=who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="爱", topic="体察")
+                    self._log_journal(who, utterance, txt, "subtext")
+                    return result
+
         # --- 我们的故事 / 约定（"咱俩怎么认识的" / "我们的约定"）---
         if action is None and who.get("obey") and getattr(self, "spouse", None):
             us = utterance or ""
@@ -1275,9 +1288,24 @@ class Agent:
         if self.emotions is not None:
             self.emotions.observe(utterance, speaker=who if who.get("known") else None)
 
-        # --- 生成回复（带上情绪 / 学识等提示；上下文含纠缠联想）---
+        # --- 先在心里思量一下（像人一样听话听音，再开口）---
+        from .thinking import ponder, thinking_hint
+        mood_now = None
+        if getattr(self, "emotions", None) is not None:
+            try:
+                mood_now = self.emotions.mood()[0]
+            except Exception:
+                mood_now = None
+        result["reasoning"] = ponder(
+            utterance, speaker=who if who.get("known") else None, memories=ctx, mood=mood_now)
+        hints = self._hints()
+        hint = thinking_hint(utterance)          # 把读出的弦外之音喂给大模型
+        if hint:
+            hints = hints + [hint]
+
+        # --- 生成回复（带上情绪 / 学识 / 思量等提示；上下文含纠缠联想）---
         system = self.persona.system_prompt(
-            speaker=who if who.get("known") else None, memories=ctx, hints=self._hints()
+            speaker=who if who.get("known") else None, memories=ctx, hints=hints
         )
         if self.llm.available:
             try:
@@ -2937,12 +2965,17 @@ class Agent:
     # ---------- 内心独白 ----------
     def _inner_thought(self, utterance, who, assoc_texts) -> str:
         from .monologue import compose_thought
+        from .thinking import read_subtext
         mood_char = mood = None
         if self.emotions is not None:
             from .emotions import _DESC
             top, val = self.emotions.mood()
             if val >= self.emotions.baseline + 0.08:
                 mood_char, mood = top, _DESC.get(top)
+        # 听话听音：若读出弦外之音，内心独白先记下这层察觉（像人一样多想一层）
+        _cat, insight = read_subtext(utterance)
+        if insight:
+            return insight
         return compose_thought(utterance, mood=mood, mood_char=mood_char, assoc=assoc_texts,
                                speaker=who.get("name") if who.get("known") else None)
 
