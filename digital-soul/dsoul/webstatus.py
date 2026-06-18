@@ -78,9 +78,11 @@ def _companion_guardian(agent) -> dict:
 
     独立成函数便于单测；每块各自降级为空，不影响整页。
     """
-    out = {"meds": [], "appts": [], "habits": [], "joys": [], "muse": "", "reasoning": []}
+    out = {"meds": [], "appts": [], "habits": [], "joys": [], "muse": "", "reasoning": [],
+           "body": ""}
     try:
         out["reasoning"] = list(getattr(agent, "_last_reasoning", []) or [])
+        out["body"] = getattr(agent, "_last_body", "") or ""
     except Exception:
         pass
     try:
@@ -360,6 +362,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
   <div class=k style="margin-top:10px">📖 家训</div><ul id=precepts></ul></div>
 <div class=card><div class=k>👪 这一家子</div><div id=family class=dim></div><div id=familychips style="margin-top:6px"></div></div>
 <div class=card><div class=k>🫶 守护惦记</div><ul id=care></ul></div>
+<div class=card><div class=k>🤖 此刻体态</div><div id=body class=dim>…</div></div>
 <div class=card><div class=k>🧠 刚才怎么想的</div><ul id=reasoning></ul></div>
 <div class=card><div class=k>🫂 陪伴守护</div>
   <div id=muse class=dim style="font-style:italic;margin-bottom:8px">…</div>
@@ -445,6 +448,7 @@ async function refresh(){
     $('#familychips').innerHTML=(s.family_members&&s.family_members.length)?s.family_members.map(m=>'<button class=devbtn style="margin:3px" onclick="talkTo(\''+esc(m.name)+'\')">叫 '+esc(m.name)+(m.mem?(' · '+m.mem+'忆'):'')+'</button>').join(''):'';
     $('#care').innerHTML=(s.care&&s.care.length)?li(s.care):'<li class=dim>暂未设置守护对象（见 config/care.yaml）</li>';
     var cp=s.companion||{};
+    $('#body').textContent=cp.body?('正「'+cp.body+'」'):'安安静静守着';
     $('#reasoning').innerHTML=(cp.reasoning&&cp.reasoning.length)?li(cp.reasoning):'<li class=dim>（还没开口想事）</li>';
     $('#muse').textContent=cp.muse||'';
     $('#meds').innerHTML=(cp.meds&&cp.meds.length)?li(cp.meds):'<li class=dim>这会儿没有要吃的药</li>';

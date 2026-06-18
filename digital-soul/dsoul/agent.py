@@ -79,6 +79,7 @@ class Agent:
         self.thoughts: deque = deque(maxlen=12)                   # 内心独白（近期心声）
         self.dialogue: deque = deque(maxlen=6)                    # 这一席话的近几句（对话连贯·像人）
         self._threads: dict = {}                                  # 你上次提到没完的事（跨天记挂）
+        self._last_body = ""                                      # 此刻的体态（注入灵魂的身体·供网页展示）
         self.curiosity = curiosity                                # 好奇心：对陌生事物的疑问本
         self.worldmodel = worldmodel                              # 世界模型：带置信度的信念，会自我修正
         self.calib = calib                                        # 预测校准（从"猜对/没猜对"学习）
@@ -1750,9 +1751,10 @@ class Agent:
             if ci:
                 text = f"{text} {ci}"
         # 注入灵魂的身体：看向TA、带着此刻的情绪做出体态（守护对象则挡在身前）
-        from .embodiment import express, guard_stance
+        from .embodiment import body_language, express, guard_stance
         mood = self.emotions.mood()[0] if getattr(self, "emotions", None) else None
         express(self.robot, mood, who.get("name"))
+        self._last_body = body_language(mood)[0]
         if who.get("guard"):
             guard_stance(self.robot, who.get("name"))
         self.robot.say(text)
