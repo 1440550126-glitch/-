@@ -7,6 +7,7 @@
   --r:14px; --sh:0 8px 30px rgba(0,0,0,.35);
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0;padding:0}
 body{
   background:radial-gradient(1200px 600px at 20% -10%,rgba(110,168,254,.12),transparent 60%),
@@ -30,6 +31,7 @@ a{cursor:pointer;color:inherit}
 .lz-nav::-webkit-scrollbar{display:none}
 .lz-nav a{padding:7px 12px;border-radius:10px;font-size:13px;color:var(--mut);white-space:nowrap;flex:none}
 .lz-nav a:hover{color:var(--txt);background:var(--card)}
+.lz-nav a.on{color:var(--acc);background:var(--card)}
 .lz-nav a.primary{color:#fff;background:var(--grad);font-weight:600}
 .lz-user{display:flex;align-items:center;gap:10px;font-size:13px}
 .lz-quota{background:var(--card);border:1px solid var(--line);padding:4px 9px;border-radius:20px;color:var(--acc);font-weight:600;font-size:12px}

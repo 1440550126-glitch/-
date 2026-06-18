@@ -85,20 +85,24 @@ const toolName = (id) => toolMeta(id)?.name || id;
 const toolIcon = (id) => toolMeta(id)?.icon || '🔧';
 
 // ---------------- 公共 UI 片段 ----------------
+const NAV = [
+  { label: '团队广场', hash: '#/', match: ['', 'team', 'run', 'batch'] },
+  { label: '智能体', hash: '#/agents', match: ['agents', 'agent'] },
+  { label: '知识库', hash: '#/kb', match: ['kb'] },
+  { label: '触发器', hash: '#/triggers', match: ['triggers'] },
+  { label: '历史', hash: '#/history', match: ['history'] },
+  { label: '用量', hash: '#/usage', match: ['usage'] },
+  { label: '＋ 建队', hash: '#/new', match: ['new', 'edit'], primary: true }
+];
+const sectionOf = () => (location.hash || '#/').replace(/^#\/?/, '').split('/')[0];
 function header() {
-  const m = state.me;
+  const m = state.me, sec = sectionOf();
   return h('header', { class: 'lz-top' },
     h('div', { class: 'lz-brand', onclick: () => nav('#/') },
       h('span', { class: 'lz-logo' }, '🛰'),
       h('div', {}, h('b', {}, '灵阵'), h('small', {}, 'AI 团队 · 对标扣子'))),
-    h('nav', { class: 'lz-nav' },
-      h('a', { onclick: () => nav('#/') }, '团队广场'),
-      h('a', { onclick: () => nav('#/agents') }, '智能体'),
-      h('a', { onclick: () => nav('#/kb') }, '知识库'),
-      h('a', { onclick: () => nav('#/triggers') }, '触发器'),
-      h('a', { onclick: () => nav('#/history') }, '历史'),
-      h('a', { onclick: () => nav('#/usage') }, '用量'),
-      h('a', { class: 'primary', onclick: () => nav('#/new') }, '＋ 建队')),
+    h('nav', { class: 'lz-nav' }, NAV.map((it) =>
+      h('a', { class: it.primary ? 'primary' : (it.match.includes(sec) ? 'on' : ''), onclick: () => nav(it.hash) }, it.label))),
     h('div', { class: 'lz-user' },
       state.meta ? h('span', { class: 'lz-quota', title: '今日剩余运行次数' }, `⚡ ${state.meta.quota.left}/${state.meta.quota.limit}`) : null,
       h('span', { class: 'lz-me' }, (m?.avatar ? '' : '👤'), m?.nickname || '我'),
@@ -124,6 +128,7 @@ function teamCard(t, opts = {}) {
 
 // ---------------- 登录 ----------------
 function renderLogin() {
+  document.title = '灵阵 · AI 团队';
   let mode = 'guest';
   const box = h('div', { class: 'lz-auth-box' });
   function draw() {
@@ -1023,10 +1028,12 @@ async function renderAgentEdit(id) {
 }
 
 // ---------------- 路由 ----------------
+const TITLES = { '': '团队广场', agents: '智能体工作室', agent: '智能体', kb: '知识库', triggers: '定时触发器', history: '运行记录', usage: '用量看板', new: '组建团队', edit: '编辑团队', team: '团队', run: '作战室', batch: '批量运行' };
 function route() {
   if (!state.me) { renderLogin(); return; }
   const hash = location.hash || '#/';
   const [path, p1] = hash.replace(/^#\//, '').split('/');
+  document.title = '灵阵 · ' + (TITLES[path] ?? 'AI 团队');
   if (path === 'agents') return renderAgents();
   if (path === 'agent' && p1) return renderAgentEdit(p1);
   if (path === 'team' && p1) return renderTeam(p1);
