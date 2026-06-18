@@ -73,6 +73,42 @@ def _legacy_family_care(agent) -> dict:
             "family": family_roster, "family_members": family_members, "care": care_list}
 
 
+def _companion_guardian(agent) -> dict:
+    """陪伴守护的此刻状态（只读）：该吃的药 / 就医安排 / 习惯打卡 / 最近小确幸 / 心声。
+
+    独立成函数便于单测；每块各自降级为空，不影响整页。
+    """
+    out = {"meds": [], "appts": [], "habits": [], "joys": [], "muse": ""}
+    try:
+        if getattr(agent, "medications", None) is not None:
+            out["meds"] = list(agent.medications.reminders())
+    except Exception:
+        pass
+    try:
+        if getattr(agent, "appointments", None) is not None:
+            out["appts"] = [f"{it['date']} {it['what']}"
+                            for _, it in agent.appointments.upcoming(within=30)]
+    except Exception:
+        pass
+    try:
+        hb = getattr(agent, "habits_book", None)
+        if hb is not None:
+            out["habits"] = [f"{n}（连续{h.get('streak', 0)}天）" for n, h in hb.habits.items()]
+    except Exception:
+        pass
+    try:
+        if getattr(agent, "joys", None) is not None:
+            out["joys"] = agent.joys.recent(3)
+    except Exception:
+        pass
+    try:
+        if hasattr(agent, "muse"):
+            out["muse"] = agent.muse()
+    except Exception:
+        pass
+    return out
+
+
 def _snapshot(agent, monitor) -> dict:
     present = sorted(monitor.present.keys()) if monitor is not None else []
     mems = [it["text"] for it in agent.memory.items[-8:]][::-1]
@@ -246,6 +282,7 @@ def _snapshot(agent, monitor) -> dict:
         "people": [p["name"] for p in agent.authority.people.values()],
         "owner": _owner(agent),
         **_legacy_family_care(agent),
+        "companion": _companion_guardian(agent),
     }
 
 
@@ -319,6 +356,12 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
   <div class=k style="margin-top:10px">📖 家训</div><ul id=precepts></ul></div>
 <div class=card><div class=k>👪 这一家子</div><div id=family class=dim></div><div id=familychips style="margin-top:6px"></div></div>
 <div class=card><div class=k>🫶 守护惦记</div><ul id=care></ul></div>
+<div class=card><div class=k>🫂 陪伴守护</div>
+  <div id=muse class=dim style="font-style:italic;margin-bottom:8px">…</div>
+  <div class=k>💊 该吃的药</div><ul id=meds></ul>
+  <div class=k style="margin-top:6px">🏥 就医安排</div><ul id=appts></ul>
+  <div class=k style="margin-top:6px">🎯 习惯打卡</div><div id=habits class=dim></div>
+  <div class=k style="margin-top:6px">🌼 最近的小确幸</div><ul id=joys></ul></div>
 <div class=card><div class=k>🧩 最近记住</div><ul id=mems></ul></div>
 <div class=card><div class=k>🕘 最近对话</div><ul id=jour></ul></div>
 <div class=card><div class=k>🛰️ 最近派活 / 提议</div><ul id=disp></ul></div>
@@ -396,6 +439,12 @@ async function refresh(){
     $('#family').textContent=s.family||'（还没登记家人）';
     $('#familychips').innerHTML=(s.family_members&&s.family_members.length)?s.family_members.map(m=>'<button class=devbtn style="margin:3px" onclick="talkTo(\''+esc(m.name)+'\')">叫 '+esc(m.name)+(m.mem?(' · '+m.mem+'忆'):'')+'</button>').join(''):'';
     $('#care').innerHTML=(s.care&&s.care.length)?li(s.care):'<li class=dim>暂未设置守护对象（见 config/care.yaml）</li>';
+    var cp=s.companion||{};
+    $('#muse').textContent=cp.muse||'';
+    $('#meds').innerHTML=(cp.meds&&cp.meds.length)?li(cp.meds):'<li class=dim>这会儿没有要吃的药</li>';
+    $('#appts').innerHTML=(cp.appts&&cp.appts.length)?li(cp.appts):'<li class=dim>近期没有就医安排</li>';
+    $('#habits').textContent=(cp.habits&&cp.habits.length)?cp.habits.join('　'):'还没立小目标';
+    $('#joys').innerHTML=(cp.joys&&cp.joys.length)?li(cp.joys):'<li class=dim>今天的好事还没说给我听</li>';
     $('#mems').innerHTML=li(s.recent_memories);
     $('#jour').innerHTML=li(s.recent_journal);
     if(!inited){$('#speaker').innerHTML=s.people.map(p=>'<option'+(p===s.owner?' selected':'')+'>'+esc(p)+'</option>').join('');inited=true;}

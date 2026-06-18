@@ -6,7 +6,9 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from dsoul.webstatus import PAGE, _legacy_family_care  # noqa: E402
+from dsoul.webstatus import (  # noqa: E402
+    PAGE, _companion_guardian, _legacy_family_care,
+)
 
 
 class _StubAgent:
@@ -78,8 +80,48 @@ def test_family_member_memory_counts():
 
 def test_page_has_new_cards():
     for marker in ("id=chronicle", "id=lastwords", "id=precepts",
-                   "id=family", "id=care", "talkTo"):
+                   "id=family", "id=care", "talkTo",
+                   "id=meds", "id=appts", "id=habits", "id=joys", "陪伴守护"):
         assert marker in PAGE, marker
+
+
+class _CompanionAgent:
+    """带陪伴守护字段的极简桩。"""
+
+    class _Med:
+        def reminders(self, now=None):
+            return ["该吃降压药了，08:00 这顿别忘了。"]
+
+    class _Appt:
+        def upcoming(self, now=None, within=30):
+            return [(2, {"date": "2026-06-20", "what": "复诊"})]
+
+    class _Joy:
+        def recent(self, k=3):
+            return ["孙子来看我了"]
+
+    def __init__(self):
+        self.medications = self._Med()
+        self.appointments = self._Appt()
+        self.joys = self._Joy()
+        self.habits_book = type("H", (), {"habits": {"早睡": {"streak": 5}}})()
+
+    def muse(self):
+        return "这会儿就盼着大家都顺顺当当。"
+
+
+def test_companion_guardian_surfaced():
+    d = _companion_guardian(_CompanionAgent())
+    assert d["meds"] and "降压药" in d["meds"][0]
+    assert d["appts"] == ["2026-06-20 复诊"]
+    assert d["habits"] == ["早睡（连续5天）"]
+    assert d["joys"] == ["孙子来看我了"]
+    assert "顺顺当当" in d["muse"]
+
+
+def test_companion_guardian_degrades():
+    d = _companion_guardian(_StubAgent())          # 没有这些字段也不炸
+    assert d == {"meds": [], "appts": [], "habits": [], "joys": [], "muse": ""}
 
 
 if __name__ == "__main__":
