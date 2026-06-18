@@ -519,6 +519,29 @@ def cmd_plugin(args):
     return 0
 
 
+def cmd_watch(args):
+    cfg = load_config(getattr(args, "home", None))
+    watches = list(cfg.get("watch", []) or [])
+    if args.action == "list":
+        if not watches:
+            print(dim("（未配置监视）mnemo watch add --name X --path ./dir --prompt \"...\""))
+        for w in watches:
+            print(f"{green('●')} {bold(w.get('name'))} ← {dim(w.get('path'))}  «{w.get('prompt','')[:40]}»")
+    elif args.action == "add":
+        watches = [w for w in watches if w.get("name") != args.name]
+        watches.append({"name": args.name, "path": args.path, "prompt": args.prompt})
+        cfg.set("watch", watches); cfg.save()
+        print(green(f"已添加监视：{args.name} ← {args.path}")
+              + dim("（mnemo daemon 运行时生效，首次只记录基线）"))
+    elif args.action == "remove":
+        new = [w for w in watches if w.get("name") != args.name]
+        if len(new) == len(watches):
+            print(red("未找到")); return 1
+        cfg.set("watch", new); cfg.save()
+        print(green(f"已移除监视：{args.name}"))
+    return 0
+
+
 def cmd_mcp(args):
     cfg = load_config(getattr(args, "home", None))
     servers = dict(cfg.get("mcp.servers", {}) or {})
@@ -1012,6 +1035,14 @@ def build_parser() -> argparse.ArgumentParser:
     pli.add_argument("--name"); pli.add_argument("-y", "--yes", action="store_true")
     plr = pls.add_parser("remove"); plr.add_argument("name")
 
+    pw = sub.add_parser("watch", help="文件监视：路径变化即触发任务（守护进程生效）")
+    pws = pw.add_subparsers(dest="action", required=True)
+    pws.add_parser("list")
+    pwa = pws.add_parser("add")
+    pwa.add_argument("--name", required=True); pwa.add_argument("--path", required=True)
+    pwa.add_argument("--prompt", required=True)
+    pwr = pws.add_parser("remove"); pwr.add_argument("name")
+
     pmc = sub.add_parser("mcp", help="MCP：接入任意 Model Context Protocol 服务的工具")
     pmcs = pmc.add_subparsers(dest="action", required=True)
     pmcs.add_parser("list")
@@ -1090,7 +1121,7 @@ _HANDLERS = {
     "chat": cmd_chat, "run": cmd_run, "ingest": cmd_ingest, "config": cmd_config,
     "provider": cmd_provider, "persona": cmd_persona,
     "memory": cmd_memory, "session": cmd_session, "skill": cmd_skill,
-    "plugin": cmd_plugin, "task": cmd_task,
+    "plugin": cmd_plugin, "task": cmd_task, "watch": cmd_watch,
     "daemon": cmd_daemon, "doctor": cmd_doctor, "status": cmd_status,
     "notify": cmd_notify, "audit": cmd_audit,
     "market": cmd_market, "sync": cmd_sync, "speak": cmd_speak, "see": cmd_see,

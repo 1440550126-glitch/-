@@ -212,9 +212,54 @@ class Scheduler:
                         except Exception:  # noqa: BLE001
                             pass
 
+    def _latest_mtime(self, path: Path) -> float:
+        if path.is_file():
+            return path.stat().st_mtime
+        latest = path.stat().st_mtime
+        for p in path.rglob("*"):
+            try:
+                if p.is_file():
+                    latest = max(latest, p.stat().st_mtime)
+            except OSError:
+                pass
+        return latest
+
+    def _check_watches(self, now: float) -> int:
+        """文件监视：路径变化即跑对应 prompt（首次只记录基线，不触发）。返回触发数。"""
+        cfg = getattr(self.agent, "config", None)
+        mem = getattr(self.agent, "memory", None)
+        if not cfg or not mem:
+            return 0
+        triggered = 0
+        for w in (cfg.get("watch", []) or []):
+            path = Path(w.get("path", "")).expanduser()
+            if not w.get("path") or not path.exists():
+                continue
+            name = w.get("name", w.get("path"))
+            mt = self._latest_mtime(path)
+            key = f"watch_mtime:{name}"
+            prev = float(mem.get_profile(key, "0") or 0)
+            if mt > prev:
+                if prev > 0:                      # 非首见 → 触发
+                    self.log(f"👁 监视触发：{path}")
+                    try:
+                        out = self.agent.run(
+                            f"{w.get('prompt', '')}\n（检测到路径有变化：{path}）",
+                            session="watch", auto_approve=True)
+                        self.log(f"   ↳ {out[:120].strip()}")
+                        if cfg.get("notify.on_task", False):
+                            from .notify import notify
+                            notify(cfg, f"{path.name}：{out[:100]}", title="Mnemo 监视")
+                        triggered += 1
+                    except Exception as e:  # noqa: BLE001
+                        self.log(f"   ✗ 监视任务失败：{e}")
+                mem.set_profile(key, str(mt))
+        return triggered
+
     def run_once(self, now: float | None = None) -> int:
         now = now or time.time()
         self._maintenance(now)
+        self._check_watches(now)
         due = self.store.due(now)
         for t in due:
             self._run_task(t)

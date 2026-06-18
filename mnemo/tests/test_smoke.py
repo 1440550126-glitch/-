@@ -1071,6 +1071,33 @@ class TestHttpRetry(unittest.TestCase):
         self.assertEqual(calls["n"], 1)        # 4xx 不重试
 
 
+class TestWatch(unittest.TestCase):
+    def test_file_watch_triggers_after_baseline(self):
+        import os
+        from mnemo.daemon import Scheduler, TaskStore
+        tmp = tempfile.TemporaryDirectory()
+        cfg = load_config(tmp.name)
+        mem = Memory(cfg.db_path)
+        agent = Agent(FakeProvider(["已处理变化", "再次处理"]),
+                      build_default_registry(), mem, SkillRegistry(cfg), cfg)
+        watched = Path(tmp.name) / "data.txt"
+        watched.write_text("v1", encoding="utf-8")
+        cfg.set("watch", [{"name": "w1", "path": str(watched), "prompt": "echo: changed"}])
+        sched = Scheduler(agent, TaskStore(cfg.db_path), log=lambda *a: None)
+
+        # 首次：只记录基线，不触发
+        self.assertEqual(sched._check_watches(time.time()), 0)
+        self.assertEqual(len(mem.session_episodes("watch")), 0)
+        # 修改文件并把 mtime 推到未来 → 触发
+        watched.write_text("v2", encoding="utf-8")
+        future = time.time() + 1000
+        os.utime(watched, (future, future))
+        self.assertEqual(sched._check_watches(time.time()), 1)
+        self.assertEqual(len(mem.session_episodes("watch")), 1)
+        mem.close()
+        tmp.cleanup()
+
+
 class TestTaskHistory(unittest.TestCase):
     def test_runs_recorded_and_queried(self):
         from mnemo.daemon import TaskStore
