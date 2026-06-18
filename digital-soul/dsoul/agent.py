@@ -323,6 +323,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "worry")
                     return result
 
+        # --- 夸夸/肯定：明着求夸，或说起了值得肯定的事（孝顺/努力/善良…），走心地夸 ---
+        if action is None and who.get("obey"):
+            from .praise import detect_trait, is_praise_request
+            if is_praise_request(utterance) or detect_trait(utterance):
+                txt = self.give_praise(utterance, name=who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="喜", topic="肯定")
+                    self._log_journal(who, utterance, txt, "praise")
+                    return result
+
         # --- 打气：家人要面对大事，给句鼓励，事后还会主动跟进 ---
         if action is None and who.get("obey"):
             from .encourage import detect_occasion
@@ -569,6 +581,16 @@ class Agent:
                 txt = self.reminisce_about(cue)
                 result["reply"] = txt
                 self._log_journal(who, u, txt, "reminisce")
+                return result
+
+        # --- 今天吃什么（"今天吃啥好" / "晚上做什么菜"）：从家传菜挑、应季避忌口 ---
+        if action is None and who.get("obey") and any(
+                k in (utterance or "") for k in ("今天吃什么", "吃什么好", "吃啥好", "今天做什么吃",
+                                                 "晚上吃啥", "中午吃啥", "做什么菜好", "吃点什么好")):
+            txt = self.what_to_cook()
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "cooking_today")
                 return result
 
         # --- 家传菜谱（"外婆的红烧肉怎么做" / "你有什么拿手菜"）---
@@ -1810,6 +1832,22 @@ class Agent:
             return ""
         self._habit_reminded_day = today
         return f"今天的{'、'.join(pend)}还没打卡呢，别断了哈。"
+
+    # ---------- 今天吃什么 / 夸夸 ----------
+    def what_to_cook(self, now=None) -> str:
+        from datetime import datetime
+        from .cooking_today import season_of, what_to_eat
+        from .health_history import allergies
+        from .recipes import collect_recipes, list_names
+        now = now or datetime.now()
+        names = list_names(collect_recipes(getattr(self, "recipes", None), self.family))
+        avoid = [a["to"] for a in allergies(getattr(self, "health", None))]
+        return what_to_eat(recipes=names, season=season_of(now.month),
+                           avoid=avoid, seed=now.strftime("%Y%m%d"))
+
+    def give_praise(self, utterance="", name="") -> str:
+        from .praise import praise
+        return praise(utterance, name=name, seed=utterance)
 
     # ---------- 节日筹备 ----------
     def festival_prep(self, utterance) -> str:
