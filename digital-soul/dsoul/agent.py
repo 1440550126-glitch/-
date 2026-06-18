@@ -38,7 +38,8 @@ class Agent:
                  calendar=None, capsules=None, notes=None,
                  recipes=None, sayings=None, social=None, goals=None,
                  shopping=None, mannerisms=None, heirlooms=None,
-                 health=None, favors=None, stories=None, teachings=None) -> None:
+                 health=None, favors=None, stories=None, teachings=None,
+                 spouse=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -91,6 +92,8 @@ class Agent:
         self.stories = stories or {}                              # 讲古：家史/往事故事库（配置）
         self._told_stories: set = set()                           # 已讲过的故事（轮着讲不重样）
         self.teachings = teachings or {}                          # 言传身教：道理 + 手艺
+        self.spouse = spouse or {}                                # 老伴专属（夫妻之间：昵称/故事/唠叨/思念）
+        self._spouse_nag_day = None                               # 当天是否已对老伴唠叨过（去重）
         self.social = social                                      # 社交记忆（对每人的亲疏冷暖）
         self.goals = goals                                        # 心愿与目标
         self.shopping = shopping                                  # 采买清单
@@ -238,6 +241,37 @@ class Agent:
                 result["proposal"] = prop
                 self._log_journal(who, utterance, prop["reply"], f"propose:{prop['agent']}")
                 return result
+
+        # --- 老伴思念（最高情感优先）：另一半说"我想你了/睡不着"，像本人那样温柔接住 ---
+        if action is None and who.get("obey") and getattr(self, "spouse", None) \
+                and self.is_my_spouse(who.get("name"), who.get("relation")):
+            from .spouse import senses_longing
+            if senses_longing(utterance):
+                txt = self.comfort_spouse(utterance)
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="爱", topic="思念")
+                    self._log_journal(who, utterance, txt, "spouse_comfort")
+                    return result
+
+        # --- 我们的故事 / 约定（"咱俩怎么认识的" / "我们的约定"）---
+        if action is None and who.get("obey") and getattr(self, "spouse", None):
+            us = utterance or ""
+            if any(k in us for k in ("我们怎么认识", "咱俩怎么认识", "你们怎么认识", "怎么走到一起",
+                                     "我们的故事", "你和妈怎么", "你跟妈怎么", "和妈妈怎么认识",
+                                     "你俩怎么好上")):
+                txt = self.love_story()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, us, txt, "love_story")
+                    return result
+            if any(k in us for k in ("我们的约定", "咱俩的约定", "答应过我", "说好的事", "我们说好")):
+                txt = self.our_promises_line()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, us, txt, "promises")
+                    return result
 
         # --- 行为习惯（"你在干嘛/这会儿在做什么"）：说出 TA 此刻惯常的活动 ---
         if action is None and who.get("obey") and any(
@@ -872,6 +906,14 @@ class Agent:
         if who.get("obey"):
             for cap in self.due_capsules():
                 text = f"{text} {cap}"
+        # 老伴专属：见到另一半，纪念日道一声、把放心不下的话轻轻唠叨一句（当天去重）
+        if who.get("obey") and getattr(self, "spouse", None) \
+                and self.is_my_spouse(who.get("name"), who.get("relation")):
+            anni = self.spouse_anniversary()
+            if anni:
+                text = f"{text} {anni}"
+            for c in self.spouse_care_today():
+                text = f"{text} {c}"
         # 家谱生日：见到你时，若近几天有家人过生日，主动提醒一句别忘了
         if who.get("obey") and self.family:
             bday = self.birthday_reminders(within=7)
@@ -1200,6 +1242,56 @@ class Agent:
             return ""
         import random
         return teach_lesson(random.choice(lessons))
+
+    # ---------- 老伴专属（夫妻之间）----------
+    def is_my_spouse(self, name, relation=None) -> bool:
+        from .spouse import is_spouse
+        return is_spouse(getattr(self, "spouse", None), name, relation)
+
+    def love_story(self) -> str:
+        """我们的故事（怎么认识、怎么走到一起）。"""
+        from .spouse import love_story
+        return love_story(getattr(self, "spouse", None))
+
+    def our_promises_line(self) -> str:
+        from .spouse import our_promises
+        ps = our_promises(getattr(self, "spouse", None))
+        if not ps:
+            return ""
+        return "咱俩说好的：" + "；".join(ps) + "。这些我都记着。"
+
+    def comfort_spouse(self, utterance="") -> str:
+        """老伴流露思念/孤独时，像本人那样温柔接住。"""
+        from .spouse import comfort_lonely
+        return comfort_lonely(getattr(self, "spouse", None), utterance)
+
+    def spouse_anniversary(self, now=None) -> str:
+        from .spouse import anniversary_words
+        return anniversary_words(getattr(self, "spouse", None), now)
+
+    def spouse_care_today(self, now=None) -> list:
+        """对老伴饱含爱意的唠叨；当天只唠叨一次（去重）。"""
+        from datetime import date
+        from .spouse import care_words
+        if not getattr(self, "spouse", None):
+            return []
+        today = (now.date() if hasattr(now, "date") else date.today()).isoformat()
+        if self._spouse_nag_day == today:
+            return []
+        self._spouse_nag_day = today
+        return care_words(self.spouse, now)
+
+    def spouse_greeting(self, now=None) -> str:
+        """见到老伴的专属问候：昵称 + 纪念日 + 一句牵挂（去重唠叨）。供 greet 调用。"""
+        from .spouse import call_name
+        if not getattr(self, "spouse", None):
+            return ""
+        parts = [f"{call_name(self.spouse)}，你来啦。"]
+        anni = self.spouse_anniversary(now)
+        if anni:
+            parts.append(anni)
+        parts += self.spouse_care_today(now)
+        return " ".join(parts)
 
     def kinship(self, text) -> str:
         """算亲戚称呼："我爸的弟弟" → "该叫叔叔"。"""

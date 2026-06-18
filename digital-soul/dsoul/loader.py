@@ -35,6 +35,7 @@ from .shopping import ShoppingList
 from .timecapsule import CapsuleBook
 from .skills import SkillRegistry
 from .social import SocialLog
+from .spouse import spouse_profile
 from .tasks import TaskBook
 from .values import load_values
 from .worldmodel import WorldModel
@@ -133,7 +134,9 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  favors=FavorBook(base / "data" / "favors.json",
                                   seed=_load_yaml(base / "config" / "favors.yaml")),
                  stories=_load_yaml(base / "config" / "stories.yaml"),
-                 teachings=_load_yaml(base / "config" / "teachings.yaml"))
+                 teachings=_load_yaml(base / "config" / "teachings.yaml"),
+                 spouse=spouse_profile(_load_yaml(base / "config" / "spouse.yaml"),
+                                       family_cfg, relationships))
 
 
 def _seed_memory(base: Path, memory) -> None:
