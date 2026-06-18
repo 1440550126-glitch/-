@@ -11,6 +11,7 @@ from .agent import Agent
 from .appointments import AppointmentBook
 from .authority import Authority
 from .calendar_book import EventBook
+from .contacts import ContactBook
 from .curiosity import QuestionLog
 from .devices import build_device_hub, build_sensor_source
 from .dream import DreamLog
@@ -155,7 +156,9 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                      _load_yaml(base / "config" / "opinions.yaml"), identity),
                  joys=JoyLog(base / "data" / "joys.json"),
                  habits_book=HabitBook(base / "data" / "habit_goals.json",
-                                       seed=_load_yaml(base / "config" / "habit_goals.yaml")))
+                                       seed=_load_yaml(base / "config" / "habit_goals.yaml")),
+                 contacts=ContactBook(base / "data" / "contacts.json",
+                                      seed=_load_yaml(base / "config" / "contacts.yaml")))
 
 
 def _seed_memory(base: Path, memory) -> None:

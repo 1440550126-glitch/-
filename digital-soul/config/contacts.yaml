@@ -1,0 +1,15 @@
+# 重要联系人：记着该记的号码——孩子、医生、邻居、急救。要紧时刻喊一声就找得到。
+# 关系里带 孩子/儿子/女儿/医生/急救/社区/邻居/老伴 的，会被当作"紧急可找"，
+# 应急时分身会第一时间把他们报给你。首次启动灌进 data/contacts.json。
+#
+# contacts:
+#   - name: 小明
+#     relation: 儿子
+#     phone: "138xxxxxxxx"
+#   - name: 王医生
+#     relation: 社区医生
+#     phone: "010-xxxxxxx"
+#   - name: 老李
+#     relation: 邻居
+#     phone: "139xxxxxxxx"
+#     note: 楼上，有事能搭把手

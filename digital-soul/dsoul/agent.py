@@ -41,7 +41,8 @@ class Agent:
                  health=None, favors=None, stories=None, teachings=None,
                  spouse=None, preferences=None, humor=None,
                  medications=None, safety=None, appointments=None,
-                 opinions=None, joys=None, habits_book=None) -> None:
+                 opinions=None, joys=None, habits_book=None,
+                 contacts=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -109,6 +110,7 @@ class Agent:
         self._joy_asked_day = None                                # 当天是否已主动问过开心事（去重）
         self.habits_book = habits_book                            # 习惯养成陪练（戒烟/早睡/锻炼打卡）
         self._habit_reminded_day = None                           # 当天是否已催过打卡（去重）
+        self.contacts = contacts                                  # 重要联系人电话本（要紧时找得到）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
         self._game_mode = None                                    # 正在玩的游戏（如"接龙"）
@@ -280,6 +282,16 @@ class Agent:
                     self.social.note(who.get("name"), emotion="爱", topic=topic)
                 self._log_journal(who, utterance, txt, mark)
                 return result
+
+        # --- 应急（最高优先）：摔了/胸口疼/喘不上气/救命，第一时间稳住并给指引 ---
+        if action is None and who.get("obey"):
+            from .emergency import senses_emergency
+            if senses_emergency(utterance):
+                txt = self.emergency_help(utterance, name=who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "emergency")
+                    return result
 
         # --- 游戏进行中：先看这句是不是在接龙 / 报谜底（仅当真在玩时才接管）---
         if action is None and who.get("obey") and (self._pending_riddle or self._game_mode):
@@ -812,6 +824,22 @@ class Agent:
                 if g:
                     result["reply"] = g
                     self._log_journal(who, utterance, g, "game")
+                    return result
+
+        # --- 重要联系人（"小明的电话" / "联系人都有谁"）---
+        if action is None and who.get("obey") and self.contacts is not None:
+            u = utterance or ""
+            if any(k in u for k in ("重要电话", "联系人", "电话本", "都有谁的电话")):
+                txt = self.contacts_describe()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "contacts")
+                    return result
+            if any(k in u for k in ("的电话", "电话号", "打电话给", "联系", "号码")):
+                txt = self.find_contact(u)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "contact_find")
                     return result
 
         # --- 解闷（"好无聊" / "干点啥好"）：挑个事陪你打发 ---
@@ -1987,6 +2015,25 @@ class Agent:
                 self._game_mode = None
                 return "哎，这个字我一时接不上，你赢啦！"
         return ""
+
+    # ---------- 应急 / 联系人 ----------
+    def emergency_help(self, utterance="", name="") -> str:
+        from .emergency import guide
+        cl = self.contacts.emergency_line() if self.contacts is not None else ""
+        return guide(utterance, name=name, contacts_line=cl)
+
+    def find_contact(self, query) -> str:
+        if self.contacts is None:
+            return ""
+        c = self.contacts.find(query)
+        if not c:
+            return ""
+        rel = f"（{c['relation']}）" if c.get("relation") else ""
+        phone = c.get("phone") or "（没记号码）"
+        return f"{c['name']}{rel}的电话：{phone}。"
+
+    def contacts_describe(self) -> str:
+        return self.contacts.describe() if self.contacts is not None else ""
 
     def relieve_boredom(self, now=None) -> str:
         from datetime import datetime
