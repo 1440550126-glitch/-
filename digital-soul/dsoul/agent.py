@@ -509,6 +509,18 @@ class Agent:
                 self._log_journal(who, utterance, txt, "appointments")
                 return result
 
+        # --- 主动哄开心（"哄哄我" / "心情不好"）：不只安慰，还想法子逗你乐 ---
+        if action is None and who.get("obey"):
+            from .mood_lifter import is_lift_request
+            if is_lift_request(utterance):
+                txt = self.cheer_up(who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="爱", topic="哄开心")
+                    self._log_journal(who, utterance, txt, "cheer_up")
+                    return result
+
         # --- 陪伴安慰（任何家人累了/难过了，以"我就在身边"接住，present-tense）---
         if action is None and who.get("obey"):
             from .companion import senses_down
@@ -2095,6 +2107,33 @@ class Agent:
         """有人累了/难过了，以"我就在身边"的暖意接住。"""
         from .companion import comfort
         return comfort(utterance, name=name or "")
+
+    def cheer_up(self, name="") -> str:
+        """主动哄人开心：凑个段子 + 一首爱听的歌 + 一件开心旧事 + 撺掇打个电话。"""
+        from .mood_lifter import lift
+        joke = ""
+        try:
+            joke = self.tell_a_joke()
+        except Exception:
+            joke = ""
+        song = ""
+        try:
+            from .music import favorites
+            favs = favorites(getattr(self, "music", None))
+            song = favs[0] if favs else ""
+        except Exception:
+            song = ""
+        joy = ""
+        if getattr(self, "joys", None) is not None:
+            rs = self.joys.recent(1)
+            joy = rs[0] if rs else ""
+        call_who = ""
+        if getattr(self, "touch", None) is not None:
+            od = self.touch.overdue()
+            if od:
+                rec = self.touch.people.get(od[0][0], {})
+                call_who = rec.get("relation") or od[0][0]
+        return lift(joke=joke, song=song, joy=joy, call_who=call_who, seed=name)
 
     def reassure_fear(self, utterance="", name="") -> str:
         """夜里怕黑/做噩梦/独自在家，立刻稳住、给安全感。"""
