@@ -198,6 +198,45 @@ def _t_now(args, ctx):
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S %A")
 
 
+# 安全计算器：用 ast 解析，仅允许算术与白名单数学函数，绝不 eval 任意代码
+import ast as _ast  # noqa: E402
+import math as _math  # noqa: E402
+import operator as _op  # noqa: E402
+
+_CALC_OPS = {_ast.Add: _op.add, _ast.Sub: _op.sub, _ast.Mult: _op.mul,
+             _ast.Div: _op.truediv, _ast.Pow: _op.pow, _ast.Mod: _op.mod,
+             _ast.FloorDiv: _op.floordiv, _ast.USub: _op.neg, _ast.UAdd: _op.pos}
+_CALC_FUNCS = {k: getattr(_math, k) for k in
+               ("sqrt", "sin", "cos", "tan", "log", "log2", "log10",
+                "exp", "floor", "ceil", "fabs", "factorial")}
+_CALC_CONSTS = {"pi": _math.pi, "e": _math.e, "tau": _math.tau}
+
+
+def _calc_eval(node):
+    if isinstance(node, _ast.Constant) and isinstance(node.value, (int, float)):
+        return node.value
+    if isinstance(node, _ast.BinOp) and type(node.op) in _CALC_OPS:
+        return _CALC_OPS[type(node.op)](_calc_eval(node.left), _calc_eval(node.right))
+    if isinstance(node, _ast.UnaryOp) and type(node.op) in _CALC_OPS:
+        return _CALC_OPS[type(node.op)](_calc_eval(node.operand))
+    if isinstance(node, _ast.Name) and node.id in _CALC_CONSTS:
+        return _CALC_CONSTS[node.id]
+    if isinstance(node, _ast.Call) and isinstance(node.func, _ast.Name) \
+            and node.func.id in _CALC_FUNCS and not node.keywords:
+        return _CALC_FUNCS[node.func.id](*[_calc_eval(a) for a in node.args])
+    raise ValueError("不支持的表达式元素")
+
+
+def _t_calc(args, ctx):
+    expr = (args.get("expr") or args.get("expression") or "").strip()
+    if not expr:
+        return "[calc] 缺少 expr"
+    try:
+        return str(_calc_eval(_ast.parse(expr, mode="eval").body))
+    except Exception as e:  # noqa: BLE001
+        return f"[calc] 无法计算「{expr}」：{e}"
+
+
 def _t_view_image(args, ctx):
     """多模态：用带视觉能力的后端理解一张本地图片。"""
     prov = getattr(ctx.agent, "provider", None) if ctx.agent else None
@@ -285,6 +324,8 @@ def build_default_registry() -> ToolRegistry:
     r.add("forget", "删除一条过时/错误的长期记忆（先用 recall 查编号）",
           {"id": "记忆编号"}, _t_forget, danger=True)
     r.add("now", "获取当前日期时间", {}, _t_now)
+    r.add("calc", "精确计算数学表达式（支持 + - * / ** % 与 sqrt/sin/log 等）",
+          {"expr": "如 (3+4)*2 或 sqrt(2)*pi"}, _t_calc)
     r.add("remind", "设置一个定时提醒（守护进程到点会主动触发）",
           {"text": "提醒内容", "when": "时间：in 2h / 18:30 / 2026-06-17 09:00"}, _t_remind)
     r.add("delegate", "把一个聚焦子任务交给子 Agent 处理并拿回结果（多 Agent 协作）",

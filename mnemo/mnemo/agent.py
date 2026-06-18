@@ -107,9 +107,16 @@ class Agent:
         except Exception:  # noqa: BLE001
             pass
 
+    def _active_persona(self) -> str:
+        active = self.config.get("persona_active")
+        personas = self.config.get("personas", {}) or {}
+        if active and isinstance(personas, dict) and active in personas:
+            return personas[active]
+        return self.config.get("persona", "你是 Mnemo，用户的私人 AI 伙伴。")
+
     def _system_prompt(self, user_input: str, native: bool = False) -> str:
         import datetime as _dt
-        parts = [self.config.get("persona", "你是 Mnemo，用户的私人 AI 伙伴。")]
+        parts = [self._active_persona()]
         parts.append(f"## 当前情境\n现在是 {_dt.datetime.now():%Y-%m-%d %H:%M %A}。")
 
         if self.memory and self.config.get("memory.enabled", True):

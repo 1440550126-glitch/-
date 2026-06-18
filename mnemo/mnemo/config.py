@@ -20,6 +20,13 @@ DEFAULTS: dict[str, Any] = {
     "allow_shell": True,      # 是否允许 run_shell 工具
     "shell_timeout": 60,
     "persona": "你是 Mnemo，用户的私人 AI 伙伴：可靠、简洁、主动。说中文。",
+    # 人格：可命名切换；persona_active 指向 personas 里的某个，留空则用上面的 persona
+    "persona_active": None,
+    "personas": {
+        "程序员": "你是资深工程师：给出可运行代码与简洁解释，重视边界、安全与可维护性。说中文。",
+        "教练": "你是耐心的成长教练：多问启发式问题，鼓励用户，给可执行的小步骤。说中文。",
+        "研究员": "你是严谨的研究员：先列要点再展开，标注不确定与来源，不臆断。说中文。",
+    },
     "native_tools": False,    # true 时对支持的后端启用原生 function-calling（更稳）
     "registry": "",           # 技能/插件市场地址（本地文件或 URL）
     "memory": {"enabled": True, "recall_limit": 6, "min_importance": 1, "semantic": False},

@@ -845,6 +845,39 @@ class TestMemoryManagement(unittest.TestCase):
         self.assertEqual(eps[0]["user"], "你好")
 
 
+class TestCalcAndPersona(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = load_config(self.tmp.name)
+        self.mem = Memory(self.cfg.db_path)
+        self.skills = SkillRegistry(self.cfg)
+        self.tools = build_default_registry()
+
+    def tearDown(self):
+        self.mem.close()
+        self.tmp.cleanup()
+
+    def test_calc_arithmetic(self):
+        ctx = ToolContext()
+        self.assertEqual(self.tools.run("calc", {"expr": "(3+4)*2"}, ctx), "14")
+        self.assertEqual(self.tools.run("calc", {"expr": "2**10"}, ctx), "1024")
+        self.assertEqual(self.tools.run("calc", {"expr": "sqrt(16)"}, ctx), "4.0")
+
+    def test_calc_rejects_code(self):
+        ctx = ToolContext()
+        out = self.tools.run("calc", {"expr": "__import__('os').system('echo hi')"}, ctx)
+        self.assertIn("无法计算", out)
+
+    def test_persona_switch_changes_prompt(self):
+        self.cfg.set("personas", {"程序员": "你是资深工程师。说中文。"})
+        self.cfg.set("persona_active", "程序员")
+        agent = Agent(FakeProvider(["x"]), self.tools, self.mem, self.skills, self.cfg)
+        self.assertIn("资深工程师", agent._system_prompt("hi"))
+        # 切回默认
+        self.cfg.set("persona_active", None)
+        self.assertIn("Mnemo", agent._system_prompt("hi"))
+
+
 class TestAwareness(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

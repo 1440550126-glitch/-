@@ -246,6 +246,42 @@ def cmd_config(args):
     return 0
 
 
+def cmd_persona(args):
+    cfg = load_config(getattr(args, "home", None))
+    personas = dict(cfg.get("personas", {}) or {})
+    active = cfg.get("persona_active")
+    if args.action == "list":
+        if not personas:
+            print(dim("（暂无命名人格）用 mnemo persona add <名> <提示> 添加"))
+        for name, text in personas.items():
+            mark = green("●") if name == active else dim("○")
+            print(f"{mark} {bold(name)} — {dim(text[:60])}")
+        print(dim(f"\n当前：{active or '（默认 persona）'}"))
+    elif args.action == "show":
+        text = personas.get(args.name) or (cfg.get("persona") if args.name == "默认" else None)
+        print(text or red("未找到"))
+    elif args.action == "add":
+        personas[args.name] = args.prompt
+        cfg.set("personas", personas); cfg.save()
+        print(green(f"已保存人格：{args.name}"))
+    elif args.action == "use":
+        if args.name not in personas:
+            print(red(f"未找到人格：{args.name}（可用：{', '.join(personas) or '无'}）")); return 1
+        cfg.set("persona_active", args.name); cfg.save()
+        print(green(f"已切换人格 → {args.name}"))
+    elif args.action == "reset":
+        cfg.set("persona_active", None); cfg.save()
+        print(green("已恢复默认 persona"))
+    elif args.action == "remove":
+        if personas.pop(args.name, None) is None:
+            print(red("未找到")); return 1
+        if active == args.name:
+            cfg.set("persona_active", None)
+        cfg.set("personas", personas); cfg.save()
+        print(green(f"已删除人格：{args.name}"))
+    return 0
+
+
 def cmd_provider(args):
     cfg = load_config(getattr(args, "home", None))
     if getattr(args, "provider", None):
@@ -859,6 +895,14 @@ def build_parser() -> argparse.ArgumentParser:
     pps = pp.add_subparsers(dest="action", required=True)
     pps.add_parser("list"); pps.add_parser("test")
 
+    ppe = sub.add_parser("persona", help="人格：命名切换 AI 的语气与定位")
+    ppes = ppe.add_subparsers(dest="action", required=True)
+    ppes.add_parser("list"); ppes.add_parser("reset")
+    pesh = ppes.add_parser("show"); pesh.add_argument("name")
+    pea = ppes.add_parser("add"); pea.add_argument("name"); pea.add_argument("prompt")
+    peu = ppes.add_parser("use"); peu.add_argument("name")
+    per = ppes.add_parser("remove"); per.add_argument("name")
+
     pm = sub.add_parser("memory", help="永久记忆")
     pms = pm.add_subparsers(dest="action", required=True)
     ml = pms.add_parser("list"); ml.add_argument("--limit", type=int, default=30)
@@ -979,7 +1023,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 _HANDLERS = {
     "chat": cmd_chat, "run": cmd_run, "ingest": cmd_ingest, "config": cmd_config,
-    "provider": cmd_provider,
+    "provider": cmd_provider, "persona": cmd_persona,
     "memory": cmd_memory, "session": cmd_session, "skill": cmd_skill,
     "plugin": cmd_plugin, "task": cmd_task,
     "daemon": cmd_daemon, "doctor": cmd_doctor, "status": cmd_status, "audit": cmd_audit,
