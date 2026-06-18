@@ -77,6 +77,22 @@ def parse_when(spec: str, now: float | None = None) -> float | None:
     return None
 
 
+_REPEAT_PRESET = {"hourly": 3600, "daily": 86400, "weekly": 604800}
+
+
+def repeat_seconds(repeat: str | None) -> int | None:
+    """把周期描述解析为秒：hourly/daily/weekly 或 every Ns/m/h/d。无法解析返回 None。"""
+    if not repeat:
+        return None
+    r = repeat.strip().lower()
+    if r in _REPEAT_PRESET:
+        return _REPEAT_PRESET[r]
+    m = re.match(r"every\s+(\d+)\s*([smhd])$", r)
+    if m:
+        return int(m.group(1)) * {"s": 1, "m": 60, "h": 3600, "d": 86400}[m.group(2)]
+    return None
+
+
 class Memory:
     def __init__(self, db_path: str | Path, check_same_thread: bool = True):
         self.db_path = str(db_path)
@@ -131,6 +147,9 @@ class Memory:
             self.db.execute("ALTER TABLE facts ADD COLUMN embedding TEXT")
         if "lsh" not in cols:
             self.db.execute("ALTER TABLE facts ADD COLUMN lsh INTEGER")  # ANN 签名
+        rcols = {r["name"] for r in self.db.execute("PRAGMA table_info(reminders)")}
+        if "repeat" not in rcols:
+            self.db.execute("ALTER TABLE reminders ADD COLUMN repeat TEXT")  # 周期提醒
         self.db.commit()
         if not self.get_profile("first_seen"):
             self.set_profile("first_seen", str(int(time.time())))
@@ -491,12 +510,16 @@ class Memory:
         return {"merged": merged, "forgotten": forgotten, "kept": len(kept)}
 
     # ---------- 提醒（主动提醒） ----------
-    def add_reminder(self, text: str, remind_at: float) -> int:
+    def add_reminder(self, text: str, remind_at: float, repeat: str | None = None) -> int:
         cur = self.db.execute(
-            "INSERT INTO reminders(text,remind_at,created_at) VALUES(?,?,?)",
-            (text, remind_at, time.time()))
+            "INSERT INTO reminders(text,remind_at,created_at,repeat) VALUES(?,?,?,?)",
+            (text, remind_at, time.time(), repeat))
         self.db.commit()
         return cur.lastrowid
+
+    def reschedule_reminder(self, rid: int, next_at: float) -> None:
+        self.db.execute("UPDATE reminders SET remind_at=? WHERE id=?", (next_at, rid))
+        self.db.commit()
 
     def due_reminders(self, now: float | None = None) -> list[dict]:
         now = now or time.time()

@@ -188,13 +188,21 @@ class Scheduler:
         if not mem:
             return
         cfg = getattr(self.agent, "config", None)
+        from .memory import repeat_seconds
         for rem in mem.due_reminders(now):
             ts = datetime.now().strftime("%H:%M")
             self.log(f"[{ts}] 🔔 提醒：{rem['text']}")
             if cfg and cfg.get("notify.on_reminder", True):
                 from .notify import notify
                 notify(cfg, rem["text"], title="Mnemo 提醒")
-            mem.mark_reminder_done(rem["id"])
+            secs = repeat_seconds(rem.get("repeat"))
+            if secs:                       # 周期提醒：滚动到下一次，而非标记完成
+                nxt = rem["remind_at"]
+                while nxt <= now:
+                    nxt += secs
+                mem.reschedule_reminder(rem["id"], nxt)
+            else:
+                mem.mark_reminder_done(rem["id"])
         last = float(mem.get_profile("last_consolidate", "0") or 0)
         if now - last > 86400:
             res = mem.consolidate()

@@ -404,8 +404,11 @@ def _t_remind(args, ctx):
     if when is None:
         return "[错误] 无法解析时间，请用：in 2h / 18:30 / 2026-06-17 09:00"
     import time
-    rid = ctx.memory.add_reminder(args["text"], when)
-    return f"已设提醒 #{rid}：{args['text']}（{time.strftime('%m-%d %H:%M', time.localtime(when))}）"
+    repeat = args.get("repeat") or None
+    rid = ctx.memory.add_reminder(args["text"], when, repeat=repeat)
+    rep = f"，每 {repeat} 重复" if repeat else ""
+    return (f"已设提醒 #{rid}：{args['text']}"
+            f"（{time.strftime('%m-%d %H:%M', time.localtime(when))}{rep}）")
 
 
 def build_default_registry() -> ToolRegistry:
@@ -435,8 +438,9 @@ def build_default_registry() -> ToolRegistry:
     r.add("now", "获取当前日期时间", {}, _t_now)
     r.add("calc", "精确计算数学表达式（支持 + - * / ** % 与 sqrt/sin/log 等）",
           {"expr": "如 (3+4)*2 或 sqrt(2)*pi"}, _t_calc)
-    r.add("remind", "设置一个定时提醒（守护进程到点会主动触发）",
-          {"text": "提醒内容", "when": "时间：in 2h / 18:30 / 2026-06-17 09:00"}, _t_remind)
+    r.add("remind", "设置定时提醒（守护进程到点触发，可周期重复）",
+          {"text": "提醒内容", "when": "时间：in 2h / 18:30 / 2026-06-17 09:00",
+           "repeat": "可选：daily/weekly/hourly 或 every 3d"}, _t_remind)
     r.add("notify", "立即推送一条通知给用户（桌面/webhook）",
           {"message": "通知内容", "title": "标题，默认 Mnemo"}, _t_notify)
     r.add("delegate", "把一个聚焦子任务交给子 Agent 处理并拿回结果（多 Agent 协作）",

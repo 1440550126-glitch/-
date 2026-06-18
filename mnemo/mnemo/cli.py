@@ -439,8 +439,10 @@ def cmd_memory(args):
         if when is None:
             print(red("无法解析时间，请用：in 2h / 18:30 / 2026-06-17 09:00"))
             return 1
-        rid = m.add_reminder(args.text, when)
-        print(green(f"已设提醒 #{rid}（{time.strftime('%m-%d %H:%M', time.localtime(when))}）"
+        repeat = getattr(args, "repeat", None) or None
+        rid = m.add_reminder(args.text, when, repeat=repeat)
+        rep = f"，每 {repeat} 重复" if repeat else ""
+        print(green(f"已设提醒 #{rid}（{time.strftime('%m-%d %H:%M', time.localtime(when))}{rep}）"
                     + dim("，启动 mnemo daemon 后到点会主动触发")))
     elif args.action == "reminders":
         rows = m.pending_reminders()
@@ -1235,6 +1237,7 @@ def build_parser() -> argparse.ArgumentParser:
     mr = pms.add_parser("remind", help="设置定时提醒")
     mr.add_argument("text"); mr.add_argument("--when", required=True,
                                              help="in 2h / 18:30 / 2026-06-17 09:00")
+    mr.add_argument("--repeat", help="周期：daily/weekly/hourly 或 every 3d")
     mg = pms.add_parser("graph", help="导出记忆关系图为自包含 HTML")
     mg.add_argument("--out", default="mnemo-graph.html"); mg.add_argument("--limit", type=int, default=80)
 

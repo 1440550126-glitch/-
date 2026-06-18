@@ -187,6 +187,35 @@ class FakeEmbedProvider(Provider):
         return [[float(t.count("猫")), float(t.count("狗"))] for t in texts]
 
 
+class TestRecurringReminders(unittest.TestCase):
+    def test_repeat_seconds(self):
+        from mnemo.memory import repeat_seconds
+        self.assertEqual(repeat_seconds("daily"), 86400)
+        self.assertEqual(repeat_seconds("weekly"), 604800)
+        self.assertEqual(repeat_seconds("every 3d"), 3 * 86400)
+        self.assertIsNone(repeat_seconds(None))
+        self.assertIsNone(repeat_seconds("nonsense"))
+
+    def test_daemon_reschedules_repeat(self):
+        from mnemo.daemon import Scheduler, TaskStore
+        tmp = tempfile.TemporaryDirectory()
+        cfg = load_config(tmp.name)
+        mem = Memory(cfg.db_path)
+        past = time.time() - 100
+        rid = mem.add_reminder("吃药", past, repeat="daily")
+        agent = Agent(FakeProvider(["ok"]), build_default_registry(),
+                      mem, SkillRegistry(cfg), cfg)
+        sched = Scheduler(agent, TaskStore(cfg.db_path), log=lambda *a: None)
+        sched._maintenance(time.time())
+        # 周期提醒应被改期到未来，而非标记完成
+        pend = mem.pending_reminders()
+        self.assertEqual(len(pend), 1)
+        self.assertEqual(pend[0]["id"], rid)
+        self.assertGreater(pend[0]["remind_at"], time.time())
+        mem.close()
+        tmp.cleanup()
+
+
 class TestProactiveMemory(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
