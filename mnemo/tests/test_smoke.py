@@ -754,6 +754,64 @@ class TestIngest(unittest.TestCase):
         self.assertNotIn("技术文档", prof)            # 知识块不进画像
 
 
+_DDG_SAMPLE = '''<html><body>
+<div class="result results_links web-result">
+ <h2 class="result__title">
+  <a rel="nofollow" class="result__a"
+     href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fen.wikipedia.org%2Fwiki%2FMars&amp;rut=abc">Mars - <b>Wikipedia</b></a>
+ </h2>
+ <a class="result__snippet" href="//duckduckgo.com/l/?uddg=x">Mars is the fourth planet from the Sun.</a>
+</div>
+<div class="result">
+ <h2 class="result__title">
+  <a rel="nofollow" class="result__a"
+     href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fnasa.gov%2Fmars&amp;rut=def">NASA Mars</a>
+ </h2>
+ <a class="result__snippet">Explore Mars with NASA.</a>
+</div>
+</body></html>'''
+
+
+class TestWebSearch(unittest.TestCase):
+    def test_parse_results(self):
+        from mnemo.websearch import parse_results
+        res = parse_results(_DDG_SAMPLE)
+        self.assertEqual(len(res), 2)
+        self.assertEqual(res[0]["title"], "Mars - Wikipedia")     # <b> 被剥离
+        self.assertEqual(res[0]["url"], "https://en.wikipedia.org/wiki/Mars")  # uddg 解码 + &amp;
+        self.assertEqual(res[0]["snippet"], "Mars is the fourth planet from the Sun.")
+        self.assertEqual(res[1]["url"], "https://nasa.gov/mars")
+
+    def test_parse_limit(self):
+        from mnemo.websearch import parse_results
+        self.assertEqual(len(parse_results(_DDG_SAMPLE, limit=1)), 1)
+
+    def test_tool_formats_results(self):
+        import mnemo.websearch as ws
+        from mnemo.websearch import parse_results
+        orig = ws.search
+        ws.search = lambda q, limit=6: parse_results(_DDG_SAMPLE, limit)
+        try:
+            reg = build_default_registry()
+            out = reg.run("web_search", {"query": "mars"}, ToolContext())
+        finally:
+            ws.search = orig
+        self.assertIn("Mars - Wikipedia", out)
+        self.assertIn("https://en.wikipedia.org/wiki/Mars", out)
+
+    def test_tool_handles_network_error(self):
+        import mnemo.websearch as ws
+        def boom(q, limit=6):
+            raise OSError("network down")
+        orig = ws.search
+        ws.search = boom
+        try:
+            out = build_default_registry().run("web_search", {"query": "x"}, ToolContext())
+        finally:
+            ws.search = orig
+        self.assertIn("检索失败", out)
+
+
 class TestUsage(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

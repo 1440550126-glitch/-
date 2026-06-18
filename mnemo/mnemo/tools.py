@@ -148,6 +148,22 @@ def _t_web_fetch(args, ctx):
     return text[:6000] + ("\n…(已截断)" if len(text) > 6000 else "")
 
 
+def _t_web_search(args, ctx):
+    query = (args.get("query") or "").strip()
+    if not query:
+        return "[错误] 缺少 query"
+    from .websearch import search
+    try:
+        results = search(query, int(args.get("limit", 6)))
+    except Exception as e:  # noqa: BLE001
+        return f"[web_search] 检索失败：{e}（可改用 web_fetch 直接抓取已知 URL）"
+    if not results:
+        return "(没有检索到结果)"
+    return "\n".join(
+        f"{i}. {r['title']}\n   {r['url']}" + (f"\n   {r['snippet']}" if r["snippet"] else "")
+        for i, r in enumerate(results, 1))
+
+
 def _t_remember(args, ctx):
     if not ctx.memory:
         return "[错误] 记忆不可用"
@@ -247,6 +263,8 @@ def build_default_registry() -> ToolRegistry:
     r.add("list_dir", "列出目录内容", {"path": "目录，默认当前"}, _t_list_dir)
     r.add("run_shell", "执行 shell 命令并返回输出", {"command": "命令"},
           _t_run_shell, danger=True)
+    r.add("web_search", "用搜索引擎检索网页，返回标题/链接/摘要（再用 web_fetch 抓正文）",
+          {"query": "搜索词", "limit": "结果条数，默认6"}, _t_web_search)
     r.add("web_fetch", "抓取网页并返回纯文本", {"url": "http(s) 链接"}, _t_web_fetch)
     r.add("remember", "把一条信息写入长期记忆",
           {"text": "要记住的内容", "importance": "1-5，默认3"}, _t_remember)
