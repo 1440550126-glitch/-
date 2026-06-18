@@ -509,6 +509,16 @@ class Agent:
                 self._log_journal(who, utterance, txt, "appointments")
                 return result
 
+        # --- 说出我的感受（"你什么心情" / "你开心吗"）：袒露自己的心情，像个有真心的人 ---
+        if action is None and who.get("obey"):
+            from .express_feelings import is_feeling_query
+            if is_feeling_query(utterance):
+                txt = self.voice_my_feeling()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "feeling")
+                    return result
+
         # --- 主动哄开心（"哄哄我" / "心情不好"）：不只安慰，还想法子逗你乐 ---
         if action is None and who.get("obey"):
             from .mood_lifter import is_lift_request
@@ -2107,6 +2117,19 @@ class Agent:
         """有人累了/难过了，以"我就在身边"的暖意接住。"""
         from .companion import comfort
         return comfort(utterance, name=name or "")
+
+    def voice_my_feeling(self) -> str:
+        """把分身此刻的心情说出来（七情随互动起伏，这里袒露给家人）。"""
+        from .express_feelings import share_feeling
+        mood = None
+        if getattr(self, "emotions", None) is not None:
+            try:
+                top, val = self.emotions.mood()
+                if val >= self.emotions.baseline + 0.05:
+                    mood = top
+            except Exception:
+                mood = None
+        return share_feeling(mood, seed=mood or "")
 
     def cheer_up(self, name="") -> str:
         """主动哄人开心：凑个段子 + 一首爱听的歌 + 一件开心旧事 + 撺掇打个电话。"""
