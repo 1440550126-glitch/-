@@ -936,6 +936,47 @@ def cmd_notify(args):
     return 0
 
 
+def cmd_init(args):
+    cfg = load_config(getattr(args, "home", None))
+    print(bold("✦ Mnemo 初始化向导"))
+    if not _TTY:
+        print(dim("非交互环境，已跳过向导。手动配置：\n"
+                  "  export ANTHROPIC_API_KEY=... / OPENAI_API_KEY=... / GEMINI_API_KEY=...\n"
+                  "  mnemo config set provider auto    # 自动挑可用后端\n"
+                  "  mnemo persona use 程序员           # 选个人格\n"
+                  "  mnemo                              # 开始对话"))
+        return 0
+
+    def ask(q, default=""):
+        try:
+            return input(cyan(q)).strip() or default
+        except (EOFError, KeyboardInterrupt):
+            return default
+
+    ready = [s["name"] for s in provider_status(cfg) if s["available"] and s["name"] != "offline"]
+    print(dim("检测到可用后端：" + (", ".join(ready) or "无（将用离线兜底，配置 Key 解锁全部能力）")))
+    prov = ask("选择 provider（anthropic/openai/gemini/ollama/auto）[auto]：", "auto")
+    cfg.set("provider", prov)
+    if prov in ("anthropic", "openai", "gemini") and not cfg.get(f"providers.{prov}.api_key"):
+        key = ask(f"输入 {prov} 的 API Key（留空稍后用环境变量）：")
+        if key:
+            cfg.set(f"providers.{prov}.api_key", key)
+    personas = list((cfg.get("personas", {}) or {}).keys())
+    print(dim("可选人格：" + "、".join(personas)))
+    pe = ask("默认人格（留空=通用）：")
+    if pe and pe in personas:
+        cfg.set("persona_active", pe)
+    cfg.save()
+    name = ask("我该怎么称呼你？：")
+    if name and cfg.get("memory.enabled", True):
+        mem = Memory(cfg.db_path)
+        mem.set_profile("name", name)
+        mem.add_fact(f"你叫{name}", kind="identity", importance=5, source="init")
+        mem.close()
+    print(green("✓ 初始化完成！") + dim(" 输入 mnemo 开始对话，它会越来越懂你。"))
+    return 0
+
+
 def cmd_status(args):
     app = build_app(args)
     cfg = app.cfg
@@ -1209,6 +1250,7 @@ def build_parser() -> argparse.ArgumentParser:
     pn = sub.add_parser("notify", help="推送一条通知（测试 desktop/webhook 渠道）")
     pn.add_argument("message"); pn.add_argument("--title", default="Mnemo")
 
+    sub.add_parser("init", help="初始化向导：选后端/人格/称呼")
     sub.add_parser("status", help="一览：后端/记忆/用量/提醒/任务/会话/MCP")
     sub.add_parser("doctor", help="环境自检")
     return p
@@ -1219,7 +1261,7 @@ _HANDLERS = {
     "provider": cmd_provider, "persona": cmd_persona,
     "memory": cmd_memory, "session": cmd_session, "skill": cmd_skill,
     "plugin": cmd_plugin, "task": cmd_task, "watch": cmd_watch,
-    "daemon": cmd_daemon, "doctor": cmd_doctor, "status": cmd_status,
+    "daemon": cmd_daemon, "doctor": cmd_doctor, "init": cmd_init, "status": cmd_status,
     "notify": cmd_notify, "audit": cmd_audit,
     "market": cmd_market, "sync": cmd_sync, "speak": cmd_speak, "see": cmd_see,
     "serve": cmd_serve, "voice": cmd_voice, "mcp": cmd_mcp, "usage": cmd_usage,
