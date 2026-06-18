@@ -1339,13 +1339,22 @@ class Agent:
                 mood_now = self.emotions.mood()[0]
             except Exception:
                 mood_now = None
+        knows = ""
+        if getattr(self, "understanding", None) is not None and who.get("known"):
+            try:
+                knows = self.understanding.brief(who["name"])
+            except Exception:
+                knows = ""
         result["reasoning"] = ponder(
-            utterance, speaker=who if who.get("known") else None, memories=ctx, mood=mood_now)
+            utterance, speaker=who if who.get("known") else None, memories=ctx,
+            mood=mood_now, knows=knows)
         self._last_reasoning = result["reasoning"]      # 存一份，网页上能看到它"怎么想的"
         hints = self._hints()
         hint = thinking_hint(utterance)          # 把读出的弦外之音喂给大模型
         if hint:
             hints = hints + [hint]
+        if knows:                                 # 把"我对TA的了解"也喂给大模型，回得更贴心
+            hints = hints + [f"（我对{who['name']}的了解：{knows}。回应时照顾到这层。）"]
 
         # --- 生成回复（带上情绪 / 学识 / 思量等提示；上下文含纠缠联想）---
         system = self.persona.system_prompt(

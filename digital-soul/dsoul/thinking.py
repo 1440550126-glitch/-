@@ -48,12 +48,14 @@ def respond_to_subtext(utterance, who="") -> str:
     return ""
 
 
-def ponder(utterance, speaker=None, memories=None, mood=None) -> list:
+def ponder(utterance, speaker=None, memories=None, mood=None, knows=None) -> list:
     """像人一样在心里转几个弯，返回一串思量（可作内心活动展示）。"""
     steps = []
     rel = (speaker or {}).get("relation") if isinstance(speaker, dict) else None
     if rel:
         steps.append(f"是{rel}在跟我说话，得用心听。")
+    if knows:                                    # 用上我对TA一直以来的了解
+        steps.append(f"我了解你——{knows}，顺着这点想。")
     _cat, insight = read_subtext(utterance)
     if insight:
         steps.append(insight)

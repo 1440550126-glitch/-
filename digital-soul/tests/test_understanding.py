@@ -50,6 +50,16 @@ def test_portrait_stranger():
     assert "还不算熟" in _u().portrait("陌生人")
 
 
+def test_brief_only_when_familiar():
+    u = _u()
+    u.observe("小明", "睡不好", emotion="哀")
+    assert u.brief("小明") == ""                          # 才 1 回，不妄断
+    u.observe("小明", "又失眠", emotion="哀")
+    u.observe("小明", "还是睡不好", emotion="哀")
+    b = u.brief("小明")
+    assert "心思重" in b and "睡不好" in b                 # 够熟了才给判断
+
+
 def test_persistence():
     p = pathlib.Path(tempfile.mkdtemp()) / "u.json"
     Understanding(p).observe("小明", "睡不好", emotion="哀")

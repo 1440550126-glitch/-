@@ -84,6 +84,20 @@ class Understanding:
             return "渐渐熟了"
         return "还在慢慢了解"
 
+    def brief(self, name) -> str:
+        """一句话的"我对你的了解"，供思考/提示用（不够熟就不妄下判断，返回空）。"""
+        rec = self.people.get(str(name))
+        if not rec or rec["count"] < 3:
+            return ""
+        bits = []
+        temper = _TEMPER.get(self.dominant_mood(name))
+        if temper:
+            bits.append(temper)
+        concerns = self.top_concerns(name, 1)
+        if concerns:
+            bits.append(f"近来为「{concerns[0]}」烦心")
+        return "、".join(bits)
+
     def portrait(self, name) -> str:
         """说说"在我眼里你是怎样的人"。"""
         rec = self.people.get(str(name))
