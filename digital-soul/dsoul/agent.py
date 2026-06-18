@@ -816,6 +816,26 @@ class Agent:
                 self._log_journal(who, u, txt, "habit")
                 return result
 
+        # --- 今天穿什么 / 要带伞吗（按气温天气叮嘱出门）---
+        if action is None and who.get("obey") and any(
+                k in (utterance or "") for k in ("今天穿什么", "穿什么衣服", "穿啥", "要带伞",
+                                                 "今天冷吗", "今天热吗", "出门带什么")):
+            txt = self.dressing_advice()
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "weather_day")
+                return result
+
+        # --- 动一动 / 养生操（"带我做个操" / "教我护颈"）---
+        if action is None and who.get("obey"):
+            from .exercise_coach import find_routine, is_exercise_query
+            if is_exercise_query(utterance) or find_routine(utterance):
+                txt = self.coach_exercise(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "exercise")
+                    return result
+
         # --- 节日筹备（"过年准备什么" / "中秋要张罗啥"）---
         if action is None and who.get("obey"):
             from .festival_prep import detect_festival, is_prep_query
@@ -1848,6 +1868,18 @@ class Agent:
     def give_praise(self, utterance="", name="") -> str:
         from .praise import praise
         return praise(utterance, name=name, seed=utterance)
+
+    def dressing_advice(self) -> str:
+        """按当前气温/天气给一句出门叮嘱。"""
+        from .weather_day import day_advice
+        sensors = getattr(self, "sensors", None) or {}
+        return day_advice(temp=sensors.get("temperature"), condition=sensors.get("weather"))
+
+    def coach_exercise(self, utterance="") -> str:
+        """带着做套养生操/散步；没指定就按时候挑一个。"""
+        from .exercise_coach import find_routine, guide, suggest
+        name = find_routine(utterance)
+        return guide(name) if name else suggest()
 
     # ---------- 节日筹备 ----------
     def festival_prep(self, utterance) -> str:
