@@ -80,6 +80,9 @@ const STATUS = { running: ['运行中', 'run'], done: ['已完成', 'done'], fai
 async function loadMeta() { if (!state.meta) { state.meta = await GET('/api/agents/meta'); for (const s of state.meta.strategies) state.strat[s.id] = s; } return state.meta; }
 const stratIcon = (id) => (state.strat[id]?.icon) || '🛰';
 const stratName = (id) => (state.strat[id]?.name) || id;
+const toolMeta = (id) => (state.meta?.tools || []).find((t) => t.id === id);
+const toolName = (id) => toolMeta(id)?.name || id;
+const toolIcon = (id) => toolMeta(id)?.icon || '🔧';
 
 // ---------------- 公共 UI 片段 ----------------
 function header() {
@@ -90,6 +93,7 @@ function header() {
       h('div', {}, h('b', {}, '灵阵'), h('small', {}, 'AI 团队 · 对标扣子'))),
     h('nav', { class: 'lz-nav' },
       h('a', { onclick: () => nav('#/') }, '团队广场'),
+      h('a', { onclick: () => nav('#/agents') }, '智能体'),
       h('a', { onclick: () => nav('#/kb') }, '知识库'),
       h('a', { onclick: () => nav('#/triggers') }, '触发器'),
       h('a', { onclick: () => nav('#/history') }, '历史'),
@@ -474,23 +478,57 @@ async function renderRun(id) {
   window.addEventListener('hashchange', () => es?.close(), { once: true });
 }
 
-// ---------------- 运行历史 ----------------
+// ---------------- 运行历史 / 草稿箱 ----------------
+function runsView(items) {
+  if (!items.length) return empty('还没有运行记录', '去团队广场派一个任务吧');
+  return h('div', { class: 'lz-runs' }, items.map((r) => {
+    const [label, cls] = STATUS[r.status] || ['—', ''];
+    return h('div', { class: 'lz-run-row', onclick: () => nav(`#/run/${r.id}`) },
+      h('span', { class: 'lz-strat' }, stratIcon(r.strategy) + ' ' + r.team_name),
+      h('div', { class: 'lz-run-task' }, r.task),
+      h('div', { class: 'lz-run-side' },
+        h('span', { class: 'lz-st ' + cls }, label),
+        h('small', {}, `${r.step_count} 步 · ${r.by_llm ? '大模型' : '本地'} · ${fmtTime(r.started_at)}`)));
+  }));
+}
+function draftsView(items) {
+  if (!items.length) return empty('草稿箱是空的', '让带「📥 文案入草稿箱」工具的成员跑一条任务，产出会落在这里');
+  const wrap = h('div', { class: 'lz-drafts' });
+  for (const d of items) {
+    const card = d.card || {};
+    const row = h('div', { class: 'lz-draft' },
+      h('div', { class: 'lz-draft-text' }, d.text),
+      h('div', { class: 'lz-draft-meta' },
+        card.emotion ? h('span', { class: 'lz-src' }, '情绪 · ' + card.emotion) : null,
+        card.scene ? h('span', { class: 'lz-src' }, '场景 · ' + card.scene) : null,
+        h('small', {}, fmtTime(d.created_at))),
+      h('div', { class: 'lz-draft-acts' },
+        h('button', { class: 'lz-btn mini', onclick: () => copy(d.text) }, '复制'),
+        d.run_id ? h('button', { class: 'lz-btn mini ghost', onclick: () => nav(`#/run/${d.run_id}`) }, '来源运行') : null,
+        h('button', { class: 'lz-btn mini ghost danger', onclick: async () => {
+          try { await DEL(`/api/agent-drafts/${d.id}`); toast('已删除'); row.remove(); } catch (e) { toast(e.message, 'warn'); }
+        } }, '删除')));
+    wrap.append(row);
+  }
+  return wrap;
+}
 async function renderHistory() {
   mount(shell(spinner()));
   try {
     await loadMeta();
-    const { items } = await GET('/api/runs');
-    mount(shell(
-      h('div', { class: 'lz-sec-t big' }, '运行历史'),
-      items.length ? h('div', { class: 'lz-runs' }, items.map((r) => {
-        const [label, cls] = STATUS[r.status] || ['—', ''];
-        return h('div', { class: 'lz-run-row', onclick: () => nav(`#/run/${r.id}`) },
-          h('span', { class: 'lz-strat' }, stratIcon(r.strategy) + ' ' + r.team_name),
-          h('div', { class: 'lz-run-task' }, r.task),
-          h('div', { class: 'lz-run-side' },
-            h('span', { class: 'lz-st ' + cls }, label),
-            h('small', {}, `${r.step_count} 步 · ${r.by_llm ? '大模型' : '本地'} · ${fmtTime(r.started_at)}`)));
-      })) : empty('还没有运行记录', '去团队广场派一个任务吧')));
+    const [runs, drafts] = await Promise.all([GET('/api/runs'), GET('/api/agent-drafts').catch(() => ({ items: [] }))]);
+    let tab = location.hash.includes('drafts') ? 'drafts' : 'runs';
+    const tabbar = h('div', { class: 'lz-tabs' });
+    const body = h('div', {});
+    function paint() {
+      tabbar.innerHTML = '';
+      for (const [k, lbl] of [['runs', '运行历史 ' + runs.items.length], ['drafts', '草稿箱 ' + drafts.items.length]])
+        tabbar.append(h('button', { class: 'lz-tab' + (tab === k ? ' on' : ''), onclick: () => { tab = k; paint(); } }, lbl));
+      body.innerHTML = '';
+      body.append(tab === 'runs' ? runsView(runs.items) : draftsView(drafts.items));
+    }
+    paint();
+    mount(shell(h('div', { class: 'lz-sec-t big' }, '运行记录'), tabbar, body));
   } catch (e) { mount(shell(empty('加载失败', e.message))); }
 }
 
@@ -604,6 +642,7 @@ async function renderBuilder(editId) {
         h('label', {}, '团队使命'), fGoal,
         h('label', {}, '编排策略'), stratWrap,
         h('label', {}, ['选择成员 ', cnt]), roster,
+        h('p', { class: 'lz-hint' }, '没有合适的成员？', h('a', { class: 'lz-link', onclick: () => nav('#/agent/new') }, '去智能体工作室造一个 →')),
         h('label', {}, '挂载知识库（可选 · 供调研类成员 RAG 检索）'), kbPicker,
         h('label', {}, '编排官指令（可选）'), fNote,
         h('label', {}, ['每位成员最大工具轮数（1-', String(m.limits.max_rounds), '）']), fRounds,
@@ -868,11 +907,111 @@ async function renderUsage() {
   } catch (e) { mount(shell(empty('加载失败', e.message))); }
 }
 
+// ---------------- 智能体工作室（把风格/话术封装成可复用的 AI 分身） ----------------
+async function renderAgents() {
+  mount(shell(spinner()));
+  try {
+    await loadMeta();
+    const { mine, templates } = await GET('/api/agents');
+    const card = (a) => h('article', { class: 'lz-card', onclick: () => nav(`#/agent/${a.id}`) },
+      h('div', { class: 'lz-card-h' },
+        h('span', { class: 'lz-ava lg' }, a.avatar || '🤖'),
+        h('div', { class: 'lz-card-ti' }, h('b', {}, a.name), h('span', { class: 'lz-strat' }, a.role || '通用智能体')),
+        a.is_template ? h('span', { class: 'lz-tag tpl' }, '模板') : (a.tier === 'premium' ? h('span', { class: 'lz-tag pub' }, '高级') : null)),
+      a.persona ? h('p', { class: 'lz-card-goal' }, a.persona) : null,
+      (a.tools || []).length ? h('div', { class: 'lz-tools' }, a.tools.slice(0, 6).map((t) => h('span', { class: 'lz-tool' }, toolIcon(t) + ' ' + toolName(t)))) : null);
+    mount(shell(
+      h('div', { class: 'lz-sec-t big' }, '🤖 智能体工作室'),
+      h('p', { class: 'lz-intro' }, '把你的风格、话术、专业经验封装成一个 AI 分身——设定人设与可用工具，存为可复用的「技能包」，随时编入任意团队。'),
+      h('button', { class: 'lz-btn', onclick: () => nav('#/agent/new') }, '＋ 新建智能体'),
+      h('div', { class: 'lz-sec-t' }, `我的智能体（${mine.length}）`),
+      mine.length ? h('div', { class: 'lz-grid' }, mine.map(card)) : empty('还没有自定义智能体', '从下方模板复制一个，或点上方新建'),
+      h('div', { class: 'lz-sec-t' }, '内置模板'),
+      h('div', { class: 'lz-grid' }, templates.map(card))));
+  } catch (e) { mount(shell(empty('加载失败', e.message))); }
+}
+
+async function renderAgentEdit(id) {
+  mount(shell(spinner()));
+  try {
+    const m = await loadMeta();
+    const isNew = id === 'new';
+    let a = { name: '', avatar: '🤖', role: '', persona: '', tier: 'default', tools: [], temperature: 0.7, mine: true, is_template: false };
+    if (!isNew) a = (await GET(`/api/agents/${id}`)).agent;
+    const readOnly = !isNew && !a.mine;
+
+    const fName = h('input', { class: 'lz-in', value: a.name, placeholder: '智能体名（如：小红书爆款写手）', maxlength: 24 });
+    const fAva = h('input', { class: 'lz-in tiny', value: a.avatar, maxlength: 8 });
+    const fRole = h('input', { class: 'lz-in', value: a.role || '', placeholder: '一句话角色（如：资深种草文案）', maxlength: 60 });
+    const fPersona = h('textarea', { class: 'lz-ta', rows: 6, placeholder: '人设 / 风格 / 话术：它是谁、擅长什么、用什么语气、有哪些偏好与禁忌。写得越具体，分身越像你。' });
+    fPersona.value = a.persona || '';
+    const fTemp = h('input', { class: 'lz-in tiny', type: 'number', min: 0, max: 1.5, step: 0.1, value: a.temperature });
+    if (readOnly) for (const el of [fName, fAva, fRole, fPersona, fTemp]) el.setAttribute('disabled', '');
+
+    let tier = a.tier === 'premium' ? 'premium' : 'default';
+    const tierWrap = h('div', { class: 'lz-mode-tabs', style: { maxWidth: '320px' } });
+    function drawTier() {
+      tierWrap.innerHTML = '';
+      for (const [k, lbl] of [['default', '标准模型'], ['premium', '高级模型']])
+        tierWrap.append(h('button', { class: 'lz-mode' + (tier === k ? ' on' : ''), onclick: () => { if (readOnly) return; tier = k; drawTier(); } }, lbl));
+    }
+    drawTier();
+
+    const toolSel = new Set(a.tools || []);
+    const toolGrid = h('div', { class: 'lz-pick-grid' }, m.tools.map((t) => {
+      const cardEl = h('button', { class: 'lz-pick' + (toolSel.has(t.id) ? ' on' : ''), onclick: () => {
+        if (readOnly) return;
+        if (toolSel.has(t.id)) toolSel.delete(t.id); else toolSel.add(t.id);
+        cardEl.classList.toggle('on', toolSel.has(t.id));
+      } }, h('span', { class: 'lz-ava' }, t.icon || '🔧'), h('div', {}, h('b', {}, t.name), h('small', {}, t.desc)));
+      return cardEl;
+    }));
+
+    const actions = h('div', { class: 'lz-team-actions' });
+    if (readOnly) {
+      actions.append(h('button', { class: 'lz-btn xl', onclick: async () => {
+        try { const { agent } = await POST(`/api/agents/${id}/clone`); toast('已复制为我的'); nav(`#/agent/${agent.id}`); }
+        catch (e) { toast(e.message, 'warn'); }
+      } }, '⎘ 复制为我的，再编辑'));
+    } else {
+      const save = h('button', { class: 'lz-btn xl' }, isNew ? '创建智能体' : '保存修改');
+      save.addEventListener('click', async () => {
+        const body = { name: fName.value.trim(), avatar: fAva.value.trim() || '🤖', role: fRole.value.trim(), persona: fPersona.value.trim(), tier, tools: [...toolSel], temperature: Number(fTemp.value) || 0.7 };
+        if (!body.name) { toast('给智能体起个名字', 'warn'); return; }
+        save.disabled = true;
+        try { const { agent } = isNew ? await POST('/api/agents', body) : await PATCH(`/api/agents/${id}`, body); toast(isNew ? '已创建' : '已保存'); nav(`#/agent/${agent.id}`); }
+        catch (e) { toast(e.message, 'warn'); save.disabled = false; }
+      });
+      actions.append(save);
+      if (!isNew) actions.append(h('button', { class: 'lz-btn ghost danger', onclick: async () => {
+        if (!confirm('删除这个智能体？已编入团队的引用会失效。')) return;
+        try { await DEL(`/api/agents/${id}`); toast('已删除'); nav('#/agents'); } catch (e) { toast(e.message, 'warn'); }
+      } }, '🗑 删除'));
+    }
+
+    mount(shell(
+      h('button', { class: 'lz-back', onclick: () => nav('#/agents') }, '‹ 智能体'),
+      h('div', { class: 'lz-sec-t big' }, isNew ? '新建智能体' : (readOnly ? '智能体（内置模板 · 只读）' : '编辑智能体')),
+      readOnly ? h('div', { class: 'lz-note' }, '内置模板不可直接修改，「复制为我的」后即可自由编辑人设与工具。') : null,
+      h('div', { class: 'lz-form' },
+        h('label', {}, '名称 / 头像'),
+        h('div', { class: 'lz-row' }, fName, fAva),
+        h('label', {}, '角色'), fRole,
+        h('label', {}, '人设 / 风格 / 话术'), fPersona,
+        h('label', {}, '模型档位'), tierWrap,
+        h('label', {}, ['可用工具（已选 ', String(toolSel.size), '）']), toolGrid,
+        h('label', {}, '发挥度 temperature（0 严谨 ~ 1.5 发散）'), fTemp,
+        actions)));
+  } catch (e) { mount(shell(empty('加载失败', e.message))); }
+}
+
 // ---------------- 路由 ----------------
 function route() {
   if (!state.me) { renderLogin(); return; }
   const hash = location.hash || '#/';
   const [path, p1] = hash.replace(/^#\//, '').split('/');
+  if (path === 'agents') return renderAgents();
+  if (path === 'agent' && p1) return renderAgentEdit(p1);
   if (path === 'team' && p1) return renderTeam(p1);
   if (path === 'run' && p1) return renderRun(p1);
   if (path === 'batch' && p1) return renderBatch(p1);

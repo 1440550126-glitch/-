@@ -26,8 +26,9 @@ a{cursor:pointer;color:inherit}
 .lz-logo.xl{font-size:60px}
 .lz-brand b{font-size:18px;letter-spacing:.5px}
 .lz-brand small{display:block;color:var(--mut);font-size:11px;margin-top:-2px}
-.lz-nav{display:flex;gap:6px;margin-left:auto}
-.lz-nav a{padding:7px 12px;border-radius:10px;font-size:13px;color:var(--mut);white-space:nowrap}
+.lz-nav{display:flex;gap:6px;margin-left:auto;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.lz-nav::-webkit-scrollbar{display:none}
+.lz-nav a{padding:7px 12px;border-radius:10px;font-size:13px;color:var(--mut);white-space:nowrap;flex:none}
 .lz-nav a:hover{color:var(--txt);background:var(--card)}
 .lz-nav a.primary{color:#fff;background:var(--grad);font-weight:600}
 .lz-user{display:flex;align-items:center;gap:10px;font-size:13px}
@@ -286,6 +287,14 @@ a{cursor:pointer;color:inherit}
 .lz-batch-h{display:flex;align-items:center;gap:12px}
 .lz-batch-task{flex:1;min-width:0;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lz-batch-res{margin-top:8px;font-size:13px;color:var(--mut);line-height:1.6;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+
+/* ---- 草稿箱 ---- */
+.lz-drafts{display:flex;flex-direction:column;gap:10px}
+.lz-draft{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 16px}
+.lz-draft-text{font-size:14px;color:var(--txt);line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.lz-draft-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:9px 0}
+.lz-draft-meta small{color:var(--dim);font-size:11px;margin-left:auto}
+.lz-draft-acts{display:flex;gap:8px;flex-wrap:wrap}
 
 /* ---- Toast ---- */
 .lz-toast{position:fixed;left:50%;bottom:34px;background:var(--card2);border:1px solid var(--line);color:var(--txt);padding:11px 18px;border-radius:11px;font-size:14px;box-shadow:var(--sh);opacity:0;transition:.3s;z-index:99;transform:translateX(-50%) translateY(20px)}
