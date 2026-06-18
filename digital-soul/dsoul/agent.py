@@ -319,6 +319,18 @@ class Agent:
                 self._log_journal(who, utterance, txt, mark)
                 return result
 
+        # --- 托住（最高优先）：接住最重的那句"不想活了"，稳稳托住、引向身边的人与帮助 ---
+        if action is None and who.get("obey"):
+            from .gentle_insist import senses_despair
+            if senses_despair(utterance):
+                txt = self.hold_despair(who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="爱", topic="托住")
+                    self._log_journal(who, utterance, txt, "hold")
+                    return result
+
         # --- 应急（最高优先）：摔了/胸口疼/喘不上气/救命，第一时间稳住并给指引 ---
         if action is None and who.get("obey"):
             from .emergency import senses_emergency
@@ -347,6 +359,18 @@ class Agent:
                     if self.social is not None:
                         self.social.note(who.get("name"), emotion="惧", topic="安抚")
                     self._log_journal(who, utterance, txt, "comfort_fear")
+                    return result
+
+        # --- 该犟就犟：你说不吃药/不看病/太拼，它拦着劝着，因为在乎（不顺着你害你）---
+        if action is None and who.get("obey"):
+            from .gentle_insist import senses_self_neglect
+            if senses_self_neglect(utterance):
+                txt = self.insist_care(utterance, who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="爱", topic="劝")
+                    self._log_journal(who, utterance, txt, "insist")
                     return result
 
         # --- 老来的宽慰（高优先）：怕成累赘/没用了/记性差，接住并给一句挺直腰板的暖 ---
@@ -2191,6 +2215,29 @@ class Agent:
                 rec = self.touch.people.get(od[0][0], {})
                 call_who = rec.get("relation") or od[0][0]
         return lift(joke=joke, song=song, joy=joy, call_who=call_who, seed=name)
+
+    def hold_despair(self, name="") -> str:
+        """接住最重的那句：托住人、引向身边的关爱与帮助。"""
+        from .family import members
+        from .gentle_insist import hold
+        call_who = ""
+        try:
+            if self.contacts is not None:
+                ec = self.contacts.emergency_contacts()
+                if ec:
+                    call_who = ec[0].get("relation") or ec[0].get("name") or ""
+        except Exception:
+            call_who = ""
+        if not call_who:
+            ms = [m for m in members(getattr(self, "family", {}) or {})
+                  if m.get("relation") not in ("本人", "", None)]
+            if ms:
+                call_who = ms[0].get("relation") or ms[0].get("name") or ""
+        return hold(name=name, call_who=call_who)
+
+    def insist_care(self, utterance, name="") -> str:
+        from .gentle_insist import insist
+        return insist(utterance, name=name)
 
     def reassure_fear(self, utterance="", name="") -> str:
         """夜里怕黑/做噩梦/独自在家，立刻稳住、给安全感。"""
