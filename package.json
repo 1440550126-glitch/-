@@ -1,0 +1,1 @@
+{"name":"lingmirror-ai","version":"1.0.0-lts","description":"LingMirror AI v1.0 LTS commercial frozen release","main":"backend/server.js","scripts":{"start":"node backend/server.js","migrate":"node backend/migrate.js","preflight":"node backend/preflight.js"},"engines":{"node":">=20"},"dependencies":{}}
