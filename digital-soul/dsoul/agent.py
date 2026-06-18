@@ -39,7 +39,7 @@ class Agent:
                  recipes=None, sayings=None, social=None, goals=None,
                  shopping=None, mannerisms=None, heirlooms=None,
                  health=None, favors=None, stories=None, teachings=None,
-                 spouse=None) -> None:
+                 spouse=None, preferences=None, humor=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -94,6 +94,9 @@ class Agent:
         self.teachings = teachings or {}                          # 言传身教：道理 + 手艺
         self.spouse = spouse or {}                                # 老伴专属（夫妻之间：昵称/故事/唠叨/思念）
         self._spouse_nag_day = None                               # 当天是否已对老伴唠叨过（去重）
+        self.preferences = preferences or {}                      # 喜好脾性（爱吃/偏爱/讨厌，答得稳）
+        self.humor = humor or {}                                  # 幽默：段子库（讲过的轮换）
+        self._told_jokes: set = set()                             # 已讲过的段子（去重）
         self._goodnight_day = None                                # 当晚是否已道过晚安（去重）
         self._ritual_fired: set = set()                           # 当天已唤过的日常默契（去重）
         self._companion_slot = None                               # 本时段是否已主动问候过（去重）
@@ -597,6 +600,39 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, ut, txt, "teaching")
+                    return result
+
+        # --- 脾性喜好（"你爱吃什么" / "你讨厌啥"）：答得稳，像有自己口味的人 ---
+        if action is None and who.get("obey") and getattr(self, "preferences", None):
+            pref = self.state_preference(utterance)
+            if pref:
+                result["reply"] = pref
+                self._log_journal(who, utterance, pref, "preference")
+                return result
+
+        # --- 幽默（"讲个笑话" / 被打趣时俏皮回一句）---
+        if action is None and who.get("obey"):
+            from .humor import is_joke_request, is_teasing
+            if is_joke_request(utterance):
+                j = self.tell_a_joke()
+                if j:
+                    result["reply"] = j
+                    self._log_journal(who, utterance, j, "joke")
+                    return result
+            if is_teasing(utterance):
+                b = self.banter_back(utterance)
+                result["reply"] = b
+                self._log_journal(who, utterance, b, "banter")
+                return result
+
+        # --- 唠家常（"吃了吗" / "在吗" / "最近咋样"）：自然接住，别一本正经检索 ---
+        if action is None and who.get("obey"):
+            from .smalltalk import is_smalltalk
+            if is_smalltalk(utterance):
+                st = self.chitchat(utterance)
+                if st:
+                    result["reply"] = st
+                    self._log_journal(who, utterance, st, "smalltalk")
                     return result
 
         # --- 传统节日（"今天是什么节" / "端午有什么讲究"）---
@@ -1481,6 +1517,33 @@ class Agent:
                 except Exception:
                     pass
         return line
+
+    # ---------- 脾性 / 幽默 / 唠家常（让分身有血有肉）----------
+    def state_preference(self, utterance) -> str:
+        """答"你爱吃啥/你讨厌啥"，每次一致。"""
+        from .preferences import answer_preference
+        return answer_preference(getattr(self, "preferences", None), utterance)
+
+    def opinion(self, thing) -> str:
+        """对某样东西表个态。"""
+        from .preferences import opinion_on
+        return opinion_on(getattr(self, "preferences", None), thing)
+
+    def tell_a_joke(self) -> str:
+        """讲个还没讲过的段子。"""
+        from .humor import collect_jokes, tell_joke
+        j = tell_joke(collect_jokes(getattr(self, "humor", None)), exclude=self._told_jokes)
+        if j:
+            self._told_jokes.add(j)
+        return j
+
+    def banter_back(self, utterance="") -> str:
+        from .humor import banter
+        return banter(utterance, seed=utterance)
+
+    def chitchat(self, utterance) -> str:
+        from .smalltalk import smalltalk_reply
+        return smalltalk_reply(utterance, seed=utterance)
 
     def spouse_anniversary(self, now=None) -> str:
         from .spouse import anniversary_words

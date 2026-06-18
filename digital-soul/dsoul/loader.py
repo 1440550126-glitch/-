@@ -24,6 +24,7 @@ from .mannerisms import load_mannerisms
 from .memory import Memory
 from .notes import NoteBook
 from .perception import build_perception
+from .preferences import collect_preferences
 from .predict import Calibration
 from .persona import Persona
 from .planner import Planner, PlanBook
@@ -136,7 +137,10 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  stories=_load_yaml(base / "config" / "stories.yaml"),
                  teachings=_load_yaml(base / "config" / "teachings.yaml"),
                  spouse=spouse_profile(_load_yaml(base / "config" / "spouse.yaml"),
-                                       family_cfg, relationships))
+                                       family_cfg, relationships),
+                 preferences=collect_preferences(
+                     _load_yaml(base / "config" / "preferences.yaml"), identity),
+                 humor=_load_yaml(base / "config" / "humor.yaml"))
 
 
 def _seed_memory(base: Path, memory) -> None:
