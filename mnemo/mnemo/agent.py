@@ -114,10 +114,16 @@ class Agent:
             return personas[active]
         return self.config.get("persona", "你是 Mnemo，用户的私人 AI 伙伴。")
 
-    def _system_prompt(self, user_input: str, native: bool = False) -> str:
+    def _system_prompt(self, user_input: str, native: bool = False,
+                       session: str | None = None) -> str:
         import datetime as _dt
         parts = [self._active_persona()]
         parts.append(f"## 当前情境\n现在是 {_dt.datetime.now():%Y-%m-%d %H:%M %A}。")
+
+        if self.memory and session:
+            summ = self.memory.get_session_summary(session)
+            if summ:
+                parts.append("## 早前对话摘要（本会话）\n" + summ)
 
         if self.memory and self.config.get("memory.enabled", True):
             # 主动提醒：到点/逾期的事项，在对话中主动提起（不止靠守护进程）
@@ -240,7 +246,7 @@ class Agent:
                           auto_approve=auto_approve, confirm=confirm, agent=self, deny=deny)
         steps: list[dict] = []
 
-        messages = [Message("system", self._system_prompt(user_input))]
+        messages = [Message("system", self._system_prompt(user_input, session=session))]
         # 注入最近对话，保持连续性
         if self.memory:
             for ep in self.memory.recent_episodes(limit=4, session=session):
@@ -283,7 +289,7 @@ class Agent:
                           auto_approve=auto_approve, confirm=confirm, agent=self, deny=deny)
         specs = self._tool_specs()
         steps: list[dict] = []
-        messages = [Message("system", self._system_prompt(user_input, native=True))]
+        messages = [Message("system", self._system_prompt(user_input, native=True, session=session))]
         if self.memory:
             for ep in self.memory.recent_episodes(limit=4, session=session):
                 messages.append(Message("user", ep["user"]))

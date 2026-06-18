@@ -421,6 +421,13 @@ def cmd_session(args):
     m = app.memory
     if not m:
         print("记忆已禁用"); return 0
+    if args.action == "summarize":
+        summ = m.summarize_session(args.session, app.provider)
+        if summ:
+            print(green("已生成会话摘要：") + "\n" + dim(summ))
+        else:
+            print(yellow("无法生成摘要（对话太短，或当前后端不支持/离线）"))
+        return 0
     if args.action == "list":
         rows = m.sessions()
         if not rows:
@@ -977,6 +984,8 @@ def build_parser() -> argparse.ArgumentParser:
     ssh2 = pse2s.add_parser("show"); ssh2.add_argument("session")
     sex2 = pse2s.add_parser("export"); sex2.add_argument("session")
     sex2.add_argument("--out", default="session.md")
+    ssm2 = pse2s.add_parser("summarize", help="把较早对话压缩为滚动摘要（长会话保持连贯）")
+    ssm2.add_argument("session")
 
     ps = sub.add_parser("skill", help="技能：学习/查看/管理")
     pss = ps.add_subparsers(dest="action", required=True)

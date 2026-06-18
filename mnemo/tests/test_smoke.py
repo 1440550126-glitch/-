@@ -880,6 +880,17 @@ class TestMemoryManagement(unittest.TestCase):
         self.assertIn("小红", md)
         self.assertIn("咖啡", md)
 
+    def test_session_summary_roundtrip(self):
+        for i in range(8):
+            self.mem.add_episode("s1", f"问题{i}", f"回答{i}")
+        summ = self.mem.summarize_session("s1", FakeProvider(["早前对话摘要X"]), keep_recent=4)
+        self.assertEqual(summ, "早前对话摘要X")
+        self.assertEqual(self.mem.get_session_summary("s1"), "早前对话摘要X")
+
+    def test_summarize_too_short_returns_none(self):
+        self.mem.add_episode("s2", "a", "b")
+        self.assertIsNone(self.mem.summarize_session("s2", FakeProvider(["x"]), keep_recent=4))
+
     def test_sessions_listing(self):
         self.mem.add_episode("s1", "你好", "嗨")
         self.mem.add_episode("s1", "再问", "再答")
@@ -993,6 +1004,12 @@ class TestAwareness(unittest.TestCase):
         sp = agent._system_prompt("你好")
         self.assertIn("给妈妈打电话", sp)
         self.assertIn("当前情境", sp)
+
+    def test_session_summary_injected(self):
+        self.mem.set_session_summary("s9", "早前聊过登山计划")
+        agent = Agent(FakeProvider(["x"]), self.tools, self.mem, self.skills, self.cfg)
+        sp = agent._system_prompt("你好", session="s9")
+        self.assertIn("早前聊过登山计划", sp)
 
     def test_forget_tool(self):
         fid = self.mem.add_fact("一条会被删除的记忆")

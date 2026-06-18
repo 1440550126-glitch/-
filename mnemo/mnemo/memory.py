@@ -253,6 +253,36 @@ class Memory:
             (session, limit)).fetchall()
         return [dict(r) for r in rows]
 
+    def get_session_summary(self, session: str) -> str | None:
+        return self.get_profile(f"summary:{session}")
+
+    def set_session_summary(self, session: str, text: str) -> None:
+        self.set_profile(f"summary:{session}", text)
+
+    def summarize_session(self, session: str, provider, keep_recent: int = 4) -> str | None:
+        """把会话中较早的对话压缩成滚动摘要，让长会话仍保持连贯（需在线 provider）。
+
+        返回新摘要文本；不足以压缩或无 provider 能力时返回 None。
+        """
+        eps = self.session_episodes(session, limit=500)
+        if len(eps) <= keep_recent:
+            return None
+        old = eps[:-keep_recent]
+        prior = self.get_session_summary(session) or ""
+        convo = "\n".join(f"用户：{e['user']}\n助手：{e['assistant']}" for e in old)[:6000]
+        from .providers import Message
+        instr = ("把以下对话压缩成简明要点摘要，保留关键事实/决定/未尽事项，中文，"
+                 "作为长期上下文备忘（不超过 200 字）：\n"
+                 + (f"已有摘要：\n{prior}\n\n新增对话：\n" if prior else "") + convo)
+        try:
+            summary = provider.chat([Message("user", instr)], max_tokens=400)
+        except Exception:  # noqa: BLE001
+            return None
+        if summary and summary.strip():
+            self.set_session_summary(session, summary.strip())
+            return summary.strip()
+        return None
+
     def recent_episodes(self, limit: int = 6, session: str | None = None) -> list[dict]:
         if session:
             rows = self.db.execute(
