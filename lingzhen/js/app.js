@@ -38,6 +38,36 @@ function fmtTime(ts) {
   return `${d.getMonth() + 1}-${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 function copy(text) { navigator.clipboard?.writeText(text).then(() => toast('已复制'), () => toast('复制失败', 'warn')); }
+const isMemberNow = () => (state.me?.member_until || 0) > Date.now();
+const yuan = (fen) => '¥' + (fen / 100).toFixed(2).replace(/\.00$/, '');
+
+// ---------------- 弹窗 / 转化 ----------------
+function closeModal() { document.querySelector('.lz-mask')?.remove(); }
+function modal(...content) {
+  closeModal();
+  const mask = h('div', { class: 'lz-mask', onclick: (e) => { if (e.target === mask) closeModal(); } },
+    h('div', { class: 'lz-modal' }, h('button', { class: 'lz-modal-x', onclick: closeModal }, '✕'), ...content));
+  document.body.append(mask);
+  requestAnimationFrame(() => mask.classList.add('show'));
+  return mask;
+}
+function upgradeModal(msg) {
+  modal(h('div', { class: 'lz-up' },
+    h('div', { class: 'lz-up-i' }, '👑'),
+    h('h3', {}, '今天的免费额度用完了'),
+    h('p', {}, msg || '免费版每天可运行 8 次 AI 团队。开通会员，每天 80 次，并解锁高级模型协作。'),
+    h('div', { class: 'lz-up-rows' },
+      h('div', {}, h('b', {}, '8 → 80'), h('small', {}, '每日团队运行')),
+      h('div', {}, h('b', {}, '高级模型'), h('small', {}, '更强编排产出')),
+      h('div', {}, h('b', {}, '¥9.9'), h('small', {}, '月卡 · 一杯奶茶'))),
+    h('button', { class: 'lz-btn block xl', onclick: () => { closeModal(); nav('#/pricing'); } }, '查看会员方案'),
+    h('button', { class: 'lz-btn ghost block', onclick: closeModal }, '明天再来')));
+}
+// 配额耗尽 → 转化弹窗；其余错误 → toast
+function handleErr(e) {
+  if (e?.extra?.quota_exceeded || e?.extra?.need_member) upgradeModal(e.message);
+  else toast(e?.message || '出错了，稍后再试', 'warn');
+}
 
 // ---------------- 极简 Markdown 渲染（结果为 Markdown） ----------------
 function mdInline(s) {
@@ -104,7 +134,8 @@ function header() {
     h('nav', { class: 'lz-nav' }, NAV.map((it) =>
       h('a', { class: it.primary ? 'primary' : (it.match.includes(sec) ? 'on' : ''), onclick: () => nav(it.hash) }, it.label))),
     h('div', { class: 'lz-user' },
-      state.meta ? h('span', { class: 'lz-quota', title: '今日剩余运行次数' }, `⚡ ${state.meta.quota.left}/${state.meta.quota.limit}`) : null,
+      state.meta ? h('a', { class: 'lz-quota' + (isMemberNow() ? ' vip' : ''), title: isMemberNow() ? '会员 · 查看权益' : '今日剩余运行次数 · 点击升级', onclick: () => nav('#/pricing') },
+        (isMemberNow() ? '👑 ' : '⚡ ') + `${state.meta.quota.left}/${state.meta.quota.limit}`) : null,
       h('span', { class: 'lz-me' }, (m?.avatar ? '' : '👤'), m?.nickname || '我'),
       h('a', { class: 'lz-out', onclick: logout }, '退出')));
 }
@@ -292,7 +323,7 @@ function runBox(id) {
         if (!task) { ta.focus(); toast('先描述一下任务', 'warn'); return; }
         runBtn.disabled = true; runBtn.textContent = '正在创建运行…';
         try { const { run_id } = await POST(`/api/teams/${id}/run`, { task }); nav(`#/run/${run_id}`); }
-        catch (e) { toast(e.message, 'warn'); runBtn.disabled = false; runBtn.textContent = '🚀 派单运行'; }
+        catch (e) { handleErr(e); runBtn.disabled = false; runBtn.textContent = '🚀 派单运行'; }
       });
       box.append(ta, runBtn);
     } else {
@@ -304,7 +335,7 @@ function runBox(id) {
         if (!items.length) { toast('至少给一条输入', 'warn'); return; }
         batchBtn.disabled = true; batchBtn.textContent = '正在创建…';
         try { const { batch_id } = await POST(`/api/teams/${id}/batch`, { task, items }); nav(`#/batch/${batch_id}`); }
-        catch (e) { toast(e.message, 'warn'); batchBtn.disabled = false; batchBtn.textContent = '🚀 批量派单'; }
+        catch (e) { handleErr(e); batchBtn.disabled = false; batchBtn.textContent = '🚀 批量派单'; }
       });
       box.append(
         h('p', { class: 'lz-hint' }, '一个任务模板套用多条输入，逐条排队执行，结果汇总到一张表。'),
@@ -845,7 +876,7 @@ async function renderTriggers() {
           try {
             const { run_id } = await POST(`/api/triggers/${t.id}/run-now`);
             toast('已触发！'); setTimeout(() => nav(`#/run/${run_id}`), 500);
-          } catch (e) { toast(e.message, 'warn'); runNowBtn.disabled = false; }
+          } catch (e) { handleErr(e); runNowBtn.disabled = false; }
         });
         const delBtn = h('button', { class: 'lz-btn ghost danger sm' }, '删除');
         delBtn.addEventListener('click', async () => {
@@ -925,7 +956,64 @@ async function renderUsage() {
           h('div', { class: 'lz-usg-assets' },
             h('div', {}, h('div', { class: 'lz-usg-n' }, String(u.assets.teams)), h('small', {}, '团队')),
             h('div', {}, h('div', { class: 'lz-usg-n' }, String(u.assets.agents)), h('small', {}, '智能体')),
-            h('div', {}, h('div', { class: 'lz-usg-n' }, String(u.assets.kbs)), h('small', {}, '知识库')))))));
+            h('div', {}, h('div', { class: 'lz-usg-n' }, String(u.assets.kbs)), h('small', {}, '知识库'))))),
+      u.member
+        ? h('div', { class: 'lz-member-ok' }, '👑 你已是会员 · 每日 80 次运行与高级模型已解锁，感谢支持！')
+        : h('div', { class: 'lz-upsell', onclick: () => nav('#/pricing') },
+            h('div', {}, h('b', {}, '👑 升级会员，每日 80 次 + 高级模型'), h('small', {}, '一杯奶茶钱，让团队全力开火 · 沙盒支付即时生效')),
+            h('button', { class: 'lz-btn' }, '查看会员 →'))));
+  } catch (e) { mount(shell(empty('加载失败', e.message))); }
+}
+
+// ---------------- 会员 / 定价 ----------------
+async function renderPricing() {
+  mount(shell(spinner()));
+  try {
+    await loadMeta();
+    const cat = await GET('/api/shop/catalog');
+    const member = isMemberNow();
+    const until = state.me?.member_until ? new Date(state.me.member_until) : null;
+
+    async function buy(plan, btn) {
+      btn.disabled = true; btn.textContent = '开通中…';
+      try {
+        const { order } = await POST('/api/shop/orders', { kind: 'member', item_id: plan.id });
+        await POST(`/api/shop/orders/${order.id}/pay`);
+        state.meta = null;
+        try { state.me = await GET('/api/me'); } catch { /* ignore */ }
+        await loadMeta();
+        toast('开通成功，欢迎成为会员 👑');
+        renderPricing();
+      } catch (e) { handleErr(e); btn.disabled = false; btn.textContent = member ? '续费' : '立即开通'; }
+    }
+    const planCard = (p) => {
+      const btn = h('button', { class: 'lz-btn block' + (p.tag ? ' xl' : '') }, member ? '续费' : '立即开通');
+      btn.addEventListener('click', () => buy(p, btn));
+      return h('div', { class: 'lz-plan' + (p.tag ? ' hot' : '') },
+        p.tag ? h('span', { class: 'lz-plan-tag' }, p.tag) : null,
+        h('div', { class: 'lz-plan-name' }, p.name.replace('句灵会员 · ', '')),
+        h('div', { class: 'lz-plan-price' }, yuan(p.price_fen), h('small', {}, ` / ${p.months} 个月`)),
+        h('div', { class: 'lz-plan-blurb' }, p.blurb), btn);
+    };
+    const cmp = (label, free, vip) => h('div', { class: 'lz-cmp-row' },
+      h('span', {}, label), h('span', { class: 'lz-cmp-free' }, free), h('span', { class: 'lz-cmp-vip' }, vip));
+
+    mount(shell(
+      h('div', { class: 'lz-sec-t big' }, '👑 会员 · 解锁全力的 AI 团队'),
+      member
+        ? h('div', { class: 'lz-member-ok' }, `你已是会员 · 有效期至 ${until.getFullYear()}-${until.getMonth() + 1}-${until.getDate()}。每日 80 次运行 + 高级模型已解锁。`)
+        : h('p', { class: 'lz-intro' }, '免费版足够上手；想让团队全力开火、用上更强的大模型，开通会员即可。当前为沙盒支付，开通后即时生效。'),
+      h('div', { class: 'lz-cmp' },
+        h('div', { class: 'lz-cmp-head' }, h('span', {}, '能力'), h('span', {}, '免费版'), h('span', { class: 'lz-cmp-vip' }, '会员')),
+        cmp('每日团队运行', '8 次', '80 次'),
+        cmp('高级模型协作', '—', '✓ 解锁'),
+        cmp('批量运行 / 定时触发 / 对外 API', '✓', '✓'),
+        cmp('知识库 RAG / 团队记忆 / Webhook', '✓', '✓'),
+        cmp('句灵全生态会员权益', '—', '✓ 一并解锁')),
+      h('div', { class: 'lz-plans' }, cat.member_plans.map(planCard)),
+      h('div', { class: 'lz-sec-t' }, '开通后还一并获得'),
+      h('ul', { class: 'lz-benefits' }, (cat.member_benefits || []).map((b) => h('li', {}, b))),
+      h('p', { class: 'lz-hint' }, cat.fair_play || '沙盒支付环境，正式上线将接入微信支付 / 支付宝 / Apple 内购。')));
   } catch (e) { mount(shell(empty('加载失败', e.message))); }
 }
 
@@ -1028,7 +1116,7 @@ async function renderAgentEdit(id) {
 }
 
 // ---------------- 路由 ----------------
-const TITLES = { '': '团队广场', agents: '智能体工作室', agent: '智能体', kb: '知识库', triggers: '定时触发器', history: '运行记录', usage: '用量看板', new: '组建团队', edit: '编辑团队', team: '团队', run: '作战室', batch: '批量运行' };
+const TITLES = { '': '团队广场', agents: '智能体工作室', agent: '智能体', kb: '知识库', triggers: '定时触发器', history: '运行记录', usage: '用量看板', pricing: '会员', new: '组建团队', edit: '编辑团队', team: '团队', run: '作战室', batch: '批量运行' };
 function route() {
   if (!state.me) { renderLogin(); return; }
   const hash = location.hash || '#/';
@@ -1046,6 +1134,7 @@ function route() {
   if (path === 'kb') return renderKB();
   if (path === 'triggers') return renderTriggers();
   if (path === 'usage') return renderUsage();
+  if (path === 'pricing') return renderPricing();
   return renderHome();
 }
 
