@@ -1757,7 +1757,8 @@ class Agent:
         self._last_body = body_language(mood)[0]
         if who.get("guard"):
             guard_stance(self.robot, who.get("name"))
-        self.robot.say(text)
+        from .perform import perform
+        perform(self.robot, text, mood)        # 说与动合一：边说边点头/侧首/倾身
         return text
 
     def memorial_today(self, now=None) -> list:
