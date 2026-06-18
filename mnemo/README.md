@@ -10,6 +10,7 @@ API Key 就能启动完整系统（走离线兜底）；配上任意大模型后
 
 ```bash
 cd mnemo
+python -m mnemo init        # 初始化向导（选后端/人格/称呼，可跳过）
 python -m mnemo doctor      # 环境自检（含能力探测）
 python -m mnemo             # 进入对话（默认命令）
 ```
@@ -46,6 +47,9 @@ export OPENAI_API_KEY=sk-... OPENAI_BASE_URL=https://api.deepseek.com/v1 OPENAI_
 | **文件监视** | `mnemo watch add` 路径变化即触发任务（守护进程巡检） |
 | **会话连贯** | 滚动摘要压缩长会话（`session summarize`，守护进程每日自动刷新）；`chat --resume` 续接 |
 | **更多工具** | `edit_file` 精准改写、`http_request` 调任意 REST、`calc` 安全计算、`forget` 自纠记忆 |
+| **成本护栏** | `usage.daily_token_limit` 到达即暂停调用，保护无人值守不超支 |
+| **脚本友好** | `mnemo run --json` 输出 `{reply, steps}`；`mnemo init` 初始化向导 |
+| **导入导出** | `memory export/import`（Markdown/JSON）、`ingest <url>` 摄入网页、邮件通知投递简报 |
 | 学技能 + **自我进化** | Markdown 技能即学即用；**一次成功任务可自动沉淀为新技能**（`skill distill` / `run --distill`） |
 | 下载插件 + **市场** | `plugin install <git/本地>`；**`market search/install`** 从 registry 按名安装技能/插件 |
 | **多 Agent 协作** | `delegate` 工具：主 Agent 把聚焦子任务派给角色化子 Agent |
@@ -208,7 +212,7 @@ mnemo plugin install ./my-plugin
 ## 测试
 
 ```bash
-python -m unittest discover -s tests -v   # 109 项全链路冒烟，全部通过
+python -m unittest discover -s tests -v   # 114 项全链路冒烟，全部通过
 ```
 
 覆盖：记忆/画像、语义检索+LSH ANN、巩固/遗忘、提醒、工具循环、原生 function-calling、
