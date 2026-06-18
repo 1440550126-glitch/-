@@ -697,6 +697,63 @@ class TestTools(unittest.TestCase):
         tmp.cleanup()
 
 
+class TestIngest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.mem = Memory(Path(self.tmp.name) / "m.db")
+        self.docs = Path(self.tmp.name) / "docs"
+        self.docs.mkdir()
+
+    def tearDown(self):
+        self.mem.close()
+        self.tmp.cleanup()
+
+    def test_chunk_text(self):
+        from mnemo.ingest import chunk_text
+        self.assertEqual(chunk_text(""), [])
+        self.assertEqual(chunk_text("一句话"), ["一句话"])
+        # 段落聚合
+        small = chunk_text("第一段。\n\n第二段。", max_chars=100)
+        self.assertEqual(len(small), 1)
+        # 超长段落硬切
+        big = chunk_text("x" * 250, max_chars=100)
+        self.assertEqual(len(big), 3)
+        self.assertTrue(all(len(c) <= 100 for c in big))
+
+    def test_ingest_dir_and_recall(self):
+        from mnemo.ingest import ingest_path
+        (self.docs / "a.md").write_text("# 火星\n火星是太阳系第四颗行星，表面呈红色。",
+                                        encoding="utf-8")
+        (self.docs / "b.txt").write_text("光合作用把二氧化碳和水转化为葡萄糖。",
+                                         encoding="utf-8")
+        (self.docs / "ignore.bin").write_text("二进制不该被读取", encoding="utf-8")
+        res = ingest_path(self.mem, self.docs)
+        self.assertEqual(res["files"], 2)            # .bin 被跳过
+        self.assertGreaterEqual(res["chunks"], 2)
+        kinds = {f["kind"] for f in self.mem.all_facts()}
+        self.assertIn("knowledge", kinds)
+        hits = self.mem.recall("火星 行星")
+        self.assertTrue(any("火星" in h["text"] for h in hits))
+
+    def test_ingest_is_idempotent(self):
+        from mnemo.ingest import ingest_path
+        (self.docs / "a.md").write_text("永久记忆是 Mnemo 的核心卖点。", encoding="utf-8")
+        ingest_path(self.mem, self.docs)
+        n1 = self.mem.stats()["facts"]
+        ingest_path(self.mem, self.docs)             # 再次摄入相同内容
+        n2 = self.mem.stats()["facts"]
+        self.assertEqual(n1, n2)                      # UNIQUE 约束天然去重
+
+    def test_knowledge_not_in_profile(self):
+        from mnemo.ingest import ingest_path
+        (self.docs / "a.md").write_text("某个无关的技术文档内容。", encoding="utf-8")
+        self.mem.set_profile("name", "小明")
+        ingest_path(self.mem, self.docs)
+        prof = self.mem.profile_summary()
+        self.assertIn("小明", prof)
+        self.assertNotIn("技术文档", prof)            # 知识块不进画像
+
+
 class TestUsage(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

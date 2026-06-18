@@ -201,6 +201,32 @@ def cmd_run(args):
     return 0
 
 
+def cmd_ingest(args):
+    app = build_app(args)
+    if not app.memory:
+        print(red("记忆未启用，无法摄入知识")); return 1
+    from .ingest import ingest_path
+    p = Path(args.path).expanduser()
+    if not p.exists():
+        print(red(f"路径不存在：{p}")); return 1
+    prov = None if args.no_embed else app.provider
+    try:
+        res = ingest_path(app.memory, p, tag=args.tag or "",
+                          max_chars=args.max_chars, provider=prov)
+    except Exception as e:  # noqa: BLE001
+        print(red(f"摄入失败：{e}")); return 1
+    if not res["chunks"]:
+        print(yellow("没有可摄入的文本（检查扩展名/大小限制）")); return 0
+    msg = f"已摄入 {res['files']} 个文件 · {res['chunks']} 个知识块"
+    if res.get("embedded"):
+        msg += f" · 向量化 {res['embedded']} 块"
+    if res.get("skipped"):
+        msg += dim(f" · 跳过 {res['skipped']}")
+    print(green(msg))
+    print(dim("用 `mnemo memory search <词>` 检索；相关对话时会被自动回忆。"))
+    return 0
+
+
 def cmd_config(args):
     app_cfg = load_config(getattr(args, "home", None))
     if args.action == "path":
@@ -715,6 +741,12 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--cwd", default=".", help="工作目录")
     pr.add_argument("--distill", metavar="NAME", help="完成后把过程沉淀为名为 NAME 的技能")
 
+    pin = sub.add_parser("ingest", help="把本地文档/目录摄入长期记忆（知识库 RAG）")
+    pin.add_argument("path", help="文件或目录")
+    pin.add_argument("--tag", default="", help="给这批知识打标签，便于检索/管理")
+    pin.add_argument("--max-chars", type=int, default=800, dest="max_chars", help="每块最大字符数")
+    pin.add_argument("--no-embed", action="store_true", help="不计算向量（仅关键词检索）")
+
     pc = sub.add_parser("config", help="查看/修改配置")
     pcs = pc.add_subparsers(dest="action", required=True)
     pcs.add_parser("show"); pcs.add_parser("path")
@@ -829,7 +861,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 _HANDLERS = {
-    "chat": cmd_chat, "run": cmd_run, "config": cmd_config, "provider": cmd_provider,
+    "chat": cmd_chat, "run": cmd_run, "ingest": cmd_ingest, "config": cmd_config,
+    "provider": cmd_provider,
     "memory": cmd_memory, "skill": cmd_skill, "plugin": cmd_plugin, "task": cmd_task,
     "daemon": cmd_daemon, "doctor": cmd_doctor, "audit": cmd_audit,
     "market": cmd_market, "sync": cmd_sync, "speak": cmd_speak, "see": cmd_see,
