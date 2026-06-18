@@ -12,6 +12,7 @@
     "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
     "smoke": "node --disable-warning=ExperimentalWarning scripts/smoke.mjs",
     "check": "node scripts/check-syntax.mjs",
-    "dolby:test": "node web/dolby/test/dolby.test.mjs"
+    "dolby:test": "node web/dolby/test/dolby.test.mjs",
+    "dolby:demo": "node web/dolby/tools/render-demo.mjs"
   }
 }

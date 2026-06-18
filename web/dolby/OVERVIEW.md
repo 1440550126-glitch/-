@@ -53,7 +53,8 @@ createVisualizer(canvas, { dolby: player.dolby }).start();
 
 ```bash
 npm start                                   # http://localhost:3000/dolby/demo.html · /player.html
-npm run dolby:test                          # 零依赖自测（模拟 Web Audio，94 断言）
+npm run dolby:test                          # 零依赖自测（模拟 Web Audio，119 断言）
+npm run dolby:demo                          # 离线渲染效果预览：打印 EQ/展宽/LUFS + 写 dry/dolby 对比 WAV
 ```
 
 当前版本：**1.17.0** ·  许可证 MIT
