@@ -10,6 +10,7 @@ from .actions import SimulationRobot
 from .agent import Agent
 from .appointments import AppointmentBook
 from .authority import Authority
+from .belongings import Belongings
 from .calendar_book import EventBook
 from .contacts import ContactBook
 from .countdown import CountdownBook
@@ -188,7 +189,9 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  reminders=ReminderBook(base / "data" / "reminders.json"),
                  countdown=CountdownBook(base / "data" / "countdown.json",
                                          seed=_load_yaml(base / "config" / "countdown.yaml")),
-                 todo=TodoList(base / "data" / "todo.json"))
+                 todo=TodoList(base / "data" / "todo.json"),
+                 belongings=Belongings(base / "data" / "belongings.json",
+                                       seed=_load_yaml(base / "config" / "belongings.yaml")))
 
 
 def _seed_memory(base: Path, memory) -> None:

@@ -45,7 +45,8 @@ class Agent:
                  contacts=None, ledger=None, bedtime=None,
                  music=None, plants=None, touch=None, understanding=None,
                  messages=None, vitals=None, board=None, growth=None,
-                 pets=None, reminders=None, countdown=None, todo=None) -> None:
+                 pets=None, reminders=None, countdown=None, todo=None,
+                 belongings=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -137,6 +138,7 @@ class Agent:
         self.reminders = reminders                                # 随口提醒（"提醒我三点吃药"）
         self.countdown = countdown                                # 倒计时（离过年/退休/高考还有几天）
         self.todo = todo                                          # 个人待办清单（自己的一张小清单）
+        self.belongings = belongings                              # 找东西（钥匙/老花镜/存折搁哪了）
         self._noticed: set = set()                                # 已点破过的"门道"（当天去重）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
@@ -526,6 +528,17 @@ class Agent:
                     result["reply"] = txt
                     self._log_journal(who, u, txt, "med_list")
                     return result
+
+        # --- 找东西（"我把钥匙放鞋柜上了" / "钥匙放哪了" / "我的老花镜呢"）---
+        if action is None and who.get("obey") and self.belongings is not None and any(
+                k in (utterance or "") for k in ("放在", "放到", "搁在", "搁到", "收在", "摆在",
+                                                 "放哪", "搁哪", "在哪", "哪儿去", "找不到", "不见了",
+                                                 "呢")):
+            txt = self.belongings_handle(utterance)
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "belongings")
+                return result
 
         # --- 待办清单（"待办加交电费" / "我的待办" / "待办交电费办好了"）---
         if action is None and who.get("obey") and self.todo is not None and "待办" in (utterance or ""):
@@ -2758,6 +2771,29 @@ class Agent:
             return ""
         mine = [it["what"] for it in self.board.for_member(name)]
         return ("今天轮到你：" + "、".join(mine) + "，别忘了。") if mine else ""
+
+    # ---------- 找东西 ----------
+    def belongings_handle(self, utterance) -> str:
+        from .belongings import parse_put, parse_where
+        if self.belongings is None:
+            return ""
+        u = (utterance or "").strip()
+        where_signal = any(h in u for h in ("放哪", "搁哪", "在哪", "哪儿去", "找不到", "不见了")) \
+            or u.rstrip("？?。.").endswith("呢")
+        item = parse_where(u)
+        if item and where_signal:                # 是在找东西，不是在放
+            place = self.belongings.where(item)
+            return (f"{item}在{place}，我替你记着呢。") if place else \
+                f"{item}放哪我没记着——找着了告诉我一声，下回我替你记。"
+        put = parse_put(u)
+        if put:
+            self.belongings.put(*put)
+            return f"记下了，{put[0]}在{put[1]}。回头忘了问我。"
+        if item:
+            place = self.belongings.where(item)
+            if place:
+                return f"{item}在{place}，我替你记着呢。"
+        return ""
 
     # ---------- 待办清单 ----------
     def todo_handle(self, utterance) -> str:
