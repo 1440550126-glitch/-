@@ -86,7 +86,14 @@ mnemo memory backfill       # 为记忆补算语义向量（需后端支持 embe
 # 知识库（RAG）：把资料喂给它，之后相关对话自动用上
 mnemo ingest ./notes --tag 读书笔记          # 摄入目录（自动切块/去重/可向量化）
 mnemo ingest spec.md                          # 摄入单个文件
+mnemo ingest https://example.com/post         # 摄入网页
 mnemo memory search 火星                       # 检索已摄入的知识
+mnemo memory import facts.json                 # 批量导入；memory export 导出 Markdown
+
+# 画像与日记（越用越懂你的人生轨迹）
+mnemo profile show                            # 查看/直接编辑 Mnemo 对你的了解
+mnemo profile set name 大硕
+mnemo diary                                   # 把今天的对话写成日记，存入长期记忆
 
 # 大模型后端（含 Gemini）
 mnemo provider list / test
@@ -212,7 +219,7 @@ mnemo plugin install ./my-plugin
 ## 测试
 
 ```bash
-python -m unittest discover -s tests -v   # 114 项全链路冒烟，全部通过
+python -m unittest discover -s tests -v   # 118 项全链路冒烟，全部通过
 ```
 
 覆盖：记忆/画像、语义检索+LSH ANN、巩固/遗忘、提醒、工具循环、原生 function-calling、
