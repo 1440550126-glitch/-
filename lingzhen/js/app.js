@@ -1,6 +1,6 @@
 // 灵阵 · AI 团队（独立站）：登录 → 团队广场/模板 → 派单 → 作战室实时直播 → 历史 → 建队。
 // 对接 AI句灵 服务端现有 /api/agents·/api/teams·/api/runs 接口；无大模型 Key 时后端走本地引擎，零成本可跑通。
-import { GET, POST, PATCH, DEL, sse, getToken, setToken } from './api.js';
+import { GET, POST, PUT, PATCH, DEL, sse, getToken, setToken } from './api.js';
 
 // ---------------- DOM 小工具 ----------------
 function h(tag, attrs, ...kids) {
@@ -204,15 +204,6 @@ async function renderTeam(id) {
   try {
     await loadMeta();
     const { team, members } = await GET(`/api/teams/${id}`);
-    const ta = h('textarea', { class: 'lz-ta', rows: 4, placeholder: '描述要这支团队完成什么，例如：围绕「年轻人露营」写一篇小红书种草文案，并给3个标题。' });
-    const runBtn = h('button', { class: 'lz-btn block xl' }, '🚀 派单运行');
-    runBtn.addEventListener('click', async () => {
-      const task = ta.value.trim();
-      if (!task) { ta.focus(); toast('先描述一下任务', 'warn'); return; }
-      runBtn.disabled = true; runBtn.textContent = '正在创建运行…';
-      try { const { run_id } = await POST(`/api/teams/${id}/run`, { task }); nav(`#/run/${run_id}`); }
-      catch (e) { toast(e.message, 'warn'); runBtn.disabled = false; runBtn.textContent = '🚀 派单运行'; }
-    });
 
     const actions = h('div', { class: 'lz-team-actions' });
     if (team.is_template || !team.mine) {
@@ -246,10 +237,121 @@ async function renderTeam(id) {
         h('div', {}, h('b', {}, mb.name), h('small', {}, mb.role || ''),
           (mb.tools || []).length ? h('div', { class: 'lz-tools' }, (mb.tools || []).map((tl) => h('span', { class: 'lz-tool' }, '🔧 ' + tl))) : null)))),
       (team.knowledge || []).length ? h('div', { class: 'lz-kb' }, '📚 挂载知识库：' + team.knowledge.map((k) => k.name).join('、')) : null,
-      h('div', { class: 'lz-run-box' }, h('div', { class: 'lz-sec-t' }, '给这支团队下达任务'), ta, runBtn),
+      runBox(id),
       actions,
-      team.mine && !team.is_template ? apiPanel(team) : null));
+      team.mine && !team.is_template ? apiPanel(team) : null,
+      team.mine && !team.is_template ? webhookPanel(team) : null,
+      team.mine && !team.is_template ? memoryPanel(team) : null));
   } catch (e) { mount(shell(empty('团队不存在或无权访问', e.message))); }
+}
+
+// 派单：单次 / 批量（一个任务模板套用多条输入，逐条排队执行）
+function runBox(id) {
+  let mode = 'single';
+  const box = h('div', { class: 'lz-run-box' });
+  const ta = h('textarea', { class: 'lz-ta', rows: 4, placeholder: '描述要这支团队完成什么，例如：围绕「年轻人露营」写一篇小红书种草文案，并给3个标题。' });
+  const tplTa = h('textarea', { class: 'lz-ta', rows: 3, placeholder: '任务模板，用 {{input}} 代表每条输入。例：为「{{input}}」写一句小红书标题。' });
+  const itemsTa = h('textarea', { class: 'lz-ta', rows: 5, placeholder: '每行一条输入（最多 10 条）：\n露营\n飞盘\n骑行' });
+  function draw() {
+    box.innerHTML = '';
+    box.append(
+      h('div', { class: 'lz-sec-t' }, '给这支团队下达任务'),
+      h('div', { class: 'lz-mode-tabs' },
+        h('button', { class: 'lz-mode' + (mode === 'single' ? ' on' : ''), onclick: () => { if (mode !== 'single') { mode = 'single'; draw(); } } }, '单次派单'),
+        h('button', { class: 'lz-mode' + (mode === 'batch' ? ' on' : ''), onclick: () => { if (mode !== 'batch') { mode = 'batch'; draw(); } } }, '批量派单')));
+    if (mode === 'single') {
+      const runBtn = h('button', { class: 'lz-btn block xl' }, '🚀 派单运行');
+      runBtn.addEventListener('click', async () => {
+        const task = ta.value.trim();
+        if (!task) { ta.focus(); toast('先描述一下任务', 'warn'); return; }
+        runBtn.disabled = true; runBtn.textContent = '正在创建运行…';
+        try { const { run_id } = await POST(`/api/teams/${id}/run`, { task }); nav(`#/run/${run_id}`); }
+        catch (e) { toast(e.message, 'warn'); runBtn.disabled = false; runBtn.textContent = '🚀 派单运行'; }
+      });
+      box.append(ta, runBtn);
+    } else {
+      const batchBtn = h('button', { class: 'lz-btn block xl' }, '🚀 批量派单');
+      batchBtn.addEventListener('click', async () => {
+        const task = tplTa.value.trim();
+        const items = itemsTa.value.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 10);
+        if (!task) { toast('先写任务模板', 'warn'); return; }
+        if (!items.length) { toast('至少给一条输入', 'warn'); return; }
+        batchBtn.disabled = true; batchBtn.textContent = '正在创建…';
+        try { const { batch_id } = await POST(`/api/teams/${id}/batch`, { task, items }); nav(`#/batch/${batch_id}`); }
+        catch (e) { toast(e.message, 'warn'); batchBtn.disabled = false; batchBtn.textContent = '🚀 批量派单'; }
+      });
+      box.append(
+        h('p', { class: 'lz-hint' }, '一个任务模板套用多条输入，逐条排队执行，结果汇总到一张表。'),
+        h('label', { class: 'lz-form-lbl' }, '任务模板'), tplTa,
+        h('label', { class: 'lz-form-lbl' }, '输入列表（每行一条，最多 10 条）'), itemsTa, batchBtn);
+    }
+  }
+  draw();
+  return box;
+}
+
+// 出站 Webhook：运行完成后把结果 POST 给外部地址（可对接微信/飞书机器人、自动化平台）
+function webhookPanel(team) {
+  const box = h('div', { class: 'lz-api' });
+  function draw(url) {
+    box.innerHTML = '';
+    box.append(
+      h('div', { class: 'lz-sec-t' }, '🔔 出站 Webhook'),
+      h('p', { class: 'lz-api-desc' }, '每次运行完成后，把结果以 JSON POST 到这个地址——对接企业微信/飞书机器人、n8n 等自动化平台，实现全渠道分发。'));
+    const urlIn = h('input', { class: 'lz-in', placeholder: 'https://your-endpoint.example.com/hook', value: url || '' });
+    const saveBtn = h('button', { class: 'lz-btn sm' }, url ? '更新' : '保存');
+    saveBtn.addEventListener('click', async () => {
+      const v = urlIn.value.trim();
+      if (!v) { toast('填一个回调地址', 'warn'); return; }
+      saveBtn.disabled = true;
+      try { const r = await PUT(`/api/teams/${team.id}/webhook`, { url: v }); toast('已保存'); draw(r.webhook_url); }
+      catch (e) { toast(e.message, 'warn'); saveBtn.disabled = false; }
+    });
+    box.append(h('div', { class: 'lz-row' }, urlIn, saveBtn));
+    if (url) box.append(h('div', { class: 'lz-api-actions', style: { marginTop: '10px' } },
+      h('span', { class: 'lz-tag pub' }, '● 已开启'),
+      h('button', { class: 'lz-btn ghost danger sm', onclick: async () => {
+        if (!confirm('移除 Webhook？')) return;
+        try { await DEL(`/api/teams/${team.id}/webhook`); toast('已移除'); draw(''); } catch (e) { toast(e.message, 'warn'); }
+      } }, '移除')));
+  }
+  draw(team.webhook_url || '');
+  return box;
+}
+
+// 团队记忆：长期键值记忆，任务里用 {{键名}} 引用，运行时自动填充
+function memoryPanel(team) {
+  const box = h('div', { class: 'lz-api' });
+  async function load() {
+    box.innerHTML = '';
+    box.append(
+      h('div', { class: 'lz-sec-t' }, '🧠 团队记忆'),
+      h('p', { class: 'lz-api-desc' }, '沉淀团队的长期记忆（品牌名、语气、受众…）。在任务里用 {{键名}} 引用，运行时自动填充——把流程一次配置、反复复用。最多 50 条。'));
+    let items = [];
+    try { items = (await GET(`/api/teams/${team.id}/memory`)).items; } catch (e) { /* ignore */ }
+    const list = h('div', { class: 'lz-mem-list' });
+    if (!items.length) list.append(h('p', { class: 'lz-hint' }, '还没有记忆条目，下面加一条试试。'));
+    for (const it of items) list.append(h('div', { class: 'lz-mem-row' },
+      h('code', { class: 'lz-mem-k' }, '{{' + it.key + '}}'),
+      h('span', { class: 'lz-mem-v' }, it.value || '（空）'),
+      h('button', { class: 'lz-btn mini ghost danger', onclick: async () => {
+        try { await DEL(`/api/teams/${team.id}/memory/${encodeURIComponent(it.key)}`); toast('已删除'); load(); }
+        catch (e) { toast(e.message, 'warn'); }
+      } }, '删除')));
+    const kIn = h('input', { class: 'lz-in', placeholder: '键名（如 品牌名）', maxlength: 60 });
+    const vIn = h('input', { class: 'lz-in', placeholder: '值', maxlength: 500 });
+    const addBtn = h('button', { class: 'lz-btn sm' }, '＋ 保存');
+    addBtn.addEventListener('click', async () => {
+      const key = kIn.value.trim();
+      if (!key) { toast('填个键名', 'warn'); return; }
+      addBtn.disabled = true;
+      try { await PUT(`/api/teams/${team.id}/memory`, { key, value: vIn.value.trim() }); toast('已保存'); load(); }
+      catch (e) { toast(e.message, 'warn'); addBtn.disabled = false; }
+    });
+    box.append(list, h('div', { class: 'lz-mem-add' }, kIn, vIn, addBtn));
+  }
+  load();
+  return box;
 }
 
 // 对外 API：为自己的团队生成密钥，任意外部系统可凭密钥同步调用（无需登录）
@@ -390,6 +492,47 @@ async function renderHistory() {
             h('small', {}, `${r.step_count} 步 · ${r.by_llm ? '大模型' : '本地'} · ${fmtTime(r.started_at)}`)));
       })) : empty('还没有运行记录', '去团队广场派一个任务吧')));
   } catch (e) { mount(shell(empty('加载失败', e.message))); }
+}
+
+// ---------------- 批量运行结果 ----------------
+async function renderBatch(batchId) {
+  mount(shell(spinner()));
+  let data;
+  try { data = await GET(`/api/runs/batch/${batchId}`); }
+  catch (e) { mount(shell(empty('批量任务不存在', e.message))); return; }
+  await loadMeta();
+
+  const wrap = h('div', { class: 'lz-batch' });
+  function paint(d) {
+    wrap.innerHTML = '';
+    const done = d.items.filter((r) => r.status !== 'running').length;
+    wrap.append(h('div', { class: 'lz-batch-bar' },
+      h('span', {}, `共 ${d.items.length} 条 · 已完成 ${done}/${d.items.length}`),
+      d.done ? h('span', { class: 'lz-st done' }, '全部完成') : h('span', { class: 'lz-st run' }, '运行中…')));
+    for (const r of d.items) {
+      const [label, cls] = STATUS[r.status] || ['—', ''];
+      wrap.append(h('div', { class: 'lz-batch-item', onclick: () => nav(`#/run/${r.id}`) },
+        h('div', { class: 'lz-batch-h' },
+          h('div', { class: 'lz-batch-task' }, r.task),
+          h('span', { class: 'lz-st ' + cls }, label)),
+        r.result ? h('div', { class: 'lz-batch-res' }, String(r.result).slice(0, 240))
+          : (r.status === 'running' ? h('div', { class: 'lz-hint' }, '排队 / 运行中…') : null)));
+    }
+  }
+  paint(data);
+  mount(shell(
+    h('button', { class: 'lz-back', onclick: () => nav('#/history') }, '‹ 运行历史'),
+    h('div', { class: 'lz-sec-t big' }, '📦 批量运行'),
+    h('p', { class: 'lz-intro' }, '同一团队对多条输入逐条执行，点任意一条进入它的作战室看全过程。'),
+    wrap));
+
+  let stop = false;
+  window.addEventListener('hashchange', () => { stop = true; }, { once: true });
+  while (!data.done && !stop) {
+    await new Promise((r) => setTimeout(r, 1300));
+    if (stop) break;
+    try { data = await GET(`/api/runs/batch/${batchId}`); paint(data); } catch { break; }
+  }
 }
 
 // ---------------- 建队 / 编辑 ----------------
@@ -732,6 +875,7 @@ function route() {
   const [path, p1] = hash.replace(/^#\//, '').split('/');
   if (path === 'team' && p1) return renderTeam(p1);
   if (path === 'run' && p1) return renderRun(p1);
+  if (path === 'batch' && p1) return renderBatch(p1);
   if (path === 'history') return renderHistory();
   if (path === 'new') return renderBuilder(null);
   if (path === 'edit' && p1) return renderBuilder(p1);
