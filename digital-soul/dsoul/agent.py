@@ -78,6 +78,7 @@ class Agent:
         self.values_path = values_path                            # 演化后的价值权重持久化路径
         self.thoughts: deque = deque(maxlen=12)                   # 内心独白（近期心声）
         self.dialogue: deque = deque(maxlen=6)                    # 这一席话的近几句（对话连贯·像人）
+        self._threads: dict = {}                                  # 你上次提到没完的事（跨天记挂）
         self.curiosity = curiosity                                # 好奇心：对陌生事物的疑问本
         self.worldmodel = worldmodel                              # 世界模型：带置信度的信念，会自我修正
         self.calib = calib                                        # 预测校准（从"猜对/没猜对"学习）
@@ -201,6 +202,10 @@ class Agent:
         # --- 对话连贯：把这句存进"这一席话"的缓冲，回应时能接着前面的话头（像人）---
         if who.get("known") and action is None and getattr(self, "dialogue", None) is not None:
             self.dialogue.append((utterance or "").strip())
+
+        # --- 跨天记挂：你提到要去办的/担心的/不舒服的，记个尾巴，下次见你问一句 ---
+        if who.get("obey") and action is None:
+            self._note_thread(who.get("name"), utterance)
 
         # --- 我眼里的你：把这次互动沉淀进对TA的理解（越处越懂）---
         if who.get("known") and getattr(self, "understanding", None) is not None:
@@ -1700,6 +1705,11 @@ class Agent:
             fu = self.cheer_followup(who.get("name"))
             if fu:
                 text = f"{text} {fu}"
+        # 跨天记挂：你上次提到没完的事（要去办的/担心的/不舒服的），主动问一句"后来咋样了"
+        if who.get("obey"):
+            tf = self.thread_followup(who.get("name"))
+            if tf:
+                text = f"{text} {tf}"
         # 捎话：这人来了，把攒着要带给TA的话主动捎到
         if who.get("known"):
             for msg in self.deliver_messages(who.get("name")):
@@ -2511,6 +2521,35 @@ class Agent:
         if self.understanding is None:
             return ""
         return self.understanding.portrait(name)
+
+    # ---------- 跨天记挂：惦记着你上次没完的事 ----------
+    def _note_thread(self, name, utterance) -> None:
+        from datetime import date
+        from .follow_through import find_thread
+        t = find_thread(utterance)
+        if not t or not name:
+            return
+        kind, gist = t
+        lst = self._threads.setdefault(name, [])
+        lst.append({"kind": kind, "gist": gist, "day": date.today().isoformat()})
+        self._threads[name] = lst[-3:]          # 每人最多记 3 条，免得堆
+
+    def thread_followup(self, name, now=None) -> str:
+        """见到你，若上次（更早某天）提到的事还没问过，主动跟进一句（问完即销账）。"""
+        from datetime import date
+        from .follow_through import followup_line
+        if not name:
+            return ""
+        lst = self._threads.get(name) or []
+        today = now.date().isoformat() if hasattr(now, "date") else date.today().isoformat()
+        for i, t in enumerate(lst):
+            if t["day"] < today:                # 是"上次"说的，不是这会儿刚说的
+                line = followup_line(t["kind"], t["gist"])
+                lst.pop(i)
+                self._threads[name] = lst
+                if line:
+                    return line
+        return ""
 
     # ---------- 养宠 ----------
     def pet_action(self, utterance) -> str:
