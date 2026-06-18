@@ -301,6 +301,21 @@ a{cursor:pointer;color:inherit}
 .lz-draft-meta small{color:var(--dim);font-size:11px;margin-left:auto}
 .lz-draft-acts{display:flex;gap:8px;flex-wrap:wrap}
 
+/* ---- 新手首跑 ---- */
+.lz-welcome{position:relative;background:linear-gradient(135deg,rgba(110,168,254,.16),rgba(155,140,255,.14));border:1px solid rgba(110,168,254,.3);border-radius:18px;padding:28px 24px;margin-bottom:18px;text-align:center;overflow:hidden}
+.lz-welcome-i{font-size:40px;filter:drop-shadow(0 3px 12px rgba(110,168,254,.55))}
+.lz-welcome h2{margin:8px 0 6px;font-size:23px}
+.lz-welcome p{color:var(--mut);font-size:14px;margin:0 auto 16px;max-width:520px;line-height:1.6}
+.lz-welcome-x{position:absolute;top:12px;right:12px;width:28px;height:28px;border:none;background:rgba(255,255,255,.07);color:var(--mut);border-radius:8px;cursor:pointer;font-size:12px}
+.lz-welcome-x:hover{color:var(--txt)}
+.lz-welcome-steps{display:inline-flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:16px}
+.lz-welcome-steps span{font-size:12px;color:var(--mut);background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:20px;padding:5px 12px}
+
+/* ---- 示例任务 chip ---- */
+.lz-samples-row{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.lz-chip-btn{text-align:left;background:var(--bg2);border:1px dashed var(--line);color:var(--mut);border-radius:10px;padding:8px 12px;font-size:12.5px;cursor:pointer;font-family:inherit;transition:.15s;max-width:100%}
+.lz-chip-btn:hover{border-color:var(--acc);color:var(--txt);border-style:solid}
+
 /* ---- 弹窗 ---- */
 .lz-mask{position:fixed;inset:0;background:rgba(6,8,12,.72);backdrop-filter:blur(4px);z-index:80;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;transition:.2s}
 .lz-mask.show{opacity:1}

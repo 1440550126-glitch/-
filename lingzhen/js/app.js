@@ -114,6 +114,23 @@ const toolMeta = (id) => (state.meta?.tools || []).find((t) => t.id === id);
 const toolName = (id) => toolMeta(id)?.name || id;
 const toolIcon = (id) => toolMeta(id)?.icon || '🔧';
 
+// 示例任务：消灭"空白输入框"，也用于新手一键体验
+const SAMPLE_TASKS = {
+  '内容创作小组': '围绕「下班后的城市露营」写一篇小红书种草文案，并给 3 个标题',
+  '市场调研参谋部': '分析「年轻人为什么爱喝手冲咖啡」，给出 3 个洞察和 1 个机会点',
+  '产品冲刺组': '为「帮上班族高效午休的小程序」列出 MVP 功能清单与优先级',
+  '流水线写作台': '写一篇 500 字短文：《如果城市可以静音一小时》',
+  '吵架群': '就「周报到底有没有用」吵一架，正反方各来三轮',
+  '杠精辩论赛': '辩论「AI 会不会让人变懒」，正反方各打三回合并给裁判结论',
+  '赛博算命馆': '给「测试工程师 · 林」算一卦今天的工作运势',
+  '唐诗文学创作组': '以「深夜便利店」为题作一首五言绝句，并附简短赏析'
+};
+function sampleTask(team) {
+  if (SAMPLE_TASKS[team?.name]) return SAMPLE_TASKS[team.name];
+  const g = (team?.goal || '').trim();
+  return g ? `围绕「${g}」给我一份可直接用的产出` : '用你们的专业能力，帮我策划一场周末城市市集';
+}
+
 // ---------------- 公共 UI 片段 ----------------
 const NAV = [
   { label: '团队广场', hash: '#/', match: ['', 'team', 'run', 'batch'] },
@@ -230,8 +247,32 @@ async function renderHome() {
       for (const t of list) grid.append(teamCard(t, { owner: tab === 'mine' }));
     }
     paint();
+
+    // 新手首跑：一键派单一支示例团队，直达作战室看它们"真的在干活"
+    let welcome = null;
+    if (!localStorage.getItem('lz_seen_intro') && teams.templates.length) {
+      const demo = teams.templates[0];
+      const demoBtn = h('button', { class: 'lz-btn xl' }, '🚀 一键跑通一支团队');
+      demoBtn.addEventListener('click', async () => {
+        demoBtn.disabled = true; demoBtn.textContent = '正在召集「' + demo.name + '」…';
+        try {
+          const { run_id } = await POST(`/api/teams/${demo.id}/run`, { task: sampleTask(demo) });
+          localStorage.setItem('lz_seen_intro', '1');
+          nav(`#/run/${run_id}`);
+        } catch (e) { handleErr(e); demoBtn.disabled = false; demoBtn.textContent = '🚀 一键跑通一支团队'; }
+      });
+      welcome = h('div', { class: 'lz-welcome' },
+        h('button', { class: 'lz-welcome-x', title: '关闭', onclick: () => { localStorage.setItem('lz_seen_intro', '1'); welcome.remove(); } }, '✕'),
+        h('div', { class: 'lz-welcome-i' }, '🛰'),
+        h('h2', {}, '欢迎来到灵阵'),
+        h('p', {}, '一句话，调动一支会分工的专业 AI 团队替你干活。要不要现在就看一支团队跑起来？'),
+        demoBtn,
+        h('div', { class: 'lz-welcome-steps' }, h('span', {}, '① 选团队'), h('span', {}, '② 下达任务'), h('span', {}, '③ 作战室看协作交付')));
+    }
+
     mount(shell(
-      h('section', { class: 'lz-intro' },
+      welcome,
+      welcome ? null : h('section', { class: 'lz-intro' },
         h('h2', {}, '把任务交给一支会分工的 AI 团队'),
         h('p', {}, '选一个团队 → 下达任务 → 在作战室看它们拆解、分派、调工具、整合交付。')),
       tabbar, grid));
@@ -289,7 +330,7 @@ async function renderTeam(id) {
         h('div', {}, h('b', {}, mb.name), h('small', {}, mb.role || ''),
           (mb.tools || []).length ? h('div', { class: 'lz-tools' }, (mb.tools || []).map((tl) => h('span', { class: 'lz-tool' }, '🔧 ' + tl))) : null)))),
       (team.knowledge || []).length ? h('div', { class: 'lz-kb' }, '📚 挂载知识库：' + team.knowledge.map((k) => k.name).join('、')) : null,
-      runBox(id),
+      runBox(team),
       teamRuns.length ? h('div', { class: 'lz-team-runs' },
         h('div', { class: 'lz-runs-head' },
           h('div', { class: 'lz-sec-t', style: { margin: '0' } }, `本团队最近运行（${teamRuns.length}）`),
@@ -303,7 +344,8 @@ async function renderTeam(id) {
 }
 
 // 派单：单次 / 批量（一个任务模板套用多条输入，逐条排队执行）
-function runBox(id) {
+function runBox(team) {
+  const id = team.id;
   let mode = 'single';
   const box = h('div', { class: 'lz-run-box' });
   const ta = h('textarea', { class: 'lz-ta', rows: 4, placeholder: '描述要这支团队完成什么，例如：围绕「年轻人露营」写一篇小红书种草文案，并给3个标题。' });
@@ -325,7 +367,9 @@ function runBox(id) {
         try { const { run_id } = await POST(`/api/teams/${id}/run`, { task }); nav(`#/run/${run_id}`); }
         catch (e) { handleErr(e); runBtn.disabled = false; runBtn.textContent = '🚀 派单运行'; }
       });
-      box.append(ta, runBtn);
+      const sample = sampleTask(team);
+      const chip = h('button', { class: 'lz-chip-btn', onclick: () => { ta.value = sample; ta.focus(); } }, '✨ 试试：' + sample);
+      box.append(ta, h('div', { class: 'lz-samples-row' }, chip), runBtn);
     } else {
       const batchBtn = h('button', { class: 'lz-btn block xl' }, '🚀 批量派单');
       batchBtn.addEventListener('click', async () => {
