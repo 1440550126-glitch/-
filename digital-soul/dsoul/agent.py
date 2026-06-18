@@ -836,7 +836,8 @@ class Agent:
 
         # --- 唠家常（"吃了吗" / "在吗" / "最近咋样"）：自然接住，别一本正经检索 ---
         if action is None and who.get("obey") and not any(
-                k in (utterance or "") for k in ("你看我", "你觉得我", "你瞧我")):  # 这些是"看出门道"
+                k in (utterance or "") for k in ("你看我", "你觉得我", "你瞧我",   # 看出门道
+                                                 "这周", "这一周", "这礼拜", "回顾")):  # 一周回望
             from .smalltalk import is_smalltalk
             if is_smalltalk(utterance):
                 st = self.chitchat(utterance)
@@ -885,6 +886,16 @@ class Agent:
             result["reply"] = txt
             self._log_journal(who, utterance, txt, "observe")
             return result
+
+        # --- 一周回望（"这周怎么样" / "回顾这周"）：带暖意地小结一周 ---
+        if action is None and who.get("obey"):
+            from .weekly_review import is_review_query
+            if is_review_query(utterance):
+                txt = self.weekly_review(who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "weekly_review")
+                    return result
 
         # --- 今天提要（"说说今天" / "今天有啥事"）：把要紧事汇成一段 ---
         if action is None and who.get("obey") and any(
@@ -2249,6 +2260,18 @@ class Agent:
         if self.understanding is None:
             return ""
         return self.understanding.portrait(name)
+
+    def weekly_review(self, name="") -> str:
+        """陪你把这一周回望一遍：开心事 + 坚持的 + 操心的。"""
+        from .weekly_review import compose
+        joys = self.joys.recent(3) if getattr(self, "joys", None) is not None else []
+        concerns = []
+        if getattr(self, "understanding", None) is not None and name:
+            concerns = self.understanding.top_concerns(name, 2)
+        habits = []
+        if getattr(self, "habits_book", None) is not None:
+            habits = [(n, h.get("streak", 0)) for n, h in self.habits_book.habits.items()]
+        return compose(joys=joys, concerns=concerns, habits=habits)
 
     # ---------- 捎话 ----------
     def _parse_message(self, utterance):
