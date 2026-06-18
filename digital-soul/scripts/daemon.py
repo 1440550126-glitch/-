@@ -142,6 +142,22 @@ def trigger_loop(agent, mouth=None) -> None:
             print(f"[时光胶囊] {cap}", flush=True)
             if mouth is not None:
                 mouth.speak(cap, mood=_mood(agent), profile=profile)
+        # 老伴专属：到日常时辰唤一句默契；入夜主动道一声晚安（各自去重）
+        try:
+            spouse_lines = []
+            r = agent.spouse_ritual_now()
+            if r:
+                spouse_lines.append(r)
+            gn = agent.nightly_goodnight()
+            if gn:
+                spouse_lines.append(gn)
+        except Exception as e:
+            print(f"[老伴] 出错：{e}", flush=True)
+            spouse_lines = []
+        for line in spouse_lines:
+            print(f"[老伴] {line}", flush=True)
+            if mouth is not None:
+                mouth.speak(line, mood=_mood(agent), profile=profile)
 
 
 def think_loop(agent, minutes: float) -> None:

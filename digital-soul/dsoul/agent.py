@@ -94,6 +94,8 @@ class Agent:
         self.teachings = teachings or {}                          # 言传身教：道理 + 手艺
         self.spouse = spouse or {}                                # 老伴专属（夫妻之间：昵称/故事/唠叨/思念）
         self._spouse_nag_day = None                               # 当天是否已对老伴唠叨过（去重）
+        self._goodnight_day = None                                # 当晚是否已道过晚安（去重）
+        self._ritual_fired: set = set()                           # 当天已唤过的日常默契（去重）
         self.social = social                                      # 社交记忆（对每人的亲疏冷暖）
         self.goals = goals                                        # 心愿与目标
         self.shopping = shopping                                  # 采买清单
@@ -925,12 +927,19 @@ class Agent:
         if who.get("obey"):
             for cap in self.due_capsules():
                 text = f"{text} {cap}"
-        # 老伴专属：见到另一半，纪念日道一声、把放心不下的话轻轻唠叨一句（当天去重）
+        # 老伴专属：见到另一半，纪念日道一声/提前提醒、日常默契、把牵挂的话轻轻唠叨（当天去重）
         if who.get("obey") and getattr(self, "spouse", None) \
                 and self.is_my_spouse(who.get("name"), who.get("relation")):
             anni = self.spouse_anniversary()
             if anni:
                 text = f"{text} {anni}"
+            else:
+                cd = self.spouse_anniversary_countdown()
+                if cd:
+                    text = f"{text} {cd}"
+            rit = self.spouse_ritual_now()
+            if rit:
+                text = f"{text} {rit}"
             for c in self.spouse_care_today():
                 text = f"{text} {c}"
         # 家谱生日：见到你时，若近几天有家人过生日，主动提醒一句别忘了
@@ -1311,6 +1320,40 @@ class Agent:
             mems = [it["text"] for _, it in self.memory.recall(name or "老伴", k=3)]
         return compose_love_letter(self.spouse, identity=self.identity,
                                    memories=mems, occasion=occasion, llm=self.llm)
+
+    def nightly_goodnight(self, now=None) -> str:
+        """夜里主动给老伴道一声晚安，每晚只道一次（供守护循环调用）。"""
+        from datetime import datetime
+        g = self.goodnight_spouse(now)
+        if not g:
+            return ""
+        today = (now or datetime.now()).strftime("%Y-%m-%d")
+        if self._goodnight_day == today:
+            return ""
+        self._goodnight_day = today
+        return g
+
+    def spouse_ritual_now(self, now=None) -> str:
+        """此刻是否到了老夫老妻的日常默契时辰，是则唤一句（同一时辰当天不重复）。"""
+        from datetime import datetime
+        from .spouse import ritual_now
+        if not getattr(self, "spouse", None):
+            return ""
+        line = ritual_now(self.spouse, now)
+        if not line:
+            return ""
+        key = ((now or datetime.now()).strftime("%Y-%m-%d"), line)
+        if key in self._ritual_fired:
+            return ""
+        self._ritual_fired.add(key)
+        return line
+
+    def spouse_anniversary_countdown(self, now=None, within=7) -> str:
+        """临近结婚纪念日的提前提醒。"""
+        from .spouse import anniversary_reminder
+        if not getattr(self, "spouse", None):
+            return ""
+        return anniversary_reminder(self.spouse, now, within)
 
     def spouse_anniversary(self, now=None) -> str:
         from .spouse import anniversary_words

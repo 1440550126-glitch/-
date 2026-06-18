@@ -67,6 +67,7 @@ def spouse_profile(config=None, family=None, relationships=None) -> dict:
         "promises": _list("promises"),
         "care": _list("care"),
         "endearments": _list("endearments"),
+        "rituals": [r for r in (cfg.get("rituals") or []) if isinstance(r, dict)],
     }
 
 
@@ -210,3 +211,63 @@ def goodnight(profile, now=None) -> str:
     if end:
         base += " " + end
     return base + " 我守着你，做个好梦。"
+
+
+def _parse_hhmm(s):
+    try:
+        h, m = str(s).split(":")
+        return int(h), int(m)
+    except Exception:
+        return None
+
+
+def ritual_now(profile, now=None, window=45) -> str:
+    """此刻是否到了老夫老妻的某个日常时辰（前后 window 分钟内），是则唤一句。"""
+    rituals = (profile or {}).get("rituals") or []
+    if not rituals:
+        return ""
+    now = now or datetime.now()
+    cur = now.hour * 60 + now.minute
+    call = call_name(profile)
+    for r in rituals:
+        t = _parse_hhmm(r.get("time"))
+        if not t:
+            continue
+        if abs(cur - (t[0] * 60 + t[1])) <= window:
+            act = str(r.get("activity", "")).strip()
+            if act:
+                return f"{call}，这个点，咱俩平时该{act}了。"
+    return ""
+
+
+def days_to_anniversary(profile, now=None):
+    """到下个结婚纪念日还有几天；算不出返回 None。"""
+    from datetime import date
+    parts = str((profile or {}).get("married") or "").split("-")
+    if len(parts) < 3:
+        return None
+    try:
+        mm, dd = int(parts[1]), int(parts[2])
+    except ValueError:
+        return None
+    now = now or datetime.now()
+    today = now.date()
+    try:
+        nxt = date(today.year, mm, dd)
+    except ValueError:
+        return None
+    if nxt < today:
+        try:
+            nxt = date(today.year + 1, mm, dd)
+        except ValueError:
+            return None
+    return (nxt - today).days
+
+
+def anniversary_reminder(profile, now=None, within=7) -> str:
+    """临近结婚纪念日的提前提醒（当天用 anniversary_words，不在此重复）。"""
+    d = days_to_anniversary(profile, now)
+    if d is None or d == 0 or d > within:
+        return ""
+    when = "明天" if d == 1 else f"还有{d}天"
+    return f"{call_name(profile)}，{when}就是咱们的结婚纪念日了，我都记着呢。"

@@ -7,9 +7,10 @@ from datetime import datetime
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from dsoul.spouse import (  # noqa: E402
-    anniversary_words, call_name, care_words, comfort_lonely, goodnight,
-    is_anniversary, is_spouse, love_story, pick_endearment, senses_longing,
-    senses_upset, soothe, spouse_profile, years_married,
+    anniversary_reminder, anniversary_words, call_name, care_words,
+    comfort_lonely, days_to_anniversary, goodnight, is_anniversary, is_spouse,
+    love_story, pick_endearment, ritual_now, senses_longing, senses_upset,
+    soothe, spouse_profile, years_married,
 )
 
 CFG = {
@@ -108,6 +109,25 @@ def test_goodnight():
     g = goodnight(p)
     assert "老婆子" in g and "做个好梦" in g
     assert goodnight({}) == ""
+
+
+def test_ritual_now():
+    cfg = dict(CFG, rituals=[{"time": "07:00", "activity": "一起喝早茶看报"},
+                             {"time": "19:30", "activity": "晚饭后散步"}])
+    p = spouse_profile(cfg)
+    line = ritual_now(p, datetime(2026, 6, 18, 7, 10))      # 07:00 前后
+    assert "喝早茶看报" in line and "老婆子" in line
+    assert ritual_now(p, datetime(2026, 6, 18, 12, 0)) == ""  # 不在任何时辰
+    assert ritual_now(spouse_profile(CFG), datetime.now()) == ""  # 没配默契
+
+
+def test_anniversary_countdown():
+    p = spouse_profile(CFG)                                 # married 10-01
+    assert days_to_anniversary(p, datetime(2026, 9, 29)) == 2
+    r = anniversary_reminder(p, datetime(2026, 9, 29), within=7)
+    assert "还有2天" in r and "结婚纪念日" in r
+    assert anniversary_reminder(p, datetime(2026, 10, 1)) == ""  # 当天不在此提醒
+    assert anniversary_reminder(p, datetime(2026, 6, 1)) == ""   # 太远不提
 
 
 if __name__ == "__main__":
