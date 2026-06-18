@@ -248,14 +248,19 @@ def cmd_ingest(args):
     app = build_app(args)
     if not app.memory:
         print(red("记忆未启用，无法摄入知识")); return 1
-    from .ingest import ingest_path
-    p = Path(args.path).expanduser()
-    if not p.exists():
-        print(red(f"路径不存在：{p}")); return 1
+    import re as _re
+    from .ingest import ingest_path, ingest_url
     prov = None if args.no_embed else app.provider
     try:
-        res = ingest_path(app.memory, p, tag=args.tag or "",
-                          max_chars=args.max_chars, provider=prov)
+        if _re.match(r"^https?://", args.path):          # 摄入网页
+            res = ingest_url(app.memory, args.path, tag=args.tag or "",
+                             max_chars=args.max_chars, provider=prov)
+        else:                                            # 摄入文件/目录
+            p = Path(args.path).expanduser()
+            if not p.exists():
+                print(red(f"路径不存在：{p}")); return 1
+            res = ingest_path(app.memory, p, tag=args.tag or "",
+                              max_chars=args.max_chars, provider=prov)
     except Exception as e:  # noqa: BLE001
         print(red(f"摄入失败：{e}")); return 1
     if not res["chunks"]:

@@ -831,6 +831,19 @@ class TestIngest(unittest.TestCase):
         hits = self.mem.recall("火星 行星")
         self.assertTrue(any("火星" in h["text"] for h in hits))
 
+    def test_ingest_url(self):
+        import mnemo.ingest as ing
+        orig = ing.fetch_url_text
+        ing.fetch_url_text = lambda url, timeout=20: "火星是太阳系第四颗行星。" * 8
+        try:
+            res = ing.ingest_url(self.mem, "https://example.com/mars")
+        finally:
+            ing.fetch_url_text = orig
+        self.assertEqual(res["files"], 1)
+        self.assertGreaterEqual(res["chunks"], 1)
+        self.assertTrue(any(f["source"] == "ingest:https://example.com/mars"
+                            for f in self.mem.all_facts()))
+
     def test_ingest_is_idempotent(self):
         from mnemo.ingest import ingest_path
         (self.docs / "a.md").write_text("永久记忆是 Mnemo 的核心卖点。", encoding="utf-8")

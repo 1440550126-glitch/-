@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import re
+import urllib.request
 from pathlib import Path
 from typing import Iterator
 
@@ -69,6 +70,39 @@ def iter_text_files(root: Path, max_file_kb: int = 1024) -> Iterator[Path]:
         except OSError:
             continue
         yield p
+
+
+def fetch_url_text(url: str, timeout: int = 20) -> str:
+    """抓取网页并粗略转纯文本（与 web_fetch 同源逻辑）。"""
+    req = urllib.request.Request(url, headers={"User-Agent": "Mnemo/0.1"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        raw = r.read(2_000_000).decode("utf-8", "replace")
+    raw = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", raw)
+    text = re.sub(r"(?s)<[^>]+>", " ", raw)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _store_chunks(memory, chunks: list[str], source: str, tag: str) -> int:
+    n = len(chunks)
+    for idx, ck in enumerate(chunks):
+        head = f"[{source} · 第{idx + 1}/{n}块]\n" if n > 1 else f"[{source}]\n"
+        memory.add_fact(head + ck, kind="knowledge", importance=3, tags=tag, source=source)
+    return n
+
+
+def ingest_url(memory, url: str, *, tag: str = "", max_chars: int = 800,
+               provider=None) -> dict:
+    """抓取一个网页并摄入长期记忆。返回 {files, chunks, embedded, skipped}。"""
+    text = fetch_url_text(url)
+    chunks = chunk_text(text, max_chars)
+    n = _store_chunks(memory, chunks, f"ingest:{url}", tag)
+    embedded = 0
+    if provider is not None and n:
+        try:
+            embedded = memory.embed_backfill(provider, limit=max(256, n))
+        except Exception:  # noqa: BLE001
+            embedded = 0
+    return {"files": 1 if n else 0, "chunks": n, "embedded": embedded, "skipped": 0}
 
 
 def ingest_path(memory, path: Path, *, tag: str = "", max_chars: int = 800,
