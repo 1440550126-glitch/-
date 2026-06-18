@@ -31,6 +31,7 @@ from .memory import Memory
 from .notes import NoteBook
 from .opinions import collect_opinions
 from .perception import build_perception
+from .plant_care import PlantBook
 from .preferences import collect_preferences
 from .predict import Calibration
 from .persona import Persona
@@ -161,7 +162,10 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                  contacts=ContactBook(base / "data" / "contacts.json",
                                       seed=_load_yaml(base / "config" / "contacts.yaml")),
                  ledger=Ledger(base / "data" / "ledger.json"),
-                 bedtime=_load_yaml(base / "config" / "bedtime.yaml"))
+                 bedtime=_load_yaml(base / "config" / "bedtime.yaml"),
+                 music=_load_yaml(base / "config" / "music.yaml"),
+                 plants=PlantBook(base / "data" / "plants.json",
+                                  seed=_load_yaml(base / "config" / "plants.yaml")))
 
 
 def _seed_memory(base: Path, memory) -> None:

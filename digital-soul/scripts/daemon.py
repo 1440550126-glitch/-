@@ -198,6 +198,16 @@ def trigger_loop(agent, mouth=None) -> None:
             print(f"[习惯] {hb}", flush=True)
             if mouth is not None:
                 mouth.speak(hb, mood=_mood(agent), profile=profile)
+        # 养花：该浇水时提醒一句（每天一次）
+        try:
+            pw = agent.plant_due_reminder()
+        except Exception as e:
+            print(f"[养花] 出错：{e}", flush=True)
+            pw = ""
+        if pw:
+            print(f"[养花] {pw}", flush=True)
+            if mouth is not None:
+                mouth.speak(pw, mood=_mood(agent), profile=profile)
 
 
 def think_loop(agent, minutes: float) -> None:

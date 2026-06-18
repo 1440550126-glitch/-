@@ -42,7 +42,8 @@ class Agent:
                  spouse=None, preferences=None, humor=None,
                  medications=None, safety=None, appointments=None,
                  opinions=None, joys=None, habits_book=None,
-                 contacts=None, ledger=None, bedtime=None) -> None:
+                 contacts=None, ledger=None, bedtime=None,
+                 music=None, plants=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -114,6 +115,9 @@ class Agent:
         self.ledger = ledger                                      # 家庭账本（随口记账、月底算清）
         self.bedtime = bedtime or {}                              # 睡前故事库（给孙辈哄睡）
         self._told_bedtime: set = set()                           # 已讲过的睡前故事（轮换）
+        self.music = music or {}                                  # 老歌：爱唱的歌 / 按心情点歌
+        self.plants = plants                                      # 养花：浇水提醒
+        self._plant_reminded_day = None                           # 当天是否已提醒浇水（去重）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
         self._game_mode = None                                    # 正在玩的游戏（如"接龙"）
@@ -818,6 +822,32 @@ class Agent:
                 if s:
                     result["reply"] = s
                     self._log_journal(who, utterance, s, "chat_start")
+                    return result
+
+        # --- 老歌（"唱首歌" / "哼一段"）---
+        if action is None and who.get("obey"):
+            from .music import is_music_request
+            if is_music_request(utterance):
+                txt = self.play_music(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "music")
+                    return result
+
+        # --- 养花（"花浇过了" / "该浇水吗" / "养的花"）---
+        if action is None and who.get("obey") and self.plants is not None:
+            u = utterance or ""
+            if any(k in u for k in ("浇水了", "浇过水", "浇了花", "花浇了", "浇好了")):
+                txt = self.water_plant(u)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "plant_water")
+                    return result
+            if any(k in u for k in ("该浇水", "要浇水吗", "养的花", "花草", "哪盆花")):
+                txt = self.plants.reminders() or self.plants_describe()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, u, txt, "plant")
                     return result
 
         # --- 睡前故事（"给娃讲个睡前故事" / "哄睡"）---
@@ -2047,6 +2077,48 @@ class Agent:
                 self._game_mode = None
                 return "哎，这个字我一时接不上，你赢啦！"
         return ""
+
+    # ---------- 老歌 / 养花 ----------
+    def play_music(self, utterance="") -> str:
+        from .music import hum, song_for_mood
+        mood = None
+        if getattr(self, "emotions", None) is not None:
+            try:
+                mood = self.emotions.mood()[0]
+            except Exception:
+                mood = None
+        if mood and any(k in (utterance or "") for k in ("心情", "应景", "高兴", "难过", "想哭")):
+            return song_for_mood(mood, self.music)
+        return hum(self.music, seed=utterance or "")
+
+    def water_plant(self, utterance) -> str:
+        if self.plants is None:
+            return ""
+        for p in self.plants.plants:
+            if p["name"] in (utterance or ""):
+                self.plants.water(p["name"])
+                return f"好，{p['name']}浇过水了，记下了。"
+        # 没点名就当全浇了
+        for p in self.plants.plants:
+            self.plants.water(p["name"])
+        return "好，花都浇过了，记下了。" if self.plants.plants else ""
+
+    def plants_describe(self) -> str:
+        return self.plants.describe() if self.plants is not None else ""
+
+    def plant_due_reminder(self, now=None) -> str:
+        """该浇水时提醒一句，每天一次（供守护循环）。"""
+        from datetime import datetime
+        if self.plants is None:
+            return ""
+        line = self.plants.reminders(now)
+        if not line:
+            return ""
+        today = (now or datetime.now()).strftime("%Y-%m-%d")
+        if self._plant_reminded_day == today:
+            return ""
+        self._plant_reminded_day = today
+        return line
 
     # ---------- 家庭账本 / 睡前故事 ----------
     def record_money(self, utterance) -> str:
