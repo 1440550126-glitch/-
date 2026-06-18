@@ -1298,6 +1298,7 @@ class Agent:
                 mood_now = None
         result["reasoning"] = ponder(
             utterance, speaker=who if who.get("known") else None, memories=ctx, mood=mood_now)
+        self._last_reasoning = result["reasoning"]      # 存一份，网页上能看到它"怎么想的"
         hints = self._hints()
         hint = thinking_hint(utterance)          # 把读出的弦外之音喂给大模型
         if hint:
@@ -1360,8 +1361,13 @@ class Agent:
                 addr = f"{who['name']}（放心，有我在）"
         else:
             addr = ""
+        from .followup import followup, is_sharing
         from .style import apply_style
-        if mems:
+        # 像人一样接话：对方在分享一件事，就顺着问一句，显出真在听（而不是干巴巴复述记忆）
+        fu = followup(utterance) if is_sharing(utterance) else ""
+        if fu:
+            body = f"{opener}{addr}{fu}"
+        elif mems:
             body = f"{opener}{addr}我记得——{mems[0].rstrip('。.')}。" + \
                    (f" 还有，{mems[1].rstrip('。.')}。" if len(mems) > 1 else "")
         else:

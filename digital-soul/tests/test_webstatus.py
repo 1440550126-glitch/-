@@ -81,7 +81,8 @@ def test_family_member_memory_counts():
 def test_page_has_new_cards():
     for marker in ("id=chronicle", "id=lastwords", "id=precepts",
                    "id=family", "id=care", "talkTo",
-                   "id=meds", "id=appts", "id=habits", "id=joys", "陪伴守护"):
+                   "id=meds", "id=appts", "id=habits", "id=joys", "陪伴守护",
+                   "id=reasoning", "刚才怎么想的"):
         assert marker in PAGE, marker
 
 
@@ -121,7 +122,8 @@ def test_companion_guardian_surfaced():
 
 def test_companion_guardian_degrades():
     d = _companion_guardian(_StubAgent())          # 没有这些字段也不炸
-    assert d == {"meds": [], "appts": [], "habits": [], "joys": [], "muse": ""}
+    assert d == {"meds": [], "appts": [], "habits": [], "joys": [], "muse": "",
+                 "reasoning": []}
 
 
 if __name__ == "__main__":
