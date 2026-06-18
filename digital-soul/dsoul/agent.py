@@ -374,6 +374,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "comfort_fear")
                     return result
 
+        # --- 稳住心神：心慌/坐立不安，带个呼吸或着地练习把人从慌乱里拉回来 ---
+        if action is None and who.get("obey"):
+            from .comfort_anxiety import calm, senses_anxiety
+            if senses_anxiety(utterance):
+                txt = calm(utterance, name=who.get("name", ""), seed=utterance)
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="惧", topic="稳心")
+                    self._log_journal(who, utterance, txt, "comfort_anxiety")
+                    return result
+
         # --- 该犟就犟：你说不吃药/不看病/太拼，它拦着劝着，因为在乎（不顺着你害你）---
         if action is None and who.get("obey"):
             from .gentle_insist import senses_self_neglect
