@@ -1273,6 +1273,15 @@ class Agent:
                 self._log_journal(who, utterance, adv, "deliberate")
                 return result
 
+        # --- 听不明白就问（像人一样不硬装懂）：话太空/太含糊时，老实问一句 ---
+        if action is None and who.get("obey"):
+            from .clarify import clarify, is_unclear
+            if is_unclear(utterance):
+                c = clarify(utterance, seed=utterance)
+                result["reply"] = c
+                self._log_journal(who, utterance, c, "clarify")
+                return result
+
         # --- 检索记忆（强度感知：淡忘的更难想起；被用到的顺便强化）---
         recalled = self._recall(utterance, k=4)
         mems = [it["text"] for _, it in recalled]
