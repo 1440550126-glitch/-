@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from dsoul.embodiment import (  # noqa: E402
-    attend, body_language, express, guard_stance, idle,
+    approach, attend, body_language, express, guard_stance, idle, wake,
 )
 
 
@@ -65,9 +65,27 @@ def test_attend_and_idle_and_guard():
     assert ("protect", "小婷") in r.calls
 
 
+def test_mood_idle_reflects_mood():
+    r = _Rec()
+    idle(r, mood="哀")
+    assert ("gesture", "静静出神") in r.calls            # 待机神态也随心情
+
+
+def test_wake_and_approach():
+    r = _Rec()
+    wake(r)
+    assert any(c[0] == "gesture" for c in r.calls) and ("look", "这个家") in r.calls
+    r2 = _Rec()
+    approach(r2, "小婷")
+    assert ("look", "小婷") in r2.calls and any(c[0] == "move" for c in r2.calls)
+
+
 def test_none_robot_safe():
     express(None, "喜", "x")          # 没有机器人也不该炸
     idle(None)
+    idle(None, mood="哀")
+    wake(None)
+    approach(None, "x")
     guard_stance(None, "x")
 
 

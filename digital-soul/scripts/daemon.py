@@ -30,6 +30,8 @@ def start_vision(agent, mouth=None) -> bool:
     me = agent.identity.get("name", "我")
 
     def on_enter(name: str) -> None:
+        from dsoul.embodiment import approach
+        approach(getattr(agent, "robot", None), name)   # 有人进门，身体先迎上前去
         text = agent.greet(name)   # 清晨第一次见到主人会自动带上"晨间简报"
         print(f"[感知] {name} 进入画面 → {me}: {text}", flush=True)
         if mouth is not None:
@@ -269,6 +271,9 @@ def main() -> None:
 
         robot = Ros2Robot()
     agent = build_agent(robot=robot)
+
+    from dsoul.embodiment import wake
+    wake(agent.robot)   # 魂醒在身体里：缓缓"醒来"，舒展、环顾这个家
 
     me = agent.identity.get("name", "我")
     llm = "✅" if agent.llm.available else "降级"

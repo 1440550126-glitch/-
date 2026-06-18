@@ -26,6 +26,16 @@ _IDLE = [
     ("整理姿态", "把身子摆正，安安静静守着"),
 ]
 
+# 待机时的神态也随心情（焦虑就坐立不安、欢喜就带点雀跃）
+_MOOD_IDLE = {
+    "哀": ("静静出神", "垂着头，像在想念什么"),
+    "惧": ("微微不安", "身子轻轻晃，时不时看向门口"),
+    "怒": ("沉着收敛", "站得笔直，慢慢把气喘匀"),
+    "喜": ("轻轻晃悠", "像哼着调子，带点雀跃"),
+    "乐": ("轻轻晃悠", "像哼着调子，带点雀跃"),
+    "爱": ("柔和守望", "目光软软地落在家人待的方向"),
+}
+
 
 def body_language(emotion):
     """某个情绪对应的体态。未知情绪给一个平和的默认。"""
@@ -66,12 +76,41 @@ def express(robot, emotion=None, speaker=None) -> None:
             pass
 
 
-def idle(robot, seed="") -> None:
-    """闲时的"活着"微动作，让它不像僵着的铁疙瘩。"""
+def idle(robot, seed="", mood=None) -> None:
+    """闲时的"活着"微动作，让它不像僵着的铁疙瘩；心情明显时神态也随之变。"""
     if robot is None:
         return
-    name, detail = _IDLE[len(str(seed)) % len(_IDLE)]
+    if mood in _MOOD_IDLE:
+        name, detail = _MOOD_IDLE[mood]
+    else:
+        name, detail = _IDLE[len(str(seed)) % len(_IDLE)]
     _do_gesture(robot, name, detail)
+
+
+def wake(robot) -> None:
+    """魂醒在身体里：开机时缓缓"醒来"，舒展、环顾这个家。"""
+    if robot is None:
+        return
+    _do_gesture(robot, "缓缓醒来", "像睁开眼，舒展一下，环顾这个家")
+    try:
+        robot.look_at("这个家")
+    except Exception:
+        pass
+
+
+def approach(robot, target) -> None:
+    """有人进门，迎上前去（张开怀抱似的暖）。"""
+    if robot is None or not target:
+        return
+    try:
+        robot.look_at(target)
+    except Exception:
+        pass
+    _do_gesture(robot, "迎上前", f"朝{target}迎过去，像张开怀抱")
+    try:
+        robot.move("前", 0.5)
+    except Exception:
+        pass
 
 
 def guard_stance(robot, target) -> None:

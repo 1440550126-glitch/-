@@ -3504,9 +3504,10 @@ class Agent:
         po = self.proactive_prediction()
         if po:
             out["notices"].append("（预感）" + po)
-        # 11) 注入灵魂的身体：闲下来也"活着"——像呼吸般轻动、环顾，不是僵着的铁疙瘩
+        # 11) 注入灵魂的身体：闲下来也"活着"——像呼吸般轻动、环顾；待机神态也随心情
         from .embodiment import idle
-        idle(getattr(self, "robot", None), seed=(now or datetime.now()).strftime("%M"))
+        mood = self.emotions.mood()[0] if getattr(self, "emotions", None) else None
+        idle(getattr(self, "robot", None), seed=(now or datetime.now()).strftime("%M"), mood=mood)
         return out
 
     # ---------- 好奇心与世界模型 ----------
