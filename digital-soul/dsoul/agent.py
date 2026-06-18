@@ -278,6 +278,28 @@ class Agent:
                 self._log_journal(who, utterance, txt, mark)
                 return result
 
+        # --- 安抚惊惧（高优先）：怕黑/噩梦/独自在家，立刻稳住给安全感 ---
+        if action is None and who.get("obey"):
+            from .comfort_fear import senses_fear
+            if senses_fear(utterance):
+                txt = self.reassure_fear(utterance, name=who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="惧", topic="安抚")
+                    self._log_journal(who, utterance, txt, "comfort_fear")
+                    return result
+
+        # --- 和事佬：家人闹别扭，不偏帮、顺顺气、搭个台阶 ---
+        if action is None and who.get("obey"):
+            from .mediate import senses_conflict
+            if senses_conflict(utterance):
+                txt = self.mediate_conflict(utterance, name=who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "mediate")
+                    return result
+
         # --- 报喜：家人有了好消息，由衷替TA高兴（并记进里程碑）---
         # 排除"送什么礼/买什么礼"这类求助——那是要送礼参考，不是报喜
         if action is None and who.get("obey") and not any(
@@ -1686,6 +1708,16 @@ class Agent:
         """有人累了/难过了，以"我就在身边"的暖意接住。"""
         from .companion import comfort
         return comfort(utterance, name=name or "")
+
+    def reassure_fear(self, utterance="", name="") -> str:
+        """夜里怕黑/做噩梦/独自在家，立刻稳住、给安全感。"""
+        from .comfort_fear import reassure
+        return reassure(utterance, name=name, seed=utterance)
+
+    def mediate_conflict(self, utterance="", name="") -> str:
+        """家人闹别扭，当个不偏帮的和事佬。"""
+        from .mediate import mediate
+        return mediate(utterance, name=name, seed=utterance)
 
     # ---------- 打气 / 报喜（替家人惦记、由衷高兴）----------
     def cheer_on(self, utterance, name="") -> str:
