@@ -242,18 +242,21 @@ class Agent:
                 self._log_journal(who, utterance, prop["reply"], f"propose:{prop['agent']}")
                 return result
 
-        # --- 老伴思念（最高情感优先）：另一半说"我想你了/睡不着"，像本人那样温柔接住 ---
+        # --- 老伴情感（最高优先）：另一半思念/睡不着 → 接住；闹脾气/委屈 → 哄好 ---
         if action is None and who.get("obey") and getattr(self, "spouse", None) \
                 and self.is_my_spouse(who.get("name"), who.get("relation")):
-            from .spouse import senses_longing
+            from .spouse import senses_longing, senses_upset
+            txt, mark, topic = "", "", ""
             if senses_longing(utterance):
-                txt = self.comfort_spouse(utterance)
-                if txt:
-                    result["reply"] = txt
-                    if self.social is not None:
-                        self.social.note(who.get("name"), emotion="爱", topic="思念")
-                    self._log_journal(who, utterance, txt, "spouse_comfort")
-                    return result
+                txt, mark, topic = self.comfort_spouse(utterance), "spouse_comfort", "思念"
+            elif senses_upset(utterance):
+                txt, mark, topic = self.soothe_spouse(utterance), "spouse_soothe", "哄"
+            if txt:
+                result["reply"] = txt
+                if self.social is not None:
+                    self.social.note(who.get("name"), emotion="爱", topic=topic)
+                self._log_journal(who, utterance, txt, mark)
+                return result
 
         # --- 我们的故事 / 约定（"咱俩怎么认识的" / "我们的约定"）---
         if action is None and who.get("obey") and getattr(self, "spouse", None):
@@ -271,6 +274,22 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, us, txt, "promises")
+                    return result
+            if any(k in us for k in ("写封情书", "写封信", "给我写信", "写信给我", "写封家书",
+                                     "给我写封")) and self.is_my_spouse(who.get("name"),
+                                                                       who.get("relation")):
+                occ = "纪念日" if "纪念" in us else ("思念" if "想" in us else "")
+                txt = self.write_love_letter(occ)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, us, txt, "love_letter")
+                    return result
+            if any(k in us for k in ("晚安", "睡了", "睡觉了", "我去睡")) and \
+                    self.is_my_spouse(who.get("name"), who.get("relation")):
+                txt = self.goodnight_spouse()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, us, txt, "goodnight")
                     return result
 
         # --- 行为习惯（"你在干嘛/这会儿在做什么"）：说出 TA 此刻惯常的活动 ---
@@ -1264,6 +1283,34 @@ class Agent:
         """老伴流露思念/孤独时，像本人那样温柔接住。"""
         from .spouse import comfort_lonely
         return comfort_lonely(getattr(self, "spouse", None), utterance)
+
+    def soothe_spouse(self, utterance="") -> str:
+        """老伴闹脾气/受委屈时，认个软把人哄好。"""
+        from .spouse import soothe
+        return soothe(getattr(self, "spouse", None), utterance)
+
+    def goodnight_spouse(self, now=None) -> str:
+        """夜里给老伴道一声晚安（限傍晚到深夜；非此时段返回空）。"""
+        from datetime import datetime
+        from .spouse import goodnight
+        if not getattr(self, "spouse", None):
+            return ""
+        hour = (now or datetime.now()).hour
+        if hour < 20 and hour > 4:                        # 只在 20:00–次日4:59 道晚安
+            return ""
+        return goodnight(self.spouse, now)
+
+    def write_love_letter(self, occasion="") -> str:
+        """以本人口吻给老伴写一封情书（有大模型则润色，否则用模板）。"""
+        from .loveletter import compose_love_letter
+        if not getattr(self, "spouse", None):
+            return ""
+        mems = []
+        if self.memory is not None:
+            name = self.spouse.get("name", "")
+            mems = [it["text"] for _, it in self.memory.recall(name or "老伴", k=3)]
+        return compose_love_letter(self.spouse, identity=self.identity,
+                                   memories=mems, occasion=occasion, llm=self.llm)
 
     def spouse_anniversary(self, now=None) -> str:
         from .spouse import anniversary_words

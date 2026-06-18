@@ -23,6 +23,10 @@ SPOUSE_RELATIONS = ("老伴", "老婆子", "老头子", "老婆", "老公", "妻
 _LONGING = ("想你", "想念你", "好想你", "想你了", "好孤单", "孤独", "睡不着", "一个人",
             "没意思", "舍不得", "撑不下去", "熬不住", "好寂寞", "你走了", "你不在")
 
+# 老伴在闹脾气/受了委屈/心烦时的关键词
+_UPSET = ("生气", "气死", "烦死", "好烦", "委屈", "难受", "不开心", "心烦", "吵架",
+          "受不了", "憋屈", "窝火", "郁闷", "气人", "怄气")
+
 
 def _find_spouse(family, relationships):
     """从 family.yaml / relationships.yaml 里找出老伴的 (名字, 关系)。"""
@@ -175,3 +179,34 @@ def comfort_lonely(profile, utterance="") -> str:
     elif profile.get("promises"):
         lines.append(f"记着我们的约定——{profile['promises'][0]}")
     return " ".join(lines)
+
+
+def senses_upset(utterance) -> bool:
+    """老伴是不是在闹脾气/受委屈/心烦。"""
+    u = utterance or ""
+    return any(k in u for k in _UPSET)
+
+
+def soothe(profile, utterance="") -> str:
+    """老伴闹脾气/受了委屈，像本人那样先认个软、把人哄好。"""
+    if not profile:
+        return ""
+    call = call_name(profile)
+    lines = [f"哎，{call}，别气了，是我不好，先消消气。"]
+    end = pick_endearment(profile, utterance)
+    if end:
+        lines.append(end)
+    lines.append("有什么慢慢跟我说，我听着呢。")
+    return " ".join(lines)
+
+
+def goodnight(profile, now=None) -> str:
+    """夜里对老伴的一句晚安（昵称 + 一句暖话 + 守着你）。"""
+    if not profile:
+        return ""
+    call = call_name(profile)
+    end = pick_endearment(profile, "晚安")
+    base = f"{call}，不早了，早点歇着。"
+    if end:
+        base += " " + end
+    return base + " 我守着你，做个好梦。"

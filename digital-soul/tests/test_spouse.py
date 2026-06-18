@@ -7,9 +7,9 @@ from datetime import datetime
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from dsoul.spouse import (  # noqa: E402
-    anniversary_words, call_name, care_words, comfort_lonely, is_anniversary,
-    is_spouse, love_story, pick_endearment, senses_longing, spouse_profile,
-    years_married,
+    anniversary_words, call_name, care_words, comfort_lonely, goodnight,
+    is_anniversary, is_spouse, love_story, pick_endearment, senses_longing,
+    senses_upset, soothe, spouse_profile, years_married,
 )
 
 CFG = {
@@ -91,6 +91,23 @@ def test_call_and_endearment():
     assert call_name({}) == "老伴"
     assert pick_endearment(p) in CFG["endearments"]
     assert pick_endearment({}) == ""
+
+
+def test_upset_and_soothe():
+    p = spouse_profile(CFG)
+    assert senses_upset("今天真把我气死了")
+    assert senses_upset("好委屈")
+    assert not senses_upset("今天挺顺心")
+    s = soothe(p, "我好烦")
+    assert "老婆子" in s and "别气了" in s
+    assert soothe({}, "烦") == ""
+
+
+def test_goodnight():
+    p = spouse_profile(CFG)
+    g = goodnight(p)
+    assert "老婆子" in g and "做个好梦" in g
+    assert goodnight({}) == ""
 
 
 if __name__ == "__main__":
