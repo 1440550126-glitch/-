@@ -246,18 +246,25 @@ function moveEntity(sb, name, to) {
   sb.characters ||= []; sb.scenes ||= []; sb.props ||= [];
   const buckets = { character: sb.characters, scene: sb.scenes, prop: sb.props };
   let ent = null, from = null;
+  // 扫描所有桶：可能被同时塞进多个桶——首个命中留作迁移源，其余同名一律移除（彻底去重，不再只处理第一个桶）
   for (const t of ['character', 'scene', 'prop']) {
-    const i = buckets[t].findIndex((x) => x && x.name === name);
-    if (i >= 0) { ent = buckets[t][i]; from = t; if (from !== to) buckets[t].splice(i, 1); break; }
+    for (let i = buckets[t].length - 1; i >= 0; i--) {
+      if (!buckets[t][i] || buckets[t][i].name !== name) continue;
+      if (!ent) { ent = buckets[t][i]; from = t; }
+      if (t !== to) buckets[t].splice(i, 1);
+    }
   }
   if (!ent || from === to) return null;
   if (ent.key) for (const sh of (sb.shots || [])) {
     if (from === 'character') sh.characters = (sh.characters || []).filter((k) => k !== ent.key);
     if (from === 'scene' && sh.scene === ent.key) sh.scene = '';   // 清掉悬空场景引用，重排时回落默认场景
   }
-  const moved = { key: ent.key, name: ent.name, desc: ent.desc || ent.image_prompt || '', image_prompt: '' };
-  if (to === 'character') { moved.role = ent.role || '角色'; moved.gender = ent.gender || ''; }
-  buckets[to].push(moved);
+  // 目标桶尚无同名才添加，避免重复
+  if (!buckets[to].some((x) => x && x.name === name)) {
+    const moved = { key: ent.key, name: ent.name, desc: ent.desc || ent.image_prompt || '', image_prompt: '' };
+    if (to === 'character') { moved.role = ent.role || '角色'; moved.gender = ent.gender || ''; }
+    buckets[to].push(moved);
+  }
   return { name, from, to };
 }
 
@@ -267,32 +274,39 @@ function applyLearnedLabels(sb) {
   for (const [name, to] of Object.entries(labels)) moveEntity(sb, name, to);
 }
 
-/** 把被 LLM 误放进 characters 的物件迁回 props（如"能源核心""数据芯片""净水囊"），就地修改 sb */
+/** 把被 LLM 误放进 characters 的物件迁回 props（如"能源核心""数据芯片""净水囊"），并做跨桶去重，就地修改 sb */
 function reclassifyProps(sb) {
   if (!Array.isArray(sb.characters)) return;
-  const propNames = new Set((sb.props || []).map((p) => p.name));
+  sb.props ||= []; sb.scenes ||= [];
+  const propNames = new Set(sb.props.map((p) => p.name));
+  const sceneNames = new Set(sb.scenes.map((s) => s.name));
   const keep = [];
   for (const c of sb.characters) {
     const name = String(c.name || '');
     const desc = String(c.desc || '');
-    // 用户已确认为角色的名字 → 权威保留，不受启发式干扰（Agent 已"学会"）
-    if (learnedTypeOf(name) === 'character') { keep.push(c); continue; }
+    // 用户已确认为角色的名字 → 权威保留，并清掉其它桶里的同名条目（人物优先，杜绝重复）
+    if (learnedTypeOf(name) === 'character') {
+      sb.props = sb.props.filter((p) => p.name !== name);
+      sb.scenes = sb.scenes.filter((s) => s.name !== name);
+      keep.push(c); continue;
+    }
+    // 同名已存在于道具/场景桶 → 多为大模型把同一条目同时塞进两个桶，丢弃这条重复的人物条目
+    // （道具/场景已正确识别，优先保留，杜绝"人物识别里还有那个道具"的重复）
+    if (propNames.has(name) || sceneNames.has(name)) continue;
     // 描述里有"性格/眼神/穿着/发型/身材/职业"等真人线索才算真人（性别字段易被大模型瞎填，不作准）
     const personDesc = PERSON_HINT.test(desc);
     // 名字以物体名词结尾 → 强判道具（无视瞎填的性别与姓氏子串）；或中部含物件词且无任何人物线索
     const isProp = (STRONG_OBJECT.test(name) && !personDesc)
       || (PROP_RE.test(name) && !c.gender && !personDesc && !PERSON_HINT.test(name));
     if (isProp) {
-      if (!propNames.has(name)) {
-        (sb.props ||= []).push({ key: c.key, name, desc: desc || c.image_prompt || '', image_prompt: c.image_prompt || '' });
-        propNames.add(name);
-      }
+      sb.props.push({ key: c.key, name, desc: desc || c.image_prompt || '', image_prompt: c.image_prompt || '' });
+      propNames.add(name);
     } else keep.push(c);
   }
   sb.characters = keep;
 }
 
-function normalizeStoryboard(sb) {
+export function normalizeStoryboard(sb) {
   applyLearnedLabels(sb);   // 先用人工校正记忆归位（Agent 进化），再跑启发式
   reclassifyProps(sb);
   const out = {

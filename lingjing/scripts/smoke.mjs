@@ -44,7 +44,33 @@ async function api(method, p, body, token) {
 }
 
 try {
-  console.log('\n— 启动与基础 —');
+  console.log('\n— 实体跨桶去重（单元） —');
+  // 隔离临时库导入流水线，验证「同名同时出现在 characters 与 props」时只保留道具、人物里不残留
+  process.env.LINGJING_DB_PATH = path.join(TMP, 'unit.sqlite');
+  process.env.LINGJING_UPLOAD_DIR = path.join(TMP, 'unit-up');
+  const { normalizeStoryboard } = await import(path.join(ROOT, 'server', 'lib', 'pipeline.js'));
+  // 模拟大模型把「能源核心」既塞进角色（还瞎填了性别/拟人描述）又塞进道具的脏数据
+  const dupSb = normalizeStoryboard({
+    title: '去重测试', style: '电影写实',
+    characters: [
+      { key: 'c1', name: '林夏', role: '主角', gender: '女', desc: '28岁女性，干练短发，沉着冷静' },
+      { key: 'c2', name: '能源核心', role: '配角', gender: '女', desc: '散发蓝光、低声嗡鸣的神秘存在' }
+    ],
+    scenes: [{ key: 's1', name: '主控室', desc: '冷色调机房' }],
+    props: [{ key: 'p1', name: '能源核心', desc: '蓝色晶体反应堆核心' }],
+    shots: [{ key: 'sh1', order: 1, scene: 's1', characters: ['c1', 'c2'], action: '林夏注视能源核心' }]
+  });
+  const charNames = dupSb.characters.map((c) => c.name);
+  const propNames = dupSb.props.map((p) => p.name);
+  ok(!charNames.includes('能源核心'), '跨桶去重：道具不再残留在人物列表');
+  ok(propNames.filter((n) => n === '能源核心').length === 1, '跨桶去重：道具在道具列表中仅一份');
+  ok(charNames.includes('林夏'), '跨桶去重：真人角色保留');
+  // 分镜对已移除角色的引用应被清掉，不留悬空 key
+  const c2gone = !dupSb.characters.some((c) => c.name === '能源核心');
+  const danglingRef = dupSb.shots.some((sh) => (sh.characters || []).some((k) => !dupSb.characters.find((c) => c.key === k)));
+  ok(c2gone && !danglingRef, '跨桶去重：分镜不残留悬空角色引用');
+
+  console.log('— 启动与基础 —');
   const boot = await until(async () => (await api('GET', '/api/bootstrap')).data, 10000);
   ok(boot.app.name === '灵境AI', 'bootstrap 返回应用信息');
   ok(/^ljk_/.test(boot.agent_token), '首次启动自动生成 Agent Token');
