@@ -490,6 +490,77 @@ function apiPanel(team) {
 }
 
 // ---------------- 作战室：实时直播 ----------------
+// 单个协作步骤节点（作战室 + 公开分享页共用）
+function stepNode(s) {
+  const running = s.status === 'running';
+  if (s.phase === 'tool') {
+    return h('div', { class: 'lz-step tool' },
+      h('div', { class: 'lz-tool-line' }, '🔧 ', h('b', {}, s.agent_name), ' 调用 ', h('code', {}, String(s.title || '').replace('调用工具 · ', '')), running ? h('span', { class: 'lz-dots' }, '…') : null),
+      s.tool_result ? h('div', { class: 'lz-tool-out' }, String(s.tool_result).slice(0, 500)) : null);
+  }
+  const phaseCls = { plan: 'plan', act: 'act', synthesize: 'synth', system: 'sys' }[s.phase] || '';
+  const badge = { plan: '编排官拆解', synthesize: '总编整合', system: '系统' }[s.phase] || '';
+  return h('div', { class: 'lz-step ' + phaseCls + (running ? ' running' : '') },
+    h('div', { class: 'lz-step-h' },
+      h('span', { class: 'lz-ava' }, s.agent_avatar || '🛰'),
+      h('div', { style: { flex: '1' } },
+        h('div', { class: 'lz-step-name' }, s.agent_name, badge ? h('span', { class: 'lz-phase-b' }, badge) : null,
+          running ? h('span', { class: 'lz-work' }, '工作中', h('span', { class: 'lz-dots' }, '…')) : null),
+        s.title && s.phase !== 'synthesize' ? h('div', { class: 'lz-step-ti' }, s.title) : null)),
+    s.output ? (s.phase === 'synthesize' ? h('div', { class: 'lz-tip' }, '↓ 最终交付见下方') : h('div', { class: 'lz-step-out' }, mdBody(s.output)))
+      : (running ? null : h('div', { class: 'lz-step-out muted' }, '（无输出）')));
+}
+
+// 生成分享链接并弹窗
+async function shareRun(id) {
+  try { const { share_id } = await POST(`/api/runs/${id}/share`); shareModal(`${location.origin}/lingzhen#/s/${share_id}`); }
+  catch (e) { handleErr(e); }
+}
+function shareModal(url) {
+  const input = h('input', { class: 'lz-in', value: url, readonly: true, onclick: (e) => e.target.select() });
+  modal(h('div', { class: 'lz-up' },
+    h('div', { class: 'lz-up-i' }, '🔗'),
+    h('h3', {}, '分享这次协作'),
+    h('p', {}, '任何人打开链接都能看到这支团队的完整协作过程与交付（只读），并能一键来组建自己的。'),
+    h('div', { class: 'lz-key-row' }, input, h('button', { class: 'lz-btn', onclick: () => copy(url) }, '复制')),
+    h('a', { class: 'lz-btn ghost block', href: url, target: '_blank', rel: 'noopener' }, '在新标签预览')));
+}
+
+// 公开分享页（免登录只读，自带获客 CTA）
+function shareTopbar() {
+  const go = () => { location.hash = '#/'; };
+  return h('header', { class: 'lz-top' },
+    h('div', { class: 'lz-brand', onclick: go }, h('span', { class: 'lz-logo' }, '🛰'), h('div', {}, h('b', {}, '灵阵'), h('small', {}, 'AI 团队 · 对标扣子'))),
+    h('a', { class: 'lz-btn sm', onclick: go }, '进入灵阵 →'));
+}
+async function renderShare(shareId) {
+  document.title = '灵阵 · 协作分享';
+  mount(h('div', { class: 'lz-shell' }, shareTopbar(), h('main', { class: 'lz-main' }, spinner())));
+  let data;
+  try { data = await GET(`/api/public/share/${encodeURIComponent(shareId)}`); }
+  catch (e) { mount(h('div', { class: 'lz-shell' }, shareTopbar(), h('main', { class: 'lz-main' }, empty('分享不存在或已取消', e.message)))); return; }
+  const r = data.run;
+  const cta = (label) => { const b = h('button', { class: 'lz-btn xl' }, label); b.addEventListener('click', () => { location.hash = '#/'; }); return b; };
+  mount(h('div', { class: 'lz-shell' }, shareTopbar(),
+    h('main', { class: 'lz-main lz-share' },
+      h('div', { class: 'lz-share-hero' },
+        h('div', { class: 'lz-share-badge' }, '🛰 灵阵 · AI 团队协作回放'),
+        h('h1', {}, r.team_name),
+        h('p', { class: 'lz-rh-task' }, '🎯 ' + r.task),
+        h('div', { class: 'lz-share-meta' },
+          r.by_llm ? h('span', { class: 'lz-chip llm' }, '大模型协作') : h('span', { class: 'lz-chip local' }, '本地引擎'),
+          h('span', { class: 'lz-st done' }, '已完成 · ' + r.step_count + ' 步'))),
+      cta('✨ 我也要组建一支 AI 团队'),
+      h('div', { class: 'lz-tl-t' }, '协作过程'),
+      h('div', { class: 'lz-timeline' }, data.steps.map(stepNode)),
+      r.result ? h('div', { class: 'lz-result' },
+        h('div', { class: 'lz-result-h' }, h('span', {}, '🧩 最终交付'), h('button', { class: 'lz-btn mini ghost', onclick: () => copy(r.result) }, '复制')),
+        mdBody(r.result)) : null,
+      h('div', { class: 'lz-share-foot' },
+        h('p', {}, '这支团队由「灵阵」零代码组建 · 一句话，调动一支会分工的 AI 团队替你干活'),
+        cta('🚀 免费试一支团队')))));
+}
+
 async function renderRun(id) {
   mount(shell(spinner()));
   let init;
@@ -518,31 +589,15 @@ async function renderRun(id) {
     timeline.innerHTML = '';
     for (const s of [...stepsById.values()].sort((a, b) => a.idx - b.idx)) timeline.append(stepNode(s));
   }
-  function stepNode(s) {
-    const running = s.status === 'running';
-    if (s.phase === 'tool') {
-      return h('div', { class: 'lz-step tool' },
-        h('div', { class: 'lz-tool-line' }, '🔧 ', h('b', {}, s.agent_name), ' 调用 ', h('code', {}, String(s.title || '').replace('调用工具 · ', '')), running ? h('span', { class: 'lz-dots' }, '…') : null),
-        s.tool_result ? h('div', { class: 'lz-tool-out' }, String(s.tool_result).slice(0, 500)) : null);
-    }
-    const phaseCls = { plan: 'plan', act: 'act', synthesize: 'synth', system: 'sys' }[s.phase] || '';
-    const badge = { plan: '编排官拆解', synthesize: '总编整合', system: '系统' }[s.phase] || '';
-    return h('div', { class: 'lz-step ' + phaseCls + (running ? ' running' : '') },
-      h('div', { class: 'lz-step-h' },
-        h('span', { class: 'lz-ava' }, s.agent_avatar || '🛰'),
-        h('div', { style: { flex: '1' } },
-          h('div', { class: 'lz-step-name' }, s.agent_name, badge ? h('span', { class: 'lz-phase-b' }, badge) : null,
-            running ? h('span', { class: 'lz-work' }, '工作中', h('span', { class: 'lz-dots' }, '…')) : null),
-          s.title && s.phase !== 'synthesize' ? h('div', { class: 'lz-step-ti' }, s.title) : null)),
-      s.output ? (s.phase === 'synthesize' ? h('div', { class: 'lz-tip' }, '↓ 最终交付见下方') : h('div', { class: 'lz-step-out' }, mdBody(s.output)))
-        : (running ? null : h('div', { class: 'lz-step-out muted' }, '（无输出）')));
-  }
 
   function renderResult(r) {
     resultBox.innerHTML = '';
     if (r.status === 'done' && r.result) {
       resultBox.append(h('div', { class: 'lz-result' },
-        h('div', { class: 'lz-result-h' }, h('span', {}, '🧩 最终交付'), h('button', { class: 'lz-btn mini ghost', onclick: () => copy(r.result) }, '复制')),
+        h('div', { class: 'lz-result-h' }, h('span', {}, '🧩 最终交付'),
+          h('div', { class: 'lz-result-acts' },
+            h('button', { class: 'lz-btn mini ghost', onclick: () => shareRun(r.id) }, '🔗 分享'),
+            h('button', { class: 'lz-btn mini ghost', onclick: () => copy(r.result) }, '复制'))),
         mdBody(r.result),
         h('div', { class: 'lz-result-meta' }, `${r.step_count} 步 · ${r.by_llm ? '大模型协作' : '本地引擎'}${r.token_total ? ' · 约 ' + r.token_total + ' tokens' : ''}`),
         h('button', { class: 'lz-btn block', onclick: () => nav(`#/team/${r.team_id}`) }, '↻ 再派一个任务')));
@@ -1162,8 +1217,9 @@ async function renderAgentEdit(id) {
 // ---------------- 路由 ----------------
 const TITLES = { '': '团队广场', agents: '智能体工作室', agent: '智能体', kb: '知识库', triggers: '定时触发器', history: '运行记录', usage: '用量看板', pricing: '会员', new: '组建团队', edit: '编辑团队', team: '团队', run: '作战室', batch: '批量运行' };
 function route() {
-  if (!state.me) { renderLogin(); return; }
   const hash = location.hash || '#/';
+  if (hash.startsWith('#/s/')) return renderShare(hash.slice(4));   // 公开分享：免登录
+  if (!state.me) { renderLogin(); return; }
   const [path, p1] = hash.replace(/^#\//, '').split('/');
   document.title = '灵阵 · ' + (TITLES[path] ?? 'AI 团队');
   if (path === 'agents') return renderAgents();

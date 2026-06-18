@@ -316,6 +316,17 @@ a{cursor:pointer;color:inherit}
 .lz-chip-btn{text-align:left;background:var(--bg2);border:1px dashed var(--line);color:var(--mut);border-radius:10px;padding:8px 12px;font-size:12.5px;cursor:pointer;font-family:inherit;transition:.15s;max-width:100%}
 .lz-chip-btn:hover{border-color:var(--acc);color:var(--txt);border-style:solid}
 
+/* ---- 公开分享页 ---- */
+.lz-result-acts{display:flex;gap:6px}
+.lz-share-hero{text-align:center;padding:14px 0 6px}
+.lz-share-badge{display:inline-block;font-size:12px;color:var(--acc);background:rgba(110,168,254,.12);border:1px solid rgba(110,168,254,.3);border-radius:20px;padding:5px 14px;margin-bottom:12px}
+.lz-share-hero h1{font-size:26px;margin:0 0 10px}
+.lz-share-hero .lz-rh-task{display:inline-block;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 16px;color:var(--mut);font-size:14px;max-width:640px}
+.lz-share-meta{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:12px}
+.lz-share .lz-btn.xl{margin:18px auto;display:block;max-width:340px}
+.lz-share-foot{text-align:center;margin-top:30px;padding-top:24px;border-top:1px solid var(--line)}
+.lz-share-foot p{color:var(--mut);font-size:13px;margin-bottom:4px}
+
 /* ---- 弹窗 ---- */
 .lz-mask{position:fixed;inset:0;background:rgba(6,8,12,.72);backdrop-filter:blur(4px);z-index:80;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;transition:.2s}
 .lz-mask.show{opacity:1}

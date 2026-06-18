@@ -374,6 +374,33 @@ GET('/api/runs/:id', async (ctx) => {
   return { run: { ...run, plan: jparse(run.plan, null) }, steps: q.all('SELECT * FROM run_steps WHERE run_id = ? ORDER BY idx', run.id) };
 }, { auth: true });
 
+// 生成 / 取消 公开分享链接（只读作战室，免登录可看，用于传播获客）
+POST('/api/runs/:id/share', async (ctx) => {
+  const run = q.get('SELECT * FROM agent_runs WHERE id = ?', Number(ctx.params.id));
+  if (!run || run.user_id !== ctx.user.id) throw notFound();
+  if (run.status === 'running') throw bad('等这次运行结束再分享吧');
+  let sid = run.share_id;
+  if (!sid) { sid = uid('s_', 12); q.run('UPDATE agent_runs SET share_id = ? WHERE id = ?', sid, run.id); }
+  return { share_id: sid };
+}, { auth: true });
+
+DEL('/api/runs/:id/share', async (ctx) => {
+  const run = q.get('SELECT * FROM agent_runs WHERE id = ?', Number(ctx.params.id));
+  if (!run || run.user_id !== ctx.user.id) throw notFound();
+  q.run('UPDATE agent_runs SET share_id = NULL WHERE id = ?', run.id);
+  return { unshared: true };
+}, { auth: true });
+
+// 公开只读读取（免登录）：仅暴露协作过程与交付，不含用户身份
+GET('/api/public/share/:shareId', async (ctx) => {
+  const run = q.get('SELECT * FROM agent_runs WHERE share_id = ?', String(ctx.params.shareId));
+  if (!run) throw notFound('分享不存在或已取消');
+  return {
+    run: { team_name: run.team_name, strategy: run.strategy, task: run.task, status: run.status, result: run.result, by_llm: run.by_llm, step_count: run.step_count, started_at: run.started_at },
+    steps: q.all('SELECT idx, phase, agent_name, agent_avatar, title, output, tool, tool_result, status FROM run_steps WHERE run_id = ? ORDER BY idx', run.id)
+  };
+});
+
 // 批量运行结果（轮询用）
 GET('/api/runs/batch/:batchId', async (ctx) => {
   const items = q.all('SELECT id, task, status, result, step_count, by_llm, started_at, ended_at FROM agent_runs WHERE batch_id = ? AND user_id = ? ORDER BY id', ctx.params.batchId, ctx.user.id);
