@@ -120,9 +120,9 @@ def cmd_chat(args):
             print("再见 👋")
             break
         if line == "/help":
-            print(dim("/memory 记忆概览  /profile 画像  /skills 技能  /provider 后端  "
-                      "/forget <id> 删记忆  /distill <名> 把刚才任务存为技能  "
-                      "/new 新会话  /exit 退出"))
+            print(dim("/memory 记忆  /profile 画像  /skills 技能  /tools 工具  /provider 后端\n"
+                      "/usage 用量  /reminders 提醒  /persona [名] 人格  /ingest <路径> 摄入知识\n"
+                      "/forget <id> 删记忆  /distill <名> 存技能  /new 新会话  /exit 退出"))
             continue
         if line.startswith("/distill "):
             from .skills import distill_from_trace
@@ -159,6 +159,44 @@ def cmd_chat(args):
         if line == "/new":
             session = f"chat:{int(time.time())}"
             print(dim("已开启新会话"))
+            continue
+        if line == "/tools":
+            print(dim("可用工具：" + "、".join(app.tools.names())))
+            continue
+        if line == "/usage":
+            from .usage import UsageStore
+            us = UsageStore(app.cfg.db_path)
+            s = us.summary(); us.close()
+            print(dim(f"累计 {s['calls']} 次 · 入 {s['in_tok']} · 出 {s['out_tok']}"
+                      + (f" · ${s['cost']:.4f}" if s['cost'] else "")))
+            continue
+        if line == "/reminders" and app.memory:
+            rows = app.memory.pending_reminders()
+            print(dim("（无待办提醒）") if not rows else
+                  "\n".join(dim(f"  {time.strftime('%m-%d %H:%M', time.localtime(r['remind_at']))} "
+                                f"{r['text']}") for r in rows))
+            continue
+        if line.startswith("/persona"):
+            parts = line.split(maxsplit=1)
+            if len(parts) == 1:
+                cur = app.cfg.get("persona_active") or "（默认）"
+                names = ", ".join((app.cfg.get("personas", {}) or {}).keys())
+                print(dim(f"当前人格：{cur}　可选：{names or '无'}（/persona <名> 切换）"))
+            else:
+                name = parts[1].strip()
+                if name in (app.cfg.get("personas", {}) or {}):
+                    app.cfg.set("persona_active", name); app.cfg.save()
+                    print(dim(f"✦ 已切换人格 → {name}"))
+                else:
+                    print(dim(f"未找到人格：{name}"))
+            continue
+        if line.startswith("/ingest ") and app.memory:
+            from .ingest import ingest_path
+            p = Path(line.split(maxsplit=1)[1].strip()).expanduser()
+            if not p.exists():
+                print(dim(f"路径不存在：{p}")); continue
+            res = ingest_path(app.memory, p, provider=app.provider)
+            print(dim(f"✦ 已摄入 {res['files']} 文件 / {res['chunks']} 块"))
             continue
         streaming = (_TTY and app.cfg.get("ui.stream", True)
                      and not app.cfg.get("native_tools", False))
