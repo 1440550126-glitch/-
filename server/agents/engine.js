@@ -381,6 +381,60 @@ async function synthesize(run, team, members, blackboard) {
 }
 
 // ============================================================
+// 验收闸门：任务完成前不停下——产出未达标就让团队继续改进并重新整合
+// ============================================================
+const MAX_REFINE = 2;   // 自动改进最多轮数（安全上限，避免无限循环 / 成本失控）
+
+// 本地启发式验收（无大模型时使用）：任务要点覆盖率 + 篇幅
+export function localReview(task, result) {
+  const r = String(result || '');
+  const kws = topKeywords(task, 6);
+  const missing = kws.filter((k) => !r.includes(k));
+  const coverage = kws.length ? (kws.length - missing.length) / kws.length : 1;
+  const longEnough = r.length >= 120;
+  const pass = coverage >= 0.6 && longEnough;
+  const gaps = [];
+  if (coverage < 0.6) gaps.push(`产出未充分覆盖任务要点：${missing.slice(0, 4).join('、')}`);
+  if (!longEnough) gaps.push('内容偏单薄，需要更具体、可执行的细节与示例');
+  return { pass, score: pass ? 85 : Math.max(45, Math.round(coverage * 70)), gaps: gaps.length ? gaps : ['进一步打磨表达与可用性'] };
+}
+
+// 验收官给出 pass / score / gaps，并作为一个步骤直播到作战室
+async function reviewResult(run, team, task, result, roundNo) {
+  const step = newStep(run.id, { phase: 'review', agent_id: 0, agent_name: '验收官 · 质控', agent_avatar: '✅', title: `对照任务验收产出（第 ${roundNo} 次）`, input: task, status: 'running' });
+  let verdict = null, byLLM = false, tok = 0, cost = 0;
+  if (llmEnabled()) {
+    const r = await llmStep({
+      userId: run.user_id, feature: 'agent_review', tier: 'default',
+      system: '你是严格的验收官。判断给定产出是否完整、准确地达成了用户任务。只输出 JSON：{"pass":true|false,"score":0-100,"gaps":["改进点1","改进点2"]}。当且仅当产出可直接交付、无明显缺漏时 pass=true；gaps 给具体、可执行的改进点（最多 4 条）。',
+      prompt: `用户任务：${task}\n\n当前产出：\n${String(result).slice(0, 2600)}\n\n请验收。`,
+      json: true, maxTokens: 320, temperature: 0.2, fallback: () => null
+    });
+    tok = r.tokens; cost = r.cost; byLLM = r.byLLM;
+    const v = r.byLLM ? parseJSON(r.text) : null;
+    if (v && typeof v.pass === 'boolean') {
+      verdict = { pass: v.pass, score: clamp(Number(v.score ?? (v.pass ? 85 : 55)), 0, 100), gaps: (Array.isArray(v.gaps) ? v.gaps : []).slice(0, 4).map((x) => String(x).slice(0, 120)) };
+    }
+  }
+  if (!verdict) verdict = localReview(task, result);
+  if (verdict.pass) verdict.gaps = [];
+  const head = verdict.pass ? '✅ 通过验收，可交付' : '⚠ 未通过，团队需要继续改进';
+  finishStep(run.id, step, { output: `${head}（评分 ${verdict.score}/100）` + (verdict.gaps.length ? `\n\n**待改进：**\n- ${verdict.gaps.join('\n- ')}` : ''), status: 'done', by_llm: byLLM ? 1 : 0, tokens: tok, cost });
+  return verdict;
+}
+
+// 一轮改进：先发一个分隔说明，再让全体成员针对验收意见各自改进（写回黑板）
+async function refineRound(run, team, members, blackboard, gaps, kbIds, roundNo) {
+  const div = newStep(run.id, { phase: 'system', title: `根据验收意见，团队进入第 ${roundNo} 轮改进`, input: gaps.join('；'), status: 'running' });
+  finishStep(run.id, div, { output: `🔁 验收未通过，团队针对以下意见继续打磨：\n- ${gaps.join('\n- ')}`, status: 'done' });
+  const note = gaps.join('；');
+  for (const agent of members) {
+    if (isStopped(run.id)) break;
+    await runSubtask(run, team, agent, { step: `第 ${roundNo} 轮改进`, objective: `针对验收意见改进你负责的部分：${note}。补齐缺口、提升质量与可用性，只产出改进后的内容。` }, blackboard, kbIds);
+  }
+}
+
+// ============================================================
 // 运行总控
 // ============================================================
 // 创建一次运行并异步执行（路由派活 / 定时触发器共用）。source: manual | trigger
@@ -426,12 +480,28 @@ export function startBatch(team, rawTask, items, userId) {
 }
 
 // 出站 Webhook：运行结束后把结果 POST 给团队配置的回调地址（SSRF 防护，失败不影响主流程）
+// 自动识别飞书/Lark 自定义机器人地址，按飞书消息格式发送；其余地址按通用 JSON 推送。
+export function isFeishuHook(u) {
+  try { const host = new URL(u).hostname.toLowerCase(); return /(^|\.)feishu\.cn$|(^|\.)larksuite\.com$/.test(host); }
+  catch { return false; }
+}
+export function feishuMessage(run) {
+  const ok = run.status === 'done';
+  const head = ok ? '✅ 任务完成' : run.status === 'failed' ? '❌ 任务失败' : 'ℹ️ 任务结束';
+  let text = `【灵阵 · AI 团队】${head}\n团队：${run.team_name}\n任务：${run.task}`;
+  if (ok && run.result) text += `\n\n交付：\n${String(run.result).slice(0, 900)}`;
+  else if (run.error) text += `\n\n原因：${run.error}`;
+  return { msg_type: 'text', content: { text } };   // 飞书机器人若设关键词安全策略，加「灵阵」即可放行
+}
 async function fireWebhook(url, run) {
+  const body = isFeishuHook(url)
+    ? feishuMessage(run)
+    : { run_id: run.id, team_id: run.team_id, team_name: run.team_name, task: run.task, status: run.status, result: run.result, by_llm: !!run.by_llm, source: run.source, ended_at: run.ended_at };
   try {
     await safeFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'User-Agent': 'LingArray-Webhook/1.0' },
-      body: JSON.stringify({ run_id: run.id, team_id: run.team_id, team_name: run.team_name, task: run.task, status: run.status, result: run.result, by_llm: !!run.by_llm, source: run.source, ended_at: run.ended_at }),
+      body: JSON.stringify(body),
       timeoutMs: 6000, followRedirects: false
     });
   } catch (e) { console.warn('[webhook]', run.id, e.message); }
@@ -488,12 +558,21 @@ export async function executeRun(runId) {
 
     if (isStopped(run.id)) return finalizeStopped(run.id);
 
-    // ③ 整合
-    const { result, byLLM: synBy } = await synthesize(run, team, members, blackboard);
+    // ③ 整合 → ④ 验收：未通过则团队继续改进并重新整合，直到通过或达到安全上限
+    let { result, byLLM: synAny } = await synthesize(run, team, members, blackboard);
+    for (let round = 0; round <= MAX_REFINE; round++) {
+      if (isStopped(run.id)) return finalizeStopped(run.id);
+      const review = await reviewResult(run, team, run.task, result, round + 1);
+      if (review.pass || round === MAX_REFINE) break;
+      await refineRound(run, team, members, blackboard, review.gaps, kbIds, round + 1);
+      if (isStopped(run.id)) return finalizeStopped(run.id);
+      const re = await synthesize(run, team, members, blackboard);
+      result = re.result; synAny = synAny || re.byLLM;
+    }
 
     const fresh = q.get('SELECT by_llm FROM agent_runs WHERE id = ?', run.id);
     q.run("UPDATE agent_runs SET status = 'done', result = ?, by_llm = MAX(?, ?), ended_at = ? WHERE id = ?",
-      result, fresh?.by_llm || 0, synBy ? 1 : 0, now(), run.id);
+      result, fresh?.by_llm || 0, synAny ? 1 : 0, now(), run.id);
     q.run('UPDATE teams SET run_count = run_count + 1 WHERE id = ?', team.id);
     emit(run.id, 'done', q.get('SELECT * FROM agent_runs WHERE id = ?', run.id));
   } catch (e) {

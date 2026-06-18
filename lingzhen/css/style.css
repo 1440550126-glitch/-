@@ -316,6 +316,10 @@ a{cursor:pointer;color:inherit}
 .lz-chip-btn{text-align:left;background:var(--bg2);border:1px dashed var(--line);color:var(--mut);border-radius:10px;padding:8px 12px;font-size:12.5px;cursor:pointer;font-family:inherit;transition:.15s;max-width:100%}
 .lz-chip-btn:hover{border-color:var(--acc);color:var(--txt);border-style:solid}
 
+/* ---- 验收官步骤 ---- */
+.lz-step.review{border-left:3px solid var(--ok)}
+.lz-step.review .lz-phase-b{background:rgba(70,211,154,.16);color:var(--ok)}
+
 /* ---- 个人中心 ---- */
 .lz-me{cursor:pointer}
 .lz-me-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}

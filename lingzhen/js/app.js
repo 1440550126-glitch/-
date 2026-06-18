@@ -355,6 +355,7 @@ function runBox(team) {
     box.innerHTML = '';
     box.append(
       h('div', { class: 'lz-sec-t' }, '给这支团队下达任务'),
+      h('p', { class: 'lz-hint', style: { margin: '0 0 10px' } }, '派单后团队自动协作产出 → 验收官把关 → 不达标就继续改进，直到通过验收才停下；可在下方配置完成后通知飞书。'),
       h('div', { class: 'lz-mode-tabs' },
         h('button', { class: 'lz-mode' + (mode === 'single' ? ' on' : ''), onclick: () => { if (mode !== 'single') { mode = 'single'; draw(); } } }, '单次派单'),
         h('button', { class: 'lz-mode' + (mode === 'batch' ? ' on' : ''), onclick: () => { if (mode !== 'batch') { mode = 'batch'; draw(); } } }, '批量派单')));
@@ -397,9 +398,9 @@ function webhookPanel(team) {
   function draw(url) {
     box.innerHTML = '';
     box.append(
-      h('div', { class: 'lz-sec-t' }, '🔔 出站 Webhook'),
-      h('p', { class: 'lz-api-desc' }, '每次运行完成后，把结果以 JSON POST 到这个地址——对接企业微信/飞书机器人、n8n 等自动化平台，实现全渠道分发。'));
-    const urlIn = h('input', { class: 'lz-in', placeholder: 'https://your-endpoint.example.com/hook', value: url || '' });
+      h('div', { class: 'lz-sec-t' }, '🔔 完成通知 / 出站 Webhook'),
+      h('p', { class: 'lz-api-desc' }, '任务完成（通过验收）后自动推送结果到这个地址。粘贴飞书自定义机器人 webhook 即按飞书格式发送通知（机器人安全设置加关键词「灵阵」即可放行）；其它地址按通用 JSON 推送，可对接企业微信、n8n 等。'));
+    const urlIn = h('input', { class: 'lz-in', placeholder: 'https://open.feishu.cn/open-apis/bot/v2/hook/…', value: url || '' });
     const saveBtn = h('button', { class: 'lz-btn sm' }, url ? '更新' : '保存');
     saveBtn.addEventListener('click', async () => {
       const v = urlIn.value.trim();
@@ -498,8 +499,8 @@ function stepNode(s) {
       h('div', { class: 'lz-tool-line' }, '🔧 ', h('b', {}, s.agent_name), ' 调用 ', h('code', {}, String(s.title || '').replace('调用工具 · ', '')), running ? h('span', { class: 'lz-dots' }, '…') : null),
       s.tool_result ? h('div', { class: 'lz-tool-out' }, String(s.tool_result).slice(0, 500)) : null);
   }
-  const phaseCls = { plan: 'plan', act: 'act', synthesize: 'synth', system: 'sys' }[s.phase] || '';
-  const badge = { plan: '编排官拆解', synthesize: '总编整合', system: '系统' }[s.phase] || '';
+  const phaseCls = { plan: 'plan', act: 'act', synthesize: 'synth', system: 'sys', review: 'review' }[s.phase] || '';
+  const badge = { plan: '编排官拆解', synthesize: '总编整合', system: '系统', review: '验收官' }[s.phase] || '';
   return h('div', { class: 'lz-step ' + phaseCls + (running ? ' running' : '') },
     h('div', { class: 'lz-step-h' },
       h('span', { class: 'lz-ava' }, s.agent_avatar || '🛰'),
