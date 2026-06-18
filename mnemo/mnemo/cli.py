@@ -636,9 +636,42 @@ def cmd_task(args):
     return 0
 
 
+def _daemon_pid(cfg):
+    import os
+    pf = cfg.home / "daemon.pid"
+    if not pf.is_file():
+        return None
+    try:
+        pid = int(pf.read_text().strip())
+    except (ValueError, OSError):
+        return None
+    try:
+        os.kill(pid, 0)            # 探活，不发真正信号
+        return pid
+    except OSError:
+        return None                # 进程已不在（陈旧 pid 文件）
+
+
 def cmd_daemon(args):
+    import os
+    import signal as _sig
+    if getattr(args, "status", False):
+        cfg = load_config(getattr(args, "home", None))
+        pid = _daemon_pid(cfg)
+        print(green(f"守护进程运行中（PID {pid}）") if pid else dim("守护进程未运行"))
+        return 0
+    if getattr(args, "stop", False):
+        cfg = load_config(getattr(args, "home", None))
+        pid = _daemon_pid(cfg)
+        if not pid:
+            print(dim("守护进程未运行")); return 0
+        os.kill(pid, _sig.SIGTERM)
+        print(green(f"已发送停止信号给 PID {pid}"))
+        return 0
     app = build_app(args, with_mcp=True)
     from .daemon import Scheduler, TaskStore
+    if not args.once and _daemon_pid(app.cfg):
+        print(yellow("已有守护进程在运行（mnemo daemon --status 查看）。")); return 1
     store = TaskStore(app.cfg.db_path)
     sched = Scheduler(app.agent, store)
     if args.once:
@@ -1071,6 +1104,8 @@ def build_parser() -> argparse.ArgumentParser:
     pd = sub.add_parser("daemon", help="启动守护进程，后台跑任务")
     pd.add_argument("--once", action="store_true", help="只巡检一次（用于测试/cron）")
     pd.add_argument("--interval", type=int, default=30, help="巡检间隔秒")
+    pd.add_argument("--status", action="store_true", help="查看守护进程是否在运行")
+    pd.add_argument("--stop", action="store_true", help="停止正在运行的守护进程")
 
     pa = sub.add_parser("audit", help="查看工具调用审计日志")
     pa.add_argument("--limit", type=int, default=30)

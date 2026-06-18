@@ -1071,6 +1071,20 @@ class TestHttpRetry(unittest.TestCase):
         self.assertEqual(calls["n"], 1)        # 4xx 不重试
 
 
+class TestDaemonControl(unittest.TestCase):
+    def test_pid_liveness(self):
+        import os
+        from mnemo.cli import _daemon_pid
+        tmp = tempfile.TemporaryDirectory()
+        cfg = load_config(tmp.name)
+        self.assertIsNone(_daemon_pid(cfg))                 # 无 pid 文件
+        (cfg.home / "daemon.pid").write_text(str(os.getpid()))
+        self.assertEqual(_daemon_pid(cfg), os.getpid())     # 当前进程存活
+        (cfg.home / "daemon.pid").write_text("999999")
+        self.assertIsNone(_daemon_pid(cfg))                 # 陈旧/不存在的 pid
+        tmp.cleanup()
+
+
 class TestWatch(unittest.TestCase):
     def test_file_watch_triggers_after_baseline(self):
         import os
