@@ -271,6 +271,8 @@ class Memory:
 
         返回新摘要文本；不足以压缩或无 provider 能力时返回 None。
         """
+        if getattr(provider, "name", "") == "offline":
+            return None                    # 离线兜底不会"真摘要"，避免污染上下文
         eps = self.session_episodes(session, limit=500)
         if len(eps) <= keep_recent:
             return None
