@@ -543,6 +543,18 @@ class Agent:
                 self._log_journal(who, utterance, txt, "appointments")
                 return result
 
+        # --- 真情流露（"你想我吗" / "你在乎我吗"）：不打太极，真心实意应一句 ---
+        if action is None and who.get("obey"):
+            from .affection import is_love_query, love_reply
+            if is_love_query(utterance):
+                txt = love_reply(who.get("relation", ""), seed=who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="爱", topic="情话")
+                    self._log_journal(who, utterance, txt, "affection")
+                    return result
+
         # --- 说说我自己（"你今天怎么样" / "你过得好吗"）：双向地聊，再把话转回给你 ---
         if action is None and who.get("obey"):
             from .self_share import is_about_me_query
