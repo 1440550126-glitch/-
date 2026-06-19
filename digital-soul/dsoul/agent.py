@@ -1571,6 +1571,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "dialect")
                     return result
 
+        # --- 手机帮手（"微信视频怎么打" / "字太小怎么调大" / "怎么连wifi"）---
+        if action is None and who.get("obey"):
+            from . import phone_help as _ph
+            _phcfg = self.identity if isinstance(self.identity, dict) else None
+            if _ph.is_phone_help(utterance, _phcfg):
+                txt = _ph.help_for(utterance, _phcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "phone_help")
+                    return result
+
         # --- 垃圾分类（"西瓜皮是什么垃圾" / "过期药怎么扔"）---
         if action is None and who.get("obey"):
             from . import garbage_sort as _gs
