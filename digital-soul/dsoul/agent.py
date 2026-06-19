@@ -768,6 +768,19 @@ class Agent:
                     self._log_journal(who, utterance, txt, "cuisines")
                     return result
 
+        # --- 吉祥寓意（"蝙蝠是什么寓意" / "为什么贴鱼"）：好彩头的讲究 ---
+        if action is None and who.get("obey"):
+            from . import auspicious as _au
+            _aucfg = self.identity if isinstance(self.identity, dict) else None
+            if _au.is_auspicious_query(utterance, _aucfg):
+                txt = _au.meaning_of(utterance, _aucfg)
+                if not txt and any(k in (utterance or "") for k in ("吉祥图案", "吉祥寓意", "好彩头")):
+                    txt = "讨彩头常用这些：" + "、".join(_au.symbols(_aucfg)[:8]) + "……想知道哪个的寓意跟我说。"
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "auspicious")
+                    return result
+
         # --- 传统手工艺（"剪纸怎么做" / "景泰蓝是什么" / "非遗有哪些"）---
         if action is None and who.get("obey"):
             from . import crafts as _cf
