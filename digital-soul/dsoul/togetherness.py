@@ -60,7 +60,8 @@ def is_accompany_request(utterance) -> bool:
     u = str(utterance or "")
     if not any(c in u for c in _CUES):
         return False
-    # "陪我"等 + 一件可一起做的事；或单纯"陪陪我/陪着我"
+    # 认得出一件可一起做的事 → 作伴；否则只接"纯陪着"（别抢"陪我动动脑/唱歌"等有专门去处的）
     if _find(u):
         return True
-    return any(k in u for k in ("陪我", "陪陪我", "陪着我", "陪我坐", "陪我待会"))
+    return any(k in u for k in ("陪陪我", "陪着我", "陪我坐", "陪我待会", "陪我会儿",
+                                "就陪陪", "陪我歇", "陪我待"))
