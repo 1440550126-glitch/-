@@ -146,6 +146,7 @@ class Agent:
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
         self._game_mode = None                                    # 正在玩的游戏（如"接龙"）
+        self._feihua_used: dict = {}                              # 飞花令各字已对过的句子（不重样）
         self._goodnight_day = None                                # 当晚是否已道过晚安（去重）
         self._ritual_fired: set = set()                           # 当天已唤过的日常默契（去重）
         self._companion_slot = None                               # 本时段是否已主动问候过（去重）
@@ -1630,6 +1631,16 @@ class Agent:
                 result["reply"] = txt
                 self._log_journal(who, utterance, txt, "brain_train")
                 return result
+
+        # --- 飞花令（"玩飞花令" / "来句带月的诗"）：对诗的雅游戏 ---
+        if action is None and who.get("obey"):
+            from .feihualing import is_feihualing
+            if is_feihualing(utterance):
+                txt = self.feihualing_handle(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "feihualing")
+                    return result
 
         # --- 绕口令（"来个绕口令" / "练练嘴"）：跟语音一脉，练嘴皮逗个乐 ---
         if action is None and who.get("obey"):
@@ -3747,6 +3758,27 @@ class Agent:
         clip = vb.pick(mood=mood, seed=utterance or "")
         play_clip(clip)                              # 尽力放音（无文件/无播放器则静默）
         return describe(clip)
+
+    def feihualing_handle(self, utterance="") -> str:
+        """飞花令：取（或随机）一个字，对一句带该字的名句，记着不重样，招呼你接。"""
+        from datetime import datetime
+
+        from . import feihualing as fh
+        cfg = self.identity if isinstance(self.identity, dict) else None
+        ch = fh.extract_char(utterance, cfg)
+        if not ch:
+            cs = fh.chars(cfg)
+            ch = cs[datetime.now().microsecond % len(cs)] if cs else ""
+        if not ch:
+            return ""
+        used = self._feihua_used.get(ch, [])
+        line = fh.a_line(ch, used=used, seed=utterance or "")
+        if not line:                                 # 这个字的句子对完了，重头来
+            self._feihua_used[ch] = []
+            line = fh.a_line(ch, seed=utterance or "")
+        if line:
+            self._feihua_used.setdefault(ch, []).append(line)
+        return f"「{ch}」字——{line}。该你了，对一句也带「{ch}」的。"
 
     def twister_handle(self, utterance="") -> str:
         """绕口令：要难的给难的，点了词给那条，否则随口来一条。"""
