@@ -39,6 +39,7 @@ from .opinions import collect_opinions
 from .perception import build_perception
 from .pets import PetBook
 from .plant_care import PlantBook
+from .poetry import collect as _collect_poems
 from .preferences import collect_preferences
 from .predict import Calibration
 from .persona import Persona
@@ -191,7 +192,8 @@ def build_agent(base_dir=None, robot=None, llm_model: str | None = None) -> Agen
                                          seed=_load_yaml(base / "config" / "countdown.yaml")),
                  todo=TodoList(base / "data" / "todo.json"),
                  belongings=Belongings(base / "data" / "belongings.json",
-                                       seed=_load_yaml(base / "config" / "belongings.yaml")))
+                                       seed=_load_yaml(base / "config" / "belongings.yaml")),
+                 poetry=_load_yaml(base / "config" / "poetry.yaml"))
 
 
 def _seed_memory(base: Path, memory) -> None:

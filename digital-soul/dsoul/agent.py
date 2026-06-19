@@ -46,7 +46,7 @@ class Agent:
                  music=None, plants=None, touch=None, understanding=None,
                  messages=None, vitals=None, board=None, growth=None,
                  pets=None, reminders=None, countdown=None, todo=None,
-                 belongings=None) -> None:
+                 belongings=None, poetry=None) -> None:
         self.identity = identity
         self.persona = persona
         self.memory = memory
@@ -139,6 +139,7 @@ class Agent:
         self.countdown = countdown                                # 倒计时（离过年/退休/高考还有几天）
         self.todo = todo                                          # 个人待办清单（自己的一张小清单）
         self.belongings = belongings                              # 找东西（钥匙/老花镜/存折搁哪了）
+        self.poetry = poetry                                      # 背诗：跟孙辈对诗/整首背
         self._noticed: set = set()                                # 已点破过的"门道"（当天去重）
         self._told_riddles: set = set()                           # 出过的谜语/急转弯（轮换）
         self._pending_riddle = None                               # 正等你猜的谜（题, 答案）
@@ -537,6 +538,16 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, utterance, txt, "dream_interpret")
+                    return result
+
+        # --- 背诗 / 对诗（"床前明月光下一句" / "背首静夜思"）---
+        if action is None and who.get("obey"):
+            from .poetry import is_poetry, next_line
+            if is_poetry(utterance) or next_line(utterance):
+                txt = self.poetry_handle(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "poetry")
                     return result
 
         # --- 生肖星座（"1948年属什么" / "三月八号什么星座"）---
@@ -2804,6 +2815,21 @@ class Agent:
             return ""
         mine = [it["what"] for it in self.board.for_member(name)]
         return ("今天轮到你：" + "、".join(mine) + "，别忘了。") if mine else ""
+
+    # ---------- 背诗 ----------
+    def poetry_handle(self, utterance) -> str:
+        from .poetry import collect, find_title, is_poetry, next_line, recite, titles
+        poems = collect(getattr(self, "poetry", None))
+        nl = next_line(utterance, poems)
+        if nl:
+            return nl + "。"
+        t = find_title(utterance, poems)
+        if t:
+            return recite(t, poems)
+        if is_poetry(utterance):
+            ts = titles(poems)
+            return recite(ts[0], poems) if ts else ""
+        return ""
 
     # ---------- 找东西 ----------
     def belongings_handle(self, utterance) -> str:
