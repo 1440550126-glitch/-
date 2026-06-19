@@ -753,6 +753,21 @@ class Agent:
                     self._log_journal(who, utterance, txt, "landmarks")
                     return result
 
+        # --- 八大菜系（"川菜有什么名菜" / "八大菜系是哪八个"）---
+        if action is None and who.get("obey"):
+            from . import cuisines as _cui
+            _cuicfg = self.identity if isinstance(self.identity, dict) else None
+            if _cui.is_cuisine_query(utterance, _cuicfg):
+                u2 = utterance or ""
+                if "菜系" in u2 and not _cui.find_cuisine(u2, _cuicfg):
+                    txt = _cui.eight_cuisines()
+                else:
+                    txt = _cui.about(u2, _cuicfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "cuisines")
+                    return result
+
         # --- 传统手工艺（"剪纸怎么做" / "景泰蓝是什么" / "非遗有哪些"）---
         if action is None and who.get("obey"):
             from . import crafts as _cf
