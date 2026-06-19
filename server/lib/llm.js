@@ -1,5 +1,6 @@
 import { q } from './db.js';
 import { now, dayCN, estimateTokens } from './util.js';
+import { open } from './secretbox.js';
 
 // ===== 提供商配置（OpenAI 兼容 Chat Completions；密钥只存在于服务端环境变量） =====
 const PROVIDER = process.env.LLM_PROVIDER || 'none';
@@ -28,10 +29,11 @@ function getUserLLM(userId) {
   const id = Number(userId);
   if (_userCache.has(id)) return _userCache.get(id);
   const row = q.get('SELECT * FROM user_llm WHERE user_id = ?', id);
-  const cfg = (row && row.api_key && row.base_url) ? {
+  const apiKey = row ? open(row.api_key) : '';   // 解密落库的 Key
+  const cfg = (row && apiKey && row.base_url) ? {
     provider: row.provider || 'custom',
     baseUrl: row.base_url.replace(/\/+$/, ''),
-    apiKey: row.api_key,
+    apiKey,
     models: { default: row.model_default || MODELS.default, premium: row.model_premium || row.model_default || MODELS.premium }
   } : null;
   _userCache.set(id, cfg);

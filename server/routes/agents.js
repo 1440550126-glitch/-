@@ -12,6 +12,7 @@ import { computeNext, fireTrigger, MIN_INTERVAL_MIN, MAX_TRIGGERS } from '../age
 import { assertSafeHop } from '../agents/safefetch.js';
 import { useQuota, quotaUsed, todayCostMicro, resolveLLM, invalidateUserLLM, chatLLM, userHasLLM } from '../lib/llm.js';
 import { LLM_PROVIDERS, findProvider } from '../lib/llm-providers.js';
+import { seal } from '../lib/secretbox.js';
 
 // ---------- 访问控制小工具 ----------
 const agentRow = (id) => q.get('SELECT * FROM agents WHERE id = ?', Number(id));
@@ -110,7 +111,8 @@ PUT('/api/me/llm', async (ctx) => {
   const provider = findProvider(b.provider) ? b.provider : 'custom';
   const base_url = sanitizeText(b.base_url, 200);
   const existing = q.get('SELECT api_key FROM user_llm WHERE user_id = ?', ctx.user.id);
-  const api_key = sanitizeText(b.api_key, 256) || existing?.api_key || '';   // 编辑时不重填 Key 则沿用旧的
+  const rawKey = sanitizeText(b.api_key, 256);
+  const api_key = rawKey ? seal(rawKey) : (existing?.api_key || '');   // 新 Key 加密落库；不重填则沿用旧的（已加密）
   const model_default = sanitizeText(b.model_default, 80);
   const model_premium = sanitizeText(b.model_premium, 80) || model_default;
   if (!/^https?:\/\/.+/.test(base_url)) throw bad('请填写有效的接口地址（base_url，需以 http(s):// 开头）');

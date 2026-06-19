@@ -55,12 +55,12 @@ function upgradeModal(msg) {
   modal(h('div', { class: 'lz-up' },
     h('div', { class: 'lz-up-i' }, '👑'),
     h('h3', {}, '今天的免费额度用完了'),
-    h('p', {}, msg || '免费版每天可运行 8 次 AI 团队。开通会员，每天 80 次，并解锁高级模型协作。'),
+    h('p', {}, msg || '免费每天可体验 8 次。订阅会员并自带大模型 Key，即可用自己的模型不限量跑。'),
     h('div', { class: 'lz-up-rows' },
-      h('div', {}, h('b', {}, '8 → 80'), h('small', {}, '每日团队运行')),
-      h('div', {}, h('b', {}, '高级模型'), h('small', {}, '更强编排产出')),
-      h('div', {}, h('b', {}, '¥9.9'), h('small', {}, '月卡 · 一杯奶茶'))),
-    h('button', { class: 'lz-btn block xl', onclick: () => { closeModal(); nav('#/pricing'); } }, '查看会员方案'),
+      h('div', {}, h('b', {}, '8 → ∞'), h('small', {}, '自带 Key 不限量')),
+      h('div', {}, h('b', {}, '自带模型'), h('small', {}, '任意 OpenAI 兼容')),
+      h('div', {}, h('b', {}, '¥39 起'), h('small', {}, '按月订阅'))),
+    h('button', { class: 'lz-btn block xl', onclick: () => { closeModal(); nav('#/pricing'); } }, '查看订阅方案'),
     h('button', { class: 'lz-btn ghost block', onclick: closeModal }, '明天再来')));
 }
 // 配额耗尽 → 转化弹窗；其余错误 → toast

@@ -1,9 +1,9 @@
-// 商业化目录：会员方案 / 高级额度包 / 预置头像（价格符合年轻人消费水平）
+// 商业化目录：会员方案 / 高级额度包 / 预置头像（按月订阅，定价低于市场、但非廉价）
 
 export const MEMBER_PLANS = [
-  { id: 'm1', name: '句灵会员 · 月卡', months: 1, price_fen: 990, blurb: '一杯奶茶钱，让文字活一个月' },
-  { id: 'm3', name: '句灵会员 · 季卡', months: 3, price_fen: 2680, blurb: '折合 8.9 元/月', tag: '推荐' },
-  { id: 'm12', name: '句灵会员 · 年卡', months: 12, price_fen: 8800, blurb: '折合 7.3 元/月', tag: '最划算' }
+  { id: 'm1', name: '句灵会员 · 月卡', months: 1, price_fen: 3900, blurb: '按月订阅，随时可停' },
+  { id: 'm3', name: '句灵会员 · 季卡', months: 3, price_fen: 9900, blurb: '折合 33 元/月', tag: '推荐' },
+  { id: 'm12', name: '句灵会员 · 年卡', months: 12, price_fen: 29900, blurb: '折合不到 25 元/月', tag: '最划算' }
 ];
 
 export const MEMBER_BENEFITS = [

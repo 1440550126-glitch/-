@@ -88,7 +88,7 @@ server.listen(PORT, () => {
   console.log(`  📱 用户端   http://localhost:${PORT}`);
   console.log(`  🛠  管理后台 http://localhost:${PORT}/admin`);
   console.log(`  🛰  灵阵独立站 http://localhost:${PORT}/lingzhen`);
-  console.log(`  🤖 大模型   ${llmEnabled() ? '已接入 ' + process.env.LLM_PROVIDER : '未配置（本地规则引擎模式，零成本可完整体验）'}\n`);
+  console.log(`  🤖 大模型   ${llmEnabled() ? '平台兜底 Key 已接入 ' + process.env.LLM_PROVIDER : '纯 BYOK：用户在「模型设置」自带 Key；未自带则走本地引擎'}\n`);
 });
 
 process.on('SIGINT', () => { console.log('\nbye~'); process.exit(0); });
