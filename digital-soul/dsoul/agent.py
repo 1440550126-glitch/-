@@ -540,6 +540,16 @@ class Agent:
                     self._log_journal(who, utterance, txt, "dream_interpret")
                     return result
 
+        # --- 对对子（"天对什么" / "来对个对子"）---
+        if action is None and who.get("obey"):
+            from .couplets import is_couplet, respond
+            if is_couplet(utterance):
+                txt = respond(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "couplet")
+                    return result
+
         # --- 背诗 / 对诗（"床前明月光下一句" / "背首静夜思"）---
         if action is None and who.get("obey"):
             from .poetry import is_poetry, next_line
