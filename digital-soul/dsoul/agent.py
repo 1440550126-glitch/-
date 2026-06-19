@@ -456,6 +456,16 @@ class Agent:
                     self._log_journal(who, utterance, txt, "comfort_anxiety")
                     return result
 
+        # --- 哄孩子（"孩子一直哭怎么办" / "娃不吃饭"）：温和带娃，先接情绪再想招 ---
+        if action is None and who.get("obey"):
+            from .soothe_child import is_child_soothing, soothe
+            if is_child_soothing(utterance):
+                txt = soothe(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "soothe_child")
+                    return result
+
         # --- 哄消气：闹脾气/受委屈/拌嘴时，不犟嘴，先认领情绪、给台阶、拉回暖处 ---
         if action is None and who.get("obey"):
             from . import coax as _coax
