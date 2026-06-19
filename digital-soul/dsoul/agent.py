@@ -338,6 +338,18 @@ class Agent:
                 self._log_journal(who, utterance, txt, mark)
                 return result
 
+        # --- 防诈骗（守护·高优先）：听出骗钱套路就立刻拦一句、给三条当下能做的 ---
+        if action is None and who.get("obey"):
+            from . import antifraud as af
+            if af.smells_like_scam(utterance) or af.is_fraud_question(utterance):
+                txt = self.antifraud_handle(utterance, who)
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="惧", topic="防诈")
+                    self._log_journal(who, utterance, txt, "antifraud")
+                    return result
+
         # --- 告别与释怀：来想念/告别的人说出不舍，以本人口吻温柔回应、给一份释怀（数字魂的本意）---
         if action is None and who.get("obey"):
             from .condolence import console, senses_mourning
@@ -3378,6 +3390,17 @@ class Agent:
         if not region:
             return "我能说几地的乡音呢——" + "、".join(dl.regions()) + "。你想听哪儿的？"
         return dl.demo(region)
+
+    def antifraud_handle(self, utterance="", who=None) -> str:
+        """防诈骗：闻出套路就拦一句给三条；直接问反诈就念几条防身顺口溜。"""
+        from . import antifraud as af
+        who = who or {}
+        name = who.get("name", "") if who.get("known") else ""
+        if af.smells_like_scam(utterance):
+            return af.warn(utterance=utterance, name=name)
+        if af.is_fraud_question(utterance):
+            return "我教你几条防身的：" + " ".join(af.tips()[:4]) + " 拿不准就打 96110。"
+        return ""
 
     def xiehouyu_handle(self, utterance="") -> str:
         """歇后语：认出前半截就接后半截+意思；泛泛求一句就随口来一条。"""
