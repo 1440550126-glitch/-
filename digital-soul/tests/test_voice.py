@@ -7,7 +7,10 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from dsoul.voice import Mouth, emotion_to_voice, voice_params  # noqa: E402
+from dsoul.voice import (  # noqa: E402
+    Mouth, _espeak_args, _say_args, detect_system_tts, emotion_to_voice,
+    voice_params,
+)
 
 
 def test_emotion_to_voice_mapping():
@@ -45,6 +48,38 @@ def test_external_tts_cmd_invoked():
     Mouth().speak("你好", profile={"tts_cmd": f"touch '{mark}'  # {{text}}"})
     assert os.path.exists(mark)                               # 外部克隆嗓音命令被调用
     os.remove(mark)
+
+
+def test_say_args_macos():
+    a = _say_args("你好", {"rate": 200, "voice": "Tingting"})
+    assert a[0] == "say" and "Tingting" in a and a[-1] == "你好"
+    assert "-r" in a and "200" in a
+
+
+def test_espeak_args_linux():
+    a = _espeak_args("espeak-ng")("你好", {"rate": 175, "volume": 1.0})
+    assert a[0] == "espeak-ng" and "zh" in a and a[-1] == "你好"
+
+
+def test_detect_system_tts_shape():
+    r = detect_system_tts()       # 有 say/espeak 则返回 (名, 构造函数)，否则 None
+    assert r is None or (isinstance(r, tuple) and len(r) == 2 and callable(r[1]))
+
+
+def test_speak_falls_back_to_system_tts():
+    import subprocess as sp
+    from dsoul import voice as V
+    m = Mouth.__new__(Mouth)               # 造一个"只有系统 TTS"的嘴
+    m.backend = "espeak-ng"
+    m._engine = None
+    m._syscmd = ("espeak-ng", V._espeak_args("espeak-ng"))
+    calls, orig = [], sp.run
+    sp.run = lambda args, **k: calls.append(args)
+    try:
+        m.speak("你好呀", mood="喜")
+    finally:
+        sp.run = orig
+    assert calls and calls[0][0] == "espeak-ng" and calls[0][-1] == "你好呀"
 
 
 if __name__ == "__main__":

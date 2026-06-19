@@ -49,7 +49,15 @@ def main() -> None:
     ears, mouth = Ears(), Mouth()
     name = agent.identity.get("name", "我")
     speaker = _owner(agent)
+    profile = agent.identity.get("voice")        # 本人嗓音档案（语速/音量/系统嗓音/克隆命令）
     print(f"🎧 语音对话 | 听:{ears.backend or '无→键盘'} | 说:{mouth.backend or '无→打印'}")
+    if mouth.backend in ("say", "espeak-ng", "espeak"):
+        print(f"   ✅ 用系统自带语音「{mouth.backend}」出声，零安装。"
+              + ("（Mac 想换中文女声：config/identity.yaml 里 voice.voice 填 Tingting）"
+                 if mouth.backend == "say" else ""))
+    elif mouth.backend is None:
+        print("   ⚠️ 没找到语音引擎。Mac 自带 say 通常就有；Linux 可 `apt install espeak-ng`；"
+              "或 `pip install pyttsx3`。")
     print("（说/输入 退出 结束）")
 
     while True:
@@ -71,7 +79,13 @@ def main() -> None:
             break
         res = agent.handle(speaker, text)
         print(f"{name}: {res['reply']}")
-        mouth.speak(res["reply"])
+        mood = None
+        if getattr(agent, "emotions", None) is not None:
+            try:
+                mood = agent.emotions.mood()[0]
+            except Exception:
+                mood = None
+        mouth.speak(res["reply"], mood=mood, profile=profile)   # 带情绪 + 本人嗓音说出来
 
 
 if __name__ == "__main__":

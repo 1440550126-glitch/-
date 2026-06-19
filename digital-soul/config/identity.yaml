@@ -18,3 +18,13 @@ daily_life:
   - "白天写代码、开会、带团队"
   - "晚饭后陪家人散步遛狗"
   - "周末打打篮球，或者在家捣鼓开源项目"
+
+# ---- 嗓音档案（让它「说话」，不只是聊天）----
+# 接上 Ollama 后用 `python scripts/voice_chat.py` 就能语音对话。
+# 说话引擎按优先级自动选：tts_cmd（声音克隆）> pyttsx3 > 系统自带（Mac 的 say / Linux 的 espeak）。
+# Mac 开箱即说；想要中文女声，voice 填 Tingting（先在「系统设置→辅助功能→朗读内容」里下载中文语音）。
+voice:
+  rate: 185           # 语速（词/分钟；情绪会在此基础上加减）
+  volume: 0.95        # 音量 0~1
+  voice: ""           # 系统嗓音名：Mac 如 Tingting/Sinji；留空用系统默认
+  # tts_cmd: "my-voice-clone --text '{text}'"   # 接本地声音克隆 CLI，用最像本人的嗓音说（含 {text}）

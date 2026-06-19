@@ -81,17 +81,54 @@ class Ears:
         return (result.get("text") or "").strip()
 
 
+def _say_args(text, v):
+    """macOS 自带 `say`（中文语音质量好、零安装）。"""
+    args = ["say"]
+    if v.get("voice"):
+        args += ["-v", str(v["voice"])]      # 如 Tingting（普通话女声）/ Sinji
+    r = int(v.get("rate") or 180)
+    args += ["-r", str(max(90, min(320, r)))]    # 词/分钟，随情绪变
+    args.append(text)
+    return args
+
+
+def _espeak_args(prog):
+    """Linux 的 espeak-ng / espeak，中文用 -v zh。"""
+    def build(text, v):
+        r = int(v.get("rate") or 175)
+        amp = int((v.get("volume") or 1.0) * 150)
+        return [prog, "-v", "zh", "-s", str(max(80, min(320, r))),
+                "-a", str(max(0, min(200, amp))), text]
+    return build
+
+
+def detect_system_tts():
+    """探测系统自带的语音命令：Mac 用 say，Linux 用 espeak。没有则 None。"""
+    import shutil
+    if shutil.which("say"):
+        return ("say", _say_args)
+    for prog in ("espeak-ng", "espeak"):
+        if shutil.which(prog):
+            return (prog, _espeak_args(prog))
+    return None
+
+
 class Mouth:
     def __init__(self) -> None:
         self.backend: str | None = None
         self._engine = None
+        self._syscmd = None
         try:
             import pyttsx3
 
             self._engine = pyttsx3.init()
             self.backend = "pyttsx3"
         except Exception:
-            self.backend = None
+            self._engine = None
+        if self.backend is None:                 # 没装 pyttsx3 就用系统自带 TTS
+            self._syscmd = detect_system_tts()
+            if self._syscmd:
+                self.backend = self._syscmd[0]
 
     @property
     def available(self) -> bool:
@@ -100,8 +137,8 @@ class Mouth:
     def speak(self, text: str, mood=None, profile=None) -> None:
         """播报。mood 让语速/音量随情绪变化；profile 是"本人嗓音档案"。
 
-        若 profile.tts_cmd 配了外部命令（含 {text}），就交给它——可接你本地的声音克隆 CLI，
-        用接近本人的嗓音说话。否则用系统 TTS（pyttsx3），再不行就打印。
+        优先级：profile.tts_cmd（外部声音克隆 CLI，最像本人）> pyttsx3 >
+        系统自带 TTS（Mac 的 say / Linux 的 espeak，零安装就能出声）> 打印文字。
         """
         v = voice_params(profile, mood) if profile else emotion_to_voice(mood)
         cmd = v.get("tts_cmd")
@@ -112,7 +149,7 @@ class Mouth:
                 return
             except Exception:
                 pass
-        if self.available:
+        if self.backend == "pyttsx3" and self._engine is not None:
             try:
                 self._engine.setProperty("rate", v["rate"])
                 self._engine.setProperty("volume", v["volume"])
@@ -122,9 +159,16 @@ class Mouth:
                 pass
             self._engine.say(text)
             self._engine.runAndWait()
-        else:
-            tag = f"（语气：{v.get('tone')}）" if v.get("tone") else ""
-            print(f"🔊（未装 TTS，用文字代替）{tag}{text}")
+            return
+        if self._syscmd is not None:
+            import subprocess
+            try:
+                subprocess.run(self._syscmd[1](text, v), check=False, timeout=60)
+                return
+            except Exception:
+                pass
+        tag = f"（语气：{v.get('tone')}）" if v.get("tone") else ""
+        print(f"🔊（没找到语音引擎，用文字代替）{tag}{text}")
 
 
 def record_wav(seconds: float = 5, samplerate: int = 16000) -> str | None:
