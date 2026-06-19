@@ -14,5 +14,10 @@
     "passes": true,
     "criteria": "自带Key版不填Key走本地引擎、填后用自己模型；省心版零配置用平台模型；平台模型仅省心版可用",
     "evidence": "screenshots/byok-two-tier-result.txt（自带Key版 by_llm=false→填Key=true；省心版 by_llm=true）"
+  },
+  "lingzhen-regression": {
+    "passes": true,
+    "criteria": "灵阵站主要页面回归走查：首页/智能体/知识库/触发器/用量/定价/模型设置/团队详情/作战室/历史/个人中心 逐页加载、关键选择器在场、无破版报错",
+    "evidence": "screenshots/regression-result.txt（13/13 关键选择器在场 + 0 JS 错误）+ screenshots/reg-01..13-*.png（人工抽看首页/团队/作战室渲染正常）"
   }
 }

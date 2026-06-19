@@ -13,16 +13,16 @@
 - 定价两档：自带Key版 ¥39 / 省心版 ¥99（平台模型仅省心版可用，已强制）
 - 引入并初始化 Anthropic 长时运行 Agent Harness
 - 修复定价改两档导致的 smoke 回归：`scripts/smoke.mjs` 两处过期断言（会员方案 3→2、订单 ¥9.9→自带Key版¥39）→ `npm run smoke` 168/0 全绿（证据 `screenshots/smoke-result.txt`，evaluator 复跑确认 PASS）
-- 回归验证 lingzhen-loads + byok-two-tier → test-results.json 三项全绿。lingzhen：/lingzhen 带与不带尾斜杠均 app.js HTTP 200、SPA 启动（证据截图带 URL 标签 + lingzhen-loads-result.txt）；byok：两档强制差异化（byok-two-tier-result.txt）。evaluator 独立复核 PASS——其间逮到一次「两张截图字节相同」的弱证据、已重拍修正。
+- 回归验证 lingzhen-loads + byok-two-tier → test-results.json 全绿。lingzhen：/lingzhen 带与不带尾斜杠均 app.js HTTP 200、SPA 启动（证据截图带 URL 标签 + lingzhen-loads-result.txt）；byok：两档强制差异化（byok-two-tier-result.txt）。evaluator 独立复核 PASS——其间逮到一次「两张截图字节相同」的弱证据、已重拍修正。
+- 整站回归走查 lingzhen-regression：13 个主要页面逐页加载，关键选择器在场 + 0 JS 错误（screenshots/regression-result.txt + reg-01..13-*.png）。evaluator 抽看 5 页确认渲染正常、互异 → PASS。
 
 ## In progress
 - （空）
 
 ## Next（候选，未承诺）
 - 价格后台可配（管理后台改价不改代码）
-- 只留月卡 / 砍季年卡（如确认「只包月」）
 - 参照 harness 把后端「验收官/迭代」再打磨一版
-- 灵阵站整体回归截图走查
+- 注：季/年卡已随两档重构移除，「只包月」诉求实际已满足
 
 ## Notes
 - 零依赖红线、CSP 无内联、密钥不提交——见 CLAUDE.md。
