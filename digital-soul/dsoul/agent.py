@@ -574,10 +574,11 @@ class Agent:
                 return result
 
         # --- 找东西（"我把钥匙放鞋柜上了" / "钥匙放哪了" / "我的老花镜呢"）---
-        if action is None and who.get("obey") and self.belongings is not None and any(
-                k in (utterance or "") for k in ("放在", "放到", "搁在", "搁到", "收在", "摆在",
-                                                 "放哪", "搁哪", "在哪", "哪儿去", "找不到", "不见了",
-                                                 "呢")):
+        if action is None and who.get("obey") and self.belongings is not None and (
+                any(k in (utterance or "") for k in ("放在", "放到", "搁在", "搁到", "收在", "摆在",
+                                                     "放哪", "搁哪", "在哪", "哪儿去", "找不到",
+                                                     "不见了", "呢"))
+                or ("把" in (utterance or "") and any(v in (utterance or "") for v in ("放", "搁", "收", "摆")))):
             txt = self.belongings_handle(utterance)
             if txt:
                 result["reply"] = txt
