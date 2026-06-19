@@ -643,6 +643,16 @@ class Agent:
                     self._log_journal(who, utterance, z, "zodiac")
                     return result
 
+        # --- 蒙学（"背三字经" / "九九乘法口诀"）：教孙辈开蒙 ---
+        if action is None and who.get("obey"):
+            from .mengxue import wants_classic, wants_times_table
+            if wants_classic(utterance) or wants_times_table(utterance):
+                txt = self.mengxue_handle(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "mengxue")
+                    return result
+
         # --- 日常小问答（"三斤几公斤" / "今天星期几" / "二加七等于几"）：随口能答 ---
         if action is None and who.get("obey") and any(
                 k in (utterance or "") for k in ("多少", "等于", "几公斤", "几斤", "几两", "几米",
@@ -3390,6 +3400,22 @@ class Agent:
         if not region:
             return "我能说几地的乡音呢——" + "、".join(dl.regions()) + "。你想听哪儿的？"
         return dl.demo(region)
+
+    def mengxue_handle(self, utterance="") -> str:
+        """蒙学：背开蒙经典开篇 / 九九乘法口诀（某列或整张）。"""
+        from . import mengxue as mx
+        u = utterance or ""
+        if mx.wants_classic(u):
+            return mx.recite(mx.find_classic(u))
+        if mx.wants_times_table(u):
+            whole = any(k in u for k in ("九九表", "九九乘法", "九九歌", "乘法表",
+                                         "整张", "全部", "所有"))
+            row = None if whole else mx.times_query_row(u)
+            if row:
+                cn = "零一二三四五六七八九"[row]
+                return f"{cn}的乘法口诀：" + mx.times_row(row)
+            return "九九乘法口诀：\n" + mx.times_table()
+        return ""
 
     def antifraud_handle(self, utterance="", who=None) -> str:
         """防诈骗：闻出套路就拦一句给三条；直接问反诈就念几条防身顺口溜。"""
