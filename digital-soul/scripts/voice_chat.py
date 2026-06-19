@@ -47,6 +47,7 @@ def _owner(agent) -> str:
 def main() -> None:
     agent = build_agent()
     ears, mouth = Ears(), Mouth()
+    agent.mouth = mouth                          # 挂上"嘴"：主动问候/守护提醒也会出声，且说动合一
     name = agent.identity.get("name", "我")
     speaker = _owner(agent)
     profile = agent.identity.get("voice")        # 本人嗓音档案（语速/音量/系统嗓音/克隆命令）
@@ -85,7 +86,10 @@ def main() -> None:
                 mood = agent.emotions.mood()[0]
             except Exception:
                 mood = None
-        mouth.speak(res["reply"], mood=mood, profile=profile)   # 带情绪 + 本人嗓音说出来
+        # 说动合一：边说边点头/侧首/倾身，声音按节拍一句句出（带情绪 + 本人嗓音）
+        from dsoul.perform import perform_spoken
+        perform_spoken(res["reply"], emotion=mood, robot=getattr(agent, "robot", None),
+                       mouth=mouth, profile=profile)
 
 
 if __name__ == "__main__":

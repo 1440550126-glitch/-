@@ -160,6 +160,7 @@ class Agent:
         self.llm_router = llm_router                              # 多模型路由（按任务选模型 + 小会面板）
         self._degraded_notice_shown = False                       # 降级提示只提一次
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
+        self.mouth = None            # "嘴"：语音模式下挂上它，主动说的话会边说边动（说动合一）
 
     def _hints(self) -> list[str]:
         from .style import style_hint
@@ -1972,8 +1973,11 @@ class Agent:
         self._last_body = body_language(mood)[0]
         if who.get("guard"):
             guard_stance(self.robot, who.get("name"))
-        from .perform import perform
-        perform(self.robot, text, mood)        # 说与动合一：边说边点头/侧首/倾身
+        from .perform import perform_spoken
+        # 说与动合一：边说边点头/侧首/倾身；若挂了"嘴"(语音模式)，就连声音一起按节拍出
+        perform_spoken(text, emotion=mood, robot=self.robot,
+                       mouth=getattr(self, "mouth", None),
+                       profile=(self.identity or {}).get("voice"))
         return text
 
     def memorial_today(self, now=None) -> list:

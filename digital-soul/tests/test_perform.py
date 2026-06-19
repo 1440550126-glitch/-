@@ -5,7 +5,15 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from dsoul.perform import beats, perform  # noqa: E402
+from dsoul.perform import beats, perform, perform_spoken  # noqa: E402
+
+
+class _Mouth:
+    def __init__(self):
+        self.said = []
+
+    def speak(self, text, mood=None, profile=None):
+        self.said.append((text, mood))
 
 
 class _Rec:
@@ -46,8 +54,27 @@ def test_perform_interleaves_say_and_gesture():
     assert kinds == ["say", "gesture", "say", "gesture"]
 
 
+def test_perform_spoken_mouth_and_body():
+    r, m = _Rec(), _Mouth()
+    perform_spoken("你来啦！记得吃药。", emotion="喜", robot=r, mouth=m, profile={"voice": "x"})
+    # 嘴说了每一句、带上情绪
+    assert [t for t, _ in m.said] == ["你来啦！", "记得吃药。"]
+    assert all(mood == "喜" for _, mood in m.said)
+    # 身体也跟着每句动一下
+    assert [c[0] for c in r.calls].count("gesture") == 2
+    # 有 mouth 时不再用 robot.say（避免重复发声）
+    assert not any(c[0] == "say" for c in r.calls)
+
+
+def test_perform_spoken_robot_only_speaks_via_say():
+    r = _Rec()
+    perform_spoken("你好。", emotion="喜", robot=r, mouth=None)
+    assert any(c[0] == "say" for c in r.calls)           # 没嘴时仍用 robot.say
+
+
 def test_perform_none_safe():
     perform(None, "随便", "喜")          # 没机器人不炸
+    perform_spoken("随便", "喜")         # 都没有也不炸
 
 
 if __name__ == "__main__":

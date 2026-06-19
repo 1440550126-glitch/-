@@ -33,8 +33,9 @@ def start_vision(agent, mouth=None) -> bool:
         from dsoul.embodiment import approach
         approach(getattr(agent, "robot", None), name)   # 有人进门，身体先迎上前去
         text = agent.greet(name)   # 清晨第一次见到主人会自动带上"晨间简报"
+        # 注：挂了 agent.mouth 时，greet 内部已"说动合一"地出声，这里不再重复念
         print(f"[感知] {name} 进入画面 → {me}: {text}", flush=True)
-        if mouth is not None:
+        if mouth is not None and getattr(agent, "mouth", None) is None:
             mouth.speak(text, mood=_mood(agent), profile=agent.identity.get("voice"))
         for n in agent.fire_event("enter", name):   # 进门自动化（"我一进门就开灯"）
             print(f"[自动化] {n}", flush=True)
@@ -95,7 +96,10 @@ def voice_loop(agent, ears, mouth, monitor, wake=None) -> None:
         print(f"[语音] {speaker}: {text}", flush=True)
         res = agent.handle(speaker, text)
         print(f"[语音] {me}: {res['reply']}", flush=True)
-        mouth.speak(res["reply"], mood=_mood(agent), profile=agent.identity.get("voice"))
+        # 说动合一：边说边动，声音按节拍一句句出（带情绪 + 本人嗓音）
+        from dsoul.perform import perform_spoken
+        perform_spoken(res["reply"], emotion=_mood(agent), robot=getattr(agent, "robot", None),
+                       mouth=mouth, profile=agent.identity.get("voice"))
 
 
 def sleep_loop(agent, hours: float) -> None:
@@ -292,6 +296,7 @@ def main() -> None:
     )
 
     mouth = Mouth() if args.voice else None   # 语音模式下，连打招呼/晨报也念出来
+    agent.mouth = mouth                        # 挂上"嘴"：主动说的话也出声，且说动合一
     monitor = start_vision(agent, mouth) if not args.no_vision else None
 
     if args.web is not None:
