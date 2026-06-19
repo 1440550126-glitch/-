@@ -800,6 +800,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "xiehouyu")
                     return result
 
+        # --- 十万个为什么（"天为什么是蓝的" / "为什么会打雷"）：用大白话给孩子科普 ---
+        if action is None and who.get("obey"):
+            from . import why_questions as _why
+            _whycfg = self.identity if isinstance(self.identity, dict) else None
+            if _why.is_why_query(utterance, _whycfg):
+                txt = _why.answer(utterance, _whycfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "why_questions")
+                    return result
+
         # --- 动物叫声（"小狗怎么叫" / "青蛙的叫声"）：逗小娃、做启蒙 ---
         if action is None and who.get("obey"):
             from . import animal_sounds as _as
