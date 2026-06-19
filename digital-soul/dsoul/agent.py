@@ -768,6 +768,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "xiehouyu")
                     return result
 
+        # --- 动物叫声（"小狗怎么叫" / "青蛙的叫声"）：逗小娃、做启蒙 ---
+        if action is None and who.get("obey"):
+            from . import animal_sounds as _as
+            _ascfg = self.identity if isinstance(self.identity, dict) else None
+            if _as.is_sound_query(utterance, _ascfg):
+                txt = _as.sound_of(utterance, _ascfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "animal_sounds")
+                    return result
+
         # --- 童谣 / 儿歌（"念个童谣" / "小老鼠上灯台"）：先于背诗/音乐，免得"念个/儿歌"被截走 ---
         if action is None and who.get("obey"):
             from . import nursery_rhymes as _nr
