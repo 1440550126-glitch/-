@@ -39,6 +39,9 @@ function fmtTime(ts) {
 }
 function copy(text) { navigator.clipboard?.writeText(text).then(() => toast('已复制'), () => toast('复制失败', 'warn')); }
 const isMemberNow = () => (state.me?.member_until || 0) > Date.now();
+const DAY_MS = 86400000;
+const memberDaysLeft = () => Math.ceil(((state.me?.member_until || 0) - Date.now()) / DAY_MS);
+const everMember = () => (state.me?.member_until || 0) > 0;
 const yuan = (fen) => '¥' + (fen / 100).toFixed(2).replace(/\.00$/, '');
 
 // ---------------- 弹窗 / 转化 ----------------
@@ -158,7 +161,28 @@ function header() {
       h('a', { class: 'lz-me', title: '个人中心', onclick: () => nav('#/me') }, (isMemberNow() ? '👑 ' : '👤 '), m?.nickname || '我'),
       h('a', { class: 'lz-out', onclick: logout }, '退出')));
 }
-function shell(...content) { return h('div', { class: 'lz-shell' }, header(), h('main', { class: 'lz-main' }, ...content)); }
+function shell(...content) { return h('div', { class: 'lz-shell' }, header(), renewBanner(), h('main', { class: 'lz-main' }, ...content)); }
+
+// 会员到期 / 续费提醒：7 天内到期或已到期（30 天内）时全局提示；当天可关闭
+function renewBanner() {
+  const until = state.me?.member_until || 0;
+  if (!until) return null;                                  // 从未订阅 → 不提醒（看正常升级位）
+  const left = memberDaysLeft();
+  const expired = until <= Date.now();
+  if (!expired && left > 7) return null;                    // 还早，不打扰
+  if (expired && Date.now() - until > 30 * DAY_MS) return null;  // 过期太久，不再打扰
+  if (localStorage.getItem('lz_renew_dismiss') === new Date().toDateString()) return null;
+  const d = new Date(until), md = `${d.getMonth() + 1}-${d.getDate()}`;
+  const bar = h('div', { class: 'lz-renew' + (expired ? ' expired' : '') });
+  bar.append(
+    h('span', {}, expired
+      ? `👑 你的会员已于 ${md} 到期，续费即可继续不限量使用`
+      : `👑 会员还有 ${left} 天到期（${md}），续费不掉档`),
+    h('div', { class: 'lz-renew-acts' },
+      h('button', { class: 'lz-btn sm', onclick: () => nav('#/pricing') }, '立即续费'),
+      h('button', { class: 'lz-renew-x', title: '今天不再提醒', onclick: () => { localStorage.setItem('lz_renew_dismiss', new Date().toDateString()); bar.remove(); } }, '✕')));
+  return bar;
+}
 const spinner = () => h('div', { class: 'lz-spin' }, h('div', { class: 'lz-spin-d' }), '加载中…');
 const empty = (title, sub) => h('div', { class: 'lz-empty' }, h('div', { class: 'lz-empty-i' }, '🫥'), h('b', {}, title), sub ? h('p', {}, sub) : null);
 
@@ -1269,10 +1293,10 @@ async function renderMe() {
             isGuest ? h('span', { class: 'lz-tag' }, '游客账号') : h('span', { class: 'lz-tag pub' }, '正式账号 · @' + me.username),
             member ? h('span', { class: 'lz-tag vip' }, '👑 会员') : h('span', { class: 'lz-tag' }, '免费版')))),
       member
-        ? h('div', { class: 'lz-member-ok' }, `👑 会员有效期至 ${until.getFullYear()}-${until.getMonth() + 1}-${until.getDate()} · `, h('a', { class: 'lz-link', onclick: () => nav('#/pricing') }, '续费'))
+        ? h('div', { class: 'lz-member-ok' }, `👑 会员有效期至 ${until.getFullYear()}-${until.getMonth() + 1}-${until.getDate()}（还有 ${memberDaysLeft()} 天）· `, h('a', { class: 'lz-link', onclick: () => nav('#/pricing') }, '续费'))
         : h('div', { class: 'lz-upsell', onclick: () => nav('#/pricing') },
-            h('div', {}, h('b', {}, '👑 订阅会员，自带 Key 不限量跑'), h('small', {}, '包月解锁平台，模型用你自己的 Key')),
-            h('button', { class: 'lz-btn' }, '查看订阅 →')),
+            h('div', {}, h('b', {}, everMember() ? '👑 会员已到期，续费继续不限量' : '👑 订阅会员，自带 Key 不限量跑'), h('small', {}, '包月解锁平台，模型用你自己的 Key')),
+            h('button', { class: 'lz-btn' }, everMember() ? '立即续费 →' : '查看订阅 →')),
       h('div', { class: 'lz-upsell', onclick: () => nav('#/llm') },
         h('div', {}, h('b', {}, state.meta?.byok ? '🔑 已接入你的大模型 Key' : '🔑 模型设置 · 自带大模型 Key'),
           h('small', {}, state.meta?.byok ? '任务正用你自己的模型跑 · 会员不限量' : '填自己的 Key（豆包/DeepSeek/通义…），用自己的模型与额度')),

@@ -320,6 +320,14 @@ a{cursor:pointer;color:inherit}
 .lz-step.review{border-left:3px solid var(--ok)}
 .lz-step.review .lz-phase-b{background:rgba(70,211,154,.16);color:var(--ok)}
 
+/* ---- 会员到期/续费提醒条 ---- */
+.lz-renew{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;max-width:980px;margin:12px auto 0;padding:9px 16px;border-radius:12px;font-size:13px;
+  background:linear-gradient(135deg,rgba(255,180,84,.16),rgba(155,140,255,.12));border:1px solid rgba(255,180,84,.38);color:var(--warn)}
+.lz-renew.expired{background:linear-gradient(135deg,rgba(255,107,129,.16),rgba(255,180,84,.1));border-color:rgba(255,107,129,.42);color:var(--fail)}
+.lz-renew-acts{display:flex;align-items:center;gap:8px}
+.lz-renew-x{border:none;background:transparent;color:inherit;opacity:.6;cursor:pointer;font-size:13px;padding:2px 6px}
+.lz-renew-x:hover{opacity:1}
+
 /* ---- 模型提供方选择器（BYOK） ---- */
 .lz-prov-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:6px 0 14px}
 .lz-prov{display:flex;align-items:center;gap:10px;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px;cursor:pointer;font-family:inherit;transition:.15s}
