@@ -725,6 +725,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "xiehouyu")
                     return result
 
+        # --- 童谣 / 儿歌（"念个童谣" / "小老鼠上灯台"）：先于背诗/音乐，免得"念个/儿歌"被截走 ---
+        if action is None and who.get("obey"):
+            from . import nursery_rhymes as _nr
+            _nrcfg = self.identity if isinstance(self.identity, dict) else None
+            if _nr.is_rhyme_request(utterance, _nrcfg):
+                txt = _nr.get(utterance, _nrcfg) or _nr.random_rhyme(
+                    seed=utterance or "", config=_nrcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "nursery_rhymes")
+                    return result
+
         # --- 背诗 / 对诗（"床前明月光下一句" / "背首静夜思"）---
         if action is None and who.get("obey") and not self._song_in(utterance):
             from .poetry import is_poetry, next_line
