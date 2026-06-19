@@ -69,10 +69,15 @@ try {
   const c2gone = !dupSb.characters.some((c) => c.name === '能源核心');
   const danglingRef = dupSb.shots.some((sh) => (sh.characters || []).some((k) => !dupSb.characters.find((c) => c.key === k)));
   ok(c2gone && !danglingRef, '跨桶去重：分镜不残留悬空角色引用');
-  // 总控/摄影机参数随片：视频提示词应带摄影机参数 + 该镜角色锁定档案
+  // 总控/摄影机参数随片：图与视频提示词都应带【细节】摄影机参数 + 抗畸变 + 该镜角色锁定档案
   const vprompt = dupSb.shots[0].video_prompt || '';
-  ok(/摄影/.test(vprompt) && /景深|mm|机位/.test(vprompt), '视频提示词含摄影机参数（焦段/景深/机位）');
+  const iprompt = dupSb.shots[0].image_prompt || '';
+  ok(/【摄影机】/.test(vprompt) && /定焦/.test(vprompt) && /光圈|景深/.test(vprompt) && /mm/.test(vprompt), '视频提示词含细节摄影机参数（机身/镜头/光圈/景深）');
+  ok(/畸变|比例真实/.test(vprompt), '视频提示词含抗失真/抗畸变约束');
+  ok(/【摄影机】/.test(iprompt) && /定焦/.test(iprompt) && /畸变|比例真实/.test(iprompt), '首帧图提示词也含细节摄影机参数与抗畸变');
   ok(/角色锁定/.test(vprompt) && vprompt.includes('林夏') && /固定不变/.test(vprompt), '视频提示词含角色锁定档案（总控随片，防变形/换人/身高突变）');
+  // 写实画风应点名真实电影摄影机机身
+  ok(/ARRI|电影摄影机/.test(vprompt), '写实画风点名真实电影摄影机机身');
 
   console.log('— 启动与基础 —');
   const boot = await until(async () => (await api('GET', '/api/bootstrap')).data, 10000);

@@ -393,8 +393,8 @@ function buildLocks(sb) {
     const body = bodyLock(d, age);
     // 角色锁定档案：性别+年龄+完整外貌/服装/身高体型/特征，固定不变
     c.lock = `${c.name}（${g}${age}/${c.role}：${d}${body ? '，' + body : ''}，五官·发型·服装·身高体型比例全程固定不变）`;
-    // 定妆照提示词与锁定档案一致（定义图＝首帧引用的同一形象）
-    c.image_prompt = `${style} ｜ 单人定妆照 ｜ ${c.lock}`;
+    // 定妆照提示词与锁定档案一致（定义图＝首帧引用的同一形象）+ 人像镜头抗畸变（防脸鱼眼/比例失真）
+    c.image_prompt = `${style} ｜ 单人定妆照 ｜ ${c.lock} ｜ 85mm 人像定焦镜头、面部五官比例真实、自然透视无畸变`;
   }
   for (const s of sb.scenes) {
     const d = cleanDesc(s.desc).slice(0, 90);
@@ -408,13 +408,13 @@ function buildLocks(sb) {
   }
 }
 
-// 摄影机参数：景别 → 焦段/景深，运镜关键词 → 描述（注入每条视频提示词）
+// 摄影机参数：景别 → 镜头/光圈/景深 + 抗畸变约束（描述越细，Seedream/Seedance 越不容易把画面拍失真：鱼眼、脸变形、身体拉伸）
 const LENS_MAP = {
-  '特写': '长焦 85-135mm，超浅景深，背景极致虚化',
-  '近景': '标准 50mm，浅景深，背景柔和虚化',
-  '中景': '35mm，中等景深，前后景均有层次',
-  '全景': '广角 24-28mm，深景深，全身与环境清晰',
-  '远景': '超广角 16-20mm，全景深，展现宏观环境',
+  '特写': { lens: '85mm 中长焦人像定焦镜头', dof: 'T1.8 大光圈、极浅景深、焦点锐利、背景奶油般虚化', fix: '面部五官比例真实、绝不鱼眼变形' },
+  '近景': { lens: '50mm 标准定焦镜头', dof: 'T2.0 浅景深、背景柔和虚化', fix: '透视自然、零畸变、人体比例真实' },
+  '中景': { lens: '35mm 定焦镜头', dof: 'T2.8 适中景深、主体清晰', fix: '人物比例真实、低畸变' },
+  '全景': { lens: '24-28mm 广角定焦镜头', dof: 'T4 深景深、人物与环境同清晰', fix: '边缘畸变校正、人物不被拉伸变形' },
+  '远景': { lens: '18-24mm 广角镜头', dof: 'T5.6 全景深', fix: '大气透视、地平线与建筑几何线条笔直不弯曲' },
 };
 const MOVE_RULES = [
   [/缓推|慢推|推镜|推进|前推/, '缓慢推进（dolly-in）'],
@@ -428,17 +428,23 @@ const MOVE_RULES = [
   [/跟镜|跟拍|跟随/, '跟随拍摄（tracking follow）'],
   [/甩镜|甩/, '甩镜（whip pan）'],
   [/环绕|围绕|旋转/, '环绕弧线运动（orbit/arc）'],
-  [/手持|抖动/, '手持抖动，真实感强'],
+  [/手持|抖动/, '手持轻微抖动，真实记录感'],
   [/斯坦尼康|稳定器|云台/, '斯坦尼康稳定跟随（steadicam）'],
-  [/固定|静止|锁定/, '固定机位（locked-off）'],
+  [/固定|静止|锁定/, '三脚架固定机位（locked-off）、画面稳定'],
 ];
-/** 把景别 + 运镜字段转换为摄影机参数描述字串，注入视频提示词 */
-function shotCinema(shotType, camera) {
-  const lens = LENS_MAP[String(shotType || '').replace(/\s/g, '')] || '标准镜头';
+// 机身按画风选择：写实/实拍 → 真实电影摄影机（堆传感器/动态范围术语提升真实感）；动漫/2D/3D → 虚拟电影机位，不堆胶片术语以免与画风冲突
+function cameraBody(style) {
+  return /写实|实拍|真人|纪实|超写实|电影质感|质感|photo|真实|写真/i.test(style || '')
+    ? 'ARRI Alexa Mini LF 专业电影摄影机、全画幅传感器、14 档高动态范围、广色域、电影级肤色还原'
+    : '电影级虚拟摄影机机位、专业构图、画面干净稳定';
+}
+/** 把景别 + 运镜 + 画风转成【细节化摄影机参数】，注入图与视频提示词，抑制画面失真/畸变 */
+function shotCinema(shotType, camera, style = '') {
+  const L = LENS_MAP[String(shotType || '').replace(/\s/g, '')] || LENS_MAP['中景'];
   let move = String(camera || '').trim();
   for (const [re, desc] of MOVE_RULES) { if (re.test(move)) { move = desc; break; } }
-  if (!move) move = '固定机位';
-  return `${lens}；${move}`;
+  if (!move) move = '三脚架固定机位';
+  return `${cameraBody(style)}，${L.lens}，${L.dof}，${L.fix}，${move}`;
 }
 
 /** 故事总纲（总控提示词）：写进每一张参考图，全片防跑偏 */
@@ -452,25 +458,26 @@ function alignStoryboard(sb) {
   const charByKey = new Map(sb.characters.map((c) => [c.key, c]));
   const sceneByKey = new Map(sb.scenes.map((s) => [s.key, s]));
   const propByKey = new Map(sb.props.map((p) => [p.key, p]));
+  const style = styleAnchor(sb);
   for (const sh of sb.shots) {
     const chars = (sh.characters || []).map((k) => charByKey.get(k)).filter(Boolean);
     const sc = sceneByKey.get(sh.scene);
     const props = (sh.props || []).map((k) => propByKey.get(k)).filter(Boolean);
     const action = cleanDesc(sh.action).slice(0, 80) || sh.name;
-    // 规范化首帧提示词：统一画风锚点 + 角色锁定档案逐字复用 + 场景锁定 + 画面动作 + 情绪
-    const parts = [styleAnchor(sb), sh.shot_type || '中景'];
+    const cinema = shotCinema(sh.shot_type, sh.camera, style);   // 细节化摄影机参数（机身/镜头/光圈/景深/抗畸变/运镜）
+    // 规范化首帧提示词：画风锚点 + 景别 + 摄影机参数 + 角色锁定档案 + 场景锁定 + 画面动作 + 情绪
+    const parts = [style, sh.shot_type || '中景', `【摄影机】${cinema}`];
     if (chars.length) parts.push(`【角色】${chars.map((c) => c.lock).join('；')}`);
     if (sc) parts.push(`【场景】${sc.lock}`);
     if (props.length) parts.push(`【道具】${props.map((p) => p.name).join('、')}`);
     parts.push(`【画面】${action}`);
     if (sh.emotion) parts.push(`【情绪】${chars[0]?.name || '主角'}：${sh.emotion}`);
-    sh.image_prompt = parts.join(' ｜ ').slice(0, 900);
-    // 视频提示词：动作 + 摄影机参数（焦段/景深/运镜）+ 该镜角色锁定档案（总控随片：把五官/发型/服装/身高体型逐字带进视频，防动画里变形/换人/身高突变）
+    sh.image_prompt = parts.join(' ｜ ').slice(0, 1000);
+    // 视频提示词：动作 + 摄影机参数 + 该镜角色锁定档案（总控随片：把五官/发型/服装/身高体型逐字带进视频，防动画里变形/换人/身高突变）
     const vp = cleanDesc(sh.video_prompt).slice(0, 70) || action;
-    const cinema = shotCinema(sh.shot_type, sh.camera);
-    const head = `${vp}｜摄影：${cinema}`;   // 动作+机位优先保留，锁定档案放尾部（截断只会少几个锁定细节）
+    const head = `${vp}｜【摄影机】${cinema}`;   // 动作+摄影机参数优先保留，锁定档案放尾部（截断只会少几个锁定细节）
     const lockLine = chars.length ? `｜【角色锁定】${chars.map((c) => c.lock).join('；')}` : '｜角色外观全程一致';
-    sh.video_prompt = (head + lockLine).slice(0, 520);
+    sh.video_prompt = (head + lockLine).slice(0, 600);
   }
 }
 
