@@ -789,6 +789,16 @@ class Agent:
                     self._log_journal(who, utterance, txt, "mengxue")
                     return result
 
+        # --- 十二时辰养生（"子时该干啥" / "几点睡最好"）：先于报时，免得"几点"被当成问钟点 ---
+        if action is None and who.get("obey"):
+            from . import shichen as _sc
+            if _sc.is_shichen_query(utterance):
+                txt = _sc.advice_for(utterance) or _sc.now_advice()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "shichen")
+                    return result
+
         # --- 日常小问答（"三斤几公斤" / "今天星期几" / "二加七等于几"）：随口能答 ---
         if action is None and who.get("obey") and any(
                 k in (utterance or "") for k in ("多少", "等于", "几公斤", "几斤", "几两", "几米",
