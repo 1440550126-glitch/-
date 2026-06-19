@@ -11,7 +11,8 @@
 - 商业化：包月订阅、Key 加密落库、会员到期提醒、用量看板
 - 大模型：`.env` 自动加载；纯 BYOK + 省心模式（平台 Key）混合；BYOK 7 家可选
 - 定价两档：自带Key版 ¥39 / 省心版 ¥99（平台模型仅省心版可用，已强制）
-- 引入并初始化 Anthropic 长时运行 Agent Harness（本次）
+- 引入并初始化 Anthropic 长时运行 Agent Harness
+- 修复定价改两档导致的 smoke 回归：`scripts/smoke.mjs` 两处过期断言（会员方案 3→2、订单 ¥9.9→自带Key版¥39）→ `npm run smoke` 168/0 全绿（证据 `screenshots/smoke-result.txt`，evaluator 复跑确认 PASS）
 
 ## In progress
 - （空）
@@ -26,3 +27,4 @@
 - 零依赖红线、CSP 无内联、密钥不提交——见 CLAUDE.md。
 - 出网白名单受限：外部大模型可能不可直连，用本地 mock 验证接线。
 - 验证四步：`npm run check` → `npm run smoke` → 一次性 `.mjs` 端到端 → Playwright 截图存 `screenshots/`。
+- 教训：改 `server/lib/catalog.js` 定价/方案后，务必跑 `npm run smoke`——里面有 member_plans 数量与订单金额的硬断言。

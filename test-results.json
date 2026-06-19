@@ -1,5 +1,10 @@
 {
   "_note": "验收清单（Default-FAIL 契约）：每项默认 passes=false。只有在『跑 live + 用 Read 打开证据截图/日志确认』后才可改 true；.claude/hooks/verify-gate.sh 会拦截无证据的修改。新功能在此加一行，evidence 填证据文件路径（screenshots/*.png 或 *-result.txt）。",
+  "smoke-all-green": {
+    "passes": true,
+    "criteria": "npm run smoke 全绿（修复定价改两档后 scripts/smoke.mjs 的两处过期断言：会员方案数 3→2、会员订单 ¥9.9→自带Key版 ¥39）",
+    "evidence": "screenshots/smoke-result.txt（168 通过 / 0 失败）"
+  },
   "lingzhen-loads": {
     "passes": false,
     "criteria": "/lingzhen 与 /lingzhen/（带与不带尾斜杠）均能加载 SPA、非白屏",

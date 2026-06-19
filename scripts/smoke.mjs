@@ -90,7 +90,7 @@ try {
   const health = await api('GET', '/api/health');
   ok('health', health.ok && health.data.status === 'ok');
   const boot = await api('GET', '/api/bootstrap');
-  ok('bootstrap 含头像与会员方案', boot.data.avatars.length === 12 && boot.data.member_plans.length === 3);
+  ok('bootstrap 含头像与会员方案', boot.data.avatars.length === 12 && boot.data.member_plans.length === 2);
 
   console.log('\n== 账号 ==');
   const reg = await api('POST', '/api/auth/register', { body: { username: 'xiaoming', password: 'pass123', nickname: '小明同学' } });
@@ -163,7 +163,7 @@ try {
 
   console.log('\n== 商业化（沙盒支付） ==');
   const ord = await api('POST', '/api/shop/orders', { token: guests[0].token, body: { kind: 'member', item_id: 'm1' } });
-  ok('创建会员订单 ¥9.9', ord.ok && ord.data.order.amount_fen === 990);
+  ok('创建会员订单 自带Key版 ¥39', ord.ok && ord.data.order.amount_fen === 3900);
   const pay = await api('POST', `/api/shop/orders/${ord.data.order.id}/pay`, { token: guests[0].token });
   ok('沙盒支付成功→成为会员', pay.ok && pay.data.me.is_member === true);
   const mMember = await api('POST', `/api/posts/${post1.id}/manifest`, { token: guests[0].token, body: { style: 'sakura' } });
@@ -412,7 +412,7 @@ try {
   ok('复制团队模板为我的', cloned.ok && cloned.data.team.mine === true && cloned.data.team.members.length === tpl.members.length);
   const teamId = cloned.data.team.id;
 
-  const runRes = await api('POST', `/api/teams/${teamId}/run`, { token: lzTok, body: { task: '用一句话介绍「句灵」这款产品，并算一下 12 个月会员按 9.9 元/月一共多少钱' } });
+  const runRes = await api('POST', `/api/teams/${teamId}/run`, { token: lzTok, body: { task: '用一句话介绍「句灵」这款产品，并算一下 12 个月会员按 39 元/月一共多少钱' } });
   ok('发起团队运行', runRes.ok && runRes.data.run_id > 0, JSON.stringify(runRes));
   const runId = runRes.data.run_id;
 
