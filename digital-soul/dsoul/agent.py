@@ -868,6 +868,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "classic_books")
                     return result
 
+        # --- 历史名人（"孔子是谁" / "李白哪个朝代" / "诸葛亮做了什么"）---
+        if action is None and who.get("obey"):
+            from . import historical_figures as _hf
+            _hfcfg = self.identity if isinstance(self.identity, dict) else None
+            if _hf.is_figure_query(utterance, _hfcfg):
+                txt = _hf.about(utterance, _hfcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "historical_figures")
+                    return result
+
         # --- 历史朝代（"背朝代歌" / "唐朝介绍" / "朝代顺序"）：给孙辈讲讲五千年 ---
         if action is None and who.get("obey"):
             from . import dynasties as _dy
