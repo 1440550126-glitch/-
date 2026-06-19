@@ -537,6 +537,21 @@ class Agent:
                     self._log_journal(who, utterance, txt, "blessing")
                     return result
 
+        # --- 人情礼俗（"喝喜酒有啥讲究" / "送礼忌讳" / "奔丧要注意啥"）：场面上的分寸 ---
+        if action is None and who.get("obey"):
+            from . import etiquette as _et
+            if _et.is_etiquette_query(utterance):
+                u2 = utterance or ""
+                if any(k in u2 for k in ("送礼忌讳", "送礼禁忌", "什么忌讳", "送礼避讳",
+                                         "送礼讲究")):
+                    txt = _et.gift_taboos()
+                else:
+                    txt = _et.etiquette_for(_et.detect_occasion(u2)) or _et.gift_taboos()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "etiquette")
+                    return result
+
         # --- 人生节点寄语（高考/成家/退休/创业…）：长辈那句过来人的话，比泛泛道喜更暖 ---
         if action is None and who.get("obey"):
             from .life_milestones import detect_milestone
