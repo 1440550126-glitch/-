@@ -558,8 +558,10 @@ class Agent:
                     result["reply"] = txt
                     self._log_journal(who, utterance, txt, "joys_reflect")
                     return result
+            from .home_cooking import is_cooking_howto as _is_cook
             from .joys import is_sharing_joy
-            if is_sharing_joy(utterance):
+            # "可乐鸡翅咋做"里的"乐"不是开心，是道菜——别记成小确幸
+            if is_sharing_joy(utterance) and not _is_cook(utterance):
                 txt = self.record_joy(utterance, who=who.get("name", ""))
                 if txt:
                     result["reply"] = txt
@@ -1181,6 +1183,17 @@ class Agent:
                 result["reply"] = txt
                 self._log_journal(who, utterance, txt, "recipe")
                 return result
+
+        # --- 家常菜手把手（"西红柿炒蛋怎么做"）：没配家传菜也能教几道大路菜 ---
+        if action is None and who.get("obey"):
+            from . import home_cooking as hc
+            _ccfg = self.identity if isinstance(self.identity, dict) else None
+            if hc.is_cooking_howto(utterance, _ccfg):
+                txt = hc.how_to(utterance, _ccfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "home_cooking")
+                    return result
 
         # --- 口头语录（"你常说什么" / "念几句你的老话"）---
         if action is None and who.get("obey") and self.sayings and any(
