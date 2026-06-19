@@ -13,6 +13,8 @@ export const DEFAULTS = {
   ark_base_url: 'https://ark.cn-beijing.volces.com/api/v3',
   model_chat: 'doubao-seed-1-6-250615',
   model_image: 'doubao-seedream-4-0-250828',
+  // 角色三视图 / 全场景图等"定海神针"参考图用的最强图像模型（控制台开通后可填更强的 ID 或 ep- 推理接入点）
+  model_image_pro: 'doubao-seedream-4-0-250828',
   model_video: 'doubao-seedance-1-0-pro-250528',
   // 创作框可选的视频模型（每行「显示名|模型ID」）；以方舟控制台「开通管理」里的准确 ID 为准。
   // 想用最强：去控制台复制 Seedance 2.0 / Pro 的模型 ID 或推理接入点 ep-xxxx 替换下面对应行。
@@ -45,6 +47,7 @@ export function cfg() {
     baseUrl: String(g('ark_base_url', 'ARK_BASE_URL', DEFAULTS.ark_base_url)).replace(/\/+$/, ''),
     modelChat: g('model_chat', 'ARK_MODEL_CHAT', DEFAULTS.model_chat),
     modelImage: g('model_image', 'ARK_MODEL_IMAGE', DEFAULTS.model_image),
+    modelImagePro: g('model_image_pro', 'ARK_MODEL_IMAGE_PRO', DEFAULTS.model_image_pro),
     modelVideo: g('model_video', 'ARK_MODEL_VIDEO', DEFAULTS.model_video),
     modelVideoOptions: String(g('model_video_options', 'ARK_MODEL_VIDEO_OPTIONS', DEFAULTS.model_video_options)),
     videoExtraArgs: String(g('video_extra_args', '', DEFAULTS.video_extra_args)),
@@ -177,12 +180,13 @@ export async function downloadToUploads(remoteUrl, ext) {
  * 图片生成（Seedream）。返回本地 /uploads/ 地址。
  * refImages：参考图（角色一致性 / 图生图），支持本地 uploads 路径或 http(s)/data URL。
  */
-export async function arkImage({ prompt, ratio = '16:9', refImages = [], seed = 0, feature = 'image' }) {
+export async function arkImage({ prompt, ratio = '16:9', refImages = [], seed = 0, model = '', feature = 'image' }) {
   const c = cfg();
+  const useModel = model || c.modelImage;   // 可按用途传入更强模型（角色三视图/全场景图）
   const { w, h } = ratioSize(ratio, 2048);
   const refs = refImages.map(toArkImageUrl).filter(Boolean);
   const data = await arkFetch('/images/generations', {
-    model: c.modelImage,
+    model: useModel,
     prompt,
     size: `${w}x${h}`,
     response_format: 'b64_json',
@@ -203,8 +207,8 @@ export async function arkImage({ prompt, ratio = '16:9', refImages = [], seed = 
   } else {
     throw new Error('方舟返回了未知的图片格式');
   }
-  logUsage({ feature, provider: 'ark', model: c.modelImage, images: 1 });
-  return { url, model: c.modelImage };
+  logUsage({ feature, provider: 'ark', model: useModel, images: 1 });
+  return { url, model: useModel };
 }
 
 /**

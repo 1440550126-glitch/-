@@ -9,6 +9,7 @@ export async function renderSettings(page) {
   const baseIn = h('input', { class: 'input', value: s.ark_base_url });
   const chatIn = h('input', { class: 'input', value: s.model_chat });
   const imageIn = h('input', { class: 'input', value: s.model_image });
+  const imageProIn = h('input', { class: 'input', value: s.model_image_pro || '' });
   const videoIn = h('input', { class: 'input', value: s.model_video });
   const videoOptsIn = h('textarea', { class: 'textarea', rows: 4, value: s.model_video_options || '', placeholder: 'Seedance 1.0 Pro|doubao-seedance-1-0-pro-250528' });
   const extraIn = h('input', { class: 'input', value: s.video_extra_args || '', placeholder: '如 --camerafixed true' });
@@ -33,7 +34,7 @@ export async function renderSettings(page) {
     saveBtn.disabled = true;
     try {
       const body = {
-        ark_base_url: baseIn.value.trim(), model_chat: chatIn.value.trim(), model_image: imageIn.value.trim(), model_video: videoIn.value.trim(),
+        ark_base_url: baseIn.value.trim(), model_chat: chatIn.value.trim(), model_image: imageIn.value.trim(), model_image_pro: imageProIn.value.trim(), model_video: videoIn.value.trim(),
         model_video_options: videoOptsIn.value.trim(), video_extra_args: extraIn.value.trim(),
         watermark: wmSel.value === 'true', local_fallback: fbSel.value === 'true',
         qc_enabled: qcEnSel.value === 'true', qc_autofix: qcFixSel.value === 'true', qc_min_score: Number(qcScoreIn.value), video_chain: chainSel.value === 'true', auto_expressions: exprSel.value === 'true',
@@ -92,7 +93,8 @@ export async function renderSettings(page) {
     fld('API Key', keyIn, s.ark_key_source === 'env' ? '当前使用环境变量 ARK_API_KEY（设置页保存会优先生效）' : '注意：AKLT 开头的是 AccessKey，不是方舟 API Key'),
     fld('接口地址', baseIn),
     fld('对话模型（剧本/解析/Agent）', chatIn, '如 doubao-seed-1-6-250615 或接入点 ep-xxxx'),
-    fld('图像模型（Seedream）', imageIn, '如 doubao-seedream-4-0-250828'),
+    fld('图像模型（Seedream）', imageIn, '分镜首帧/道具用，如 doubao-seedream-4-0-250828'),
+    fld('🏆 顶配图像模型（角色三视图 / 全场景图）', imageProIn, '全片"定海神针"参考图专用最强模型；可填更强的模型 ID 或 ep- 推理接入点，留空则回退默认最强模型'),
     fld('视频模型（Seedance，默认）', videoIn, 'Seedance 2.0 发布后直接替换模型 ID 即可'),
     fld('创作框可选视频模型（每行：显示名|模型ID）', videoOptsIn, '首页创作框与 Agent 可按次选用；加一行 Seedance 2.0|<模型ID> 即生效'),
     fld('视频任务附加参数', extraIn, '追加到 Seedance 文本命令末尾（按官方文档填，如 --camerafixed true）'),

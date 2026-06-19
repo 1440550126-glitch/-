@@ -59,7 +59,7 @@ GET('/api/bootstrap', async () => {
   return {
     app: { name: '灵境AI', full: '灵境AI · 短剧创作工坊', slogan: '所想即成片', version: '0.1.0' },
     user_name: getSetting('user_name', '创作者'),
-    ark: { enabled: arkEnabled(), base_url: c.baseUrl, model_chat: c.modelChat, model_image: c.modelImage, model_video: c.modelVideo },
+    ark: { enabled: arkEnabled(), base_url: c.baseUrl, model_chat: c.modelChat, model_image: c.modelImage, model_image_pro: c.modelImagePro, model_video: c.modelVideo },
     video_models: videoModelOptions(),
     video_resolutions: ['', '480p', '720p', '1080p'],
     agent_token: getSetting('agent_token', ''),
@@ -231,7 +231,7 @@ DEL('/api/canvases/:id', async ({ params }) => {
 });
 
 // ---------- 设置 ----------
-const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_video', 'model_video_options', 'video_extra_args', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint', 'local_fallback', 'agent_temperature', 'agent_max_steps', 'agent_autorun', 'agent_thinking', 'agent_plan_first', 'qc_enabled', 'qc_autofix', 'qc_min_score', 'video_chain', 'auto_expressions'];
+const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_image_pro', 'model_video', 'model_video_options', 'video_extra_args', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint', 'local_fallback', 'agent_temperature', 'agent_max_steps', 'agent_autorun', 'agent_thinking', 'agent_plan_first', 'qc_enabled', 'qc_autofix', 'qc_min_score', 'video_chain', 'auto_expressions'];
 
 GET('/api/settings', async () => {
   const c = cfg();
@@ -239,7 +239,7 @@ GET('/api/settings', async () => {
   return {
     ark_api_key_masked: key ? `${key.slice(0, 4)}****${key.slice(-4)}` : '',
     ark_key_source: getSetting('ark_api_key', '') ? 'settings' : (process.env.ARK_API_KEY ? 'env' : ''),
-    ark_base_url: c.baseUrl, model_chat: c.modelChat, model_image: c.modelImage, model_video: c.modelVideo,
+    ark_base_url: c.baseUrl, model_chat: c.modelChat, model_image: c.modelImage, model_image_pro: c.modelImagePro, model_video: c.modelVideo,
     model_video_options: c.modelVideoOptions, video_extra_args: c.videoExtraArgs,
     watermark: c.watermark,
     price_chat_in: c.priceChatIn, price_chat_out: c.priceChatOut, price_image: c.priceImage, price_video_sec: c.priceVideoSec,

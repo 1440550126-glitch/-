@@ -78,12 +78,15 @@ try {
   ok(/角色锁定/.test(vprompt) && vprompt.includes('林夏') && /固定不变/.test(vprompt), '视频提示词含角色锁定档案（总控随片，防变形/换人/身高突变）');
   // 写实画风应点名真实电影摄影机机身
   ok(/ARRI|电影摄影机/.test(vprompt), '写实画风点名真实电影摄影机机身');
+  // 角色定义图升级为三视图设定图（正/侧/背），全片定海神针参考
+  ok(/三视图/.test(dupSb.characters[0].image_prompt || ''), '角色定义图为三视图设定图（正面·侧面·背面）');
 
   console.log('— 启动与基础 —');
   const boot = await until(async () => (await api('GET', '/api/bootstrap')).data, 10000);
   ok(boot.app.name === '灵境AI', 'bootstrap 返回应用信息');
   ok(/^ljk_/.test(boot.agent_token), '首次启动自动生成 Agent Token');
   ok(boot.ark.enabled === false, '未配 Key 时为本地引擎模式');
+  ok(!!boot.ark.model_image_pro, 'bootstrap 暴露顶配图像模型（角色三视图/全场景图专用）');
 
   console.log('— 项目与剧本 —');
   const p = (await api('POST', '/api/projects', { title: '冒烟剧', genre: '悬疑反转', idea: '便利店午夜来客' })).data;
@@ -336,6 +339,12 @@ try {
   const frame = (await api('POST', '/api/ai/image', { prompt: '主角站在门口回头', kind: 'frame', project_id: p.id, node_id: linkedShot.id })).data;
   const frameTask = (await api('GET', `/api/ai/task/${frame.taskId}`)).data;
   ok(frame.url && frameTask.params?.ref_images >= 1, `首帧自动引用关联角色定妆图 ×${frameTask.params?.ref_images}`);
+  // 角色三视图/全场景图走顶配模型路由 + 角色用宽幅（横排正/侧/背）
+  const charImg = (await api('POST', '/api/ai/image', { prompt: '主角', kind: 'character', project_id: p.id, name: '三视图测试' })).data;
+  const charTask = (await api('GET', `/api/ai/task/${charImg.taskId}`)).data;
+  ok(charTask.params?.pro === true && charTask.params?.ratio === '16:9', '角色图走顶配模型路由 + 三视图宽幅(16:9)');
+  const sceneImg = (await api('POST', '/api/ai/image', { prompt: '废墟街道', kind: 'scene', project_id: p.id, name: '全场景测试' })).data;
+  ok((await api('GET', `/api/ai/task/${sceneImg.taskId}`)).data.params?.pro === true, '全场景图走顶配模型路由');
 
   console.log('— MCP over HTTP（远程助理通道） —');
   const mh = async (msg) => {
@@ -429,6 +438,9 @@ try {
   ok(set2.ok, '保存偏好');
   const set3 = (await api('GET', '/api/settings')).data;
   ok(set3.user_name === '导演', '设置生效');
+  await api('PATCH', '/api/settings', { model_image_pro: 'ep-pro-test-xyz' });
+  ok((await api('GET', '/api/settings')).data.model_image_pro === 'ep-pro-test-xyz', '顶配图像模型可配置并生效');
+  await api('PATCH', '/api/settings', { model_image_pro: '' });   // 复位，避免影响其它用例
   const stats = (await api('GET', '/api/stats')).data;
   ok(Number(stats.cost_total_yuan) === 0, '本地模式成本为 0');
 
