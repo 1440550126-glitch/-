@@ -1477,6 +1477,16 @@ class Agent:
                     self._log_journal(who, u, txt, "ledger")
                     return result
 
+        # --- 绕口令（"来个绕口令" / "练练嘴"）：跟语音一脉，练嘴皮逗个乐 ---
+        if action is None and who.get("obey"):
+            from .tongue_twister import is_twister_request
+            if is_twister_request(utterance):
+                txt = self.twister_handle(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "tongue_twister")
+                    return result
+
         # --- 玩游戏（"陪我玩个游戏" / "成语接龙" / "猜谜"）---
         if action is None and who.get("obey"):
             from .games import is_game_request
@@ -3465,6 +3475,18 @@ class Agent:
         if not region:
             return "我能说几地的乡音呢——" + "、".join(dl.regions()) + "。你想听哪儿的？"
         return dl.demo(region)
+
+    def twister_handle(self, utterance="") -> str:
+        """绕口令：要难的给难的，点了词给那条，否则随口来一条。"""
+        from . import tongue_twister as tt
+        cfg = self.identity if isinstance(self.identity, dict) else None
+        u = utterance or ""
+        if tt.wants_hard(u):
+            return "来个难的，看你溜不溜——" + tt.by_level(3, seed=u, config=cfg)
+        kw = tt.by_keyword(u, cfg)
+        if kw:
+            return "来：" + kw
+        return "练练嘴，跟我念——" + tt.random_one(seed=u, config=cfg)
 
     def mengxue_handle(self, utterance="") -> str:
         """蒙学：背开蒙经典开篇 / 九九乘法口诀（某列或整张）。"""
