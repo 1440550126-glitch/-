@@ -1,9 +1,3 @@
 node_modules/
 package-lock.json
-art/fonts/*.ttf
-art/fonts/*.ttc
-art/solo.png
-art/solo.mjs
-art/smoke.*
-art/face.*
 art/_preview_*.png
