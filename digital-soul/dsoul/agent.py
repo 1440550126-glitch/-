@@ -800,6 +800,19 @@ class Agent:
                     self._log_journal(who, utterance, txt, "xiehouyu")
                     return result
 
+        # --- 认星空（"北斗七星怎么找北极星" / "月食是怎么回事"）：夏夜抬头看天 ---
+        if action is None and who.get("obey"):
+            from . import astronomy as _ast
+            _astcfg = self.identity if isinstance(self.identity, dict) else None
+            if _ast.is_astro_query(utterance, _astcfg):
+                txt = _ast.about(utterance, _astcfg)
+                if not txt and any(k in (utterance or "") for k in ("认星星", "看星空", "星空", "天文")):
+                    txt = "天上认得这些：" + "、".join(_ast.topics(_astcfg)[:6]) + "……想认哪个跟我说。"
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "astronomy")
+                    return result
+
         # --- 十万个为什么（"天为什么是蓝的" / "为什么会打雷"）：用大白话给孩子科普 ---
         if action is None and who.get("obey"):
             from . import why_questions as _why
