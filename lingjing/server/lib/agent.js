@@ -2,7 +2,7 @@
 // 方舟可用：两阶段（先分析意图出计划，再函数调用循环执行）；未配置：本地意图引擎（可解析复合指令、多步调度）。
 import { q, getSetting } from './db.js';
 import { jparse, clamp } from './util.js';
-import { arkEnabled, arkChat } from './ark.js';
+import { llmEnabled, arkChat } from './ark.js';
 import { toolSchemas, runTool } from './tools.js';
 
 // ---------- 可调参数（设置页持久化） ----------
@@ -213,7 +213,7 @@ export async function arkAgent(messages, projectId) {
 
 export async function runAgent(messages, projectId) {
   const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content || '';
-  if (arkEnabled()) {
+  if (llmEnabled()) {
     try { return await arkAgent(messages, projectId); }
     catch (e) { console.warn('[agent] 方舟失败，落本地意图：', e.message); }
   }

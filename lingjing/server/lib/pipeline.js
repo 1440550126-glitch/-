@@ -2,8 +2,8 @@
 // 配置了火山方舟 Key 走真实模型；否则自动落到本地规则引擎（结果带 provider 标识）
 import { q, getSetting, setSetting } from './db.js';
 import { uid, now, jparse, clamp } from './util.js';
-import { arkEnabled, arkChat, arkImage, arkVideoCreate, arkVideoGet, cfg } from './ark.js';
-import { pickImageProvider, pickVideoProvider, openaiImage, googleVeoCreate, googleVeoGet } from './providers.js';
+import { arkEnabled, llmEnabled, arkChat, arkImage, arkVideoCreate, arkVideoGet, cfg } from './ark.js';
+import { pickImageProvider, pickVideoProvider, openaiImage, googleVeoCreate, googleVeoGet, dashscopeImage, dashscopeVideoCreate, dashscopeTaskGet } from './providers.js';
 import { localScript, localParse, localImageSVG, localVideoSVG, saveSVG, localNextEpisode, localViralAnalysis, guessGender, splitScriptSegments } from './local.js';
 import { resolveStylePrompt } from './styles.js';
 import { bad, notFound } from './httpx.js';
@@ -143,7 +143,7 @@ export async function generateScript({ projectId = '', idea = '', genre = '', nu
 
   let script = '';
   let byLLM = false;
-  if (arkEnabled()) {
+  if (llmEnabled()) {
     try {
       const eps = clamp(numEpisodes, 1, 6);
       const prompt = movie
@@ -186,7 +186,7 @@ export async function remakeViral({ reference, topic, projectId = '', genre = ''
   let script = '';
   let title = '';
   let byLLM = false;
-  if (arkEnabled()) {
+  if (llmEnabled()) {
     try {
       const r = await arkChat({
         feature: 'remake', system: REMAKE_SYSTEM, json: true, temperature: 0.85, maxTokens: 5000,
@@ -484,7 +484,7 @@ function alignStoryboard(sb) {
 
 /** 大模型分类校正：判断被标为"角色"的条目里哪些其实是道具/场景，自动归位（细节决定一致性） */
 async function refineEntitiesLLM(sb) {
-  if (!arkEnabled() || !sb.characters?.length) return sb;
+  if (!llmEnabled() || !sb.characters?.length) return sb;
   try {
     const list = sb.characters.map((c) => `${c.name}：${cleanDesc(c.desc).slice(0, 36)}`).join('\n');
     // 进化：把用户历史校正作为已知样例喂给模型，越用越准
@@ -561,7 +561,7 @@ export async function parseScript({ projectId }) {
   let byLLM = false;
   let warn = '';
 
-  if (arkEnabled()) {
+  if (llmEnabled()) {
     // 长剧本（电影）分幕分段送 LLM，避免一次性截断导致解析失败/丢内容
     const segments = splitScriptSegments(project.script, { maxChars: 9000 });
     try {
@@ -628,7 +628,7 @@ export async function addEpisode({ projectId, idea = '' }) {
   const nextOrder = Math.max(marks.length, sb?.episodes?.length || 1) + 1;
 
   let chunk = '';
-  if (arkEnabled()) {
+  if (llmEnabled()) {
     try {
       const cast = (sb?.characters || []).map((c) => `${c.name}（${c.role}）`).join('、');
       const r = await arkChat({
@@ -812,7 +812,7 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
   const chosenModel = model || (proKind ? cfg().modelImagePro : cfg().modelImage);
   const ip = pickImageProvider(chosenModel, { arkEnabled: arkEnabled(), arkModel: chosenModel });
   const imageModel = ip.enabled ? ip.model : 'local';
-  const provLabel = ip.provider === 'openai' ? 'OpenAI GPT Image' : '方舟图像';
+  const provLabel = ip.provider === 'openai' ? 'OpenAI GPT Image' : ip.provider === 'alibaba' ? '通义万相' : '方舟图像';
 
   const taskId = uid('t');
   q.run('INSERT INTO tasks (id, kind, status, provider, model, prompt, params, project_id, node_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
@@ -825,7 +825,9 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
     if (ip.enabled) {
       const r = ip.provider === 'openai'
         ? await openaiImage({ prompt, ratio, refImages: refs, model: ip.model, feature: `image:${kind}` })
-        : await arkImage({ prompt, ratio, refImages: refs, seed, model: ip.model, feature: `image:${kind}` });
+        : ip.provider === 'alibaba'
+          ? await dashscopeImage({ prompt, ratio, model: ip.model, feature: `image:${kind}` })
+          : await arkImage({ prompt, ratio, refImages: refs, seed, model: ip.model, feature: `image:${kind}` });
       url = r.url;
       provider = ip.provider;
     } else {
@@ -1110,7 +1112,7 @@ export async function createVideoTask({ prompt, imageUrl = '', lastImageUrl = ''
   const taskId = uid('t');
   // 按模型 ID 路由：veo* → Google Veo 3，其余 → 火山 Seedance（各用各的 API Key）
   const vp = pickVideoProvider(model, { arkEnabled: arkEnabled(), arkModel: model || cfg().modelVideo });
-  const provLabel = vp.provider === 'google' ? 'Veo' : '方舟视频';
+  const provLabel = vp.provider === 'google' ? 'Veo' : vp.provider === 'alibaba' ? '通义万相' : '方舟视频';
   const params = { ratio, duration, imageUrl, lastImageUrl: lastImageUrl || '', name, order, model: vp.model || '', provider: vp.enabled ? vp.provider : 'local', resolution: resolution || '' };
 
   let provider = 'local';
@@ -1120,7 +1122,9 @@ export async function createVideoTask({ prompt, imageUrl = '', lastImageUrl = ''
     try {
       const r = vp.provider === 'google'
         ? await googleVeoCreate({ prompt, imageUrl, ratio, model: vp.model })
-        : await arkVideoCreate({ prompt, imageUrl, lastImageUrl, ratio, duration, model: vp.model, resolution });
+        : vp.provider === 'alibaba'
+          ? await dashscopeVideoCreate({ prompt, imageUrl, ratio, model: vp.model })
+          : await arkVideoCreate({ prompt, imageUrl, lastImageUrl, ratio, duration, model: vp.model, resolution });
       provider = vp.provider;
       remoteId = r.remoteId;
       model = r.model;
@@ -1180,17 +1184,19 @@ export async function pollTask(taskId) {
     return finish('failed', {}, '生成超时（超过 18 分钟未完成，已自动结束）');
   }
 
-  if ((t.provider === 'ark' || t.provider === 'google') && t.remote_id) {
+  if ((t.provider === 'ark' || t.provider === 'google' || t.provider === 'alibaba') && t.remote_id) {
     try {
       const r = t.provider === 'google'
         ? await googleVeoGet(t.remote_id, { duration: params.duration || 8 })
-        : await arkVideoGet(t.remote_id, { duration: params.duration || 5 });
+        : t.provider === 'alibaba'
+          ? await dashscopeTaskGet(t.remote_id, { kind: 'video', duration: params.duration || 5 })
+          : await arkVideoGet(t.remote_id, { duration: params.duration || 5 });
       if (r.status === 'succeeded') return finish('succeeded', { url: r.url });
       if (r.status === 'failed') return finish('failed', {}, r.error || '生成失败');
       return { ...t, params, result: {}, status: r.status };
     } catch (e) {
       // 查询接口连续报错也不再卡死：记录但保持 running，由超时兜底
-      console.warn(`[pollTask] ${t.provider === 'google' ? 'Veo' : '方舟'}查询失败：`, e.message);
+      console.warn(`[pollTask] ${t.provider === 'google' ? 'Veo' : t.provider === 'alibaba' ? '通义万相' : '方舟'}查询失败：`, e.message);
       return { ...t, params, result: {}, status: 'running', error: e.message };
     }
   }

@@ -87,6 +87,13 @@ try {
   ok(prov.pickVideoProvider('veo-3.0-generate-001', { arkEnabled: true }).provider === 'google', 'Veo 模型路由到 Google');
   ok(prov.pickImageProvider('gpt-image-1', { arkEnabled: true }).enabled === false, '未配 OpenAI Key 时 GPT Image 不启用（安全）');
   ok(prov.imageModelOptions('doubao-seedream-4-0-250828').some((m) => m.id === 'gpt-image-1'), '图像模型清单含 GPT Image 选项');
+  // 阿里通义万相（统一 DashScope API）：图/视频按 t2i/t2v/i2v 路由到 alibaba
+  ok(prov.imageProviderOf('wanx2.1-t2i-turbo') === 'alibaba' && prov.imageProviderOf('qwen-image') === 'alibaba', '通义万相/Qwen-Image 路由到阿里');
+  ok(prov.videoProviderOf('wanx2.1-i2v-turbo') === 'alibaba' && prov.videoProviderOf('wanx2.1-t2v-turbo') === 'alibaba', '通义万相视频（i2v/t2v）路由到阿里');
+  ok(prov.pickVideoProvider('wanx2.1-i2v-turbo', { arkEnabled: true }).enabled === false, '未配 DashScope Key 时通义万相不启用（安全）');
+  const ark = await import(path.join(ROOT, 'server', 'lib', 'ark.js'));
+  ok(ark.isQwenChat('qwen-max') === true && ark.isQwenChat('doubao-seed-1-6-250615') === false, '千问对话模型按 ID 识别');
+  ok(ark.llmEnabled() === false, '无任何大模型 Key 时 llmEnabled 为 false（走本地）');
 
   console.log('— 启动与基础 —');
   const boot = await until(async () => (await api('GET', '/api/bootstrap')).data, 10000);
@@ -95,8 +102,11 @@ try {
   ok(boot.ark.enabled === false, '未配 Key 时为本地引擎模式');
   ok(!!boot.ark.model_image_pro, 'bootstrap 暴露顶配图像模型（角色三视图/全场景图专用）');
   ok((boot.image_models || []).some((m) => m.id === 'gpt-image-1'), '创作框可选图像模型含 GPT Image（OpenAI）');
+  ok((boot.image_models || []).some((m) => /wanx/i.test(m.id)), '创作框可选图像模型含 通义万相（阿里）');
   ok((boot.video_models || []).some((m) => /veo/i.test(m.id)), '创作框可选视频模型含 Veo 3（Google）');
-  ok(boot.providers && boot.providers.openai === false && boot.providers.google === false, '多供应商开通状态暴露（未配 Key 为 false）');
+  ok((boot.video_models || []).some((m) => /wanx|wan2/i.test(m.id)), '创作框可选视频模型含 通义万相（阿里）');
+  ok(boot.providers && boot.providers.openai === false && boot.providers.google === false && boot.providers.alibaba === false, '多供应商开通状态暴露（未配 Key 为 false）');
+  ok(typeof boot.llm_enabled === 'boolean', 'bootstrap 暴露 llm_enabled（对话大模型可用性）');
 
   console.log('— 项目与剧本 —');
   const p = (await api('POST', '/api/projects', { title: '冒烟剧', genre: '悬疑反转', idea: '便利店午夜来客' })).data;
@@ -365,6 +375,14 @@ try {
     return ['succeeded', 'failed'].includes(t.status) ? t : null;
   });
   ok(veoDone.provider === 'local' && veoDone.status === 'succeeded', '未配 Google Key 选 Veo 3 → 安全回退本地占位');
+  const wanImg = (await api('POST', '/api/ai/image', { prompt: '测试', kind: 'scene', project_id: p.id, model: 'wanx2.1-t2i-turbo' })).data;
+  ok((await api('GET', `/api/ai/task/${wanImg.taskId}`)).data.provider === 'local' && /\.svg$/i.test(wanImg.url), '未配 DashScope Key 选通义万相图 → 安全回退本地占位');
+  const wanVid = (await api('POST', '/api/ai/video', { prompt: '测试', model: 'wanx2.1-i2v-turbo', ratio: '16:9', duration: 3 })).data;
+  const wanDone = await until(async () => {
+    const t = (await api('GET', `/api/ai/task/${wanVid.taskId}`)).data;
+    return ['succeeded', 'failed'].includes(t.status) ? t : null;
+  });
+  ok(wanDone.provider === 'local' && wanDone.status === 'succeeded', '未配 DashScope Key 选通义万相视频 → 安全回退本地占位');
 
   console.log('— MCP over HTTP（远程助理通道） —');
   const mh = async (msg) => {
@@ -468,6 +486,15 @@ try {
   ok(setProv.google_api_key_masked.includes('****') && setProv.google_enabled === true, 'Google Key 脱敏保存并启用');
   await api('PATCH', '/api/settings', { openai_api_key: 'clear', google_api_key: 'clear' });   // 复位，避免真实外呼
   ok((await api('GET', '/api/settings')).data.openai_enabled === false, '清除 OpenAI Key 后回到未配置');
+  // 阿里云百炼·统一 Key（千问 + 通义万相）：脱敏保存 + 启用 + 接口地址
+  await api('PATCH', '/api/settings', { dashscope_api_key: 'sk-dash-test-1234', dashscope_base_url: 'https://ds.example' });
+  const setDash = (await api('GET', '/api/settings')).data;
+  ok(setDash.dashscope_api_key_masked.includes('****') && setDash.alibaba_enabled === true && setDash.dashscope_base_url === 'https://ds.example', '阿里 DashScope Key 脱敏保存、启用、接口地址生效');
+  // 选千问对话 + 配 DashScope Key → 对话大模型可用（统一 API：千问走 DashScope 兼容端点）
+  await api('PATCH', '/api/settings', { model_chat: 'qwen-max' });
+  ok((await api('GET', '/api/bootstrap')).data.llm_enabled === true, '选千问 + 配 DashScope Key → 对话大模型可用（llm_enabled）');
+  await api('PATCH', '/api/settings', { model_chat: 'doubao-seed-1-6-250615', dashscope_api_key: 'clear' });   // 复位，避免真实外呼
+  ok((await api('GET', '/api/settings')).data.alibaba_enabled === false, '清除 DashScope Key 后回到未配置');
   const stats = (await api('GET', '/api/stats')).data;
   ok(Number(stats.cost_total_yuan) === 0, '本地模式成本为 0');
 

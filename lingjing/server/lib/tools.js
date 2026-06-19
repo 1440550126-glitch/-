@@ -3,7 +3,7 @@
 // ③ 内置创作 Agent（/api/ai/agent 的函数调用循环）
 import { q, getSetting } from './db.js';
 import { jparse, micro2yuan, now } from './util.js';
-import { arkEnabled, cfg } from './ark.js';
+import { llmEnabled, cfg } from './ark.js';
 import {
   createProject, getProject, projectOut, touchProject, generateScript, parseScript, addEpisode,
   getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral, generateDubbing, checkConsistency, buildCharacterProfile, listEntities, annotateEntities
@@ -27,7 +27,7 @@ export const TOOLS = [
       const cost = q.get('SELECT COALESCE(SUM(cost_micro),0) c FROM usage_logs')?.c || 0;
       return {
         app: '灵境AI · 短剧创作工坊',
-        provider: arkEnabled() ? `火山方舟（${cfg().modelChat} / ${cfg().modelImage} / ${cfg().modelVideo}）` : '本地规则引擎（未配置方舟 Key，结果为占位预览）',
+        provider: llmEnabled() ? `大模型已接入（对话 ${cfg().modelChat}／图 ${cfg().modelImage}／视频 ${cfg().modelVideo}；多供应商：火山方舟·OpenAI·Google·阿里通义）` : '本地规则引擎（未配置任何大模型 Key，结果为占位预览）',
         projects: q.get('SELECT COUNT(*) c FROM projects WHERE deleted_at = 0')?.c || 0,
         assets: q.get('SELECT COUNT(*) c FROM assets')?.c || 0,
         running_tasks: q.get(`SELECT COUNT(*) c FROM tasks WHERE status IN ('queued','running')`)?.c || 0,

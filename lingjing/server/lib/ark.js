@@ -24,7 +24,10 @@ export const DEFAULTS = {
     'Seedance 1.0 Pro|doubao-seedance-1-0-pro-250528',
     'Seedance 1.0 Lite 图生视频|doubao-seedance-1-0-lite-i2v-250428',
     'Veo 3（Google，需 Google Key）|veo-3.0-generate-001',
-    'Veo 3 Fast（Google）|veo-3.0-fast-generate-001'
+    'Veo 3 Fast（Google）|veo-3.0-fast-generate-001',
+    '通义万相 2.1 图生视频（阿里，需 DashScope Key）|wanx2.1-i2v-turbo',
+    '通义万相 2.1 文生视频（阿里）|wanx2.1-t2v-turbo',
+    '通义万相 2.2 图生视频 Plus（阿里）|wan2.2-i2v-plus'
   ].join('\n'),
   video_extra_args: '',     // 追加到视频任务文本命令的参数，如 --camerafixed true
   watermark: false,
@@ -91,22 +94,24 @@ export function logUsage({ feature, provider = 'local', model = '', promptTokens
   return cost;
 }
 
-async function arkFetch(pathname, body, { timeoutMs = 30_000, method = 'POST' } = {}) {
+async function arkFetch(pathname, body, { timeoutMs = 30_000, method = 'POST', base = '', key = '' } = {}) {
   const c = cfg();
-  if (!c.apiKey) throw new Error('ark-disabled');
+  const useBase = base || c.baseUrl;
+  const useKey = key || c.apiKey;
+  if (!useKey) throw new Error('ark-disabled');
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const resp = await fetch(c.baseUrl + pathname, {
+    const resp = await fetch(useBase + pathname, {
       method,
       signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${c.apiKey}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${useKey}` },
       body: body === undefined ? undefined : JSON.stringify(body)
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) {
       const msg = data?.error?.message || data?.message || `HTTP ${resp.status}`;
-      throw new Error(`方舟接口错误：${msg}`);
+      throw new Error(`模型接口错误：${msg}`);
     }
     return data;
   } finally {
@@ -114,12 +119,26 @@ async function arkFetch(pathname, body, { timeoutMs = 30_000, method = 'POST' } 
   }
 }
 
+// ---- 对话模型路由：千问（Qwen/通义）走阿里云 DashScope OpenAI 兼容端点（统一 Key），否则走火山方舟 ----
+const DASHSCOPE_DEFAULT_BASE = 'https://dashscope.aliyuncs.com';
+const dashKey = () => getSetting('dashscope_api_key', '') || process.env.DASHSCOPE_API_KEY || '';
+const dashBase = () => String(getSetting('dashscope_base_url', '') || process.env.DASHSCOPE_BASE_URL || DASHSCOPE_DEFAULT_BASE).replace(/\/+$/, '');
+export const isQwenChat = (model) => /^(qwen|qwq|qvq|tongyi)/i.test(String(model || ''));
+function chatTarget() {
+  const c = cfg();
+  if (isQwenChat(c.modelChat) && dashKey()) return { base: `${dashBase()}/compatible-mode/v1`, key: dashKey(), model: c.modelChat, provider: 'alibaba' };
+  return { base: c.baseUrl, key: c.apiKey, model: c.modelChat, provider: 'ark' };
+}
+/** 对话/剧本/Agent 是否可用真实大模型（火山 Key，或选了千问且配了 DashScope Key）。 */
+export const llmEnabled = () => !!chatTarget().key;
+
 /**
  * 文本对话（支持 JSON 模式与 tools 函数调用）
  * @returns {Promise<{text:string, toolCalls:Array|null, usage:{promptTokens,completionTokens}, model:string}>}
  */
 export async function arkChat({ system = '', messages = null, prompt = '', images = null, json = false, tools = null, maxTokens = 4096, temperature = 0.8, timeoutMs = 90_000, feature = 'chat' }) {
   const c = cfg();
+  const t = chatTarget();   // 千问→DashScope 兼容端点；否则火山方舟
   const msgs = messages ? [...messages] : [];
   if (!messages) {
     if (system) msgs.push({ role: 'system', content: system });
@@ -136,13 +155,13 @@ export async function arkChat({ system = '', messages = null, prompt = '', image
     }
   }
   const data = await arkFetch('/chat/completions', {
-    model: c.modelChat,
+    model: t.model,
     messages: msgs,
     max_tokens: maxTokens,
     temperature,
     ...(json ? { response_format: { type: 'json_object' } } : {}),
     ...(tools?.length ? { tools } : {})
-  }, { timeoutMs });
+  }, { timeoutMs, base: t.base, key: t.key });
 
   const choice = data?.choices?.[0];
   const text = choice?.message?.content || '';
@@ -151,9 +170,9 @@ export async function arkChat({ system = '', messages = null, prompt = '', image
     promptTokens: data?.usage?.prompt_tokens ?? estimateTokens(JSON.stringify(msgs)),
     completionTokens: data?.usage?.completion_tokens ?? estimateTokens(text)
   };
-  logUsage({ feature, provider: 'ark', model: c.modelChat, promptTokens: usage.promptTokens, completionTokens: usage.completionTokens });
-  if (!text && !toolCalls?.length) throw new Error('方舟返回了空内容');
-  return { text, toolCalls, usage, model: c.modelChat, raw: choice?.message };
+  logUsage({ feature, provider: t.provider, model: t.model, promptTokens: usage.promptTokens, completionTokens: usage.completionTokens });
+  if (!text && !toolCalls?.length) throw new Error('模型返回了空内容');
+  return { text, toolCalls, usage, model: t.model, raw: choice?.message };
 }
 
 /** 把本地 /uploads/ 文件转成 base64 data URL（方舟图生图 / 图生视频的参考图输入） */

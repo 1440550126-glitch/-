@@ -135,7 +135,11 @@ export async function renderHome(page) {
     h('p', {}, '一句话成片 · 剧本 → 分镜 → 画布 → 成片全流程 · 任何 Agent 都能替你动手'),
     quickBox(),
     h('div', { class: 'hero-pills', style: { marginTop: '14px' } },
-      h('span', { class: 'pill' }, boot.ark.enabled ? `火山方舟 · ${boot.ark.model_video}` : '本地引擎模式 · 配置方舟 Key 解锁真实生成'),
+      h('span', { class: 'pill' }, (() => {
+        const p = boot.providers || {};
+        const on = [boot.ark.enabled && '火山方舟', p.openai && 'OpenAI', p.google && 'Google', p.alibaba && '阿里通义'].filter(Boolean);
+        return on.length ? `已接入 · ${on.join(' / ')}` : (boot.llm_enabled ? '千问已接入' : '本地引擎模式 · 配置任一模型 Key 解锁真实生成');
+      })()),
       h('span', { class: 'pill' }, 'MCP / OpenAPI 全开放'),
       h('span', { class: 'pill' }, `今日成本 ¥${boot.stats.cost_today_yuan}`)),
     doodle('star', { color: 'rgba(255,209,102,.9)', size: 22, delay: 900, rotate: -14, style: { position: 'absolute', right: '178px', top: '30px' } }),

@@ -9,10 +9,14 @@ import { downloadToUploads, logUsage } from './ark.js';
 export const PROVIDER_DEFAULTS = {
   openai_base_url: 'https://api.openai.com/v1',
   google_base_url: 'https://generativelanguage.googleapis.com/v1beta',
+  dashscope_base_url: 'https://dashscope.aliyuncs.com',   // 阿里云百炼·统一 API（千问/通义万相 图与视频共用一个 Key）
   // 创作框「生成图片」可选的图像模型（每行「显示名|模型ID」），与视频模型列表对称
   model_image_options: [
     'Seedream 4.0（火山·默认）|doubao-seedream-4-0-250828',
-    'GPT Image（OpenAI，需 OpenAI Key）|gpt-image-1'
+    'GPT Image（OpenAI，需 OpenAI Key）|gpt-image-1',
+    '通义万相 2.1 文生图 Turbo（阿里，需 DashScope Key）|wanx2.1-t2i-turbo',
+    '通义万相 2.1 文生图 Plus（阿里）|wanx2.1-t2i-plus',
+    'Qwen-Image 文生图（阿里）|qwen-image'
   ].join('\n')
 };
 
@@ -30,27 +34,44 @@ export function providerCfg() {
     openaiBase: String(g('openai_base_url', 'OPENAI_BASE_URL', PROVIDER_DEFAULTS.openai_base_url)).replace(/\/+$/, ''),
     googleKey: g('google_api_key', 'GOOGLE_API_KEY', ''),
     googleBase: String(g('google_base_url', 'GOOGLE_BASE_URL', PROVIDER_DEFAULTS.google_base_url)).replace(/\/+$/, ''),
+    dashscopeKey: g('dashscope_api_key', 'DASHSCOPE_API_KEY', ''),
+    dashscopeBase: String(g('dashscope_base_url', 'DASHSCOPE_BASE_URL', PROVIDER_DEFAULTS.dashscope_base_url)).replace(/\/+$/, ''),
     modelImageOptions: String(g('model_image_options', 'MODEL_IMAGE_OPTIONS', PROVIDER_DEFAULTS.model_image_options))
   };
 }
 
 export const openaiEnabled = () => !!providerCfg().openaiKey;
 export const googleEnabled = () => !!providerCfg().googleKey;
+export const alibabaEnabled = () => !!providerCfg().dashscopeKey;
 
-// 按模型 ID 识别供应商：gpt-image*/dall* → OpenAI；veo*/gemini* → Google；其余 → 火山方舟
-export function imageProviderOf(model) { return /^(gpt-image|dall)/i.test(String(model || '')) || /openai/i.test(String(model || '')) ? 'openai' : 'ark'; }
-export function videoProviderOf(model) { return /^veo/i.test(String(model || '')) || /(google|gemini)/i.test(String(model || '')) ? 'google' : 'ark'; }
+// 按模型 ID 识别供应商：
+//  图像：gpt-image*/dall* → OpenAI；qwen-image/wanx*t2i/wan* → 阿里通义万相；其余 → 火山方舟
+//  视频：veo*/gemini* → Google；*t2v*/*i2v*/wanx 视频 → 阿里通义万相；其余 → 火山方舟
+export function imageProviderOf(model) {
+  const m = String(model || '');
+  if (/^(gpt-image|dall)/i.test(m) || /openai/i.test(m)) return 'openai';
+  if (/(qwen-image|wanx-v1|t2i)/i.test(m) || (/^wan/i.test(m) && !/(t2v|i2v)/i.test(m))) return 'alibaba';
+  return 'ark';
+}
+export function videoProviderOf(model) {
+  const m = String(model || '');
+  if (/^veo/i.test(m) || /(google|gemini)/i.test(m)) return 'google';
+  if (/(t2v|i2v)/i.test(m) || (/^wan/i.test(m) && /video/i.test(m))) return 'alibaba';
+  return 'ark';
+}
 
-/** 选择图像供应商：返回 { provider, enabled, model }。arkEnabledFn/arkModel 由调用方注入，避免循环依赖。 */
+/** 选择图像供应商：返回 { provider, enabled, model }。arkEnabled/arkModel 由调用方注入，避免循环依赖。 */
 export function pickImageProvider(model, { arkEnabled, arkModel } = {}) {
   const provider = imageProviderOf(model);
   if (provider === 'openai') return { provider, enabled: openaiEnabled(), model: model || 'gpt-image-1' };
+  if (provider === 'alibaba') return { provider, enabled: alibabaEnabled(), model: model || 'wanx2.1-t2i-turbo' };
   return { provider: 'ark', enabled: !!arkEnabled, model: model || arkModel || '' };
 }
 /** 选择视频供应商：返回 { provider, enabled, model }。 */
 export function pickVideoProvider(model, { arkEnabled, arkModel } = {}) {
   const provider = videoProviderOf(model);
   if (provider === 'google') return { provider, enabled: googleEnabled(), model: model || 'veo-3.0-generate-001' };
+  if (provider === 'alibaba') return { provider, enabled: alibabaEnabled(), model: model || 'wanx2.1-i2v-turbo' };
   return { provider: 'ark', enabled: !!arkEnabled, model: model || arkModel || '' };
 }
 
@@ -80,6 +101,13 @@ function openaiSize(ratio) {
   return '1024x1024';
 }
 function gAspect(ratio) { return /9\s*[:：]\s*16/.test(ratio) ? '9:16' : '16:9'; }
+// 通义万相用 宽*高 像素串
+function wanSize(ratio) {
+  if (/16\s*[:：]\s*9/.test(ratio)) return '1280*720';
+  if (/9\s*[:：]\s*16/.test(ratio)) return '720*1280';
+  return '1024*1024';
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * OpenAI GPT Image（gpt-image-1）。有参考图走 images/edits（多部分表单），否则 images/generations。
@@ -166,4 +194,68 @@ export async function googleVeoGet(opName, { feature = 'video', duration = 8 } =
     catch { return { status: 'succeeded', url: uri }; }
   }
   return { status: 'failed', error: 'Veo 任务完成但未返回视频地址' };
+}
+
+// ===================== 阿里云 DashScope（统一 API）：通义万相 文生图 / 图·文生视频 =====================
+function dashHeaders(key, async = false) {
+  const h = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
+  if (async) h['X-DashScope-Async'] = 'enable';
+  return h;
+}
+/** 提交 DashScope 异步任务，返回 task_id。 */
+async function dashSubmit(pathname, body) {
+  const c = providerCfg();
+  if (!c.dashscopeKey) throw new Error('未配置 DashScope（阿里云百炼）API Key');
+  const res = await fetch(`${c.dashscopeBase}${pathname}`, { method: 'POST', headers: dashHeaders(c.dashscopeKey, true), body: JSON.stringify(body), signal: AbortSignal.timeout(60_000) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || `DashScope 任务创建失败 HTTP ${res.status}`);
+  const id = data?.output?.task_id;
+  if (!id) throw new Error('DashScope 未返回 task_id');
+  return id;
+}
+/** 查询 DashScope 任务。kind=image 取图片 URL，video 取视频 URL。返回 { status, url?, error? }。 */
+export async function dashscopeTaskGet(taskId, { kind = 'video', feature = 'video', duration = 5 } = {}) {
+  const c = providerCfg();
+  if (!c.dashscopeKey) throw new Error('未配置 DashScope API Key');
+  const res = await fetch(`${c.dashscopeBase}/api/v1/tasks/${taskId}`, { headers: dashHeaders(c.dashscopeKey), signal: AbortSignal.timeout(30_000) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || `DashScope 查询失败 HTTP ${res.status}`);
+  const st = String(data?.output?.task_status || '').toUpperCase();
+  if (st === 'PENDING' || st === 'RUNNING') return { status: 'running' };
+  if (st !== 'SUCCEEDED') { logUsage({ feature, provider: 'alibaba', model: 'wanx', ok: 0 }); return { status: 'failed', error: data?.output?.message || data?.message || 'DashScope 生成失败' }; }
+  const out = data.output || {};
+  const remote = kind === 'image'
+    ? (out.results?.[0]?.url || out.results?.[0]?.image_url)
+    : (out.video_url || out.results?.[0]?.video_url);
+  if (!remote) return { status: 'failed', error: 'DashScope 任务完成但未返回结果地址' };
+  logUsage({ feature, provider: 'alibaba', model: 'wanx', ...(kind === 'image' ? { images: 1 } : { videoSeconds: duration }) });
+  try { return { status: 'succeeded', url: await downloadToUploads(remote, kind === 'image' ? 'png' : 'mp4') }; }
+  catch { return { status: 'succeeded', url: remote }; }
+}
+
+/** 通义万相 文生图（异步任务，函数内轮询到完成；保持 generateImage 同步语义）。返回 { url, model }。 */
+export async function dashscopeImage({ prompt, ratio = '1:1', model = 'wanx2.1-t2i-turbo', feature = 'image' }) {
+  const taskId = await dashSubmit('/api/v1/services/aigc/text2image/image-synthesis', {
+    model, input: { prompt }, parameters: { size: wanSize(ratio), n: 1 }
+  });
+  const deadline = Date.now() + 120_000;
+  for (;;) {
+    const r = await dashscopeTaskGet(taskId, { kind: 'image', feature });
+    if (r.status === 'succeeded') return { url: r.url, model };
+    if (r.status === 'failed') throw new Error(r.error || '通义万相出图失败');
+    if (Date.now() > deadline) throw new Error('通义万相出图超时');
+    await sleep(2500);
+  }
+}
+
+/** 通义万相 图/文生视频（异步任务）。返回 { remoteId, model }，由 pollTask 轮询 dashscopeTaskGet。 */
+export async function dashscopeVideoCreate({ prompt, imageUrl = '', ratio = '16:9', model = 'wanx2.1-i2v-turbo' }) {
+  const input = { prompt };
+  const f = localFilePath(imageUrl);
+  // 图生视频需首帧；本地图片以 data URL 传入（若你的接入要求公网 URL，请改为可访问地址）
+  if (f && /i2v/i.test(model)) input.img_url = `data:${mimeOf(f)};base64,${fs.readFileSync(f).toString('base64')}`;
+  const remoteId = await dashSubmit('/api/v1/services/aigc/video-generation/video-synthesis', {
+    model, input, parameters: { size: wanSize(ratio) }
+  });
+  return { remoteId, model };
 }
