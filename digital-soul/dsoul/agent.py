@@ -824,6 +824,21 @@ class Agent:
                     self._log_journal(who, utterance, txt, "instruments")
                     return result
 
+        # --- 神话传说（"盘古开天的故事" / "讲个神话"）---
+        if action is None and who.get("obey"):
+            from . import myths as _my
+            _mycfg = self.identity if isinstance(self.identity, dict) else None
+            if _my.is_myth_query(utterance, _mycfg):
+                txt = _my.about(utterance, _mycfg)
+                if not txt and any(k in (utterance or "") for k in ("神话", "传说")):
+                    import random as _r
+                    pool = _my.myths(_mycfg)
+                    txt = _my.about(pool[_r.Random((utterance or "")).randint(0, len(pool) - 1)], _mycfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "myths")
+                    return result
+
         # --- 古典名著（"四大名著是哪四部" / "西游记主要人物"）---
         if action is None and who.get("obey"):
             from . import classic_books as _cb
