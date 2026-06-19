@@ -466,6 +466,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "coax")
                     return result
 
+        # --- 助眠：睡不着/失眠，不讲故事不说教，轻声陪你慢下来（present-tense） ---
+        if action is None and who.get("obey"):
+            from .sleep_aid import senses_sleepless
+            if senses_sleepless(utterance):
+                txt = self.sleep_aid_handle(utterance, who)
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="哀", topic="助眠")
+                    self._log_journal(who, utterance, txt, "sleep_aid")
+                    return result
+
         # --- 该犟就犟：你说不吃药/不看病/太拼，它拦着劝着，因为在乎（不顺着你害你）---
         if action is None and who.get("obey"):
             from .gentle_insist import senses_self_neglect
@@ -3515,6 +3527,13 @@ class Agent:
         if not region:
             return "我能说几地的乡音呢——" + "、".join(dl.regions()) + "。你想听哪儿的？"
         return dl.demo(region)
+
+    def sleep_aid_handle(self, utterance="", who=None) -> str:
+        """助眠：轻声给一段放松/数呼吸的引导。"""
+        from .sleep_aid import wind_down
+        who = who or {}
+        name = who.get("name", "") if who.get("known") else ""
+        return wind_down(name=name, seed=utterance or "")
 
     def _home_contact(self):
         """取一个能打的家人电话（优先子女/老伴），迷路时好让 TA 求助。"""
