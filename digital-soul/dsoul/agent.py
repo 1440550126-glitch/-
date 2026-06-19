@@ -1027,6 +1027,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "calc_helper")
                     return result
 
+        # --- 量词（"鱼用什么量词" / "一什么马"）：教孩子说对中文 ---
+        if action is None and who.get("obey"):
+            from . import measure_words as _mw
+            _mwcfg = self.identity if isinstance(self.identity, dict) else None
+            if _mw.is_measure_query(utterance, _mwcfg):
+                txt = _mw.measure_of(utterance, _mwcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "measure_words")
+                    return result
+
         # --- 日常小问答（"三斤几公斤" / "今天星期几" / "二加七等于几"）：随口能答 ---
         if action is None and who.get("obey") and any(
                 k in (utterance or "") for k in ("多少", "等于", "几公斤", "几斤", "几两", "几米",
