@@ -1171,6 +1171,17 @@ class Agent:
                 self._log_journal(who, utterance, txt, "understanding")
                 return result
 
+        # --- 推断（"你看出什么了吗" / "你怎么分析" / "你琢磨我咋了"）：把迹象连起来推一推 ---
+        if action is None and who.get("obey") and any(
+                k in (utterance or "") for k in ("你看出什么", "你怎么分析", "你琢磨", "你估摸",
+                                                 "你推测", "你看出点啥", "你分析分析")):
+            facts = self.infer_about(who.get("name"))
+            if facts:
+                txt = "我把这阵子的事连起来琢磨了琢磨——" + " ".join(facts)
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "infer")
+                return result
+
         # --- 看出门道（"你看我最近怎么样" / "你觉得我"）：说出从对话里上心察觉到的 ---
         if action is None and who.get("obey") and any(
                 k in (utterance or "") for k in ("你看我最近", "你觉得我最近", "你瞧我",
@@ -2673,6 +2684,47 @@ class Agent:
         if self.understanding is None:
             return ""
         return self.understanding.portrait(name)
+
+    # ---------- 推断：把零散迹象连起来想 ----------
+    def _infer_signals(self, name="", now=None) -> dict:
+        sig: dict = {}
+        if getattr(self, "understanding", None) is not None and name:
+            try:
+                sig["concerns"] = self.understanding.top_concerns(name, 4)
+            except Exception:
+                sig["concerns"] = []
+        if self.journal is not None and name:
+            try:
+                sig["symptoms"] = " ".join(
+                    e.get("utterance", "") for e in self.journal._all()[-15:]
+                    if e.get("speaker") == name)
+            except Exception:
+                sig["symptoms"] = ""
+        if getattr(self, "vitals", None) is not None:
+            try:
+                from .vitals import flag
+                lt = self.vitals.latest("血压")
+                sig["bp_high"] = bool(lt and "偏高" in flag("血压", lt["value"]))
+            except Exception:
+                sig["bp_high"] = False
+        if getattr(self, "medications", None) is not None:
+            try:
+                sig["med_missed"] = bool(self.medications.due(now))
+            except Exception:
+                sig["med_missed"] = False
+        cs = sig.get("concerns") or []
+        sig["worried"] = ("工作烦" in cs) or ("手头紧" in cs)
+        if getattr(self, "social", None) is not None:
+            try:
+                sig["long_unseen"] = bool(self.social.cooled(days=10))
+            except Exception:
+                sig["long_unseen"] = False
+        return sig
+
+    def infer_about(self, name="", now=None) -> list:
+        """把对这个人的零散迹象连起来，推几条关切的结论。"""
+        from .infer import infer
+        return infer(self._infer_signals(name, now))
 
     # ---------- 跨天记挂：惦记着你上次没完的事 ----------
     def _note_thread(self, name, utterance) -> None:
