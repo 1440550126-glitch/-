@@ -1434,6 +1434,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "festival_prep")
                     return result
 
+        # --- 节日吃食与来历（"端午吃什么" / "粽子的来历" / "为什么过中秋"）---
+        if action is None and who.get("obey"):
+            from .festival_lore import detect as _fl_detect
+            from .festival_lore import is_lore_query, lore
+            if is_lore_query(utterance) and _fl_detect(utterance):
+                txt = lore(_fl_detect(utterance))
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "festival_lore")
+                    return result
+
         # --- 传统节日（"今天是什么节" / "端午有什么讲究"）---
         if action is None and who.get("obey"):
             u6 = utterance or ""
