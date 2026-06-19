@@ -40,10 +40,16 @@ function getUserLLM(userId) {
   return cfg;
 }
 // 解析某用户实际可用的 LLM 配置：{enabled, byok, provider, baseUrl, apiKey, models}
+// 平台模型仅向「免费体验 / 省心版会员」开放；自带Key版会员需自带 Key（否则走本地引擎）。
 export function resolveLLM(userId) {
   const u = getUserLLM(userId);
   if (u) return { enabled: true, byok: true, ...u };
-  return { enabled: llmEnabled(), byok: false, provider: PROVIDER, baseUrl: BASE_URL, apiKey: API_KEY, models: MODELS };
+  let platformOk = llmEnabled();
+  if (platformOk && userId) {
+    const row = q.get('SELECT member_until, llm_tier FROM users WHERE id = ?', Number(userId));
+    if (row && row.member_until > now() && row.llm_tier === 'byok') platformOk = false;
+  }
+  return { enabled: platformOk, byok: false, provider: PROVIDER, baseUrl: BASE_URL, apiKey: API_KEY, models: MODELS };
 }
 export const userHasLLM = (userId) => !!getUserLLM(userId);
 

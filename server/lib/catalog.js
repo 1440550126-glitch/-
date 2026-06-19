@@ -1,9 +1,8 @@
-// 商业化目录：会员方案 / 高级额度包 / 预置头像（按月订阅，定价低于市场、但非廉价）
-
+// 商业化目录：会员方案 / 高级额度包 / 预置头像（按月订阅，低于市场、非廉价）
+// 两档：自带Key版（便宜，平台只做编排、模型自带不限量）/ 省心版（贵，含平台模型、开箱即用）。
 export const MEMBER_PLANS = [
-  { id: 'm1', name: '句灵会员 · 月卡', months: 1, price_fen: 3900, blurb: '按月订阅，随时可停' },
-  { id: 'm3', name: '句灵会员 · 季卡', months: 3, price_fen: 9900, blurb: '折合 33 元/月', tag: '推荐' },
-  { id: 'm12', name: '句灵会员 · 年卡', months: 12, price_fen: 29900, blurb: '折合不到 25 元/月', tag: '最划算' }
+  { id: 'm1', name: '自带Key版 · 月卡', months: 1, price_fen: 3900, llm_tier: 'byok', blurb: '平台编排 + 自带模型 Key，不限量跑' },
+  { id: 'p1', name: '省心版 · 月卡', months: 1, price_fen: 9900, llm_tier: 'easy', blurb: '含平台模型，免配置开箱即用（80 次/天）', tag: '推荐' }
 ];
 
 export const MEMBER_BENEFITS = [

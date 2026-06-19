@@ -56,7 +56,7 @@ GET('/api/agents/meta', async (ctx) => {
     strategies: STRATEGY_LIST,
     quota: { used, limit, left: Math.max(0, limit - used) },
     limits: { max_members: AGENT_QUOTA.MAX_MEMBERS, max_rounds: AGENT_QUOTA.MAX_TOOL_ROUNDS },
-    member, byok, platform_llm: llmEnabled()
+    member, byok, platform_llm: llmEnabled(), llm_tier: ctx.user.llm_tier || ''
   };
 }, { auth: true });
 
@@ -74,7 +74,7 @@ GET('/api/agents/usage', async (ctx) => {
   const member = isMember(ctx.user);
   const byok = userHasLLM(uidv);
   return {
-    member, byok, platform_llm: llmEnabled(), runs,
+    member, byok, platform_llm: llmEnabled(), llm_tier: ctx.user.llm_tier || '', runs,
     quota: {
       run: { used: quotaUsed(uidv, 'agent_run'), limit: dailyRunLimit(ctx.user) },
       api: { used: quotaUsed(uidv, 'agent_api'), limit: 50 }

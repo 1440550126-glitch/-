@@ -11,7 +11,8 @@ export function runAgentMigrations() {
     'ALTER TABLE agent_runs ADD COLUMN batch_id TEXT',
     'ALTER TABLE agent_runs ADD COLUMN share_id TEXT',
     'ALTER TABLE teams ADD COLUMN api_key TEXT',
-    'ALTER TABLE teams ADD COLUMN webhook_url TEXT'
+    'ALTER TABLE teams ADD COLUMN webhook_url TEXT',
+    "ALTER TABLE users ADD COLUMN llm_tier TEXT NOT NULL DEFAULT ''"
   ]) { try { db.exec(sql); } catch { /* 列已存在，忽略 */ } }
 }
 
