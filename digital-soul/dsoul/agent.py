@@ -589,7 +589,7 @@ class Agent:
                     return result
 
         # --- 背诗 / 对诗（"床前明月光下一句" / "背首静夜思"）---
-        if action is None and who.get("obey"):
+        if action is None and who.get("obey") and not self._song_in(utterance):
             from .poetry import is_poetry, next_line
             if is_poetry(utterance) or next_line(utterance):
                 txt = self.poetry_handle(utterance)
@@ -1295,6 +1295,20 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, u, txt, "keep_in_touch")
+                    return result
+
+        # --- 唱歌（"唱给我听" / "一起唱" / "这是什么歌" / 歌词接龙）---
+        if action is None and who.get("obey"):
+            from . import songbook as sb
+            if (sb.is_sing_request(utterance) or sb.is_singalong(utterance)
+                    or sb.is_recognize_request(utterance)
+                    or sb.wants_lyrics(utterance)
+                    or ("唱" in (utterance or "") and self._song_in(utterance))
+                    or any(k in (utterance or "") for k in ("会唱什么", "会唱啥", "都会唱"))):
+                txt = self.sing_handle(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "sing")
                     return result
 
         # --- 老歌（"唱首歌" / "哼一段"）---
@@ -3238,7 +3252,60 @@ class Agent:
                 mood = None
         if mood and any(k in (utterance or "") for k in ("心情", "应景", "高兴", "难过", "想哭")):
             return song_for_mood(mood, self.music)
+        # 点了名的歌、或泛泛"唱首歌"：能唱出词就唱出来，不行再哼调子
+        from . import songbook as sb
+        song = self._song_in(utterance)
+        if song or any(k in (utterance or "") for k in ("唱", "歌")):
+            return sb.sing(song or None, self.music, mood=mood, seed=utterance or "")
         return hum(self.music, seed=utterance or "")
+
+    def _song_in(self, utterance) -> str:
+        """从话里认出点名的歌（歌本里的或"爱唱的歌"里的）。"""
+        from . import songbook as sb
+        u = utterance or ""
+        pool = list(sb.known_songs())
+        try:
+            from .music import favorites
+            pool += favorites(self.music)
+        except Exception:
+            pass
+        for s in pool:
+            if s in u or str(s).strip("《》") in u:
+                return s
+        return ""
+
+    def sing_handle(self, utterance="") -> str:
+        """唱歌总路由：会唱啥 / 这是什么歌 / 歌词接龙 / 合唱 / 唱给我听。不接则空。"""
+        from . import songbook as sb
+        u = utterance or ""
+        # 你会唱什么歌（报一报会的曲目）
+        if any(k in u for k in ("会唱什么", "会唱啥", "都会唱", "会唱哪些", "会唱几首")):
+            ks = "、".join(sb.known_songs()[:6])
+            return f"会唱不少老调呢，像{ks}……你想听哪首？"
+        # 这是什么歌（给了句词 → 猜歌名，顺势接着唱）
+        if sb.is_recognize_request(u):
+            title = sb.recognize(u, self.music)
+            if title:
+                return f"这是{title}呀。" + sb.sing(title, self.music, seed=u)
+            return "这句我一下没听出来是哪首，你多哼两句我准能想起来。"
+        # 歌词 / 下一句（须点名一首已知的歌，免得和背诗抢"下一句"）
+        if sb.wants_lyrics(u):
+            song = self._song_in(u)
+            if not song:
+                return ""
+            if any(k in u for k in ("下一句", "后面", "接下来")):
+                nl = sb.next_lyric(song, u, self.music)
+                if nl:
+                    return f"下一句是“{nl}”。"
+            lines = sb.lyric_lines(song, self.music)
+            return f"{song}是这么唱的——“{'，'.join(lines)}”。"
+        # 一起唱 / 对唱接龙（我起头，你接）
+        if sb.is_singalong(u):
+            return sb.lead_singalong(self._song_in(u) or None, self.music, seed=u)
+        # 唱给我听（含"唱<某首歌>"）
+        if sb.is_sing_request(u) or ("唱" in u and self._song_in(u)):
+            return sb.sing(self._song_in(u) or None, self.music, seed=u)
+        return ""
 
     def water_plant(self, utterance) -> str:
         if self.plants is None:
