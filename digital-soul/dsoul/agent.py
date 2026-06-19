@@ -1321,6 +1321,16 @@ class Agent:
                     self._log_journal(who, utterance, txt, "music")
                     return result
 
+        # --- 乡音 / 方言（"说句家乡话" / "用四川话说"）---
+        if action is None and who.get("obey"):
+            from . import dialect as dl
+            if dl.is_dialect_request(utterance):
+                txt = self.dialect_handle(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "dialect")
+                    return result
+
         # --- 养宠（"狗喂了" / "遛过旺财了" / "家里的宠物"）---
         if action is None and who.get("obey") and self.pets is not None:
             up = utterance or ""
@@ -3306,6 +3316,15 @@ class Agent:
         if sb.is_sing_request(u) or ("唱" in u and self._song_in(u)):
             return sb.sing(self._song_in(u) or None, self.music, seed=u)
         return ""
+
+    def dialect_handle(self, utterance="") -> str:
+        """乡音：用点名的（或本人配置的）家乡话，秀一句招呼+应答。"""
+        from . import dialect as dl
+        u = utterance or ""
+        region = dl.region_in(u) or dl.normalize_region((self.identity or {}).get("dialect", ""))
+        if not region:
+            return "我能说几地的乡音呢——" + "、".join(dl.regions()) + "。你想听哪儿的？"
+        return dl.demo(region)
 
     def water_plant(self, utterance) -> str:
         if self.plants is None:
