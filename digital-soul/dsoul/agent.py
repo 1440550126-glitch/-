@@ -1013,6 +1013,19 @@ class Agent:
             self._log_journal(who, utterance, txt, "emergency_card")
             return result
 
+        # --- 居家安全常识（"用电安全注意什么" / "燃气怎么防"）：讲常识，先于睡前清单 ---
+        if action is None and who.get("obey"):
+            from . import home_safety as _hs
+            _hscfg = self.identity if isinstance(self.identity, dict) else None
+            if _hs.is_safety_query(utterance, _hscfg):
+                txt = _hs.tip_for(utterance, _hscfg)
+                if not txt and any(k in (utterance or "") for k in ("居家安全", "安全常识")):
+                    txt = "居家安全得留心这几样：" + "、".join(_hs.categories(_hscfg)) + "。想细说哪样跟我讲。"
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "home_safety")
+                    return result
+
         # --- 守护·居家安全（"睡前检查一下" / "门窗关了吗"）---
         if action is None and who.get("obey"):
             from .safety_check import is_safety_query
