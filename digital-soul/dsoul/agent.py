@@ -1501,6 +1501,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "dialect")
                     return result
 
+        # --- 垃圾分类（"西瓜皮是什么垃圾" / "过期药怎么扔"）---
+        if action is None and who.get("obey"):
+            from . import garbage_sort as _gs
+            _gcfg = self.identity if isinstance(self.identity, dict) else None
+            if _gs.is_sort_query(utterance, _gcfg):
+                txt = _gs.sort(utterance, _gcfg) or (
+                    "垃圾分四类：" + "；".join(_gs.categories())
+                    + "。说个具体东西，我告诉你归哪类。")
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "garbage_sort")
+                return result
+
         # --- 过日子小窍门（"油渍怎么去" / "有什么生活小窍门"）---
         if action is None and who.get("obey"):
             from .lifehacks import is_lifehack_query

@@ -22,6 +22,9 @@ def is_sharing_joy(utterance) -> bool:
         return False
     if any(n in u for n in _NEG):
         return False
+    # 分享开心事是陈述句；带疑问词的多半是在问别的（"可乐瓶是什么垃圾"里的"乐"不算乐）
+    if any(q in u for q in ("什么", "怎么", "咋", "哪", "为什么", "多少", "几类", "归哪")):
+        return False
     return any(k in u for k in _JOY_MARK)
 
 
