@@ -1544,6 +1544,20 @@ class Agent:
                 self._log_journal(who, utterance, txt, "digest")
                 return result
 
+        # --- 泡茶（"绿茶怎么泡" / "铁观音水温多少" / "泡茶讲究"）---
+        if action is None and who.get("obey"):
+            from . import tea as _tea
+            _teacfg = self.identity if isinstance(self.identity, dict) else None
+            if _tea.is_tea_query(utterance, _teacfg):
+                txt = _tea.brew(utterance, _teacfg)
+                if not txt and "泡茶" in (utterance or ""):
+                    txt = ("泡茶看茶性：" + "、".join(_tea.teas()[:5])
+                           + "……说个茶名，我告诉你水温和泡法。")
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "tea")
+                    return result
+
         # --- 养花知识（"绿萝怎么养" / "茉莉叶子黄了"）：先于养生，免得"怎么养"被当养生 ---
         if action is None and who.get("obey"):
             from . import gardening as _gd
