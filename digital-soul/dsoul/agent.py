@@ -779,6 +779,21 @@ class Agent:
                     self._log_journal(who, utterance, txt, "poetry")
                     return result
 
+        # --- 生肖星座·性格相配（"属狗的什么性格" / "天蝎座特点"）：先于算属相 ---
+        if action is None and who.get("obey"):
+            from . import zodiac_lore as _zl
+            if _zl.is_zodiac_lore_query(utterance):
+                u2 = utterance or ""
+                sign = _zl.find_sign(u2)
+                if sign and ("座" in u2):
+                    txt = _zl.sign_traits(sign)
+                else:
+                    txt = _zl.animal_traits(_zl.find_animal(u2)) or _zl.sign_traits(sign)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "zodiac_lore")
+                    return result
+
         # --- 生肖星座（"1948年属什么" / "三月八号什么星座"）---
         if action is None and who.get("obey"):
             from .zodiac import answer as _zod
