@@ -114,6 +114,9 @@ def warn(kind="", name="", utterance="") -> str:
 def is_fraud_question(utterance) -> bool:
     """直接来问'这是不是骗子/会不会是诈骗'。"""
     u = str(utterance or "")
+    # "反诈电话多少"是要号码，交给常用号码，别在这答成科普
+    if any(k in u for k in ("电话", "号码", "打几", "打多少", "几号")):
+        return False
     return any(k in u for k in ("是不是骗子", "是不是诈骗", "会不会是骗", "是骗子吗",
                                 "是诈骗吗", "这靠谱吗是不是骗", "反诈", "防诈骗"))
 

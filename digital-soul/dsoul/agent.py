@@ -1604,6 +1604,16 @@ class Agent:
                     self._log_journal(who, utterance, g, "game")
                     return result
 
+        # --- 常用号码（"报警电话多少" / "着火打几" / "反诈电话"）：公共服务号码，张口就有 ---
+        if action is None and who.get("obey"):
+            from .useful_numbers import is_number_query
+            if is_number_query(utterance):
+                txt = self.numbers_handle(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "useful_numbers")
+                    return result
+
         # --- 重要联系人（"小明的电话" / "联系人都有谁"）---
         if action is None and who.get("obey") and self.contacts is not None:
             u = utterance or ""
@@ -3595,6 +3605,14 @@ class Agent:
         cfg = self.identity if isinstance(self.identity, dict) else None
         name = self._addr(who) if who.get("known") else ""
         return for_utterance(utterance, name=name, config=cfg)
+
+    def numbers_handle(self, utterance="") -> str:
+        """常用号码：对症给一个；问"常用电话"就把救命的几个一并报清。"""
+        from . import useful_numbers as un
+        u = utterance or ""
+        if any(k in u for k in ("常用电话", "应急电话", "救命电话", "重要电话")):
+            return un.emergency()
+        return un.number_for(u) or un.emergency()
 
     def blessing_handle(self, utterance="") -> str:
         """祝福语：认出场合给一句应景的；认不出就帮你想想是啥场合。"""
