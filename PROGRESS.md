@@ -16,6 +16,8 @@
 - 回归验证 lingzhen-loads + byok-two-tier → test-results.json 全绿。lingzhen：/lingzhen 带与不带尾斜杠均 app.js HTTP 200、SPA 启动（证据截图带 URL 标签 + lingzhen-loads-result.txt）；byok：两档强制差异化（byok-two-tier-result.txt）。evaluator 独立复核 PASS——其间逮到一次「两张截图字节相同」的弱证据、已重拍修正。
 - 整站回归走查 lingzhen-regression：13 个主要页面逐页加载，关键选择器在场 + 0 JS 错误（screenshots/regression-result.txt + reg-01..13-*.png）。evaluator 抽看 5 页确认渲染正常、互异 → PASS。
 
+- 部署套件 deploy/：DEPLOY.md 手册 + bootstrap.sh 一键脚本 + systemd 单元 + Caddy/nginx 反代（含 SSE 关缓冲）+ deploy.sh 更新脚本。已验证：脚本语法、生产模式启动无安全告警、/api/health 正常。
+
 ## In progress
 - （空）
 
