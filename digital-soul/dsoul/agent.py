@@ -957,6 +957,16 @@ class Agent:
                     self._log_journal(who, utterance, txt, "shichen")
                     return result
 
+        # --- 生活小计算（"100打8折是多少" / "身高170体重65 BMI"）---
+        if action is None and who.get("obey"):
+            from . import calc_helper as _calc
+            if _calc.is_calc_query(utterance):
+                txt = _calc.answer(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "calc_helper")
+                    return result
+
         # --- 日常小问答（"三斤几公斤" / "今天星期几" / "二加七等于几"）：随口能答 ---
         if action is None and who.get("obey") and any(
                 k in (utterance or "") for k in ("多少", "等于", "几公斤", "几斤", "几两", "几米",
