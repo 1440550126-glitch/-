@@ -99,7 +99,7 @@ def voice_loop(agent, ears, mouth, monitor, wake=None) -> None:
         # 说动合一：边说边动，声音按节拍一句句出（带情绪 + 本人嗓音）
         from dsoul.perform import perform_spoken
         perform_spoken(res["reply"], emotion=_mood(agent), robot=getattr(agent, "robot", None),
-                       mouth=mouth, profile=agent.identity.get("voice"))
+                       mouth=mouth, profile=agent.identity.get("voice"), cues=True)
 
 
 def sleep_loop(agent, hours: float) -> None:

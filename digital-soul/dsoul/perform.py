@@ -41,33 +41,44 @@ def perform(robot, text, emotion=None) -> None:
     perform_spoken(text, emotion=emotion, robot=robot, mouth=None)
 
 
-def perform_spoken(text, emotion=None, robot=None, mouth=None, profile=None) -> None:
+def _voiced(seg, emotion, cues, first):
+    """有声起头：开口第一句按情绪/话意带上一口活气（嘿嘿/唉/嗯…），仅缀在头一句。"""
+    if cues and first:
+        from .vocalics import voice_lead
+        return voice_lead(seg, emotion)
+    return seg
+
+
+def perform_spoken(text, emotion=None, robot=None, mouth=None, profile=None, cues=False) -> None:
     """说与动合一（有声版）：每个节拍——嘴说一句（带情绪/本人嗓音）+ 身体动一下。
 
     mouth 为 None 时只动不发声（文本/仿真）；robot 为 None 时只发声不动。
+    cues=True 时，开口第一句会带上一口活气的小语气词（语音模式更像人）。
     """
     bs = beats(text, emotion)
     if not bs:
+        say = _voiced(str(text or ""), emotion, cues, True)
         if mouth is not None:
             try:
-                mouth.speak(str(text or ""), mood=emotion, profile=profile)
+                mouth.speak(say, mood=emotion, profile=profile)
             except Exception:
                 pass
         elif robot is not None:
             try:
-                robot.say(str(text or ""))
+                robot.say(say)
             except Exception:
                 pass
         return
-    for seg, (gname, gdetail) in bs:
+    for i, (seg, (gname, gdetail)) in enumerate(bs):
+        spoken = _voiced(seg, emotion, cues, i == 0)
         if mouth is not None:
             try:
-                mouth.speak(seg, mood=emotion, profile=profile)
+                mouth.speak(spoken, mood=emotion, profile=profile)
             except Exception:
                 pass
         elif robot is not None:
             try:
-                robot.say(seg)
+                robot.say(spoken)
             except Exception:
                 pass
         if robot is not None:

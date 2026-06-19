@@ -89,7 +89,7 @@ def main() -> None:
         # 说动合一：边说边点头/侧首/倾身，声音按节拍一句句出（带情绪 + 本人嗓音）
         from dsoul.perform import perform_spoken
         perform_spoken(res["reply"], emotion=mood, robot=getattr(agent, "robot", None),
-                       mouth=mouth, profile=profile)
+                       mouth=mouth, profile=profile, cues=True)   # 带一口活气的语气
 
 
 if __name__ == "__main__":

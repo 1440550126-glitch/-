@@ -66,6 +66,18 @@ def test_perform_spoken_mouth_and_body():
     assert not any(c[0] == "say" for c in r.calls)
 
 
+def test_perform_spoken_cues_lead_first_beat_only():
+    r, m = _Rec(), _Mouth()
+    perform_spoken("你来啦！进来坐。", emotion="喜", robot=r, mouth=m, cues=True)
+    said = [t for t, _ in m.said]
+    assert said[0].startswith("哎，")              # 头一句带了活气
+    assert not said[1].startswith("哎，")          # 后面不再叠
+    # 默认不带 cue
+    m2 = _Mouth()
+    perform_spoken("你来啦！进来坐。", emotion="喜", robot=_Rec(), mouth=m2)
+    assert not m2.said[0][0].startswith("哎，")
+
+
 def test_perform_spoken_robot_only_speaks_via_say():
     r = _Rec()
     perform_spoken("你好。", emotion="喜", robot=r, mouth=None)
