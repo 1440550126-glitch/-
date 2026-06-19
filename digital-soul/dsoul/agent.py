@@ -902,6 +902,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "zodiac_lore")
                     return result
 
+        # --- 天干地支（"2026年的干支" / "今年天干地支"）：干支纪年 ---
+        if action is None and who.get("obey"):
+            from . import ganzhi as _gz
+            if _gz.is_ganzhi_query(utterance):
+                txt = "六十甲子：" + "、".join(_gz.sexagenary()) if "六十甲子" in (utterance or "") \
+                    else _gz.answer(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "ganzhi")
+                    return result
+
         # --- 生肖星座（"1948年属什么" / "三月八号什么星座"）---
         if action is None and who.get("obey"):
             from .zodiac import answer as _zod
