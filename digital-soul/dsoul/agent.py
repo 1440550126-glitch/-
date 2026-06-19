@@ -529,6 +529,16 @@ class Agent:
                     self._log_journal(who, u, txt, "med_list")
                     return result
 
+        # --- 解梦（"梦见蛇是什么意思"）：按民间说法给个宽心吉利的解释 ---
+        if action is None and who.get("obey"):
+            from .dream_interpret import interpret, is_dream_query
+            if is_dream_query(utterance):
+                txt = interpret(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "dream_interpret")
+                    return result
+
         # --- 日常小问答（"三斤几公斤" / "今天星期几" / "二加七等于几"）：随口能答 ---
         if action is None and who.get("obey") and any(
                 k in (utterance or "") for k in ("多少", "等于", "几公斤", "几斤", "几两", "几米",
