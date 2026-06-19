@@ -736,6 +736,22 @@ class Agent:
                     self._log_journal(who, utterance, txt, "couplet")
                     return result
 
+        # --- 历史朝代（"背朝代歌" / "唐朝介绍" / "朝代顺序"）：给孙辈讲讲五千年 ---
+        if action is None and who.get("obey"):
+            from . import dynasties as _dy
+            if _dy.is_dynasty_query(utterance):
+                u2 = utterance or ""
+                if "朝代歌" in u2:
+                    txt = _dy.dynasty_song()
+                elif any(k in u2 for k in ("朝代顺序", "历史朝代", "朝代有哪些", "朝代排序")):
+                    txt = "朝代顺序：" + _dy.order()
+                else:
+                    txt = _dy.about(u2) or _dy.dynasty_song()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "dynasties")
+                    return result
+
         # --- 各地特产（"云南有什么特产" / "北京小吃有啥"）：聊聊见识、勾起念想 ---
         if action is None and who.get("obey"):
             from . import specialty as _sp
