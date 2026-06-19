@@ -671,6 +671,17 @@ class Agent:
                     self._log_journal(who, u, txt, "vitals")
                     return result
 
+        # --- 食疗（"咳嗽吃什么好" / "上火喝什么"）：温和的食补方子 ---
+        if action is None and who.get("obey"):
+            from .food_remedy import advice as _fr_adv
+            from .food_remedy import is_remedy_query
+            if is_remedy_query(utterance):
+                fr = _fr_adv(utterance)
+                if fr:
+                    result["reply"] = fr
+                    self._log_journal(who, utterance, fr, "food_remedy")
+                    return result
+
         # --- 急救常识（"烫伤了怎么办" / "流鼻血咋办"）：给几步当下能做的处置 ---
         if action is None and who.get("obey"):
             from .first_aid import advice, is_firstaid_query
