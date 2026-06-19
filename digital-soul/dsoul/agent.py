@@ -2044,6 +2044,19 @@ class Agent:
                     self._log_journal(who, utterance, txt, "tongue_twister")
                     return result
 
+        # --- 老游戏（"踢毽子怎么玩" / "讲讲小时候的游戏"）：怀旧、教孙辈 ---
+        if action is None and who.get("obey"):
+            from . import folk_games as _fg
+            _fgcfg = self.identity if isinstance(self.identity, dict) else None
+            if _fg.is_folk_game_query(utterance, _fgcfg):
+                txt = _fg.how_to(utterance, _fgcfg)
+                if not txt and any(k in (utterance or "") for k in ("老游戏", "小时候的游戏", "传统游戏", "民俗游戏")):
+                    txt = "老游戏可多了：" + "、".join(_fg.games(_fgcfg)[:8]) + "……想玩哪个跟我说。"
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "folk_games")
+                    return result
+
         # --- 玩游戏（"陪我玩个游戏" / "成语接龙" / "猜谜"）---
         if action is None and who.get("obey"):
             from .games import is_game_request
