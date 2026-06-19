@@ -736,6 +736,23 @@ class Agent:
                     self._log_journal(who, utterance, txt, "couplet")
                     return result
 
+        # --- 名山大川（"五岳是哪五座" / "泰山在哪" / "故宫介绍"）：祖国大好河山 ---
+        if action is None and who.get("obey"):
+            from . import landmarks as _lm
+            _lmcfg = self.identity if isinstance(self.identity, dict) else None
+            if _lm.is_landmark_query(utterance, _lmcfg):
+                u2 = utterance or ""
+                if "五岳" in u2 and not _lm.find_landmark(u2, _lmcfg):
+                    txt = _lm.five_mountains()
+                elif "四大名楼" in u2 or ("名楼" in u2 and not _lm.find_landmark(u2)):
+                    txt = "江南三大名楼是黄鹤楼、岳阳楼、滕王阁（加鹳雀楼并称四大名楼）。"
+                else:
+                    txt = _lm.about(u2, _lmcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "landmarks")
+                    return result
+
         # --- 认民族乐器（"二胡是什么乐器" / "琵琶名曲"）---
         if action is None and who.get("obey"):
             from . import instruments as _in
