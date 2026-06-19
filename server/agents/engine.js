@@ -288,7 +288,7 @@ function pickBestMember(task, members) {
 
 async function planTasks(run, team, members, kbIds) {
   // sequential 直接确定性编排，省 token
-  if (team.strategy === 'sequential') return { plan: fallbackPlan(run, team, members), byLLM: false, summary: '按既定工序串联流水线' };
+  if (team.strategy === 'sequential') return { plan: fallbackPlan(run, team, members), acceptance: localAcceptance(run.task), byLLM: false, summary: '按既定工序串联流水线' };
 
   const roster = members.map((m) => `#${m.id} ${m.name}（${m.role || '通用'}）`).join('\n');
   const sys = `你是 AI 团队「${team.name}」的编排官(队长)。团队使命：${team.goal || '按用户任务交付高质量成果'}。${team.manager_note || ''}\n` +
@@ -297,13 +297,20 @@ async function planTasks(run, team, members, kbIds) {
       : team.strategy === 'debate' ? '\n采用「论战」模式：让每位成员各自就任务给出独立观点，稍后由你综合。'
         : '\n采用「编排协作」模式：把任务拆给最合适的成员，必要时标注依赖。');
   const prompt = `用户任务：${run.task}\n` +
-    `只输出 JSON：{"plan":[{"step":"子任务标题","assignee":成员编号数字,"objective":"交给该成员的具体目标","depends_on":[前置子任务序号(从1开始)]}],"summary":"一句话拆解思路"}` +
-    `\n子任务数量${team.strategy === 'route' ? '恰好 1 个' : `2~${members.length + 1} 个`}。`;
-  const r = await llmStep({ userId: run.user_id, feature: 'agent_plan', tier: 'default', system: sys, prompt, json: true, maxTokens: 700, temperature: 0.4, fallback: () => null });
-  let plan = null, summary = '';
-  if (r.byLLM) { const parsed = parseJSON(r.text); plan = validatePlan(parsed, members); summary = parsed?.summary || ''; }
+    `先像专业项目经理一样定义本次交付的「验收标准(Definition of Done)」，再拆解任务。只输出 JSON：` +
+    `{"plan":[{"step":"子任务标题","assignee":成员编号数字,"objective":"交给该成员的具体目标","depends_on":[前置子任务序号(从1开始)]}],` +
+    `"acceptance":["可逐条核对的验收标准1","验收标准2","验收标准3"],"summary":"一句话拆解思路"}` +
+    `\n子任务数量${team.strategy === 'route' ? '恰好 1 个' : `2~${members.length + 1} 个`}；acceptance 给 3~5 条具体、可检验的成果标准。`;
+  const r = await llmStep({ userId: run.user_id, feature: 'agent_plan', tier: 'default', system: sys, prompt, json: true, maxTokens: 760, temperature: 0.4, fallback: () => null });
+  let plan = null, summary = '', acceptance = null;
+  if (r.byLLM) {
+    const parsed = parseJSON(r.text);
+    plan = validatePlan(parsed, members); summary = parsed?.summary || '';
+    if (Array.isArray(parsed?.acceptance)) acceptance = parsed.acceptance.map((x) => String(x).slice(0, 120)).filter(Boolean).slice(0, 6);
+  }
   if (!plan) plan = fallbackPlan(run, team, members);
-  return { plan, byLLM: r.byLLM, summary, tokens: r.tokens, cost: r.cost };
+  if (!acceptance || !acceptance.length) acceptance = localAcceptance(run.task);
+  return { plan, acceptance, byLLM: r.byLLM, summary, tokens: r.tokens, cost: r.cost };
 }
 
 // 拓扑排序（按 depends_on，1 基序号；异常时退回原序）
@@ -385,41 +392,62 @@ async function synthesize(run, team, members, blackboard) {
 // ============================================================
 const MAX_REFINE = 2;   // 自动改进最多轮数（安全上限，避免无限循环 / 成本失控）
 
-// 本地启发式验收（无大模型时使用）：任务要点覆盖率 + 篇幅
-export function localReview(task, result) {
-  const r = String(result || '');
-  const kws = topKeywords(task, 6);
-  const missing = kws.filter((k) => !r.includes(k));
-  const coverage = kws.length ? (kws.length - missing.length) / kws.length : 1;
-  const longEnough = r.length >= 120;
-  const pass = coverage >= 0.6 && longEnough;
-  const gaps = [];
-  if (coverage < 0.6) gaps.push(`产出未充分覆盖任务要点：${missing.slice(0, 4).join('、')}`);
-  if (!longEnough) gaps.push('内容偏单薄，需要更具体、可执行的细节与示例');
-  return { pass, score: pass ? 85 : Math.max(45, Math.round(coverage * 70)), gaps: gaps.length ? gaps : ['进一步打磨表达与可用性'] };
+// 验收标准（Definition of Done）——无大模型时的专业基线
+export function localAcceptance() {
+  return [
+    '完整、准确地回应任务的核心要求，不遗漏、不跑题',
+    '内容充实、可直接交付使用（有具体内容，不空话、不敷衍）',
+    '结构清晰，分点 / 分段呈现，重点突出',
+    '给出明确结论与可执行的下一步建议'
+  ];
 }
 
-// 验收官给出 pass / score / gaps，并作为一个步骤直播到作战室
-async function reviewResult(run, team, task, result, roundNo) {
-  const step = newStep(run.id, { phase: 'review', agent_id: 0, agent_name: '验收官 · 质控', agent_avatar: '✅', title: `对照任务验收产出（第 ${roundNo} 次）`, input: task, status: 'running' });
+// 本地逐条验收清单（对应 localAcceptance 的 4 个专业维度）；覆盖度按任务汉字字符匹配，更稳健
+export function localChecklist(task, result) {
+  const r = String(result || '');
+  const cjk = [...new Set(String(task).replace(/[^一-鿿]/g, '').split(''))];
+  const coverage = cjk.length ? cjk.filter((c) => r.includes(c)).length / cjk.length : (r.length > 40 ? 1 : 0);
+  const missing = topKeywords(task, 6).filter((k) => !r.includes(k));
+  const structured = /(\n\s*[-*\d]|\n#{1,3}\s)/.test(r);
+  const concluded = /(建议|下一步|总结|结论|next)/i.test(r);
+  const checks = [
+    { criterion: '完整覆盖任务要点', pass: coverage >= 0.6, note: coverage >= 0.6 ? '已覆盖主要内容' : '偏离任务，待补：' + missing.slice(0, 4).join('、') },
+    { criterion: '内容充实可用、不空话', pass: r.length >= 160, note: r.length >= 160 ? '篇幅充足' : '偏单薄，需更具体' },
+    { criterion: '结构清晰、分点呈现', pass: structured, note: structured ? '' : '建议分点 / 分段' },
+    { criterion: '给出结论与下一步建议', pass: concluded, note: concluded ? '' : '缺少结论 / 建议' }
+  ];
+  const passN = checks.filter((c) => c.pass).length;
+  const pass = checks[0].pass && passN >= 3;   // 必须覆盖要点 + 至少 3/4 达标
+  const gaps = checks.filter((c) => !c.pass).map((c) => `${c.criterion}${c.note ? `（${c.note}）` : ''}`);
+  return { pass, score: Math.round((passN / checks.length) * 100), checks, gaps };
+}
+
+// 验收官逐条对照「验收标准」检查产出，输出清单式结论并直播到作战室
+async function reviewResult(run, team, task, result, criteria, roundNo) {
+  const step = newStep(run.id, { phase: 'review', agent_id: 0, agent_name: '验收官 · 质控', agent_avatar: '✅', title: `按验收标准逐条检查（第 ${roundNo} 次）`, input: task, status: 'running' });
   let verdict = null, byLLM = false, tok = 0, cost = 0;
   if (llmEnabled()) {
     const r = await llmStep({
       userId: run.user_id, feature: 'agent_review', tier: 'default',
-      system: '你是严格的验收官。判断给定产出是否完整、准确地达成了用户任务。只输出 JSON：{"pass":true|false,"score":0-100,"gaps":["改进点1","改进点2"]}。当且仅当产出可直接交付、无明显缺漏时 pass=true；gaps 给具体、可执行的改进点（最多 4 条）。',
-      prompt: `用户任务：${task}\n\n当前产出：\n${String(result).slice(0, 2600)}\n\n请验收。`,
-      json: true, maxTokens: 320, temperature: 0.2, fallback: () => null
+      system: '你是严格的验收官(QA)。逐条对照给定「验收标准」检查产出。只输出 JSON：{"checks":[{"criterion":"标准原文","pass":true|false,"note":"达标说明或具体缺口"}],"pass":全部关键项达标则true,"score":0-100}。务必对每条标准都给出判断。',
+      prompt: `用户任务：${task}\n\n验收标准（逐条核对）：\n${criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}\n\n待验收产出：\n${String(result).slice(0, 2400)}`,
+      json: true, maxTokens: 540, temperature: 0.2, fallback: () => null
     });
     tok = r.tokens; cost = r.cost; byLLM = r.byLLM;
     const v = r.byLLM ? parseJSON(r.text) : null;
-    if (v && typeof v.pass === 'boolean') {
-      verdict = { pass: v.pass, score: clamp(Number(v.score ?? (v.pass ? 85 : 55)), 0, 100), gaps: (Array.isArray(v.gaps) ? v.gaps : []).slice(0, 4).map((x) => String(x).slice(0, 120)) };
+    if (v && Array.isArray(v.checks) && v.checks.length) {
+      const checks = v.checks.slice(0, 8).map((c) => ({ criterion: String(c.criterion || '').slice(0, 100), pass: !!c.pass, note: String(c.note || '').slice(0, 80) }));
+      const passN = checks.filter((c) => c.pass).length;
+      verdict = { pass: typeof v.pass === 'boolean' ? v.pass : passN === checks.length, score: clamp(Number(v.score ?? Math.round((passN / checks.length) * 100)), 0, 100), checks, gaps: checks.filter((c) => !c.pass).map((c) => `${c.criterion}${c.note ? `（${c.note}）` : ''}`) };
     }
   }
-  if (!verdict) verdict = localReview(task, result);
-  if (verdict.pass) verdict.gaps = [];
-  const head = verdict.pass ? '✅ 通过验收，可交付' : '⚠ 未通过，团队需要继续改进';
-  finishStep(run.id, step, { output: `${head}（评分 ${verdict.score}/100）` + (verdict.gaps.length ? `\n\n**待改进：**\n- ${verdict.gaps.join('\n- ')}` : ''), status: 'done', by_llm: byLLM ? 1 : 0, tokens: tok, cost });
+  if (!verdict) verdict = localChecklist(task, result);
+  const passN = verdict.checks.filter((c) => c.pass).length, total = verdict.checks.length;
+  const head = verdict.pass
+    ? `✅ 通过验收，可交付（${passN}/${total} 项达标 · 评分 ${verdict.score}）`
+    : `⚠ 未通过验收（${passN}/${total} 项达标 · 评分 ${verdict.score}），团队继续改进`;
+  const lines = verdict.checks.map((c) => `${c.pass ? '✅' : '❌'} ${c.criterion}${c.note ? ` —— ${c.note}` : ''}`).join('\n');
+  finishStep(run.id, step, { output: `${head}\n\n${lines}`, status: 'done', by_llm: byLLM ? 1 : 0, tokens: tok, cost });
   return verdict;
 }
 
@@ -530,14 +558,15 @@ export async function executeRun(runId) {
     if (!members.length) throw new Error('团队还没有可用成员，请先添加成员');
     const kbIds = (jparse(team.knowledge_ids, []) || []).map(Number).filter(Boolean);
 
-    // ① 计划
-    const planStep = newStep(run.id, { phase: 'plan', title: '编排官拆解任务、分派成员', input: run.task, status: 'running' });
-    const { plan, byLLM: planByLLM, summary, tokens: pt = 0, cost: pc = 0 } = await planTasks(run, team, members, kbIds);
+    // ① 计划 + 验收标准（Definition of Done）
+    const planStep = newStep(run.id, { phase: 'plan', title: '编排官拆解任务、定义验收标准、分派成员', input: run.task, status: 'running' });
+    const { plan, acceptance, byLLM: planByLLM, summary, tokens: pt = 0, cost: pc = 0 } = await planTasks(run, team, members, kbIds);
     const planView = plan.map((p, i) => {
       const m = members.find((x) => x.id === p.agentId);
       return `${i + 1}. ${p.step} → ${m ? m.avatar + ' ' + m.name : '成员'}：${p.objective}${p.depends_on?.length ? `（依赖 ${p.depends_on.join(',')}）` : ''}`;
     }).join('\n');
-    finishStep(run.id, planStep, { output: (summary ? summary + '\n\n' : '') + planView, status: 'done', by_llm: planByLLM ? 1 : 0, tokens: pt, cost: pc });
+    const accView = acceptance.length ? '\n\n📋 验收标准（Definition of Done）：\n' + acceptance.map((c, i) => `${i + 1}. ${c}`).join('\n') : '';
+    finishStep(run.id, planStep, { output: (summary ? summary + '\n\n' : '') + '【分派】\n' + planView + accView, status: 'done', by_llm: planByLLM ? 1 : 0, tokens: pt, cost: pc });
     q.run('UPDATE agent_runs SET plan = ?, by_llm = MAX(by_llm, ?) WHERE id = ?', JSON.stringify(plan), planByLLM ? 1 : 0, run.id);
 
     if (isStopped(run.id)) return finalizeStopped(run.id);
@@ -562,7 +591,7 @@ export async function executeRun(runId) {
     let { result, byLLM: synAny } = await synthesize(run, team, members, blackboard);
     for (let round = 0; round <= MAX_REFINE; round++) {
       if (isStopped(run.id)) return finalizeStopped(run.id);
-      const review = await reviewResult(run, team, run.task, result, round + 1);
+      const review = await reviewResult(run, team, run.task, result, acceptance, round + 1);
       if (review.pass || round === MAX_REFINE) break;
       await refineRound(run, team, members, blackboard, review.gaps, kbIds, round + 1);
       if (isStopped(run.id)) return finalizeStopped(run.id);
