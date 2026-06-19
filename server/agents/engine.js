@@ -136,43 +136,74 @@ async function runSubtask(run, team, agent, item, blackboard, kbIds) {
   const memo = blackboard.map((b) => `【${b.agentName} 的产出 · ${b.step}】\n${b.output}`).join('\n\n').slice(0, 1800);
   const observations = [];
   const maxRounds = clamp(team.max_rounds, 1, AGENT_QUOTA.MAX_TOOL_ROUNDS);
-  let final = null, usedLLM = false, tok = 0, cost = 0;
+  let final = null, usedLLM = false, tok = 0, cost = 0, flagged = false;
 
-  if (llmEnabled() && toolIds.length) {
-    const sys = agentSystemPrompt(agent, toolIds);
-    for (let round = 0; round < maxRounds && !isStopped(run.id); round++) {
-      const prompt =
-        `子任务：${item.step}\n目标：${item.objective}\n用户原始任务：${run.task}\n` +
-        (memo ? `\n队友已完成的产出（可参考、衔接）：\n${memo}\n` : '') +
-        (observations.length ? `\n你已经获得的工具结果：\n${observations.join('\n')}\n` : '') +
-        `\n现在请决定下一步（输出单个 JSON）。`;
-      const r = await llmStep({ userId: run.user_id, feature: 'agent_act', tier: agent.tier, system: sys, prompt, json: true, maxTokens: 700, temperature: agent.temperature ?? 0.6, fallback: () => null });
-      tok += r.tokens; cost += r.cost; usedLLM = usedLLM || r.byLLM;
-      const action = r.byLLM ? parseJSON(r.text) : null;
-      if (!action) { final = r.text || null; break; }
-      if (action.action === 'tool' && toolIds.includes(action.tool)) {
-        await runToolStep(run, agent, action.tool, action.args || {}, kbIds, observations);
-        continue;
+  async function produce() {
+    if (llmEnabled() && toolIds.length) {
+      const sys = agentSystemPrompt(agent, toolIds);
+      for (let round = 0; round < maxRounds && !isStopped(run.id); round++) {
+        const prompt =
+          `子任务：${item.step}\n目标：${item.objective}\n用户原始任务：${run.task}\n` +
+          (memo ? `\n队友已完成的产出（可参考、衔接）：\n${memo}\n` : '') +
+          (observations.length ? `\n你已经获得的工具结果：\n${observations.join('\n')}\n` : '') +
+          `\n现在请决定下一步（输出单个 JSON）。`;
+        const r = await llmStep({ userId: run.user_id, feature: 'agent_act', tier: agent.tier, system: sys, prompt, json: true, maxTokens: 700, temperature: agent.temperature ?? 0.6, fallback: () => null });
+        tok += r.tokens; cost += r.cost; usedLLM = usedLLM || r.byLLM;
+        const action = r.byLLM ? parseJSON(r.text) : null;
+        if (!action) return r.text || null;
+        if (action.action === 'tool' && toolIds.includes(action.tool)) { await runToolStep(run, agent, action.tool, action.args || {}, kbIds, observations); continue; }
+        return action.output ?? action.final ?? action.result ?? (typeof action === 'string' ? action : null);
       }
-      final = action.output ?? action.final ?? action.result ?? (typeof action === 'string' ? action : null);
-      break;
+      return null;
+    } else if (llmEnabled()) {
+      const r = await llmStep({
+        userId: run.user_id, feature: 'agent_act', tier: agent.tier, system: agentSystemPrompt(agent, []),
+        prompt: `子任务：${item.step}\n目标：${item.objective}\n用户原始任务：${run.task}\n` + (memo ? `\n队友产出：\n${memo}\n` : '') + '\n请给出你的产出。',
+        maxTokens: 800, temperature: agent.temperature ?? 0.6, fallback: () => null
+      });
+      tok += r.tokens; cost += r.cost; usedLLM = usedLLM || r.byLLM;
+      return r.byLLM ? r.text : null;
     }
-  } else if (llmEnabled()) {
-    // 有大模型但该成员无工具：一次性产出
-    const r = await llmStep({
-      userId: run.user_id, feature: 'agent_act', tier: agent.tier,
-      system: agentSystemPrompt(agent, []),
-      prompt: `子任务：${item.step}\n目标：${item.objective}\n用户原始任务：${run.task}\n` + (memo ? `\n队友产出：\n${memo}\n` : '') + '\n请给出你的产出。',
-      maxTokens: 800, temperature: agent.temperature ?? 0.6, fallback: () => null
-    });
-    tok += r.tokens; cost += r.cost; usedLLM = r.byLLM; final = r.byLLM ? r.text : null;
+    return null;
+  }
+
+  // 失败可重试 + 升级：执行异常时自动重试一次，仍失败则降级并标注「需人工介入」
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try { final = await produce(); break; }
+    catch (e) {
+      console.warn('[agent] subtask error', agent.id, item.step, e.message);
+      if (attempt === 1) { flagged = true; }
+      else {
+        const div = newStep(run.id, { phase: 'system', title: `${agent.name} 执行异常，自动重试`, status: 'running' });
+        finishStep(run.id, div, { output: `↻ ${agent.name} 首次执行出错（${String(e.message).slice(0, 80)}），自动重试一次…`, status: 'done' });
+      }
+    }
   }
 
   if (final == null || !String(final).trim()) {
-    final = await localProduce(run, agent, item, memo, toolIds, kbIds, observations);
+    if (flagged) final = `（⚠ ${agent.name} 本环节连续两次执行异常，已自动重试仍未完成，建议人工介入或稍后重跑。）`;
+    else { try { final = await localProduce(run, agent, item, memo, toolIds, kbIds, observations); } catch { flagged = true; final = `（⚠ ${agent.name} 本环节执行异常，建议人工介入。）`; } }
   }
-  finishStep(run.id, step, { output: String(final).trim(), status: 'done', by_llm: usedLLM ? 1 : 0, tokens: tok, cost });
-  blackboard.push({ agentId: agent.id, agentName: agent.name, step: item.step, output: String(final).trim() });
+
+  const clean = String(final).trim();
+  const sc = selfCheck(item, clean, flagged);
+  finishStep(run.id, step, { output: clean + '\n\n' + sc.note, status: flagged ? 'failed' : 'done', by_llm: usedLLM ? 1 : 0, tokens: tok, cost });
+  blackboard.push({ agentId: agent.id, agentName: agent.name, step: item.step, output: clean, flagged });
+}
+
+// 成员交活前自检：对照子任务目标，确认要点齐备、篇幅达标（减少返工）
+function selfCheck(item, output, flagged) {
+  if (flagged) return { ok: false, note: '🔍 自检：本环节执行异常，需人工复核。' };
+  const o = String(output || '');
+  const kws = topKeywords(`${item.objective || ''} ${item.step || ''}`, 4);
+  const missing = kws.filter((k) => !o.includes(k));
+  const okCover = kws.length === 0 || missing.length <= Math.ceil(kws.length / 2);
+  const okLen = o.length >= 60;
+  const ok = okCover && okLen;
+  const note = ok
+    ? '🔍 自检：已对照目标完成，要点齐备，可交接下游。'
+    : `🔍 自检：${!okLen ? '产出偏短、' : ''}${!okCover ? '部分要点待补、' : ''}已尽力，建议下游与验收重点关注。`;
+  return { ok, note };
 }
 
 // ---- 本地兜底产出：先按启发式真实调用一个工具，再组织角色视角的结构化结论 ----
@@ -251,7 +282,8 @@ function validatePlan(raw, members) {
       step: String(it.step || it.title || `子任务 ${out.length + 1}`).slice(0, 60),
       agentId: agent.id,
       objective: String(it.objective || it.goal || run_taskOf(it) || '').slice(0, 400) || `完成「${it.step || ''}」`,
-      depends_on: Array.isArray(it.depends_on) ? it.depends_on.map(Number).filter((x) => x >= 1) : []
+      depends_on: Array.isArray(it.depends_on) ? it.depends_on.map(Number).filter((x) => x >= 1) : [],
+      estimate_min: Number(it.estimate_min) > 0 ? clamp(Math.round(Number(it.estimate_min)), 1, 120) : undefined
     });
   }
   return out.length ? out : null;
@@ -286,9 +318,19 @@ function pickBestMember(task, members) {
   return best;
 }
 
+// 为计划补齐 RACI 与工时：负责(R)=承接成员，复核(C)=质检类成员或总编，预计工时按目标体量估算
+function enrichPlan(plan, members) {
+  const reviewer = members.find((m) => /质检|审阅|审核|critic|镜|复核|检查|挑错/i.test(`${m.role} ${m.name}`));
+  for (const p of plan) {
+    if (!(Number(p.estimate_min) > 0)) p.estimate_min = clamp(Math.round(String(p.objective || '').length / 12) + 5, 5, 30);
+    if (!p.reviewer) p.reviewer = (reviewer && reviewer.id !== p.agentId) ? reviewer.name : '总编 · 整合官';
+  }
+  return plan;
+}
+
 async function planTasks(run, team, members, kbIds) {
   // sequential 直接确定性编排，省 token
-  if (team.strategy === 'sequential') return { plan: fallbackPlan(run, team, members), acceptance: localAcceptance(run.task), byLLM: false, summary: '按既定工序串联流水线' };
+  if (team.strategy === 'sequential') return { plan: enrichPlan(fallbackPlan(run, team, members), members), acceptance: localAcceptance(run.task), byLLM: false, summary: '按既定工序串联流水线' };
 
   const roster = members.map((m) => `#${m.id} ${m.name}（${m.role || '通用'}）`).join('\n');
   const sys = `你是 AI 团队「${team.name}」的编排官(队长)。团队使命：${team.goal || '按用户任务交付高质量成果'}。${team.manager_note || ''}\n` +
@@ -298,7 +340,7 @@ async function planTasks(run, team, members, kbIds) {
         : '\n采用「编排协作」模式：把任务拆给最合适的成员，必要时标注依赖。');
   const prompt = `用户任务：${run.task}\n` +
     `先像专业项目经理一样定义本次交付的「验收标准(Definition of Done)」，再拆解任务。只输出 JSON：` +
-    `{"plan":[{"step":"子任务标题","assignee":成员编号数字,"objective":"交给该成员的具体目标","depends_on":[前置子任务序号(从1开始)]}],` +
+    `{"plan":[{"step":"子任务标题","assignee":成员编号数字,"objective":"交给该成员的具体目标","estimate_min":预计工时分钟数,"depends_on":[前置子任务序号(从1开始)]}],` +
     `"acceptance":["可逐条核对的验收标准1","验收标准2","验收标准3"],"summary":"一句话拆解思路"}` +
     `\n子任务数量${team.strategy === 'route' ? '恰好 1 个' : `2~${members.length + 1} 个`}；acceptance 给 3~5 条具体、可检验的成果标准。`;
   const r = await llmStep({ userId: run.user_id, feature: 'agent_plan', tier: 'default', system: sys, prompt, json: true, maxTokens: 760, temperature: 0.4, fallback: () => null });
@@ -309,6 +351,7 @@ async function planTasks(run, team, members, kbIds) {
     if (Array.isArray(parsed?.acceptance)) acceptance = parsed.acceptance.map((x) => String(x).slice(0, 120)).filter(Boolean).slice(0, 6);
   }
   if (!plan) plan = fallbackPlan(run, team, members);
+  plan = enrichPlan(plan, members);
   if (!acceptance || !acceptance.length) acceptance = localAcceptance(run.task);
   return { plan, acceptance, byLLM: r.byLLM, summary, tokens: r.tokens, cost: r.cost };
 }
@@ -362,22 +405,28 @@ async function runDebate(run, team, members, kbIds) {
 // ============================================================
 function localSynthesize(run, team, blackboard) {
   const stratName = STRATEGIES[team.strategy]?.name || team.strategy;
-  const lead = !blackboard.length
+  const roles = blackboard.map((b) => b.agentName).join('、');
+  const flagged = blackboard.filter((b) => b.flagged);
+  const sections = blackboard.map((b) => `### ${b.agentName} · ${b.step}\n${b.output}`).join('\n\n');
+  const summary = !blackboard.length
     ? `团队就「${run.task}」完成了处理。`
     : team.strategy === 'debate'
-      ? `${blackboard.length} 位成员经过多轮交锋，围绕「${run.task}」形成了下列立场；如需更精炼的共识/分歧裁决，配置大模型 Key 后重跑即可。`
-      : `团队已从 ${blackboard.length} 个角度完成「${run.task}」，以下是整合后的成果与下一步建议。`;
-  const sections = blackboard.map((b) => `### ${b.agentName} · ${b.step}\n${b.output}`).join('\n\n');
-  const roles = blackboard.map((b) => b.agentName).join('、');
+      ? `${blackboard.length} 位成员围绕「${run.task}」多轮交锋，下面汇总各方立场与可取之处。`
+      : `${team.name} 的 ${blackboard.length} 位成员从不同角度协作完成「${run.task}」，已整合为可直接使用的成果。`;
+  const risks = [];
+  if (flagged.length) risks.push(`**${flagged.map((f) => f.agentName).join('、')}** 的环节执行异常、已重试仍未完成，建议人工复核或重跑该部分。`);
+  risks.push('部分结论基于通用经验给出，落地前请结合你的实际数据 / 场景核验。');
+  risks.push('如需更强的事实性与更深入的产出，配置大模型 Key 后重跑本团队即可。');
   return `# 「${run.task}」· 团队交付\n> 由 ${team.name}（${stratName}）的 ${blackboard.length} 位成员协作完成：${roles}\n\n` +
-    `**一句话结论**：${lead}\n\n## 各部分产出\n${sections}\n\n## 下一步建议\n` +
-    `- 选取上面最关键的 1~2 个结论先行落地，快速验证；\n- 把仍标注「待确认」的点补齐资料或数据后复跑；\n- 如需更高质量，配置大模型 Key 后重跑本团队即可获得更深入的产出。`;
+    `## 执行摘要（TL;DR）\n${summary}\n\n## 各部分产出\n${sections}\n\n` +
+    `## 假设与风险\n${risks.map((x) => '- ' + x).join('\n')}\n\n## 下一步建议\n` +
+    `- 选取最关键的 1~2 个结论先行落地、快速验证；\n- 把仍标注「待确认」的点补齐资料或数据后复跑；\n- 需要规模化时用「批量运行」对多条输入套用同一流程。`;
 }
 
 async function synthesize(run, team, members, blackboard) {
   const sys = team.strategy === 'debate'
-    ? `你是圆桌论战的主持总编。综合各成员的观点，写出中文 Markdown：先给「一句话裁决」，再分「共识」「分歧」两栏，最后给「结论与建议」。客观中立，不偏袒某一方。`
-    : `你是团队「${team.name}」的总编。把成员们的产出整合成给用户的最终交付物：结构清晰、可直接使用的中文 Markdown；开头给一句话结论，中间分要点，最后给「下一步建议」。只给成果，不要复述过程。`;
+    ? `你是圆桌论战的主持总编。综合各成员观点，输出中文 Markdown，结构固定为：## 执行摘要（TL;DR，一句话裁决）→ ## 共识 → ## 分歧 → ## 假设与风险 → ## 结论与建议。客观中立，不偏袒某一方。`
+    : `你是团队「${team.name}」的总编。把成员们的产出整合成给用户的最终交付物，中文 Markdown，结构固定为：## 执行摘要（TL;DR，一段话讲清结论）→ ## 正文（分点 / 分模块呈现核心成果）→ ## 假设与风险（列出关键假设与待确认风险）→ ## 下一步建议。只给成果，不要复述过程。`;
   const parts = blackboard.map((b) => `## ${b.agentName} · ${b.step}\n${b.output}`).join('\n\n');
   const prompt = `用户任务：${run.task}\n团队策略：${STRATEGIES[team.strategy]?.name || team.strategy}\n各成员产出：\n${parts}\n\n请整合成最终交付物。`;
   const step = newStep(run.id, { phase: 'synthesize', agent_id: 0, agent_name: '总编 · 整合官', agent_avatar: '🧩', title: '整合各成员产出，生成最终交付物', input: run.task, status: 'running' });
@@ -563,10 +612,11 @@ export async function executeRun(runId) {
     const { plan, acceptance, byLLM: planByLLM, summary, tokens: pt = 0, cost: pc = 0 } = await planTasks(run, team, members, kbIds);
     const planView = plan.map((p, i) => {
       const m = members.find((x) => x.id === p.agentId);
-      return `${i + 1}. ${p.step} → ${m ? m.avatar + ' ' + m.name : '成员'}：${p.objective}${p.depends_on?.length ? `（依赖 ${p.depends_on.join(',')}）` : ''}`;
+      return `${i + 1}. ${p.step}\n   · 负责(R) ${m ? m.avatar + ' ' + m.name : '成员'}　· 复核(C) ${p.reviewer}　· 预计 ${p.estimate_min} 分钟${p.depends_on?.length ? `　· 依赖 #${p.depends_on.join(',')}` : ''}\n   · 目标：${p.objective}`;
     }).join('\n');
+    const totalMin = plan.reduce((s, p) => s + (Number(p.estimate_min) || 0), 0);
     const accView = acceptance.length ? '\n\n📋 验收标准（Definition of Done）：\n' + acceptance.map((c, i) => `${i + 1}. ${c}`).join('\n') : '';
-    finishStep(run.id, planStep, { output: (summary ? summary + '\n\n' : '') + '【分派】\n' + planView + accView, status: 'done', by_llm: planByLLM ? 1 : 0, tokens: pt, cost: pc });
+    finishStep(run.id, planStep, { output: (summary ? summary + '\n\n' : '') + `【分派 · 预计总工时 ${totalMin} 分钟】\n` + planView + accView, status: 'done', by_llm: planByLLM ? 1 : 0, tokens: pt, cost: pc });
     q.run('UPDATE agent_runs SET plan = ?, by_llm = MAX(by_llm, ?) WHERE id = ?', JSON.stringify(plan), planByLLM ? 1 : 0, run.id);
 
     if (isStopped(run.id)) return finalizeStopped(run.id);
