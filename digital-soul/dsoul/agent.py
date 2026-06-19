@@ -514,6 +514,18 @@ class Agent:
                     return result
 
         # --- 报喜：家人有了好消息，由衷替TA高兴（并记进里程碑）---
+        # --- 看天识天（"燕子低飞是要下雨吗" / "蚂蚁搬家"）：先于报喜，免得把"蚂蚁搬家"当乔迁 ---
+        if action is None and who.get("obey"):
+            from . import weather_lore as _wl
+            _wcfg = self.identity if isinstance(self.identity, dict) else None
+            if _wl.is_weather_lore_query(utterance, _wcfg):
+                txt = _wl.lore_for(utterance, _wcfg) or _wl.random_lore(
+                    seed=utterance or "", config=_wcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "weather_lore")
+                    return result
+
         # --- 祝福语 / 贺词（"结婚说句祝福语" / "拜年话咋说"）：要的就是句体面话，先于报喜/寄语 ---
         if action is None and who.get("obey"):
             from .blessings import is_blessing_request
