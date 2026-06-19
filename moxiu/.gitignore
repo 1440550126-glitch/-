@@ -1,0 +1,5 @@
+node_modules/
+art/fonts/*.ttf
+art/fonts/*.ttc
+art/solo.png
+art/smoke.*

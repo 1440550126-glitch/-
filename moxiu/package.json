@@ -1,0 +1,13 @@
+{
+  "name": "moxiu",
+  "private": true,
+  "type": "module",
+  "description": "墨修 · 水墨风修仙放置小游戏（抖音/H5）",
+  "scripts": {
+    "art": "node art/gen.mjs all",
+    "art:fonts": "bash art/fetch-fonts.sh"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  }
+}
