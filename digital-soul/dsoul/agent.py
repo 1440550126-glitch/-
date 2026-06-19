@@ -1549,6 +1549,18 @@ class Agent:
                     self._log_journal(who, u, txt, "ledger")
                     return result
 
+        # --- 动动脑（口算/记性/找不同/补老话）：陪老人练脑、防糊涂 ---
+        if action is None and who.get("obey"):
+            from .brain_train import a_drill, is_brain_train
+            if is_brain_train(utterance):
+                from datetime import datetime
+                _k, q, ans = a_drill(seed=str(datetime.now().microsecond) + (utterance or ""))
+                self._pending_riddle = (q, ans)          # 复用"待答—核对"机制
+                txt = q + "（想想看，想不出就说「答案」）"
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "brain_train")
+                return result
+
         # --- 绕口令（"来个绕口令" / "练练嘴"）：跟语音一脉，练嘴皮逗个乐 ---
         if action is None and who.get("obey"):
             from .tongue_twister import is_twister_request
