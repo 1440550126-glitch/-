@@ -1174,6 +1174,16 @@ class Agent:
                 self._log_journal(who, utterance, txt, "cooking_today")
                 return result
 
+        # --- 应季时鲜（"现在吃什么水果当季" / "有什么应季的菜"）---
+        if action is None and who.get("obey"):
+            from .seasonal_food import is_seasonal_query, whats_fresh
+            if is_seasonal_query(utterance):
+                txt = whats_fresh()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "seasonal_food")
+                    return result
+
         # --- 家传菜谱（"外婆的红烧肉怎么做" / "你有什么拿手菜"）---
         if action is None and who.get("obey") and self.recipes and (
                 "怎么做" in (utterance or "") or "咋做" in (utterance or "")
