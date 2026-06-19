@@ -694,7 +694,13 @@ class Agent:
                     result["reply"] = txt
                     self._log_journal(who, uc, txt, "countdown_add")
                     return result
-            if (("离" in uc or "距离" in uc) and any(k in uc for k in ("还有", "多久", "几天", "多少天"))):
+            has_ask = any(k in uc for k in ("还有", "还剩", "多久", "几天", "多少天"))
+            explicit = ("离" in uc or "距离" in uc)
+            is_fest = False
+            if has_ask:
+                from .festival_dates import canonical
+                is_fest = bool(canonical(self._countdown_name(uc)))
+            if has_ask and (explicit or is_fest):
                 txt = self.countdown_query(uc)
                 if txt:
                     result["reply"] = txt
@@ -3141,7 +3147,14 @@ class Agent:
         if self.countdown is None:
             return ""
         name = self._countdown_name(utterance)
-        return self.countdown.describe(name) if name else ""
+        if not name:
+            return ""
+        from .festival_dates import canonical, describe
+        if canonical(name):                      # 是节日 → 用内置阳历表离线算
+            s = describe(name)
+            if s:
+                return s
+        return self.countdown.describe(name)
 
     def add_countdown(self, utterance) -> str:
         from .countdown import parse_date
