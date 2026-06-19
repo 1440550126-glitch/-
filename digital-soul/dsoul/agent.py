@@ -458,6 +458,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "joy")
                     return result
 
+        # --- 放下旧怨/悔：心里搁着没原谅、对不起、当年的悔，劝你松开、趁来得及去和好 ---
+        if action is None and who.get("obey"):
+            from .reconcile import senses_regret, soothe_regret
+            if senses_regret(utterance):
+                txt = soothe_regret(utterance, name=who.get("name", ""))
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="哀", topic="放下")
+                    self._log_journal(who, utterance, txt, "reconcile")
+                    return result
+
         # --- 宽慰忧虑：家人说出担心/害怕，先认同那份不安，再轻轻宽慰 ---
         if action is None and who.get("obey"):
             from .worries import senses_worry
