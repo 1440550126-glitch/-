@@ -10,7 +10,7 @@ import { STRATEGIES, STRATEGY_LIST, AGENT_QUOTA } from '../agents/catalog.js';
 import { startTeamRun, runTeamSync, stopRun, resolveTask, startBatch } from '../agents/engine.js';
 import { computeNext, fireTrigger, MIN_INTERVAL_MIN, MAX_TRIGGERS } from '../agents/scheduler.js';
 import { assertSafeHop } from '../agents/safefetch.js';
-import { useQuota, quotaUsed, todayCostMicro, resolveLLM, invalidateUserLLM, chatLLM, userHasLLM } from '../lib/llm.js';
+import { useQuota, quotaUsed, todayCostMicro, resolveLLM, invalidateUserLLM, chatLLM, userHasLLM, llmEnabled } from '../lib/llm.js';
 import { LLM_PROVIDERS, findProvider } from '../lib/llm-providers.js';
 import { seal } from '../lib/secretbox.js';
 
@@ -56,7 +56,7 @@ GET('/api/agents/meta', async (ctx) => {
     strategies: STRATEGY_LIST,
     quota: { used, limit, left: Math.max(0, limit - used) },
     limits: { max_members: AGENT_QUOTA.MAX_MEMBERS, max_rounds: AGENT_QUOTA.MAX_TOOL_ROUNDS },
-    member, byok
+    member, byok, platform_llm: llmEnabled()
   };
 }, { auth: true });
 
@@ -74,7 +74,7 @@ GET('/api/agents/usage', async (ctx) => {
   const member = isMember(ctx.user);
   const byok = userHasLLM(uidv);
   return {
-    member, byok, runs,
+    member, byok, platform_llm: llmEnabled(), runs,
     quota: {
       run: { used: quotaUsed(uidv, 'agent_run'), limit: dailyRunLimit(ctx.user) },
       api: { used: quotaUsed(uidv, 'agent_api'), limit: 50 }

@@ -1134,18 +1134,18 @@ async function renderPricing() {
       h('div', { class: 'lz-sec-t big' }, '👑 订阅 · 包月解锁全力的 AI 团队'),
       member
         ? h('div', { class: 'lz-member-ok' }, `你已订阅 · 有效期至 ${until.getFullYear()}-${until.getMonth() + 1}-${until.getDate()}。`, h('a', { class: 'lz-link', onclick: () => nav('#/llm') }, '去填自己的大模型 Key，不限量跑 →'))
-        : h('p', { class: 'lz-intro' }, '本产品按月订阅：包月解锁平台全部能力，模型用你自己的 Key（任意 OpenAI 兼容：豆包 / DeepSeek / 通义…），成本透明、会员不限量。当前为沙盒支付，开通即时生效。'),
+        : h('p', { class: 'lz-intro' }, '按月订阅，两种用法随你：开箱即用（平台模型，每天 80 次，免配置）；或自带大模型 Key（任意 OpenAI 兼容：豆包 / DeepSeek / 通义…）用自己的模型不限量跑。当前为沙盒支付，开通即时生效。'),
       h('div', { class: 'lz-cmp' },
         h('div', { class: 'lz-cmp-head' }, h('span', {}, '能力'), h('span', {}, '免费体验'), h('span', { class: 'lz-cmp-vip' }, '包月订阅')),
-        cmp('每日团队运行', '8 次', '自带 Key 不限量'),
-        cmp('自带大模型 Key（BYOK）', '—', '✓ 任意 OpenAI 兼容'),
-        cmp('高级模型协作 + 验收官迭代', '本地引擎', '✓ 你的模型全力跑'),
+        cmp('开箱即用（平台模型 · 免配置）', '8 次/天', '✓ 80 次/天'),
+        cmp('自带 Key 解锁不限量（可选）', '—', '✓ 任意 OpenAI 兼容'),
+        cmp('多智能体协作 + 验收官迭代', '本地引擎', '✓ 平台 / 自带模型'),
         cmp('批量 / 定时 / 知识库 / API / Webhook', '✓', '✓'),
         cmp('结果分享 / 团队记忆 / 草稿箱', '✓', '✓')),
       h('div', { class: 'lz-plans' }, cat.member_plans.map(planCard)),
       h('div', { class: 'lz-upsell', onclick: () => nav('#/llm') },
-        h('div', {}, h('b', {}, '🔑 订阅后自带大模型 Key'), h('small', {}, '豆包 / DeepSeek / 通义 / OpenAI… 任选，用自己的模型与额度，不限量跑')),
-        h('button', { class: 'lz-btn' }, '去设置 →')),
+        h('div', {}, h('b', {}, '🔑 想不限量？自带大模型 Key（可选）'), h('small', {}, '不想折腾就用平台模型开箱即用；要不限量再填自己的 Key')),
+        h('button', { class: 'lz-btn' }, '模型设置 →')),
       h('div', { class: 'lz-sec-t' }, '开通后还一并获得'),
       h('ul', { class: 'lz-benefits' }, (cat.member_benefits || []).map((b) => h('li', {}, b))),
       h('p', { class: 'lz-hint' }, cat.fair_play || '沙盒支付环境，正式上线将接入微信支付 / 支付宝 / Apple 内购。')));
@@ -1369,11 +1369,13 @@ async function renderLLM() {
 
     mount(shell(
       h('button', { class: 'lz-back', onclick: () => nav('#/me') }, '‹ 个人中心'),
-      h('div', { class: 'lz-sec-t big' }, '🔑 模型设置 · 自带大模型 Key'),
+      h('div', { class: 'lz-sec-t big' }, '🔑 模型设置'),
       config
-        ? h('div', { class: 'lz-member-ok' }, `已接入：${prov(config.provider).name} · ${config.model_default}。你的任务正用自己的模型跑，会员可不限量。`)
-        : h('p', { class: 'lz-intro' }, '订阅后自带任意大模型 Key（OpenAI 兼容即可），任务就用你自己的模型与额度跑——成本透明、会员不限量。Key 只存服务端、绝不下发前端。'),
-      h('div', { class: 'lz-sec-t' }, '① 选择模型提供方'),
+        ? h('div', { class: 'lz-member-ok' }, `🔑 已接入你的 Key：${prov(config.provider).name} · ${config.model_default}。任务用你自己的模型跑，会员不限量。`)
+        : state.meta?.platform_llm
+          ? h('div', { class: 'lz-member-ok' }, `✅ 省心模式已就绪：无需任何配置，订阅即用平台模型（每天 ${state.meta.quota?.limit ?? 80} 次）。想不限量或换成自己的模型，再在下方自带 Key —— 可选。`)
+          : h('p', { class: 'lz-intro' }, '两种用法任选其一：① 让运营开启「省心模式」用平台模型（开箱即用）；② 自带任意大模型 Key（OpenAI 兼容），用自己的模型与额度、不限量。Key 只存服务端、绝不下发前端。'),
+      h('div', { class: 'lz-sec-t' }, '① 选择模型提供方（可选 · 不填走省心模式）'),
       picker,
       h('div', { class: 'lz-form' },
         h('div', { class: 'lz-sec-t' }, '② 填写你的配置'),
