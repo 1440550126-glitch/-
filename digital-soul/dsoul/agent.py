@@ -513,6 +513,16 @@ class Agent:
                     return result
 
         # --- 报喜：家人有了好消息，由衷替TA高兴（并记进里程碑）---
+        # --- 祝福语 / 贺词（"结婚说句祝福语" / "拜年话咋说"）：要的就是句体面话，先于报喜/寄语 ---
+        if action is None and who.get("obey"):
+            from .blessings import is_blessing_request
+            if is_blessing_request(utterance):
+                txt = self.blessing_handle(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "blessing")
+                    return result
+
         # --- 人生节点寄语（高考/成家/退休/创业…）：长辈那句过来人的话，比泛泛道喜更暖 ---
         if action is None and who.get("obey"):
             from .life_milestones import detect_milestone
@@ -3572,6 +3582,16 @@ class Agent:
         cfg = self.identity if isinstance(self.identity, dict) else None
         name = self._addr(who) if who.get("known") else ""
         return for_utterance(utterance, name=name, config=cfg)
+
+    def blessing_handle(self, utterance="") -> str:
+        """祝福语：认出场合给一句应景的；认不出就帮你想想是啥场合。"""
+        from . import blessings as bl
+        cfg = self.identity if isinstance(self.identity, dict) else None
+        occ = bl.detect_occasion(utterance, cfg)
+        if occ:
+            return bl.bless_for(occ, seed=utterance or "", config=cfg)
+        return ("想给啥场合说句祝福？生日、结婚、乔迁、寿宴、升学、开业、拜年……"
+                "你说一声，我替你想句体面的。")
 
     def opera_handle(self, utterance="") -> str:
         """戏曲：点了剧种唱那个、没点挑一段；报戏词问"哪出"则帮认。"""
