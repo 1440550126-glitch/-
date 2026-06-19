@@ -736,6 +736,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "couplet")
                     return result
 
+        # --- 各地特产（"云南有什么特产" / "北京小吃有啥"）：聊聊见识、勾起念想 ---
+        if action is None and who.get("obey"):
+            from . import specialty as _sp
+            _spcfg = self.identity if isinstance(self.identity, dict) else None
+            if _sp.is_specialty_query(utterance, _spcfg):
+                txt = _sp.about(utterance, _spcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "specialty")
+                    return result
+
         # --- 姓氏起源（"张姓的来历" / "讲讲我的姓"）：认认根、传家 ---
         if action is None and who.get("obey"):
             from . import surnames as _sn
