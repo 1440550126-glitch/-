@@ -972,6 +972,17 @@ class Agent:
                     self._log_journal(who, u, txt, "vitals")
                     return result
 
+        # --- 膳食养生（"补钙吃什么" / "护眼吃啥" / "老人吃什么好"）：日常吃啥补啥 ---
+        if action is None and who.get("obey"):
+            from . import nutrition as _nu
+            _nucfg = self.identity if isinstance(self.identity, dict) else None
+            if _nu.is_nutrition_query(utterance, _nucfg):
+                txt = _nu.food_for(utterance, _nucfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "nutrition")
+                    return result
+
         # --- 食疗（"咳嗽吃什么好" / "上火喝什么"）：温和的食补方子 ---
         if action is None and who.get("obey"):
             from .food_remedy import advice as _fr_adv
