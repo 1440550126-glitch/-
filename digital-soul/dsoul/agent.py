@@ -539,6 +539,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "dream_interpret")
                     return result
 
+        # --- 生肖星座（"1948年属什么" / "三月八号什么星座"）---
+        if action is None and who.get("obey"):
+            from .zodiac import answer as _zod
+            from .zodiac import is_zodiac_query
+            if is_zodiac_query(utterance):
+                z = _zod(utterance)
+                if z:
+                    result["reply"] = z
+                    self._log_journal(who, utterance, z, "zodiac")
+                    return result
+
         # --- 日常小问答（"三斤几公斤" / "今天星期几" / "二加七等于几"）：随口能答 ---
         if action is None and who.get("obey") and any(
                 k in (utterance or "") for k in ("多少", "等于", "几公斤", "几斤", "几两", "几米",
