@@ -80,6 +80,7 @@ class Agent:
         self.thoughts: deque = deque(maxlen=12)                   # 内心独白（近期心声）
         self.dialogue: deque = deque(maxlen=6)                    # 这一席话的近几句（对话连贯·像人）
         self._threads: dict = {}                                  # 你上次提到没完的事（跨天记挂）
+        self._inferred_day = None                                 # 当天是否已主动说过推断（去重）
         self._last_body = ""                                      # 此刻的体态（注入灵魂的身体·供网页展示）
         self.curiosity = curiosity                                # 好奇心：对陌生事物的疑问本
         self.worldmodel = worldmodel                              # 世界模型：带置信度的信念，会自我修正
@@ -1882,6 +1883,15 @@ class Agent:
             obs = self.notice_about(who.get("name"))
             if obs:
                 text = f"{text} {obs}"
+        # 主动推断：几条迹象凑一块儿，琢磨出个结论就关切地提一句（每天一次）
+        if who.get("obey"):
+            from datetime import date as _date
+            today = _date.today().isoformat()
+            if self._inferred_day != today:
+                facts = self.infer_about(who.get("name"))
+                if facts:
+                    self._inferred_day = today
+                    text = f"{text} 我琢磨着——{facts[0]}"
         # 陪伴：按这个时候，顺口关心一句（本时段当天只问一次，不啰嗦）
         if who.get("obey"):
             ci = self.companion_checkin()
