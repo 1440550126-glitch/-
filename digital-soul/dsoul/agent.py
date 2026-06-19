@@ -832,6 +832,16 @@ class Agent:
                     self._log_journal(who, utterance, txt, "voicebank")
                     return result
 
+        # --- 专属默契（你一提暗号/老梗，TA 立马接上下半句——只有你们懂） ---
+        if action is None and who.get("obey"):
+            jtxt = self.inside_joke_handle(utterance, who)
+            if jtxt:
+                result["reply"] = jtxt
+                if self.social is not None:
+                    self.social.note(who.get("name"), emotion="乐", topic="默契")
+                self._log_journal(who, utterance, jtxt, "inside_joke")
+                return result
+
         # --- 说说我自己（"你今天怎么样" / "你过得好吗"）：双向地聊，再把话转回给你 ---
         if action is None and who.get("obey"):
             from .self_share import is_about_me_query
@@ -3492,6 +3502,19 @@ class Agent:
         if not region:
             return "我能说几地的乡音呢——" + "、".join(dl.regions()) + "。你想听哪儿的？"
         return dl.demo(region)
+
+    def inside_joke_handle(self, utterance="", who=None) -> str:
+        """专属默契：踩中暗号就接梗；想听老梗就翻一个出来。没配则空（不硬占）。"""
+        from . import inside_jokes as ij
+        cfg = self.identity if isinstance(self.identity, dict) else None
+        who = who or {}
+        name = who.get("name") if who.get("known") else None
+        say = ij.match(utterance, cfg, who=name)
+        if say:
+            return say
+        if ij.wants_callback(utterance):
+            return ij.a_callback(cfg, who=name, seed=utterance or "")
+        return ""
 
     def voicebank_handle(self, utterance="") -> str:
         """声音相册：按心情/关键词挑一段本人录音，尽力放出来，并端出那句话。"""

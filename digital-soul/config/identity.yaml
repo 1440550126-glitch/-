@@ -41,3 +41,11 @@ voice:
 #     text: "（爽朗地笑）"
 #     occasions: [happy]
 #     mood: 喜
+
+# 专属默契：只有你们懂的暗号/老梗——一提 cue，TA 就接上 say。with 限定是跟谁的梗（可省）
+# inside_jokes:
+#   - cue: [老地方, 老规矩]
+#     say: "老地方见——还是那家牛肉面，你加辣我不要香菜。"
+#     with: 小婷
+#   - cue: [天王盖地虎]
+#     say: "宝塔镇河妖！哈哈，对上了。"
