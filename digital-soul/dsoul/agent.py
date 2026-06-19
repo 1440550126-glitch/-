@@ -1174,6 +1174,17 @@ class Agent:
             self._log_journal(who, utterance, txt, "emergency_card")
             return result
 
+        # --- 灾害自救（"地震了怎么办" / "着火了怎么跑" / "有人溺水"）：突发保命常识 ---
+        if action is None and who.get("obey"):
+            from . import disaster_safety as _ds
+            _dscfg = self.identity if isinstance(self.identity, dict) else None
+            if _ds.is_disaster_query(utterance, _dscfg):
+                txt = _ds.tip_for(utterance, _dscfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "disaster_safety")
+                    return result
+
         # --- 居家安全常识（"用电安全注意什么" / "燃气怎么防"）：讲常识，先于睡前清单 ---
         if action is None and who.get("obey"):
             from . import home_safety as _hs
