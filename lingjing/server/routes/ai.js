@@ -31,7 +31,8 @@ POST('/api/ai/parse', async ({ body }) => {
 POST('/api/ai/image', async ({ body }) => {
   return await generateImage({
     prompt: body.prompt, name: body.name, kind: body.kind || 'scene', ratio: body.ratio,
-    projectId: body.project_id, nodeId: body.node_id, refImages: body.ref_images || [], tab: body.tab
+    projectId: body.project_id, nodeId: body.node_id, refImages: body.ref_images || [], tab: body.tab,
+    model: body.model || ''
   });
 });
 

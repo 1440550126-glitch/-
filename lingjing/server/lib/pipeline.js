@@ -3,6 +3,7 @@
 import { q, getSetting, setSetting } from './db.js';
 import { uid, now, jparse, clamp } from './util.js';
 import { arkEnabled, arkChat, arkImage, arkVideoCreate, arkVideoGet, cfg } from './ark.js';
+import { pickImageProvider, pickVideoProvider, openaiImage, googleVeoCreate, googleVeoGet } from './providers.js';
 import { localScript, localParse, localImageSVG, localVideoSVG, saveSVG, localNextEpisode, localViralAnalysis, guessGender, splitScriptSegments } from './local.js';
 import { resolveStylePrompt } from './styles.js';
 import { bad, notFound } from './httpx.js';
@@ -751,7 +752,7 @@ export function addAsset({ tab = 'material', kind = 'image', name, url, poster =
 }
 
 // ---------- 图像生成（同步） ----------
-export async function generateImage({ prompt, name = '', kind = 'scene', ratio = '', projectId = '', nodeId = '', refImages = [], tab = '', emotion = '', skipQC = false }) {
+export async function generateImage({ prompt, name = '', kind = 'scene', ratio = '', projectId = '', nodeId = '', refImages = [], tab = '', emotion = '', model = '', skipQC = false }) {
   if (!prompt?.trim()) throw bad('缺少图片提示词 prompt');
   const project = projectId ? getProject(projectId, { required: false }) : null;
   prompt = applyStyle(prompt.trim(), project?.style);
@@ -805,34 +806,40 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
   const seed = project?.seed || 0;
   // 角色三视图需横向排布 正/侧/背 三个视角 → 角色用宽幅；场景/首帧/道具沿用项目画幅
   if (kind === 'character') ratio = '16:9';
-  // 角色三视图 / 全场景图是全片"定海神针"参考，交给最强图像模型（model_image_pro）；分镜首帧/道具用默认模型
+  // 角色三视图 / 全场景图是全片"定海神针"参考，交给最强图像模型（model_image_pro）；分镜首帧/道具用默认模型。
+  // 显式传入 model（创作框选择）> 顶配/默认。再按模型 ID 路由到 火山 Seedream 或 OpenAI GPT Image（各用各的 Key）。
   const proKind = (kind === 'character' || kind === 'scene');
-  const imageModel = arkEnabled() ? (proKind ? cfg().modelImagePro : cfg().modelImage) : 'local';
+  const chosenModel = model || (proKind ? cfg().modelImagePro : cfg().modelImage);
+  const ip = pickImageProvider(chosenModel, { arkEnabled: arkEnabled(), arkModel: chosenModel });
+  const imageModel = ip.enabled ? ip.model : 'local';
+  const provLabel = ip.provider === 'openai' ? 'OpenAI GPT Image' : '方舟图像';
 
   const taskId = uid('t');
   q.run('INSERT INTO tasks (id, kind, status, provider, model, prompt, params, project_id, node_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-    taskId, 'image', 'running', arkEnabled() ? 'ark' : 'local', imageModel, prompt.slice(0, 1500),
-    JSON.stringify({ kind, ratio, name, ref_images: refs.length, seed, emotion: shotEmotion, chain_ref: chainRef, model: imageModel, pro: proKind }), projectId, nodeId, now(), now());
+    taskId, 'image', 'running', ip.enabled ? ip.provider : 'local', imageModel, prompt.slice(0, 1500),
+    JSON.stringify({ kind, ratio, name, ref_images: refs.length, seed, emotion: shotEmotion, chain_ref: chainRef, model: imageModel, provider: ip.enabled ? ip.provider : 'local', pro: proKind }), projectId, nodeId, now(), now());
 
   let url = '';
   let provider = 'local';
   try {
-    if (arkEnabled()) {
-      const r = await arkImage({ prompt, ratio, refImages: refs, seed, model: proKind ? cfg().modelImagePro : '', feature: `image:${kind}` });
+    if (ip.enabled) {
+      const r = ip.provider === 'openai'
+        ? await openaiImage({ prompt, ratio, refImages: refs, model: ip.model, feature: `image:${kind}` })
+        : await arkImage({ prompt, ratio, refImages: refs, seed, model: ip.model, feature: `image:${kind}` });
       url = r.url;
-      provider = 'ark';
+      provider = ip.provider;
     } else {
       url = saveSVG(localImageSVG({ prompt, name, kind, ratio, order: 0, emotion }));
     }
   } catch (e) {
-    console.warn('[pipeline] 方舟图片失败：', e.message);
-    if (arkEnabled() && !localFallbackOn()) {
+    console.warn(`[pipeline] ${provLabel}失败：`, e.message);
+    if (ip.enabled && !localFallbackOn()) {
       // 诚实模式：标记失败并抛出真实原因，而非伪装成功给占位图
-      q.run('UPDATE tasks SET status = ?, error = ?, updated_at = ? WHERE id = ?', 'failed', `方舟图片失败：${e.message}`, now(), taskId);
-      throw bad(`方舟图片生成失败：${e.message}。请到设置页确认图像模型 ID 已开通；如需占位预览可在设置页开启「本地兜底」`);
+      q.run('UPDATE tasks SET status = ?, error = ?, updated_at = ? WHERE id = ?', 'failed', `${provLabel}失败：${e.message}`, now(), taskId);
+      throw bad(`${provLabel}生成失败：${e.message}。请到设置页确认该模型对应的 API Key/模型 ID 已正确配置；如需占位预览可在设置页开启「本地兜底」`);
     }
     url = saveSVG(localImageSVG({ prompt, name, kind, ratio, emotion }));
-    q.run('UPDATE tasks SET error = ? WHERE id = ?', `ark: ${e.message}（已用本地兜底）`, taskId);
+    q.run('UPDATE tasks SET error = ? WHERE id = ?', `${ip.provider}: ${e.message}（已用本地兜底）`, taskId);
   }
 
   const asset = addAsset({
@@ -1101,28 +1108,34 @@ export async function createVideoTask({ prompt, imageUrl = '', lastImageUrl = ''
   ratio = ratio || project?.ratio || '16:9';
   duration = clamp(duration, 2, 12);
   const taskId = uid('t');
-  const params = { ratio, duration, imageUrl, lastImageUrl: lastImageUrl || '', name, order, model: model || '', resolution: resolution || '' };
+  // 按模型 ID 路由：veo* → Google Veo 3，其余 → 火山 Seedance（各用各的 API Key）
+  const vp = pickVideoProvider(model, { arkEnabled: arkEnabled(), arkModel: model || cfg().modelVideo });
+  const provLabel = vp.provider === 'google' ? 'Veo' : '方舟视频';
+  const params = { ratio, duration, imageUrl, lastImageUrl: lastImageUrl || '', name, order, model: vp.model || '', provider: vp.enabled ? vp.provider : 'local', resolution: resolution || '' };
 
   let provider = 'local';
   let remoteId = '';
-  if (arkEnabled()) {
+  model = vp.model;
+  if (vp.enabled) {
     try {
-      const r = await arkVideoCreate({ prompt, imageUrl, lastImageUrl, ratio, duration, model, resolution });
-      provider = 'ark';
+      const r = vp.provider === 'google'
+        ? await googleVeoCreate({ prompt, imageUrl, ratio, model: vp.model })
+        : await arkVideoCreate({ prompt, imageUrl, lastImageUrl, ratio, duration, model: vp.model, resolution });
+      provider = vp.provider;
       remoteId = r.remoteId;
       model = r.model;
     } catch (e) {
-      console.warn('[pipeline] 方舟视频任务创建失败：', e.message);
-      // 已接入方舟却失败 → 默认不静默落本地，而是把任务标记失败并暴露真实原因
+      console.warn(`[pipeline] ${provLabel}任务创建失败：`, e.message);
+      // 已接入却失败 → 默认不静默落本地，而是把任务标记失败并暴露真实原因
       // （让用户能看到「模型未开通 / ID 错误 / 无额度」等，而不是误以为生成了真视频）
       if (!localFallbackOn()) {
         q.run(`INSERT INTO tasks (id, kind, status, provider, model, prompt, params, project_id, node_id, error, created_at, updated_at)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-          taskId, 'video', 'failed', 'ark', model || cfg().modelVideo, prompt.slice(0, 1500), JSON.stringify(params), projectId, nodeId, `方舟视频失败：${e.message}`, now(), now());
+          taskId, 'video', 'failed', vp.provider, model, prompt.slice(0, 1500), JSON.stringify(params), projectId, nodeId, `${provLabel}失败：${e.message}`, now(), now());
         if (nodeId && project?.canvas_id) { try { patchCanvasNode(project.canvas_id, nodeId, { task_id: taskId, task_status: 'failed' }); } catch { /* noop */ } }
-        throw bad(`方舟视频生成失败：${e.message}。请到设置页确认视频模型 ID 已在控制台开通；如需占位预览可在设置页开启「本地兜底」`);
+        throw bad(`${provLabel}生成失败：${e.message}。请到设置页确认该模型对应的 API Key/模型 ID 已正确配置；如需占位预览可在设置页开启「本地兜底」`);
       }
-      params.localError = `ark: ${e.message}（已用本地兜底）`;
+      params.localError = `${vp.provider}: ${e.message}（已用本地兜底）`;
     }
   }
   q.run(`INSERT INTO tasks (id, kind, status, provider, model, remote_id, prompt, params, project_id, node_id, created_at, updated_at)
@@ -1167,15 +1180,17 @@ export async function pollTask(taskId) {
     return finish('failed', {}, '生成超时（超过 18 分钟未完成，已自动结束）');
   }
 
-  if (t.provider === 'ark' && t.remote_id) {
+  if ((t.provider === 'ark' || t.provider === 'google') && t.remote_id) {
     try {
-      const r = await arkVideoGet(t.remote_id, { duration: params.duration || 5 });
+      const r = t.provider === 'google'
+        ? await googleVeoGet(t.remote_id, { duration: params.duration || 8 })
+        : await arkVideoGet(t.remote_id, { duration: params.duration || 5 });
       if (r.status === 'succeeded') return finish('succeeded', { url: r.url });
       if (r.status === 'failed') return finish('failed', {}, r.error || '生成失败');
       return { ...t, params, result: {}, status: r.status };
     } catch (e) {
       // 查询接口连续报错也不再卡死：记录但保持 running，由超时兜底
-      console.warn('[pollTask] 方舟查询失败：', e.message);
+      console.warn(`[pollTask] ${t.provider === 'google' ? 'Veo' : '方舟'}查询失败：`, e.message);
       return { ...t, params, result: {}, status: 'running', error: e.message };
     }
   }

@@ -28,6 +28,8 @@ export async function renderHome(page) {
       mk('drama', '📖 短剧项目', '生成剧本并创建项目，进入完整流程'));
     const modelSel = h('select', { class: 'select', title: '视频模型（仅本次生效，列表在设置页维护）' },
       (boot.video_models || []).map((m) => h('option', { value: m.id, selected: m.id === boot.ark.model_video }, m.label)));
+    const imgModelSel = h('select', { class: 'select', title: '图像模型（仅本次生效，列表在设置页维护）' },
+      (boot.image_models || []).map((m) => h('option', { value: m.id, selected: m.id === boot.ark.model_image }, m.label)));
     const ratioQ = h('select', { class: 'select' }, ['16:9', '9:16', '1:1'].map((r) => h('option', { value: r }, r)));
     const durSel = h('select', { class: 'select' }, [3, 5, 8, 10].map((n) => h('option', { value: n, selected: n === 5 }, `${n} 秒`)));
     const resSel = h('select', { class: 'select', title: '分辨率' }, [['', '分辨率·自动'], ['480p', '480P'], ['720p', '720P'], ['1080p', '1080P']].map(([v, l]) => h('option', { value: v }, l)));
@@ -55,6 +57,7 @@ export async function renderHome(page) {
 
     function sync() {
       modelSel.style.display = mode === 'short' ? '' : 'none';
+      imgModelSel.style.display = mode === 'image' ? '' : 'none';
       durSel.style.display = mode === 'short' ? '' : 'none';
       resSel.style.display = mode === 'short' ? '' : 'none';
       frameBtnA.style.display = mode === 'short' ? '' : 'none';
@@ -80,8 +83,9 @@ export async function renderHome(page) {
           return;
         }
         if (mode === 'image') {
-          const r = await POST('/api/ai/image', { prompt: text, name: text.slice(0, 16), kind: 'scene', ratio: ratioQ.value });
-          showResult(r.url, `${r.provider === 'ark' ? '方舟 Seedream 出图完成' : '本地占位图（配置方舟 Key 出真图）'} · 已存入资产库`);
+          const r = await POST('/api/ai/image', { prompt: text, name: text.slice(0, 16), kind: 'scene', ratio: ratioQ.value, model: imgModelSel.value });
+          const plabel = r.provider === 'openai' ? 'OpenAI GPT Image 出图完成' : r.provider === 'ark' ? '方舟 Seedream 出图完成' : '本地占位图（配置 Key 出真图）';
+          showResult(r.url, `${plabel} · 已存入资产库`);
           done();
           return;
         }
@@ -92,7 +96,7 @@ export async function renderHome(page) {
         });
         showPending(`${boot.ark.enabled ? '方舟 Seedance 生成中（约 1-3 分钟）' : '本地引擎生成中（数秒）'}…`);
         const t = await pollUntilDone(r.taskId);
-        if (t.status === 'succeeded') showResult(t.result.url, `${t.provider === 'ark' ? '方舟出片完成' : '本地预览片'} · 已存入资产库`);
+        if (t.status === 'succeeded') showResult(t.result.url, `${t.provider === 'google' ? 'Google Veo 3 出片完成' : t.provider === 'ark' ? '方舟出片完成' : '本地预览片'} · 已存入资产库`);
         else { result.innerHTML = ''; toast('生成失败：' + (t.error || ''), 'err'); }
         done();
       } catch (e) { toast(e.message, 'err'); done(); }
@@ -115,7 +119,7 @@ export async function renderHome(page) {
     sync();
     return h('div', {},
       h('div', { class: 'quickbox' }, ta,
-        h('div', { class: 'quick-controls' }, modeChips, h('span', { class: 'grow' }), frameBtnA, frameBtnB, modelSel, ratioQ, durSel, resSel,
+        h('div', { class: 'quick-controls' }, modeChips, h('span', { class: 'grow' }), frameBtnA, frameBtnB, modelSel, imgModelSel, ratioQ, durSel, resSel,
           doodle('arrow', { color: 'var(--accent2)', size: 30, delay: 700, rotate: -64, style: { margin: '0 0 8px 2px' } }),
           startBtn)),
       result);

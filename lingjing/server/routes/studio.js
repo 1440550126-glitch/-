@@ -5,6 +5,7 @@ import { GET, POST, PATCH, DEL, bad, notFound } from '../lib/httpx.js';
 import { q, getSetting, setSetting, UPLOAD_DIR, DB_PATH } from '../lib/db.js';
 import { uid, now, jparse, micro2yuan, token32 } from '../lib/util.js';
 import { arkEnabled, cfg, arkChat, DEFAULTS, videoModelOptions } from '../lib/ark.js';
+import { providerCfg, openaiEnabled, googleEnabled, imageModelOptions, PROVIDER_DEFAULTS } from '../lib/providers.js';
 import { createProject, getProject, projectOut, touchProject, getCanvas, checkConsistency, buildCharacterProfile, listEntities, annotateEntities, getAgentBrain, restyleProject } from '../lib/pipeline.js';
 
 // 画面一致性体检
@@ -60,7 +61,9 @@ GET('/api/bootstrap', async () => {
     app: { name: '灵境AI', full: '灵境AI · 短剧创作工坊', slogan: '所想即成片', version: '0.1.0' },
     user_name: getSetting('user_name', '创作者'),
     ark: { enabled: arkEnabled(), base_url: c.baseUrl, model_chat: c.modelChat, model_image: c.modelImage, model_image_pro: c.modelImagePro, model_video: c.modelVideo },
+    providers: { openai: openaiEnabled(), google: googleEnabled() },   // 多供应商开通状态（OpenAI GPT Image / Google Veo 3）
     video_models: videoModelOptions(),
+    image_models: imageModelOptions(c.modelImage),
     video_resolutions: ['', '480p', '720p', '1080p'],
     agent_token: getSetting('agent_token', ''),
     mcp_path: path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..', 'mcp', 'server.mjs'),
@@ -231,14 +234,20 @@ DEL('/api/canvases/:id', async ({ params }) => {
 });
 
 // ---------- 设置 ----------
-const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_image_pro', 'model_video', 'model_video_options', 'video_extra_args', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint', 'local_fallback', 'agent_temperature', 'agent_max_steps', 'agent_autorun', 'agent_thinking', 'agent_plan_first', 'qc_enabled', 'qc_autofix', 'qc_min_score', 'video_chain', 'auto_expressions'];
+const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_image_pro', 'model_image_options', 'model_video', 'model_video_options', 'video_extra_args', 'openai_base_url', 'google_base_url', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint', 'local_fallback', 'agent_temperature', 'agent_max_steps', 'agent_autorun', 'agent_thinking', 'agent_plan_first', 'qc_enabled', 'qc_autofix', 'qc_min_score', 'video_chain', 'auto_expressions'];
 
 GET('/api/settings', async () => {
   const c = cfg();
+  const pc = providerCfg();
   const key = c.apiKey;
+  const mask = (k) => (k ? `${k.slice(0, 4)}****${k.slice(-4)}` : '');
   return {
     ark_api_key_masked: key ? `${key.slice(0, 4)}****${key.slice(-4)}` : '',
     ark_key_source: getSetting('ark_api_key', '') ? 'settings' : (process.env.ARK_API_KEY ? 'env' : ''),
+    // 多供应商：各自独立 API Key（脱敏返回）+ Base URL + 状态
+    openai_api_key_masked: mask(pc.openaiKey), openai_base_url: pc.openaiBase, openai_enabled: openaiEnabled(),
+    google_api_key_masked: mask(pc.googleKey), google_base_url: pc.googleBase, google_enabled: googleEnabled(),
+    model_image_options: pc.modelImageOptions,
     ark_base_url: c.baseUrl, model_chat: c.modelChat, model_image: c.modelImage, model_image_pro: c.modelImagePro, model_video: c.modelVideo,
     model_video_options: c.modelVideoOptions, video_extra_args: c.videoExtraArgs,
     watermark: c.watermark,
@@ -277,6 +286,15 @@ PATCH('/api/settings', async ({ body }) => {
     const k = String(body.ark_api_key).trim();
     if (k && /^AKLT/i.test(k)) throw bad('AKLT 开头的是火山引擎 AccessKey，不能直接当方舟 API Key；请到方舟控制台「API Key 管理」创建（UUID 形态）');
     setSetting('ark_api_key', k);
+  }
+  // OpenAI / Google 各自独立 API Key（GPT Image / Veo 3）；输入 clear 清除
+  if (body.openai_api_key !== undefined) {
+    const k = String(body.openai_api_key).trim();
+    setSetting('openai_api_key', k === 'clear' ? '' : k);
+  }
+  if (body.google_api_key !== undefined) {
+    const k = String(body.google_api_key).trim();
+    setSetting('google_api_key', k === 'clear' ? '' : k);
   }
   for (const k of SETTING_KEYS) {
     if (body[k] !== undefined) setSetting(k, body[k]);

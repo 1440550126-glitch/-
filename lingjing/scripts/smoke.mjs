@@ -80,6 +80,13 @@ try {
   ok(/ARRI|电影摄影机/.test(vprompt), '写实画风点名真实电影摄影机机身');
   // 角色定义图升级为三视图设定图（正/侧/背），全片定海神针参考
   ok(/三视图/.test(dupSb.characters[0].image_prompt || ''), '角色定义图为三视图设定图（正面·侧面·背面）');
+  // 多供应商：按模型 ID 路由（OpenAI GPT Image / Google Veo 3 / 火山方舟），未配 Key 时不启用
+  const prov = await import(path.join(ROOT, 'server', 'lib', 'providers.js'));
+  ok(prov.imageProviderOf('gpt-image-1') === 'openai' && prov.imageProviderOf('doubao-seedream-4-0-250828') === 'ark', '图像供应商按模型ID路由（gpt-image→openai）');
+  ok(prov.videoProviderOf('veo-3.0-generate-001') === 'google' && prov.videoProviderOf('doubao-seedance-1-0-pro-250528') === 'ark', '视频供应商按模型ID路由（veo→google）');
+  ok(prov.pickVideoProvider('veo-3.0-generate-001', { arkEnabled: true }).provider === 'google', 'Veo 模型路由到 Google');
+  ok(prov.pickImageProvider('gpt-image-1', { arkEnabled: true }).enabled === false, '未配 OpenAI Key 时 GPT Image 不启用（安全）');
+  ok(prov.imageModelOptions('doubao-seedream-4-0-250828').some((m) => m.id === 'gpt-image-1'), '图像模型清单含 GPT Image 选项');
 
   console.log('— 启动与基础 —');
   const boot = await until(async () => (await api('GET', '/api/bootstrap')).data, 10000);
@@ -87,6 +94,9 @@ try {
   ok(/^ljk_/.test(boot.agent_token), '首次启动自动生成 Agent Token');
   ok(boot.ark.enabled === false, '未配 Key 时为本地引擎模式');
   ok(!!boot.ark.model_image_pro, 'bootstrap 暴露顶配图像模型（角色三视图/全场景图专用）');
+  ok((boot.image_models || []).some((m) => m.id === 'gpt-image-1'), '创作框可选图像模型含 GPT Image（OpenAI）');
+  ok((boot.video_models || []).some((m) => /veo/i.test(m.id)), '创作框可选视频模型含 Veo 3（Google）');
+  ok(boot.providers && boot.providers.openai === false && boot.providers.google === false, '多供应商开通状态暴露（未配 Key 为 false）');
 
   console.log('— 项目与剧本 —');
   const p = (await api('POST', '/api/projects', { title: '冒烟剧', genre: '悬疑反转', idea: '便利店午夜来客' })).data;
@@ -345,6 +355,16 @@ try {
   ok(charTask.params?.pro === true && charTask.params?.ratio === '16:9', '角色图走顶配模型路由 + 三视图宽幅(16:9)');
   const sceneImg = (await api('POST', '/api/ai/image', { prompt: '废墟街道', kind: 'scene', project_id: p.id, name: '全场景测试' })).data;
   ok((await api('GET', `/api/ai/task/${sceneImg.taskId}`)).data.params?.pro === true, '全场景图走顶配模型路由');
+  // 多供应商安全回退：未配对应 Key 时选 GPT Image / Veo 3 → 回退本地占位，不报错也不假装成功
+  const gptImg = (await api('POST', '/api/ai/image', { prompt: '测试', kind: 'scene', project_id: p.id, model: 'gpt-image-1' })).data;
+  const gptTask = (await api('GET', `/api/ai/task/${gptImg.taskId}`)).data;
+  ok(gptTask.provider === 'local' && /\.svg$/i.test(gptImg.url), '未配 OpenAI Key 选 GPT Image → 安全回退本地占位');
+  const veoVid = (await api('POST', '/api/ai/video', { prompt: '测试', model: 'veo-3.0-generate-001', ratio: '16:9', duration: 3 })).data;
+  const veoDone = await until(async () => {
+    const t = (await api('GET', `/api/ai/task/${veoVid.taskId}`)).data;
+    return ['succeeded', 'failed'].includes(t.status) ? t : null;
+  });
+  ok(veoDone.provider === 'local' && veoDone.status === 'succeeded', '未配 Google Key 选 Veo 3 → 安全回退本地占位');
 
   console.log('— MCP over HTTP（远程助理通道） —');
   const mh = async (msg) => {
@@ -441,6 +461,13 @@ try {
   await api('PATCH', '/api/settings', { model_image_pro: 'ep-pro-test-xyz' });
   ok((await api('GET', '/api/settings')).data.model_image_pro === 'ep-pro-test-xyz', '顶配图像模型可配置并生效');
   await api('PATCH', '/api/settings', { model_image_pro: '' });   // 复位，避免影响其它用例
+  // OpenAI / Google 各自独立 API Key：脱敏保存 + 启用状态 + 接口地址
+  await api('PATCH', '/api/settings', { openai_api_key: 'sk-test-12345678', openai_base_url: 'https://oai.example/v1', google_api_key: 'gk-test-abcdefgh', google_base_url: 'https://g.example/v1beta' });
+  const setProv = (await api('GET', '/api/settings')).data;
+  ok(setProv.openai_api_key_masked.includes('****') && setProv.openai_enabled === true && setProv.openai_base_url === 'https://oai.example/v1', 'OpenAI Key 脱敏保存、启用、接口地址生效');
+  ok(setProv.google_api_key_masked.includes('****') && setProv.google_enabled === true, 'Google Key 脱敏保存并启用');
+  await api('PATCH', '/api/settings', { openai_api_key: 'clear', google_api_key: 'clear' });   // 复位，避免真实外呼
+  ok((await api('GET', '/api/settings')).data.openai_enabled === false, '清除 OpenAI Key 后回到未配置');
   const stats = (await api('GET', '/api/stats')).data;
   ok(Number(stats.cost_total_yuan) === 0, '本地模式成本为 0');
 

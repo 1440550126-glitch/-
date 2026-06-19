@@ -12,6 +12,11 @@ export async function renderSettings(page) {
   const imageProIn = h('input', { class: 'input', value: s.model_image_pro || '' });
   const videoIn = h('input', { class: 'input', value: s.model_video });
   const videoOptsIn = h('textarea', { class: 'textarea', rows: 4, value: s.model_video_options || '', placeholder: 'Seedance 1.0 Pro|doubao-seedance-1-0-pro-250528' });
+  const imageOptsIn = h('textarea', { class: 'textarea', rows: 3, value: s.model_image_options || '', placeholder: 'GPT Image|gpt-image-1' });
+  const openaiKeyIn = h('input', { class: 'input', type: 'password', autocomplete: 'off', placeholder: s.openai_api_key_masked ? `已配置 ${s.openai_api_key_masked}（输入新值覆盖，clear 清除）` : 'OpenAI API Key（sk-...）' });
+  const openaiBaseIn = h('input', { class: 'input', value: s.openai_base_url || '' });
+  const googleKeyIn = h('input', { class: 'input', type: 'password', autocomplete: 'off', placeholder: s.google_api_key_masked ? `已配置 ${s.google_api_key_masked}（输入新值覆盖，clear 清除）` : 'Google API Key（Gemini API）' });
+  const googleBaseIn = h('input', { class: 'input', value: s.google_base_url || '' });
   const extraIn = h('input', { class: 'input', value: s.video_extra_args || '', placeholder: '如 --camerafixed true' });
   const wmSel = h('select', { class: 'select' }, [['false', '不加水印'], ['true', '加 AI 水印']].map(([v, l]) => h('option', { value: v, selected: String(s.watermark) === v }, l)));
   const fbSel = h('select', { class: 'select' }, [['false', '关闭（推荐：失败时报真实错误，便于排查）'], ['true', '开启（失败时用本地占位图/视频兜底）']].map(([v, l]) => h('option', { value: v, selected: String(!!s.local_fallback) === v }, l)));
@@ -36,6 +41,8 @@ export async function renderSettings(page) {
       const body = {
         ark_base_url: baseIn.value.trim(), model_chat: chatIn.value.trim(), model_image: imageIn.value.trim(), model_image_pro: imageProIn.value.trim(), model_video: videoIn.value.trim(),
         model_video_options: videoOptsIn.value.trim(), video_extra_args: extraIn.value.trim(),
+        model_image_options: imageOptsIn.value.trim(),
+        openai_base_url: openaiBaseIn.value.trim(), google_base_url: googleBaseIn.value.trim(),
         watermark: wmSel.value === 'true', local_fallback: fbSel.value === 'true',
         qc_enabled: qcEnSel.value === 'true', qc_autofix: qcFixSel.value === 'true', qc_min_score: Number(qcScoreIn.value), video_chain: chainSel.value === 'true', auto_expressions: exprSel.value === 'true',
         user_name: nameIn.value.trim() || '创作者',
@@ -43,6 +50,10 @@ export async function renderSettings(page) {
       };
       const k = keyIn.value.trim();
       if (k) body.ark_api_key = k === 'clear' ? '' : k;
+      const ok2 = openaiKeyIn.value.trim();
+      if (ok2) body.openai_api_key = ok2;
+      const gk = googleKeyIn.value.trim();
+      if (gk) body.google_api_key = gk;
       const r = await PATCH('/api/settings', body);
       toast(r.ark_enabled ? '已保存，方舟模式已启用' : '已保存（当前本地引擎模式）', 'ok');
       keyIn.value = '';
@@ -109,6 +120,20 @@ export async function renderSettings(page) {
       fld('角色表情库自动生成', exprSel, '全流程为主角/反派生成喜怒哀乐表情集，分镜按情绪自动取用')),
     h('div', { style: { display: 'flex', gap: '10px', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap' } }, saveBtn, testBtn, diagBtn, testOut),
     diagOut);
+
+  // 其它模型供应商：OpenAI GPT Image（图）、Google Veo 3（视频）——各用各自独立 API Key
+  const pillState = (on) => h('span', { class: `pill ${on ? 'teal' : ''}`, style: { marginLeft: '8px' } }, on ? '已开通' : '未配置');
+  const provCard = h('div', { class: 'card pad' },
+    h('h3', { style: { fontSize: '15px', marginBottom: '4px' } }, '其它模型供应商（多 API 自由切换）'),
+    h('p', { style: { fontSize: '12.5px', color: 'var(--ink3)', marginBottom: '10px' } },
+      'GPT Image（OpenAI）与 Veo 3（Google）各用各自独立 API Key，与火山方舟并存、可自由选用。视频模型在上方「创作框可选视频模型」里已内置 Veo 3；图像模型在下方维护，"生成图片"时即可下拉选择。'),
+    h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' } },
+      fld(h('span', {}, 'OpenAI API Key（GPT Image）', pillState(s.openai_enabled)), openaiKeyIn, '控制台 platform.openai.com → API keys；用于 gpt-image-1'),
+      fld('OpenAI 接口地址', openaiBaseIn, '默认 https://api.openai.com/v1，可填代理/兼容网关')),
+    h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' } },
+      fld(h('span', {}, 'Google API Key（Veo 3）', pillState(s.google_enabled)), googleKeyIn, 'Google AI Studio → Get API key；用于 Veo 3 视频'),
+      fld('Google 接口地址', googleBaseIn, '默认 Gemini API：generativelanguage.googleapis.com/v1beta')),
+    fld('创作框可选图像模型（每行：显示名|模型ID）', imageOptsIn, '加一行 GPT Image|gpt-image-1 即可在「生成图片」里下拉选用'));
 
   // 语音合成（配音）
   const ttsAppid = h('input', { class: 'input', value: s.tts_appid || '', placeholder: '语音技术 AppID' });
@@ -178,6 +203,6 @@ export async function renderSettings(page) {
       h('span', { class: `pill ${s.ark_api_key_masked ? 'teal' : ''}` }, s.ark_api_key_masked ? '方舟已配置' : '本地引擎模式')),
     h('div', { class: 'wrap', style: { marginTop: '16px' } },
       h('div', { class: 'set-grid' },
-        h('div', { style: { display: 'flex', flexDirection: 'column', gap: '16px' } }, arkCard, ttsCard),
+        h('div', { style: { display: 'flex', flexDirection: 'column', gap: '16px' } }, arkCard, provCard, ttsCard),
         h('div', { style: { display: 'flex', flexDirection: 'column', gap: '16px' } }, priceCard, prefCard, statCard))));
 }

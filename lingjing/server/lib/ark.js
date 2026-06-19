@@ -22,7 +22,9 @@ export const DEFAULTS = {
     'Seedance 2.0 Pro（最强，请核对ID）|doubao-seedance-2-0-pro',
     'Seedance 2.0|doubao-seedance-2-0',
     'Seedance 1.0 Pro|doubao-seedance-1-0-pro-250528',
-    'Seedance 1.0 Lite 图生视频|doubao-seedance-1-0-lite-i2v-250428'
+    'Seedance 1.0 Lite 图生视频|doubao-seedance-1-0-lite-i2v-250428',
+    'Veo 3（Google，需 Google Key）|veo-3.0-generate-001',
+    'Veo 3 Fast（Google）|veo-3.0-fast-generate-001'
   ].join('\n'),
   video_extra_args: '',     // 追加到视频任务文本命令的参数，如 --camerafixed true
   watermark: false,
