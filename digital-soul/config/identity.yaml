@@ -27,7 +27,9 @@ voice:
   rate: 185           # 语速（词/分钟；情绪会在此基础上加减）
   volume: 0.95        # 音量 0~1
   voice: ""           # 系统嗓音名：Mac 如 Tingting/Sinji；留空用系统默认
-  # tts_cmd: "my-voice-clone --text '{text}'"   # 接本地声音克隆 CLI，用最像本人的嗓音说（含 {text}）
+  # ↓ 接本地声音克隆，用最像本人的嗓音说。{text} 写「裸的」就行（程序自动安全转义；
+  #   也可在命令里用环境变量 $DSOUL_TEXT 取原文）。先 `python scripts/voice_doctor.py` 体检。
+  # tts_cmd: "python scripts/say_clone.py --engine gpt-sovits --ref voices/mom.wav {text}"
 
 # 声音相册：本人留下的真实语音片段——在合适时机放出来，真的听见 TA（赛博永生最戳心处）
 # 每段：file 音频路径 / text 这段说的话 / occasions 适合的场景 / mood 心情 / tags 标签

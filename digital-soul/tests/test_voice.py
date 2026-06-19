@@ -8,9 +8,57 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from dsoul.voice import (  # noqa: E402
-    Mouth, _espeak_args, _say_args, detect_system_tts, emotion_to_voice,
+    Mouth, _espeak_args, _say_args, detect_system_tts, diagnose,
+    emotion_to_voice, format_diagnostics, render_tts_cmd, run_tts_cmd,
     voice_params,
 )
+
+
+def test_render_tts_cmd_escapes_specials():
+    # 含单引号/空格的文本不能把命令搞坏
+    out = render_tts_cmd("say {text}", "it's a 你好 \"x\"")
+    assert out.startswith("say ")
+    assert "{text}" not in out
+    # 没有 {text} 的模板原样返回（可用 $DSOUL_TEXT）
+    assert render_tts_cmd("mycli --in $DSOUL_TEXT", "x") == "mycli --in $DSOUL_TEXT"
+
+
+def test_run_tts_cmd_success_and_failure():
+    calls = []
+
+    def fake(cmdline, **k):
+        calls.append((cmdline, k.get("env", {}).get("DSOUL_TEXT")))
+        if "boom" in cmdline:
+            raise RuntimeError("fail")
+
+    assert run_tts_cmd("echo {text}", "嗨", runner=fake) is True
+    assert calls[-1][1] == "嗨"                       # 原文经环境变量带进去了
+    assert run_tts_cmd("boom {text}", "嗨", runner=fake) is False  # 出错 → False（好回落）
+    assert run_tts_cmd("", "嗨", runner=fake) is False            # 空命令 → False
+
+
+def test_speak_falls_back_when_tts_cmd_fails():
+    # tts_cmd 跑不通时，别哑——回落到系统/打印
+    m = Mouth()
+    m.backend = None
+    m._engine = None
+    m._syscmd = None
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        m.speak("你好", profile={"tts_cmd": "this_cmd_surely_missing_xyz {text}"})
+    assert "你好" in buf.getvalue()                   # 最终用打印兜底了
+
+
+def test_diagnose_shape_and_format():
+    checks = diagnose(profile={"tts_cmd": "gpt-sovits {text}"},
+                      which=lambda p: "/usr/bin/" + p if p in ("say", "afplay") else None,
+                      has_module=lambda m: m == "pyttsx3")
+    names = [c[0] for c in checks]
+    assert "说·合成嗓音" in names and "克隆·voice.tts_cmd" in names
+    # say 在 → 能说
+    assert any(n == "说·合成嗓音" and ok for n, ok, *_ in checks)
+    s = format_diagnostics(checks)
+    assert "体检" in s and "结论" in s
 
 
 def test_emotion_to_voice_mapping():

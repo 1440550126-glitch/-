@@ -65,39 +65,60 @@
 
 ---
 
-## 三、接入本项目（只改一行配置）
+## 三、接入本项目 —— 三步"调通"
 
 分身播报的优先级是：
 **`voice.tts_cmd`（外部克隆嗓音，最像本人）> `pyttsx3` > 系统自带 `say`/`espeak` > 打印文字。**
 
-只要在 `config/identity.yaml` 里把 `voice.tts_cmd` 填上即可。命令里用 `{text}`
-占位，运行时会被替换成要说的那句话（已自动转义，多句会按"节拍"一句句送进来）：
+### 第 0 步：先体检（看看缺啥）
+
+```bash
+python scripts/voice_doctor.py
+```
+
+它会一条条告诉你：能不能听、能不能说、播放器有没有、克隆命令接没接通，
+**没装的直接给出补救命令**，最后还会用当前嗓音真念一句听个响。
+
+### 第 1 步：先让它「能出声」（零克隆，先听个响）
+
+- **Mac**：自带 `say` 和 `afplay`，啥都不用装，`voice_doctor` 直接就念了。
+  想要中文女声：系统设置→辅助功能→朗读内容→下载「Tingting」，再把 `voice.voice` 填 `Tingting`。
+- **Linux**：`sudo apt install espeak-ng alsa-utils`（说 + 放）。
+- 跑 `python scripts/voice_chat.py`，对话回应就出声了，还会边说边动。
+
+### 第 2 步：换成「本人的声线」（接克隆模型）
+
+1. 找一段本人清晰说话的录音（30 秒以上最好，安静、单人），放到 `voices/mom.wav`。
+2. 把 GPT-SoVITS 跑起来（整合包最省心，详见上文），起它自带的 HTTP 服务 `api.py`。
+3. 在 `config/identity.yaml` 填 `voice.tts_cmd`（**`{text}` 写裸的就行，程序自动安全转义**；
+   也可用环境变量 `$DSOUL_TEXT` 取原文）：
 
 ```yaml
 voice:
   rate: 185
   volume: 0.95
-  voice: ""            # 系统嗓音 id（用克隆命令时可留空）
-  # —— 下面三选一，按你跑起来的模型填 ——
-
-  # A) 用我们自带的包装脚本（推荐，已处理"合成→播放"）：
+  voice: ""
+  # A) 推荐：用自带包装脚本（已处理「合成 wav → 播放」、URL 编码、找不到引擎自动回落系统嗓音）
   tts_cmd: "python scripts/say_clone.py --engine gpt-sovits --ref voices/mom.wav {text}"
 
-  # B) 直接调 GPT-SoVITS 的 API（你已 `python api.py` 起好服务时）：
-  # tts_cmd: "curl -s 'http://127.0.0.1:9880/?text={text}&text_language=zh' -o /tmp/s.wav && (afplay /tmp/s.wav || aplay /tmp/s.wav)"
-
-  # C) 调 CosyVoice（你自己包了个 CLI 时）：
+  # B) CosyVoice / 自己的 CLI（你包好一个「输入文字→合成→播放」的命令）
   # tts_cmd: "python -m my_cosyvoice --prompt voices/dad.wav --out /tmp/s.wav --text {text} && (afplay /tmp/s.wav || aplay /tmp/s.wav)"
 ```
 
-改完直接：
+> ⚠️ 直接拿 `curl` 拼 URL 调 HTTP 接口的，**别在 `{text}` 外面再套引号**——`{text}` 会被自动 shell 转义，
+> 而且 URL 还需要单独编码。要走 HTTP，建议用上面的 `say_clone.py`（它已经做了 URL 编码）。
+
+4. 再体检一次 `python scripts/voice_doctor.py`：克隆那一行变 ✅，并念出本人嗓音，就通了。
+
+### 第 3 步：日常用起来
 
 ```bash
-python scripts/voice_chat.py        # 语音对话，回应用本人嗓音、且边说边动
+python scripts/voice_chat.py        # 语音对话，回应用本人嗓音、且边说边动、带情绪
 python scripts/daemon.py --voice    # 常驻：主动问候/守护提醒也用本人嗓音
 ```
 
-没接克隆模型也不影响：Mac 自带 `say`、Linux `apt install espeak-ng` 就能先听个响。
+**接不通也绝不哑**：克隆命令出错（服务没起/没装/打错），会自动回落到系统 `say`/`espeak`，
+日子照过，回头再调。
 
 ---
 
