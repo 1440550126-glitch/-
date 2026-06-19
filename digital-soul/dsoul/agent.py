@@ -513,6 +513,19 @@ class Agent:
                     return result
 
         # --- 报喜：家人有了好消息，由衷替TA高兴（并记进里程碑）---
+        # --- 人生节点寄语（高考/成家/退休/创业…）：长辈那句过来人的话，比泛泛道喜更暖 ---
+        if action is None and who.get("obey"):
+            from .life_milestones import detect_milestone
+            _mcfg = self.identity if isinstance(self.identity, dict) else None
+            if detect_milestone(utterance, _mcfg):
+                txt = self.milestone_handle(utterance, who)
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="爱", topic="寄语")
+                    self._log_journal(who, utterance, txt, "milestone")
+                    return result
+
         # 排除"送什么礼/买什么礼"这类求助——那是要送礼参考，不是报喜
         if action is None and who.get("obey") and not any(
                 k in (utterance or "") for k in ("送什么", "送啥", "买什么礼", "什么礼物", "挑个礼")):
@@ -3539,6 +3552,14 @@ class Agent:
         if not region:
             return "我能说几地的乡音呢——" + "、".join(dl.regions()) + "。你想听哪儿的？"
         return dl.demo(region)
+
+    def milestone_handle(self, utterance="", who=None) -> str:
+        """人生节点：认出节点，给一段长辈的过来人寄语。"""
+        from .life_milestones import for_utterance
+        who = who or {}
+        cfg = self.identity if isinstance(self.identity, dict) else None
+        name = self._addr(who) if who.get("known") else ""
+        return for_utterance(utterance, name=name, config=cfg)
 
     def opera_handle(self, utterance="") -> str:
         """戏曲：点了剧种唱那个、没点挑一段；报戏词问"哪出"则帮认。"""
