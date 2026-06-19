@@ -671,6 +671,16 @@ class Agent:
                     self._log_journal(who, u, txt, "vitals")
                     return result
 
+        # --- 急救常识（"烫伤了怎么办" / "流鼻血咋办"）：给几步当下能做的处置 ---
+        if action is None and who.get("obey"):
+            from .first_aid import advice, is_firstaid_query
+            if is_firstaid_query(utterance):
+                txt = advice(utterance)
+                if txt:
+                    result["reply"] = "别慌，" + txt
+                    self._log_journal(who, utterance, txt, "first_aid")
+                    return result
+
         # --- 急救信息卡（"念念急救卡" / "我的急救信息"）---
         if action is None and who.get("obey") and any(
                 k in (utterance or "") for k in ("急救卡", "急救信息", "救命信息", "急救信息卡")):
