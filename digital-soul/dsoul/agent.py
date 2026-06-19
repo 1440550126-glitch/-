@@ -736,6 +736,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "couplet")
                     return result
 
+        # --- 姓氏起源（"张姓的来历" / "讲讲我的姓"）：认认根、传家 ---
+        if action is None and who.get("obey"):
+            from . import surnames as _sn
+            _sncfg = self.identity if isinstance(self.identity, dict) else None
+            if _sn.is_surname_query(utterance, _sncfg):
+                txt = _sn.about(utterance, _sncfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "surnames")
+                    return result
+
         # --- 歇后语（"外甥打灯笼下半句" / "来个歇后语"）---
         if action is None and who.get("obey"):
             from .xiehouyu import is_xiehouyu_request
