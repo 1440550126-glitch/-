@@ -1277,6 +1277,17 @@ class Agent:
                     self._log_journal(who, ub, txt, "board_assign")
                     return result
 
+        # --- 挑食材（"西瓜怎么挑" / "螃蟹怎么买"）：先于采买，免得"怎么买"被当成加购物车 ---
+        if action is None and who.get("obey"):
+            from . import pick_produce as _pp
+            _ppcfg = self.identity if isinstance(self.identity, dict) else None
+            if _pp.is_pick_query(utterance, _ppcfg):
+                txt = _pp.tip_for(utterance, _ppcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "pick_produce")
+                    return result
+
         # --- 采买清单（"买瓶酱油" / "鸡蛋买好了" / "采买清单"）---
         if action is None and who.get("obey") and self.shopping is not None:
             us = utterance or ""
