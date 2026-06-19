@@ -753,6 +753,19 @@ class Agent:
                     self._log_journal(who, utterance, txt, "landmarks")
                     return result
 
+        # --- 传统手工艺（"剪纸怎么做" / "景泰蓝是什么" / "非遗有哪些"）---
+        if action is None and who.get("obey"):
+            from . import crafts as _cf
+            _cfcfg = self.identity if isinstance(self.identity, dict) else None
+            if _cf.is_craft_query(utterance, _cfcfg):
+                txt = _cf.about(utterance, _cfcfg)
+                if not txt and any(k in (utterance or "") for k in ("手工艺", "非遗", "传统工艺", "老手艺")):
+                    txt = "老手艺有不少：" + "、".join(_cf.crafts(_cfcfg)[:8]) + "……想了解哪样跟我说。"
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "crafts")
+                    return result
+
         # --- 书法字体（"楷书是什么样" / "楷书四大家" / "想练毛笔字"）---
         if action is None and who.get("obey"):
             from . import calligraphy as _cal
