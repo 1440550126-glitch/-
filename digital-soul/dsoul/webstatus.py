@@ -79,10 +79,20 @@ def _companion_guardian(agent) -> dict:
     独立成函数便于单测；每块各自降级为空，不影响整页。
     """
     out = {"meds": [], "appts": [], "habits": [], "joys": [], "muse": "", "reasoning": [],
-           "body": ""}
+           "body": "", "face": "", "face_color": "", "face_emoji": ""}
     try:
         out["reasoning"] = list(getattr(agent, "_last_reasoning", []) or [])
         out["body"] = getattr(agent, "_last_body", "") or ""
+        out["face"] = getattr(agent, "_last_face", "") or ""
+        _mood = None
+        try:
+            _mood = agent.emotions.mood()[0] if getattr(agent, "emotions", None) else None
+        except Exception:
+            _mood = None
+        if _mood:
+            from .expression import emoji_for, led_color
+            out["face_color"] = led_color(_mood)[1]  # 灯色十六进制
+            out["face_emoji"] = emoji_for(_mood)
     except Exception:
         pass
     try:
@@ -363,6 +373,7 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 <div class=card><div class=k>👪 这一家子</div><div id=family class=dim></div><div id=familychips style="margin-top:6px"></div></div>
 <div class=card><div class=k>🫶 守护惦记</div><ul id=care></ul></div>
 <div class=card><div class=k>🤖 此刻体态</div><div id=body class=dim>…</div></div>
+<div class=card id=facecard><div class=k>🙂 此刻神情 <span id=faceemoji></span></div><div id=face class=dim>…</div></div>
 <div class=card><div class=k>🧠 刚才怎么想的</div><ul id=reasoning></ul></div>
 <div class=card><div class=k>🫂 陪伴守护</div>
   <div id=muse class=dim style="font-style:italic;margin-bottom:8px">…</div>
@@ -449,6 +460,9 @@ async function refresh(){
     $('#care').innerHTML=(s.care&&s.care.length)?li(s.care):'<li class=dim>暂未设置守护对象（见 config/care.yaml）</li>';
     var cp=s.companion||{};
     $('#body').textContent=cp.body?('正「'+cp.body+'」'):'安安静静守着';
+    $('#face').textContent=cp.face||'神情平和';
+    $('#faceemoji').textContent=cp.face_emoji||'';
+    if(cp.face_color){$('#facecard').style.borderLeft='4px solid '+cp.face_color;}
     $('#reasoning').innerHTML=(cp.reasoning&&cp.reasoning.length)?li(cp.reasoning):'<li class=dim>（还没开口想事）</li>';
     $('#muse').textContent=cp.muse||'';
     $('#meds').innerHTML=(cp.meds&&cp.meds.length)?li(cp.meds):'<li class=dim>这会儿没有要吃的药</li>';

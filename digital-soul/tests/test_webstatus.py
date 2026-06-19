@@ -123,7 +123,7 @@ def test_companion_guardian_surfaced():
 def test_companion_guardian_degrades():
     d = _companion_guardian(_StubAgent())          # 没有这些字段也不炸
     assert d == {"meds": [], "appts": [], "habits": [], "joys": [], "muse": "",
-                 "reasoning": [], "body": ""}
+                 "reasoning": [], "body": "", "face": "", "face_color": "", "face_emoji": ""}
 
 
 if __name__ == "__main__":

@@ -82,6 +82,7 @@ class Agent:
         self._threads: dict = {}                                  # 你上次提到没完的事（跨天记挂）
         self._inferred_day = None                                 # 当天是否已主动说过推断（去重）
         self._last_body = ""                                      # 此刻的体态（注入灵魂的身体·供网页展示）
+        self._last_face = ""                                      # 此刻的神情（脸+灯色·供网页展示）
         self.curiosity = curiosity                                # 好奇心：对陌生事物的疑问本
         self.worldmodel = worldmodel                              # 世界模型：带置信度的信念，会自我修正
         self.calib = calib                                        # 预测校准（从"猜对/没猜对"学习）
@@ -2211,6 +2212,8 @@ class Agent:
         mood = self.emotions.mood()[0] if getattr(self, "emotions", None) else None
         express(self.robot, mood, who.get("name"))
         self._last_body = body_language(mood)[0]
+        from .expression import describe_face
+        self._last_face = describe_face(mood)                     # 此刻的神情（供网页/灯带展示）
         if who.get("guard"):
             guard_stance(self.robot, who.get("name"))
         from .perform import perform_spoken
