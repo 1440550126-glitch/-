@@ -28,3 +28,16 @@ voice:
   volume: 0.95        # 音量 0~1
   voice: ""           # 系统嗓音名：Mac 如 Tingting/Sinji；留空用系统默认
   # tts_cmd: "my-voice-clone --text '{text}'"   # 接本地声音克隆 CLI，用最像本人的嗓音说（含 {text}）
+
+# 声音相册：本人留下的真实语音片段——在合适时机放出来，真的听见 TA（赛博永生最戳心处）
+# 每段：file 音频路径 / text 这段说的话 / occasions 适合的场景 / mood 心情 / tags 标签
+# voicebank:
+#   - file: voices/dad_morning.wav
+#     text: "早睡早起，别熬夜啊"
+#     occasions: [greeting, morning]
+#     mood: 关切
+#     tags: [叮嘱]
+#   - file: voices/dad_laugh.wav
+#     text: "（爽朗地笑）"
+#     occasions: [happy]
+#     mood: 喜

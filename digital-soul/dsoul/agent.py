@@ -820,6 +820,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "affection")
                     return result
 
+        # --- 声音相册（"想听你的声音" / "放段你说的话"）：放一段 TA 亲口留下的话 ---
+        if action is None and who.get("obey"):
+            from .voicebank import is_voicebank_request
+            if is_voicebank_request(utterance):
+                txt = self.voicebank_handle(utterance)
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="爱", topic="听声")
+                    self._log_journal(who, utterance, txt, "voicebank")
+                    return result
+
         # --- 说说我自己（"你今天怎么样" / "你过得好吗"）：双向地聊，再把话转回给你 ---
         if action is None and who.get("obey"):
             from .self_share import is_about_me_query
@@ -3480,6 +3492,22 @@ class Agent:
         if not region:
             return "我能说几地的乡音呢——" + "、".join(dl.regions()) + "。你想听哪儿的？"
         return dl.demo(region)
+
+    def voicebank_handle(self, utterance="") -> str:
+        """声音相册：按心情/关键词挑一段本人录音，尽力放出来，并端出那句话。"""
+        from .voicebank import VoiceBank, describe, play_clip
+        vb = VoiceBank.from_config(self.identity if isinstance(self.identity, dict) else None)
+        if len(vb) == 0:
+            return ("我还没存着 TA 的录音呢——把那些说话的片段配到 voicebank 里"
+                    "（一段音频配一句话），我就能在合适的时候放给你听。")
+        mood = None
+        try:
+            mood = self.emotions.mood()[0] if getattr(self, "emotions", None) else None
+        except Exception:
+            mood = None
+        clip = vb.pick(mood=mood, seed=utterance or "")
+        play_clip(clip)                              # 尽力放音（无文件/无播放器则静默）
+        return describe(clip)
 
     def twister_handle(self, utterance="") -> str:
         """绕口令：要难的给难的，点了词给那条，否则随口来一条。"""
