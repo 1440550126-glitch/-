@@ -7,3 +7,6 @@ var/
 .env
 .DS_Store
 npm-debug.log*
+
+# 视觉证据截图不入库（只保留目录占位 screenshots/.gitkeep）
+screenshots/*.png
