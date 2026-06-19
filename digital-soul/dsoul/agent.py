@@ -647,6 +647,15 @@ class Agent:
                     self._log_journal(who, u, txt, "vitals")
                     return result
 
+        # --- 急救信息卡（"念念急救卡" / "我的急救信息"）---
+        if action is None and who.get("obey") and any(
+                k in (utterance or "") for k in ("急救卡", "急救信息", "救命信息", "急救信息卡")):
+            from .emergency_card import card_data, card_text
+            txt = card_text(card_data(self))
+            result["reply"] = txt
+            self._log_journal(who, utterance, txt, "emergency_card")
+            return result
+
         # --- 守护·居家安全（"睡前检查一下" / "门窗关了吗"）---
         if action is None and who.get("obey"):
             from .safety_check import is_safety_query
