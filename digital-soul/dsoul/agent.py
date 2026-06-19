@@ -872,6 +872,18 @@ class Agent:
                 self._log_journal(who, utterance, txt, "appointments")
                 return result
 
+        # --- 甜言蜜语（"说句情话" / "土味情话" / "夸夸我"）：夫妻之间也得会说好听的 ---
+        if action is None and who.get("obey"):
+            from .sweet_talk import is_sweet_request
+            if is_sweet_request(utterance):
+                txt = self.sweet_talk_handle(utterance, who)
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="爱", topic="甜话")
+                    self._log_journal(who, utterance, txt, "sweet_talk")
+                    return result
+
         # --- 真情流露（"你想我吗" / "你在乎我吗"）：不打太极，真心实意应一句 ---
         if action is None and who.get("obey"):
             from .affection import is_love_query, love_reply
@@ -3688,6 +3700,22 @@ class Agent:
         cfg = self.identity if isinstance(self.identity, dict) else None
         name = self._addr(who) if who.get("known") else ""
         return for_utterance(utterance, name=name, config=cfg)
+
+    def sweet_talk_handle(self, utterance="", who=None) -> str:
+        """甜言蜜语：按要的种类来一句；对老伴加个昵称更亲。"""
+        from . import sweet_talk as st
+        who = who or {}
+        cfg = self.identity if isinstance(self.identity, dict) else None
+        line = st.sweet_line(st.detect_kind(utterance), seed=utterance or "", config=cfg)
+        if line and self.is_my_spouse(who.get("name"), who.get("relation")):
+            try:
+                from .spouse import pick_endearment
+                end = pick_endearment(getattr(self, "spouse", None), seed=utterance or "")
+                if end:
+                    line = f"{end}，{line}"
+            except Exception:
+                pass
+        return line
 
     def accompany_handle(self, utterance="", who=None) -> str:
         """作伴：认出要一起做的事，给一段在场陪伴的话。"""
