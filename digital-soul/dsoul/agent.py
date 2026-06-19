@@ -753,6 +753,19 @@ class Agent:
                     self._log_journal(who, utterance, txt, "landmarks")
                     return result
 
+        # --- 中国传统色（"天青是什么颜色" / "黛色是啥"）：又雅又美 ---
+        if action is None and who.get("obey"):
+            from . import colors_cn as _cc
+            _cccfg = self.identity if isinstance(self.identity, dict) else None
+            if _cc.is_color_query(utterance, _cccfg):
+                txt = _cc.about(utterance, _cccfg)
+                if not txt and any(k in (utterance or "") for k in ("传统色", "中国色", "古代颜色")):
+                    txt = "中国传统色有不少美名：" + "、".join(_cc.colors(_cccfg)[:8]) + "……想知道哪个跟我说。"
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "colors_cn")
+                    return result
+
         # --- 认民族乐器（"二胡是什么乐器" / "琵琶名曲"）---
         if action is None and who.get("obey"):
             from . import instruments as _in
