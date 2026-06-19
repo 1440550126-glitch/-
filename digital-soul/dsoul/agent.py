@@ -337,6 +337,19 @@ class Agent:
                 self._log_journal(who, utterance, txt, mark)
                 return result
 
+        # --- 告别与释怀：来想念/告别的人说出不舍，以本人口吻温柔回应、给一份释怀（数字魂的本意）---
+        if action is None and who.get("obey"):
+            from .condolence import console, senses_mourning
+            if senses_mourning(utterance):
+                txt = console(utterance, name=who.get("name", ""),
+                              relation=who.get("relation", ""))
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="爱", topic="释怀")
+                    self._log_journal(who, utterance, txt, "condolence")
+                    return result
+
         # --- 托住（最高优先）：接住最重的那句"不想活了"，稳稳托住、引向身边的人与帮助 ---
         if action is None and who.get("obey"):
             from .gentle_insist import senses_despair
