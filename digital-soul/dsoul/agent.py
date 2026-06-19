@@ -272,6 +272,13 @@ class Agent:
         if action is None and who.get("obey"):
             sret = self._scene_route(speaker_name, utterance)
             if sret is not None:
+                # 既开关灯、也当那个门口的人：离家/回家时把暖话缀在前头
+                from .farewell import is_back, is_leaving, send_off, welcome_back
+                u = utterance or ""
+                warm = (send_off(self._addr(who), seed=u) if is_leaving(u)
+                        else welcome_back(self._addr(who), seed=u) if is_back(u) else "")
+                if warm:
+                    sret = f"{warm} {sret}"
                 result["reply"] = sret
                 self._log_journal(who, utterance, sret, "scene")
                 return result
@@ -291,6 +298,22 @@ class Agent:
             if dmsg is not None:
                 result["reply"] = dmsg
                 self._log_journal(who, utterance, dmsg, "device")
+                return result
+
+        # --- 门口的人：出门相送 / 回家迎接（情感层，设备场景没接住时） ---
+        if action is None and who.get("obey"):
+            from .farewell import is_back, is_leaving, send_off, welcome_back
+            u = utterance or ""
+            ftxt = ""
+            if is_leaving(u):
+                ftxt = send_off(self._addr(who), seed=u)
+            elif is_back(u):
+                ftxt = welcome_back(self._addr(who), seed=u)
+            if ftxt:
+                result["reply"] = ftxt
+                if self.social is not None:
+                    self.social.note(who.get("name"), emotion="爱", topic="迎送")
+                self._log_journal(who, u, ftxt, "farewell")
                 return result
 
         # --- 重试没办成的待办（"再试一次"，或刚跟进过你说"好"）---
