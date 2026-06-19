@@ -736,6 +736,22 @@ class Agent:
                     self._log_journal(who, utterance, txt, "couplet")
                     return result
 
+        # --- 古典名著（"四大名著是哪四部" / "西游记主要人物"）---
+        if action is None and who.get("obey"):
+            from . import classic_books as _cb
+            if _cb.is_book_query(utterance):
+                u2 = utterance or ""
+                if "四大名著" in u2 and not _cb.find_book(u2):
+                    txt = _cb.four_classics()
+                elif any(k in u2 for k in ("主要人物", "里有谁", "有谁", "人物")):
+                    txt = _cb.characters(u2) or _cb.about(u2)
+                else:
+                    txt = _cb.about(u2) or _cb.four_classics()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "classic_books")
+                    return result
+
         # --- 历史朝代（"背朝代歌" / "唐朝介绍" / "朝代顺序"）：给孙辈讲讲五千年 ---
         if action is None and who.get("obey"):
             from . import dynasties as _dy
