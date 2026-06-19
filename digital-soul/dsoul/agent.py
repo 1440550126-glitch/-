@@ -161,6 +161,7 @@ class Agent:
         self._degraded_notice_shown = False                       # 降级提示只提一次
         self._briefed_on = None      # 今天是否已主动晨报过（按日期）
         self.mouth = None            # "嘴"：语音模式下挂上它，主动说的话会边说边动（说动合一）
+        self._festival_nudged: set = set()  # 当天已张罗过的节日（按日期+节日去重）
 
     def _hints(self) -> list[str]:
         from .style import style_hint
@@ -2009,6 +2010,11 @@ class Agent:
             st = self.solar_term_line()
             if st:
                 text = f"{text} {st}"
+        # 节日临近：快到节了/正逢节，像家里人那样张罗或道声祝福（当天每节只提一次）
+        if who.get("obey"):
+            fn = self.festival_nudge()
+            if fn:
+                text = f"{text} {fn}"
         # 打气跟进：之前替你惦记的大事（考试/面试/手术…），过后主动问一句结果
         if who.get("obey"):
             fu = self.cheer_followup(who.get("name"))
@@ -2319,6 +2325,29 @@ class Agent:
         """赶上节气当天才说的那句（没赶上返回空，供见面时主动提）。"""
         from .solar_terms import term_on, wisdom
         return wisdom(term_on(now))
+
+    def festival_nudge(self, now=None, within=7) -> str:
+        """正逢节或快到节，主动张罗/道祝福一句（当天每节去重）。没有则空。"""
+        from datetime import datetime
+
+        from . import festival_dates as fd
+        now = now or datetime.now()
+        today = now.date()
+        best = None
+        for f in fd.known_festivals():
+            d = fd.days_to_festival(f, today)
+            if d is not None and 0 <= d <= within and (best is None or d < best[1]):
+                best = (f, d)
+        if not best:
+            return ""
+        name, days = best
+        key = (today.isoformat(), name)
+        if key in self._festival_nudged:
+            return ""
+        line = fd.nudge(name, days)
+        if line:
+            self._festival_nudged.add(key)
+        return line
 
     # ---------- 人情往来 ----------
     def favor_ledger(self) -> str:

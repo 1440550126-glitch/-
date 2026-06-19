@@ -12,6 +12,7 @@ from dsoul.festival_dates import (  # noqa: E402
     describe,
     festival_date,
     known_festivals,
+    nudge,
 )
 
 
@@ -68,6 +69,28 @@ def test_describe():
 def test_unknown_returns_none():
     assert days_to_festival("我生日", date(2026, 1, 1)) is None
     assert festival_date("春节", 2099) is None        # 表外年份
+
+
+def test_nudge_today_blessing():
+    assert nudge("春节", 0).startswith("今儿是春节，")
+    assert "新春大吉" in nudge("春节", 0)
+
+
+def test_nudge_somber_festival_no_blessing():
+    # 清明没有欢庆祝福，只轻声提一句
+    s = nudge("清明", 0)
+    assert "快乐" not in s and "祭扫" in s
+
+
+def test_nudge_upcoming_within_week():
+    s = nudge("中秋", 3)
+    assert "还有 3 天就中秋了" in s and "月饼" in s
+
+
+def test_nudge_too_far_or_invalid_empty():
+    assert nudge("春节", 30) == ""
+    assert nudge("春节", -1) == ""
+    assert nudge("不是节日", 0) == ""
 
 
 if __name__ == "__main__":
