@@ -753,6 +753,23 @@ class Agent:
                     self._log_journal(who, utterance, txt, "landmarks")
                     return result
 
+        # --- 书法字体（"楷书是什么样" / "楷书四大家" / "想练毛笔字"）---
+        if action is None and who.get("obey"):
+            from . import calligraphy as _cal
+            _calcfg = self.identity if isinstance(self.identity, dict) else None
+            if _cal.is_calligraphy_query(utterance, _calcfg):
+                u2 = utterance or ""
+                if "四大家" in u2:
+                    txt = _cal.four_masters()
+                else:
+                    txt = _cal.about(u2, _calcfg)
+                    if not txt and any(k in u2 for k in ("书法", "字体", "练字", "毛笔字")):
+                        txt = "书法五体：" + "、".join(_cal.scripts(_calcfg)[:5]) + "。想了解哪种跟我说。"
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "calligraphy")
+                    return result
+
         # --- 中国传统色（"天青是什么颜色" / "黛色是啥"）：又雅又美 ---
         if action is None and who.get("obey"):
             from . import colors_cn as _cc
