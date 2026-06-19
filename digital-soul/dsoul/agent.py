@@ -405,6 +405,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "comfort_anxiety")
                     return result
 
+        # --- 哄消气：闹脾气/受委屈/拌嘴时，不犟嘴，先认领情绪、给台阶、拉回暖处 ---
+        if action is None and who.get("obey"):
+            from . import coax as _coax
+            if _coax.is_upset(utterance) or _coax.is_make_up_cue(utterance):
+                txt = self.coax_handle(utterance, who)
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="哀", topic="哄")
+                    self._log_journal(who, utterance, txt, "coax")
+                    return result
+
         # --- 该犟就犟：你说不吃药/不看病/太拼，它拦着劝着，因为在乎（不顺着你害你）---
         if action is None and who.get("obey"):
             from .gentle_insist import senses_self_neglect
@@ -2334,6 +2346,27 @@ class Agent:
     def is_my_spouse(self, name, relation=None) -> bool:
         from .spouse import is_spouse
         return is_spouse(getattr(self, "spouse", None), name, relation)
+
+    def coax_handle(self, utterance="", who=None) -> str:
+        """哄消气：按关系（老伴/孩子…）哄一句；想和好就主动服软。"""
+        from . import coax
+        who = who or {}
+        relation = who.get("relation") or ""
+        endear = ""
+        if self.is_my_spouse(who.get("name"), who.get("relation")):
+            relation = "老伴"
+            try:
+                from .spouse import pick_endearment
+                endear = pick_endearment(getattr(self, "spouse", None), seed=utterance or "")
+            except Exception:
+                endear = ""
+        kind = coax.upset_kind(utterance)
+        if kind:
+            return coax.coax_line(relation=relation, kind=kind,
+                                  seed=utterance or "", endearment=endear)
+        if coax.is_make_up_cue(utterance):
+            return coax.make_up(relation=relation, endearment=endear)
+        return ""
 
     def love_story(self) -> str:
         """我们的故事（怎么认识、怎么走到一起）。"""
