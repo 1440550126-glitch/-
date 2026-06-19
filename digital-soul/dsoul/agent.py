@@ -736,6 +736,19 @@ class Agent:
                     self._log_journal(who, utterance, txt, "couplet")
                     return result
 
+        # --- 认民族乐器（"二胡是什么乐器" / "琵琶名曲"）---
+        if action is None and who.get("obey"):
+            from . import instruments as _in
+            _incfg = self.identity if isinstance(self.identity, dict) else None
+            if _in.is_instrument_query(utterance, _incfg):
+                txt = _in.about(utterance, _incfg)
+                if not txt and any(k in (utterance or "") for k in ("民族乐器", "传统乐器", "国乐")):
+                    txt = "民族乐器有不少：" + "、".join(_in.instruments(_incfg)[:8]) + "……想了解哪个跟我说。"
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "instruments")
+                    return result
+
         # --- 古典名著（"四大名著是哪四部" / "西游记主要人物"）---
         if action is None and who.get("obey"):
             from . import classic_books as _cb
