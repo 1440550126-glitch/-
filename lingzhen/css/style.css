@@ -320,6 +320,15 @@ a{cursor:pointer;color:inherit}
 .lz-step.review{border-left:3px solid var(--ok)}
 .lz-step.review .lz-phase-b{background:rgba(70,211,154,.16);color:var(--ok)}
 
+/* ---- 模型提供方选择器（BYOK） ---- */
+.lz-prov-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:6px 0 14px}
+.lz-prov{display:flex;align-items:center;gap:10px;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px;cursor:pointer;font-family:inherit;transition:.15s}
+.lz-prov:hover{border-color:var(--acc)}
+.lz-prov.on{border-color:var(--acc);background:rgba(110,168,254,.1);box-shadow:0 0 0 2px rgba(110,168,254,.18)}
+.lz-prov-emoji{font-size:22px;flex:none;width:30px;text-align:center}
+.lz-prov b{font-size:14px;color:var(--txt);display:block}
+.lz-prov small{font-size:11px;color:var(--mut)}
+
 /* ---- 个人中心 ---- */
 .lz-me{cursor:pointer}
 .lz-me-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}

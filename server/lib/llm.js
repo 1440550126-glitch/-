@@ -20,6 +20,31 @@ const PRICES = {
 export const llmEnabled = () => PROVIDER !== 'none' && !!BASE_URL && !!API_KEY;
 export const llmProvider = () => PROVIDER;
 
+// ===== 用户自带 Key（BYOK）：优先用用户配置，否则回落到平台环境变量 =====
+const _userCache = new Map();              // user_id -> cfg | null
+export const invalidateUserLLM = (userId) => _userCache.delete(Number(userId));
+function getUserLLM(userId) {
+  if (!userId) return null;
+  const id = Number(userId);
+  if (_userCache.has(id)) return _userCache.get(id);
+  const row = q.get('SELECT * FROM user_llm WHERE user_id = ?', id);
+  const cfg = (row && row.api_key && row.base_url) ? {
+    provider: row.provider || 'custom',
+    baseUrl: row.base_url.replace(/\/+$/, ''),
+    apiKey: row.api_key,
+    models: { default: row.model_default || MODELS.default, premium: row.model_premium || row.model_default || MODELS.premium }
+  } : null;
+  _userCache.set(id, cfg);
+  return cfg;
+}
+// 解析某用户实际可用的 LLM 配置：{enabled, byok, provider, baseUrl, apiKey, models}
+export function resolveLLM(userId) {
+  const u = getUserLLM(userId);
+  if (u) return { enabled: true, byok: true, ...u };
+  return { enabled: llmEnabled(), byok: false, provider: PROVIDER, baseUrl: BASE_URL, apiKey: API_KEY, models: MODELS };
+}
+export const userHasLLM = (userId) => !!getUserLLM(userId);
+
 export function logUsage({ userId = 0, feature, provider = 'local', model = 'rule-engine', promptTokens = 0, completionTokens = 0, ok = 1, fallback = 0, latency = 0, tier = 'default' }) {
   const price = PRICES[tier] || PRICES.default;
   const cost = provider === 'local' ? 0 : promptTokens * price.in + completionTokens * price.out;
@@ -43,9 +68,11 @@ export function todayCostMicro(featurePrefix = '') {
  * 调用大模型（OpenAI 兼容）。失败/未配置时抛错，调用方必须有本地兜底。
  * @returns {Promise<{text:string, promptTokens:number, completionTokens:number}>}
  */
-export async function chatLLM({ tier = 'default', system = '', prompt, json = false, maxTokens = 800, temperature = 0.8, timeoutMs = 12_000 }) {
-  if (!llmEnabled()) throw new Error('llm-disabled');
-  const model = MODELS[tier] || MODELS.default;
+export async function chatLLM({ tier = 'default', system = '', prompt, json = false, maxTokens = 800, temperature = 0.8, timeoutMs = 12_000, cfg = null }) {
+  const BASE = cfg?.baseUrl || BASE_URL;
+  const KEY = cfg?.apiKey || API_KEY;
+  const model = cfg?.models?.[tier] || cfg?.model || MODELS[tier] || MODELS.default;
+  if (!BASE || !KEY) throw new Error('llm-disabled');
   const messages = [];
   if (system) messages.push({ role: 'system', content: system });
   messages.push({ role: 'user', content: prompt });
@@ -53,10 +80,10 @@ export async function chatLLM({ tier = 'default', system = '', prompt, json = fa
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const resp = await fetch(`${BASE_URL}/chat/completions`, {
+    const resp = await fetch(`${BASE}/chat/completions`, {
       method: 'POST',
       signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${API_KEY}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${KEY}` },
       body: JSON.stringify({
         model, messages, max_tokens: maxTokens, temperature,
         ...(json ? { response_format: { type: 'json_object' } } : {})

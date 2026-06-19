@@ -10,7 +10,8 @@ import { STRATEGIES, STRATEGY_LIST, AGENT_QUOTA } from '../agents/catalog.js';
 import { startTeamRun, runTeamSync, stopRun, resolveTask, startBatch } from '../agents/engine.js';
 import { computeNext, fireTrigger, MIN_INTERVAL_MIN, MAX_TRIGGERS } from '../agents/scheduler.js';
 import { assertSafeHop } from '../agents/safefetch.js';
-import { useQuota, quotaUsed, todayCostMicro } from '../lib/llm.js';
+import { useQuota, quotaUsed, todayCostMicro, resolveLLM, invalidateUserLLM, chatLLM, userHasLLM } from '../lib/llm.js';
+import { LLM_PROVIDERS, findProvider } from '../lib/llm-providers.js';
 
 // ---------- 访问控制小工具 ----------
 const agentRow = (id) => q.get('SELECT * FROM agents WHERE id = ?', Number(id));
@@ -46,13 +47,15 @@ const sanitizeEmoji = (s, dft) => sanitizeText(s, 8) || dft;
 // ============================================================
 GET('/api/agents/meta', async (ctx) => {
   const member = isMember(ctx.user);
-  const limit = member ? AGENT_QUOTA.MEMBER_RUNS_PER_DAY : AGENT_QUOTA.FREE_RUNS_PER_DAY;
+  const byok = userHasLLM(ctx.user.id);
+  const limit = dailyRunLimit(ctx.user);
+  const used = quotaUsed(ctx.user.id, 'agent_run');
   return {
     tools: toolList(),
     strategies: STRATEGY_LIST,
-    quota: { used: quotaUsed(ctx.user.id, 'agent_run'), limit, left: Math.max(0, limit - quotaUsed(ctx.user.id, 'agent_run')) },
+    quota: { used, limit, left: Math.max(0, limit - used) },
     limits: { max_members: AGENT_QUOTA.MAX_MEMBERS, max_rounds: AGENT_QUOTA.MAX_TOOL_ROUNDS },
-    member
+    member, byok
   };
 }, { auth: true });
 
@@ -68,11 +71,11 @@ GET('/api/agents/usage', async (ctx) => {
      FROM agent_runs WHERE user_id = ?`, start, uidv
   );
   const member = isMember(ctx.user);
-  const runLimit = member ? AGENT_QUOTA.MEMBER_RUNS_PER_DAY : AGENT_QUOTA.FREE_RUNS_PER_DAY;
+  const byok = userHasLLM(uidv);
   return {
-    member, runs,
+    member, byok, runs,
     quota: {
-      run: { used: quotaUsed(uidv, 'agent_run'), limit: runLimit },
+      run: { used: quotaUsed(uidv, 'agent_run'), limit: dailyRunLimit(ctx.user) },
       api: { used: quotaUsed(uidv, 'agent_api'), limit: 50 }
     },
     cost: {
@@ -85,6 +88,61 @@ GET('/api/agents/usage', async (ctx) => {
       kbs: q.get('SELECT COUNT(*) c FROM knowledge_bases WHERE owner_id = ?', uidv).c
     }
   };
+}, { auth: true });
+
+// 每日运行上限：非会员=体验额度；会员自带 Key(BYOK)=不限量；会员用平台 Key=80
+const UNLIMITED = 1_000_000;
+function dailyRunLimit(user) {
+  if (!isMember(user)) return AGENT_QUOTA.FREE_RUNS_PER_DAY;
+  return userHasLLM(user.id) ? UNLIMITED : AGENT_QUOTA.MEMBER_RUNS_PER_DAY;
+}
+
+// ============================================================
+// 自带大模型 Key（BYOK）：推荐清单 + 个人配置 + 连通性测试
+// ============================================================
+GET('/api/me/llm', async (ctx) => {
+  const row = q.get('SELECT provider, base_url, model_default, model_premium, updated_at FROM user_llm WHERE user_id = ?', ctx.user.id);
+  return { providers: LLM_PROVIDERS, config: row ? { ...row, has_key: true } : null };
+}, { auth: true });
+
+PUT('/api/me/llm', async (ctx) => {
+  const b = ctx.body || {};
+  const provider = findProvider(b.provider) ? b.provider : 'custom';
+  const base_url = sanitizeText(b.base_url, 200);
+  const existing = q.get('SELECT api_key FROM user_llm WHERE user_id = ?', ctx.user.id);
+  const api_key = sanitizeText(b.api_key, 256) || existing?.api_key || '';   // 编辑时不重填 Key 则沿用旧的
+  const model_default = sanitizeText(b.model_default, 80);
+  const model_premium = sanitizeText(b.model_premium, 80) || model_default;
+  if (!/^https?:\/\/.+/.test(base_url)) throw bad('请填写有效的接口地址（base_url，需以 http(s):// 开头）');
+  if (!api_key) throw bad('请填写 API Key');
+  if (!model_default) throw bad('请填写默认模型名');
+  q.run(
+    `INSERT INTO user_llm (user_id, provider, base_url, api_key, model_default, model_premium, updated_at)
+     VALUES (?,?,?,?,?,?,?)
+     ON CONFLICT(user_id) DO UPDATE SET provider=excluded.provider, base_url=excluded.base_url, api_key=excluded.api_key,
+       model_default=excluded.model_default, model_premium=excluded.model_premium, updated_at=excluded.updated_at`,
+    ctx.user.id, provider, base_url.replace(/\/+$/, ''), api_key, model_default, model_premium, now()
+  );
+  invalidateUserLLM(ctx.user.id);
+  return { saved: true, provider, has_key: true };
+}, { auth: true });
+
+DEL('/api/me/llm', async (ctx) => {
+  q.run('DELETE FROM user_llm WHERE user_id = ?', ctx.user.id);
+  invalidateUserLLM(ctx.user.id);
+  return { deleted: true };
+}, { auth: true });
+
+POST('/api/me/llm/test', async (ctx) => {
+  const cfg = resolveLLM(ctx.user.id);
+  if (!cfg.byok) throw bad('请先保存你的模型 Key 再测试');
+  try {
+    const r = await chatLLM({ tier: 'default', system: '只回复一个字。', prompt: '请回复：好', maxTokens: 8, temperature: 0, cfg, timeoutMs: 15000 });
+    return { ok: true, model: r.model, sample: (r.text || '').trim().slice(0, 40) };
+  } catch (e) {
+    const m = String(e.message || e);
+    throw bad('连接失败：' + (m.includes('llm-http-401') ? 'Key 无效(401)，确认是 API Key 而非 AccessKey' : m.includes('llm-http-404') ? '模型名不对(404)，核对控制台模型 ID' : m.includes('llm-http-429') ? '限流/余额不足(429)' : m.replace('llm-http-', 'HTTP ')));
+  }
 }, { auth: true });
 
 // ============================================================
@@ -335,11 +393,11 @@ POST('/api/teams/:id/run', async (ctx) => {
   const members = (jparse(t.member_ids, []) || []).map(agentRow).filter((a) => a && a.enabled);
   if (!members.length) throw bad('这个团队还没有成员，先去添加成员吧');
 
-  const limit = isMember(ctx.user) ? AGENT_QUOTA.MEMBER_RUNS_PER_DAY : AGENT_QUOTA.FREE_RUNS_PER_DAY;
+  const limit = dailyRunLimit(ctx.user);
   if (!useQuota(ctx.user.id, 'agent_run', limit)) {
     throw denied(
-      isMember(ctx.user) ? '今天的团队运行次数到上限了，明天再来～' : `每天可免费运行 ${AGENT_QUOTA.FREE_RUNS_PER_DAY} 次 AI 团队，开通会员可提升到 ${AGENT_QUOTA.MEMBER_RUNS_PER_DAY} 次`,
-      { need_member: !isMember(ctx.user), quota_exceeded: true }
+      isMember(ctx.user) ? '今天平台额度到上限了～在「模型设置」填上你自己的大模型 Key，即可用自己的模型不限量跑' : `每天可免费体验 ${AGENT_QUOTA.FREE_RUNS_PER_DAY} 次，开通会员并自带大模型 Key 即可不限量`,
+      { need_member: !isMember(ctx.user), quota_exceeded: true, byok_hint: true }
     );
   }
   const runId = startTeamRun(t, task, ctx.user.id, 'manual');   // 异步执行，步骤通过 SSE 实时直播
@@ -356,7 +414,7 @@ POST('/api/teams/:id/batch', async (ctx) => {
     .slice(0, 10).map((x) => typeof x === 'string' ? sanitizeText(x, 500) : x).filter((x) => x && (typeof x !== 'string' || x.length));
   if (!items.length) throw bad('至少给一条输入');
   if (!(jparse(t.member_ids, []) || []).map(agentRow).some((a) => a && a.enabled)) throw bad('这个团队还没有成员');
-  const limit = isMember(ctx.user) ? AGENT_QUOTA.MEMBER_RUNS_PER_DAY : AGENT_QUOTA.FREE_RUNS_PER_DAY;
+  const limit = dailyRunLimit(ctx.user);
   const left = Math.max(0, limit - quotaUsed(ctx.user.id, 'agent_run'));
   if (items.length > left) throw denied(`批量需要 ${items.length} 次运行额度，今天只剩 ${left} 次`, { need_member: !isMember(ctx.user), quota_exceeded: true });
   for (let i = 0; i < items.length; i++) useQuota(ctx.user.id, 'agent_run', limit);
@@ -505,7 +563,7 @@ DEL('/api/triggers/:id', async (ctx) => {
 POST('/api/triggers/:id/run-now', async (ctx) => {
   const t = triggerRow(ctx.params.id);
   if (!t || t.owner_id !== ctx.user.id) throw notFound();
-  const limit = isMember(ctx.user) ? AGENT_QUOTA.MEMBER_RUNS_PER_DAY : AGENT_QUOTA.FREE_RUNS_PER_DAY;
+  const limit = dailyRunLimit(ctx.user);
   if (!useQuota(ctx.user.id, 'agent_run', limit)) throw denied('今天的运行次数到上限了', { need_member: !isMember(ctx.user), quota_exceeded: true });
   const runId = fireTrigger(t, { advance: false });   // 立即跑一次，不打乱原定计划
   if (!runId) throw bad('团队已不可用，触发器已自动停用');

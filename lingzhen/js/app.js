@@ -151,8 +151,10 @@ function header() {
     h('nav', { class: 'lz-nav' }, NAV.map((it) =>
       h('a', { class: it.primary ? 'primary' : (it.match.includes(sec) ? 'on' : ''), onclick: () => nav(it.hash) }, it.label))),
     h('div', { class: 'lz-user' },
-      state.meta ? h('a', { class: 'lz-quota' + (isMemberNow() ? ' vip' : ''), title: isMemberNow() ? '会员 · 查看权益' : '今日剩余运行次数 · 点击升级', onclick: () => nav('#/pricing') },
-        (isMemberNow() ? '👑 ' : '⚡ ') + `${state.meta.quota.left}/${state.meta.quota.limit}`) : null,
+      state.meta ? (state.meta.byok
+        ? h('a', { class: 'lz-quota vip', title: '自带模型 Key · 不限量', onclick: () => nav('#/llm') }, '🔑 ∞')
+        : h('a', { class: 'lz-quota' + (isMemberNow() ? ' vip' : ''), title: isMemberNow() ? '会员 · 查看权益' : '今日剩余运行次数 · 点击升级', onclick: () => nav('#/pricing') },
+            (isMemberNow() ? '👑 ' : '⚡ ') + `${state.meta.quota.left}/${state.meta.quota.limit}`)) : null,
       h('a', { class: 'lz-me', title: '个人中心', onclick: () => nav('#/me') }, (isMemberNow() ? '👑 ' : '👤 '), m?.nickname || '我'),
       h('a', { class: 'lz-out', onclick: logout }, '退出')));
 }
@@ -1029,15 +1031,17 @@ async function renderUsage() {
     };
     mount(shell(
       h('div', { class: 'lz-sec-t big' }, '📊 用量看板'),
-      h('p', { class: 'lz-intro' }, u.member
-        ? '会员账号 · 享受更高配额。'
-        : `体验账号，每天最多运行 ${u.quota.run.limit} 次，外部 API 每天 ${u.quota.api.limit} 次。`),
+      h('p', { class: 'lz-intro' }, u.byok
+        ? '已接入你自己的大模型 Key 🔑 · 用自己的额度跑，会员不限量。'
+        : u.member
+          ? '会员账号 · 在「模型设置」填上自己的大模型 Key 即可不限量。'
+          : `体验账号，每天最多运行 ${u.quota.run.limit} 次，外部 API 每天 ${u.quota.api.limit} 次。`),
       h('div', { class: 'lz-usg-grid' },
         h('div', { class: 'lz-usg-card' },
           h('div', { class: 'lz-usg-label' }, '今日运行'),
-          h('div', { class: 'lz-usg-val' }, String(u.runs.today), h('span', {}, ` / ${u.quota.run.limit}`)),
+          h('div', { class: 'lz-usg-val' }, String(u.runs.today), h('span', {}, u.quota.run.limit >= 1e6 ? ' / ∞' : ` / ${u.quota.run.limit}`)),
           pctBar(u.runs.today, u.quota.run.limit, 'var(--acc)'),
-          h('div', { class: 'lz-usg-sub' }, `累计已用额度 ${u.quota.run.used} 次`)),
+          h('div', { class: 'lz-usg-sub' }, u.quota.run.limit >= 1e6 ? '自带 Key · 不限量' : `累计已用额度 ${u.quota.run.used} 次`)),
         h('div', { class: 'lz-usg-card' },
           h('div', { class: 'lz-usg-label' }, '历史总运行'),
           h('div', { class: 'lz-usg-val', style: { color: 'var(--acc2)' } }, String(u.runs.total)),
@@ -1057,11 +1061,15 @@ async function renderUsage() {
             h('div', {}, h('div', { class: 'lz-usg-n' }, String(u.assets.teams)), h('small', {}, '团队')),
             h('div', {}, h('div', { class: 'lz-usg-n' }, String(u.assets.agents)), h('small', {}, '智能体')),
             h('div', {}, h('div', { class: 'lz-usg-n' }, String(u.assets.kbs)), h('small', {}, '知识库'))))),
-      u.member
-        ? h('div', { class: 'lz-member-ok' }, '👑 你已是会员 · 每日 80 次运行与高级模型已解锁，感谢支持！')
-        : h('div', { class: 'lz-upsell', onclick: () => nav('#/pricing') },
-            h('div', {}, h('b', {}, '👑 升级会员，每日 80 次 + 高级模型'), h('small', {}, '一杯奶茶钱，让团队全力开火 · 沙盒支付即时生效')),
-            h('button', { class: 'lz-btn' }, '查看会员 →'))));
+      u.byok
+        ? h('div', { class: 'lz-member-ok' }, '🔑 已接入你自己的大模型 Key · 任务用你自己的模型与额度跑，会员不限量。')
+        : u.member
+          ? h('div', { class: 'lz-upsell', onclick: () => nav('#/llm') },
+              h('div', {}, h('b', {}, '🔑 填上你的大模型 Key，立即不限量'), h('small', {}, '豆包 / DeepSeek / 通义… 用自己的额度跑')),
+              h('button', { class: 'lz-btn' }, '去设置 →'))
+          : h('div', { class: 'lz-upsell', onclick: () => nav('#/pricing') },
+              h('div', {}, h('b', {}, '👑 订阅会员 + 自带 Key 不限量'), h('small', {}, '包月解锁平台 · 模型用你自己的 Key')),
+              h('button', { class: 'lz-btn' }, '查看订阅 →'))));
   } catch (e) { mount(shell(empty('加载失败', e.message))); }
 }
 
@@ -1099,18 +1107,21 @@ async function renderPricing() {
       h('span', {}, label), h('span', { class: 'lz-cmp-free' }, free), h('span', { class: 'lz-cmp-vip' }, vip));
 
     mount(shell(
-      h('div', { class: 'lz-sec-t big' }, '👑 会员 · 解锁全力的 AI 团队'),
+      h('div', { class: 'lz-sec-t big' }, '👑 订阅 · 包月解锁全力的 AI 团队'),
       member
-        ? h('div', { class: 'lz-member-ok' }, `你已是会员 · 有效期至 ${until.getFullYear()}-${until.getMonth() + 1}-${until.getDate()}。每日 80 次运行 + 高级模型已解锁。`)
-        : h('p', { class: 'lz-intro' }, '免费版足够上手；想让团队全力开火、用上更强的大模型，开通会员即可。当前为沙盒支付，开通后即时生效。'),
+        ? h('div', { class: 'lz-member-ok' }, `你已订阅 · 有效期至 ${until.getFullYear()}-${until.getMonth() + 1}-${until.getDate()}。`, h('a', { class: 'lz-link', onclick: () => nav('#/llm') }, '去填自己的大模型 Key，不限量跑 →'))
+        : h('p', { class: 'lz-intro' }, '本产品按月订阅：包月解锁平台全部能力，模型用你自己的 Key（任意 OpenAI 兼容：豆包 / DeepSeek / 通义…），成本透明、会员不限量。当前为沙盒支付，开通即时生效。'),
       h('div', { class: 'lz-cmp' },
-        h('div', { class: 'lz-cmp-head' }, h('span', {}, '能力'), h('span', {}, '免费版'), h('span', { class: 'lz-cmp-vip' }, '会员')),
-        cmp('每日团队运行', '8 次', '80 次'),
-        cmp('高级模型协作', '—', '✓ 解锁'),
-        cmp('批量运行 / 定时触发 / 对外 API', '✓', '✓'),
-        cmp('知识库 RAG / 团队记忆 / Webhook', '✓', '✓'),
-        cmp('句灵全生态会员权益', '—', '✓ 一并解锁')),
+        h('div', { class: 'lz-cmp-head' }, h('span', {}, '能力'), h('span', {}, '免费体验'), h('span', { class: 'lz-cmp-vip' }, '包月订阅')),
+        cmp('每日团队运行', '8 次', '自带 Key 不限量'),
+        cmp('自带大模型 Key（BYOK）', '—', '✓ 任意 OpenAI 兼容'),
+        cmp('高级模型协作 + 验收官迭代', '本地引擎', '✓ 你的模型全力跑'),
+        cmp('批量 / 定时 / 知识库 / API / Webhook', '✓', '✓'),
+        cmp('结果分享 / 团队记忆 / 草稿箱', '✓', '✓')),
       h('div', { class: 'lz-plans' }, cat.member_plans.map(planCard)),
+      h('div', { class: 'lz-upsell', onclick: () => nav('#/llm') },
+        h('div', {}, h('b', {}, '🔑 订阅后自带大模型 Key'), h('small', {}, '豆包 / DeepSeek / 通义 / OpenAI… 任选，用自己的模型与额度，不限量跑')),
+        h('button', { class: 'lz-btn' }, '去设置 →')),
       h('div', { class: 'lz-sec-t' }, '开通后还一并获得'),
       h('ul', { class: 'lz-benefits' }, (cat.member_benefits || []).map((b) => h('li', {}, b))),
       h('p', { class: 'lz-hint' }, cat.fair_play || '沙盒支付环境，正式上线将接入微信支付 / 支付宝 / Apple 内购。')));
@@ -1260,16 +1271,100 @@ async function renderMe() {
       member
         ? h('div', { class: 'lz-member-ok' }, `👑 会员有效期至 ${until.getFullYear()}-${until.getMonth() + 1}-${until.getDate()} · `, h('a', { class: 'lz-link', onclick: () => nav('#/pricing') }, '续费'))
         : h('div', { class: 'lz-upsell', onclick: () => nav('#/pricing') },
-            h('div', {}, h('b', {}, '👑 升级会员，每日 80 次 + 高级模型'), h('small', {}, '一杯奶茶钱，让团队全力开火')),
-            h('button', { class: 'lz-btn' }, '查看会员 →')),
+            h('div', {}, h('b', {}, '👑 订阅会员，自带 Key 不限量跑'), h('small', {}, '包月解锁平台，模型用你自己的 Key')),
+            h('button', { class: 'lz-btn' }, '查看订阅 →')),
+      h('div', { class: 'lz-upsell', onclick: () => nav('#/llm') },
+        h('div', {}, h('b', {}, state.meta?.byok ? '🔑 已接入你的大模型 Key' : '🔑 模型设置 · 自带大模型 Key'),
+          h('small', {}, state.meta?.byok ? '任务正用你自己的模型跑 · 会员不限量' : '填自己的 Key（豆包/DeepSeek/通义…），用自己的模型与额度')),
+        h('button', { class: 'lz-btn' }, state.meta?.byok ? '管理 →' : '去设置 →')),
       h('div', { class: 'lz-kb-new' }, h('div', { class: 'lz-sec-t' }, '昵称'), h('div', { class: 'lz-row' }, nickIn, saveNick)),
       bindBox,
       h('div', { class: 'lz-me-actions' }, h('button', { class: 'lz-btn ghost', onclick: logout }, '退出登录'))));
   } catch (e) { mount(shell(empty('加载失败', e.message))); }
 }
 
+// ---------------- 模型设置（自带大模型 Key · BYOK） ----------------
+async function renderLLM() {
+  mount(shell(spinner()));
+  try {
+    await loadMeta();
+    const { providers, config } = await GET('/api/me/llm');
+    let pid = config?.provider || 'doubao';
+    const prov = (id) => providers.find((p) => p.id === id) || providers[0];
+
+    const baseIn = h('input', { class: 'lz-in', placeholder: '接口地址 base_url（OpenAI 兼容 /chat/completions 的前缀）' });
+    const keyIn = h('input', { class: 'lz-in', type: 'password', placeholder: config ? '如不修改可留空（沿用已保存的 Key）' : '你的 API Key（只存服务端，绝不下发前端）', autocomplete: 'off' });
+    const defIn = h('input', { class: 'lz-in', placeholder: '默认模型名（高频调用，选便宜的）' });
+    const premIn = h('input', { class: 'lz-in', placeholder: '高级模型名（整合/验收等质量关键步骤）' });
+    const hint = h('p', { class: 'lz-hint' });
+
+    function fillProvider(p) {
+      baseIn.value = p.base_url || '';
+      defIn.value = p.models.default || '';
+      premIn.value = p.models.premium || '';
+      hint.innerHTML = '';
+      hint.append('💡 ' + p.recommend + ' · ' + p.key_hint + ' ');
+      if (p.apply) hint.append(h('a', { class: 'lz-link', href: p.apply, target: '_blank', rel: 'noopener' }, '去申请 Key →'));
+    }
+    const picker = h('div', { class: 'lz-prov-grid' }, providers.map((p) =>
+      h('button', { class: 'lz-prov' + (pid === p.id ? ' on' : ''), 'data-id': p.id, onclick: () => {
+        pid = p.id; for (const b of picker.children) b.classList.toggle('on', b.dataset.id === p.id); fillProvider(p);
+      } }, h('span', { class: 'lz-prov-emoji' }, p.emoji), h('div', {}, h('b', {}, p.name), h('small', {}, p.vendor)))));
+
+    fillProvider(prov(pid));
+    if (config) { baseIn.value = config.base_url; defIn.value = config.model_default; premIn.value = config.model_premium; }  // 已配置则回填实际值
+
+    const testBtn = h('button', { class: 'lz-btn ghost' }, '测试连通');
+    const saveBtn = h('button', { class: 'lz-btn xl' }, config ? '更新配置' : '保存并启用');
+    async function doSave(silent) {
+      const body = { provider: pid, base_url: baseIn.value.trim(), model_default: defIn.value.trim(), model_premium: premIn.value.trim() };
+      if (keyIn.value.trim()) body.api_key = keyIn.value.trim();
+      await PUT('/api/me/llm', body);
+      state.meta = null; await loadMeta();
+      if (!silent) { toast('已保存，之后的任务将用你自己的模型 🔑'); renderLLM(); }
+    }
+    saveBtn.addEventListener('click', async () => {
+      if (!baseIn.value.trim() || !defIn.value.trim()) { toast('填好接口地址与默认模型名', 'warn'); return; }
+      if (!config && !keyIn.value.trim()) { toast('填入你的 API Key', 'warn'); return; }
+      saveBtn.disabled = true;
+      try { await doSave(false); } catch (e) { toast(e.message, 'warn'); saveBtn.disabled = false; }
+    });
+    testBtn.addEventListener('click', async () => {
+      testBtn.disabled = true; testBtn.textContent = '测试中…';
+      try {
+        if (baseIn.value.trim() && (keyIn.value.trim() || config)) await doSave(true);  // 先存再测
+        const r = await POST('/api/me/llm/test');
+        toast('✓ 连通成功：' + (r.model || '') + ' 回复「' + (r.sample || '') + '」');
+      } catch (e) { toast(e.message, 'warn'); }
+      testBtn.disabled = false; testBtn.textContent = '测试连通';
+    });
+    const clearBtn = config ? h('button', { class: 'lz-btn ghost danger sm', onclick: async () => {
+      if (!confirm('清除你的模型 Key？之后任务将回落到本地引擎。')) return;
+      try { await DEL('/api/me/llm'); state.meta = null; await loadMeta(); toast('已清除'); renderLLM(); } catch (e) { toast(e.message, 'warn'); }
+    } }, '清除配置') : null;
+
+    mount(shell(
+      h('button', { class: 'lz-back', onclick: () => nav('#/me') }, '‹ 个人中心'),
+      h('div', { class: 'lz-sec-t big' }, '🔑 模型设置 · 自带大模型 Key'),
+      config
+        ? h('div', { class: 'lz-member-ok' }, `已接入：${prov(config.provider).name} · ${config.model_default}。你的任务正用自己的模型跑，会员可不限量。`)
+        : h('p', { class: 'lz-intro' }, '订阅后自带任意大模型 Key（OpenAI 兼容即可），任务就用你自己的模型与额度跑——成本透明、会员不限量。Key 只存服务端、绝不下发前端。'),
+      h('div', { class: 'lz-sec-t' }, '① 选择模型提供方'),
+      picker,
+      h('div', { class: 'lz-form' },
+        h('div', { class: 'lz-sec-t' }, '② 填写你的配置'),
+        h('label', {}, '接口地址 base_url'), baseIn,
+        h('label', {}, 'API Key'), keyIn,
+        h('label', {}, '默认模型 / 高级模型'),
+        h('div', { class: 'lz-row' }, defIn, premIn),
+        hint,
+        h('div', { class: 'lz-row' }, testBtn, saveBtn),
+        clearBtn)));
+  } catch (e) { mount(shell(empty('加载失败', e.message))); }
+}
+
 // ---------------- 路由 ----------------
-const TITLES = { '': '团队广场', agents: '智能体工作室', agent: '智能体', kb: '知识库', triggers: '定时触发器', history: '运行记录', usage: '用量看板', pricing: '会员', me: '个人中心', new: '组建团队', edit: '编辑团队', team: '团队', run: '作战室', batch: '批量运行' };
+const TITLES = { '': '团队广场', agents: '智能体工作室', agent: '智能体', kb: '知识库', triggers: '定时触发器', history: '运行记录', usage: '用量看板', pricing: '会员', me: '个人中心', llm: '模型设置', new: '组建团队', edit: '编辑团队', team: '团队', run: '作战室', batch: '批量运行' };
 function route() {
   const hash = location.hash || '#/';
   if (hash.startsWith('#/s/')) return renderShare(hash.slice(4));   // 公开分享：免登录
@@ -1290,6 +1385,7 @@ function route() {
   if (path === 'usage') return renderUsage();
   if (path === 'pricing') return renderPricing();
   if (path === 'me') return renderMe();
+  if (path === 'llm') return renderLLM();
   return renderHome();
 }
 

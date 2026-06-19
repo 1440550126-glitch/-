@@ -5,7 +5,7 @@
 import { q, getSetting } from '../lib/db.js';
 import { now, clamp, jparse, uid } from '../lib/util.js';
 import { publish } from '../lib/hub.js';
-import { chatLLM, logUsage, llmEnabled, llmProvider, todayCostMicro } from '../lib/llm.js';
+import { chatLLM, logUsage, resolveLLM, todayCostMicro } from '../lib/llm.js';
 import { getTool, toolsSpec } from './tools.js';
 import { terms } from './knowledge.js';
 import { safeFetch } from './safefetch.js';
@@ -16,27 +16,31 @@ const STOPPED = new Set();
 export const stopRun = (id) => STOPPED.add(Number(id));
 const isStopped = (id) => STOPPED.has(Number(id));
 
-// ---- 预算闸门：团队功能每日成本封顶后强制走本地引擎 ----
-function withinBudget() {
+// ---- 预算闸门：平台 Key 每日成本封顶后强制走本地引擎；用户自带 Key(BYOK) 不受此限 ----
+function withinBudget(byok) {
+  if (byok) return true;
   const budget = Number(getSetting('agent_budget_micro', AGENT_QUOTA.DEFAULT_BUDGET_MICRO));
   if (!budget || budget <= 0) return true;
   return todayCostMicro('agent_') < budget;
 }
+// 某用户当前是否可用大模型（平台 Key 或自带 Key）
+const llmOn = (userId) => resolveLLM(userId).enabled;
 
 // ---- 大模型调用 + 精确记账 + 本地兜底标记 ----
 async function llmStep({ userId, feature, tier = 'default', system, prompt, json = false, maxTokens = 700, temperature = 0.6, fallback }) {
-  if (llmEnabled() && withinBudget()) {
+  const cfg = resolveLLM(userId);   // 自带 Key 优先，否则平台 Key
+  if (cfg.enabled && withinBudget(cfg.byok)) {
     const t0 = now();
     try {
-      const r = await chatLLM({ tier, system, prompt, json, maxTokens, temperature });
-      const cost = logUsage({ userId, feature, provider: llmProvider(), model: r.model, promptTokens: r.promptTokens, completionTokens: r.completionTokens, ok: 1, latency: now() - t0, tier });
+      const r = await chatLLM({ tier, system, prompt, json, maxTokens, temperature, cfg });
+      const cost = logUsage({ userId, feature, provider: cfg.provider, model: r.model, promptTokens: r.promptTokens, completionTokens: r.completionTokens, ok: 1, latency: now() - t0, tier });
       return { text: r.text, tokens: r.promptTokens + r.completionTokens, cost, byLLM: true };
     } catch (e) {
-      logUsage({ userId, feature, provider: llmProvider(), model: '-', ok: 0, fallback: 1, latency: now() - t0, tier });
+      logUsage({ userId, feature, provider: cfg.provider, model: '-', ok: 0, fallback: 1, latency: now() - t0, tier });
       console.warn('[agent] llm fallback:', feature, e.message);
     }
   } else {
-    logUsage({ userId, feature, provider: 'local', fallback: llmEnabled() ? 1 : 0 });
+    logUsage({ userId, feature, provider: 'local', fallback: cfg.enabled ? 1 : 0 });
   }
   return { text: fallback ? fallback() : '', tokens: 0, cost: 0, byLLM: false };
 }
@@ -139,7 +143,7 @@ async function runSubtask(run, team, agent, item, blackboard, kbIds) {
   let final = null, usedLLM = false, tok = 0, cost = 0, flagged = false;
 
   async function produce() {
-    if (llmEnabled() && toolIds.length) {
+    if (llmOn(run.user_id) && toolIds.length) {
       const sys = agentSystemPrompt(agent, toolIds);
       for (let round = 0; round < maxRounds && !isStopped(run.id); round++) {
         const prompt =
@@ -155,7 +159,7 @@ async function runSubtask(run, team, agent, item, blackboard, kbIds) {
         return action.output ?? action.final ?? action.result ?? (typeof action === 'string' ? action : null);
       }
       return null;
-    } else if (llmEnabled()) {
+    } else if (llmOn(run.user_id)) {
       const r = await llmStep({
         userId: run.user_id, feature: 'agent_act', tier: agent.tier, system: agentSystemPrompt(agent, []),
         prompt: `子任务：${item.step}\n目标：${item.objective}\n用户原始任务：${run.task}\n` + (memo ? `\n队友产出：\n${memo}\n` : '') + '\n请给出你的产出。',
@@ -475,7 +479,7 @@ export function localChecklist(task, result) {
 async function reviewResult(run, team, task, result, criteria, roundNo) {
   const step = newStep(run.id, { phase: 'review', agent_id: 0, agent_name: '验收官 · 质控', agent_avatar: '✅', title: `按验收标准逐条检查（第 ${roundNo} 次）`, input: task, status: 'running' });
   let verdict = null, byLLM = false, tok = 0, cost = 0;
-  if (llmEnabled()) {
+  if (llmOn(run.user_id)) {
     const r = await llmStep({
       userId: run.user_id, feature: 'agent_review', tier: 'default',
       system: '你是严格的验收官(QA)。逐条对照给定「验收标准」检查产出。只输出 JSON：{"checks":[{"criterion":"标准原文","pass":true|false,"note":"达标说明或具体缺口"}],"pass":全部关键项达标则true,"score":0-100}。务必对每条标准都给出判断。',

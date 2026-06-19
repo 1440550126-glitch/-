@@ -403,3 +403,14 @@ CREATE TABLE IF NOT EXISTS team_memory (
   UNIQUE(team_id, key)
 );
 CREATE INDEX IF NOT EXISTS idx_memory_team ON team_memory(team_id, key);
+
+-- 用户自带大模型 Key（BYOK）：每人一条，订阅后自填 Key 即用自己的模型不限量跑任务
+CREATE TABLE IF NOT EXISTS user_llm (
+  user_id       INTEGER PRIMARY KEY,
+  provider      TEXT NOT NULL DEFAULT 'custom',
+  base_url      TEXT NOT NULL DEFAULT '',
+  api_key       TEXT NOT NULL DEFAULT '',
+  model_default TEXT NOT NULL DEFAULT '',
+  model_premium TEXT NOT NULL DEFAULT '',
+  updated_at    INTEGER NOT NULL
+);
