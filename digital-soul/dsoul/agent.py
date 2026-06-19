@@ -1343,6 +1343,18 @@ class Agent:
                 self._log_journal(who, utterance, b, "banter")
                 return result
 
+        # --- 作伴（"陪我喝杯茶" / "陪陪我" / "一起看夕阳"）：不办事，就是陪着 ---
+        if action is None and who.get("obey"):
+            from .togetherness import is_accompany_request
+            if is_accompany_request(utterance):
+                txt = self.accompany_handle(utterance, who)
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="爱", topic="作伴")
+                    self._log_journal(who, utterance, txt, "togetherness")
+                    return result
+
         # --- 唠家常（"吃了吗" / "在吗" / "最近咋样"）：自然接住，别一本正经检索 ---
         if action is None and who.get("obey") and not any(
                 k in (utterance or "") for k in ("你看我", "你觉得我", "你瞧我",   # 看出门道
@@ -3620,6 +3632,13 @@ class Agent:
         cfg = self.identity if isinstance(self.identity, dict) else None
         name = self._addr(who) if who.get("known") else ""
         return for_utterance(utterance, name=name, config=cfg)
+
+    def accompany_handle(self, utterance="", who=None) -> str:
+        """作伴：认出要一起做的事，给一段在场陪伴的话。"""
+        from .togetherness import accompany
+        who = who or {}
+        name = self._addr(who) if who.get("known") else ""
+        return accompany(utterance, name=name, seed=utterance or "")
 
     def numbers_handle(self, utterance="") -> str:
         """常用号码：对症给一个；问"常用电话"就把救命的几个一并报清。"""
