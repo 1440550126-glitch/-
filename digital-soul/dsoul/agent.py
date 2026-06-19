@@ -1331,6 +1331,16 @@ class Agent:
                     self._log_journal(who, utterance, txt, "dialect")
                     return result
 
+        # --- 过日子小窍门（"油渍怎么去" / "有什么生活小窍门"）---
+        if action is None and who.get("obey"):
+            from .lifehacks import is_lifehack_query
+            if is_lifehack_query(utterance):
+                txt = self.lifehack_handle(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "lifehack")
+                    return result
+
         # --- 养宠（"狗喂了" / "遛过旺财了" / "家里的宠物"）---
         if action is None and who.get("obey") and self.pets is not None:
             up = utterance or ""
@@ -3325,6 +3335,17 @@ class Agent:
         if not region:
             return "我能说几地的乡音呢——" + "、".join(dl.regions()) + "。你想听哪儿的？"
         return dl.demo(region)
+
+    def lifehack_handle(self, utterance="") -> str:
+        """过日子小窍门：对症给一条；泛泛问就随口教一条。"""
+        from . import lifehacks as lh
+        cfg = self.identity if isinstance(self.identity, dict) else None
+        t = lh.tip_for(utterance, cfg)
+        if t:
+            return t
+        if any(k in (utterance or "") for k in ("窍门", "妙招", "持家", "过日子", "常识")):
+            return lh.random_tip(seed=utterance or "", config=cfg)
+        return ""
 
     def water_plant(self, utterance) -> str:
         if self.plants is None:
