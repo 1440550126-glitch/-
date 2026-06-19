@@ -1,0 +1,9 @@
+① 两档方案: 自带Key版 · 月卡 ¥39[byok]  /  省心版 · 月卡 ¥99[easy]
+② 自带Key版会员: llm_tier=byok platform_llm=true
+   未填 Key 跑: by_llm=false（应 false：自带Key版不给平台模型，走本地）
+   填了自己的 Key 后: by_llm=true（应 true：用自己的模型）
+③ 省心版会员: llm_tier=easy 每日上限=80
+   零配置直接跑: by_llm=true（应 true：省心版用平台模型）
+
+判定: 自带Key版未填Key走本地 + 填Key走自己模型 + 省心版用平台模型
+✅ 两档差异化生效（省心版¥99>自带Key版¥39，且平台模型仅省心版可用）

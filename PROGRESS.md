@@ -13,6 +13,7 @@
 - 定价两档：自带Key版 ¥39 / 省心版 ¥99（平台模型仅省心版可用，已强制）
 - 引入并初始化 Anthropic 长时运行 Agent Harness
 - 修复定价改两档导致的 smoke 回归：`scripts/smoke.mjs` 两处过期断言（会员方案 3→2、订单 ¥9.9→自带Key版¥39）→ `npm run smoke` 168/0 全绿（证据 `screenshots/smoke-result.txt`，evaluator 复跑确认 PASS）
+- 回归验证 lingzhen-loads + byok-two-tier → test-results.json 三项全绿。lingzhen：/lingzhen 带与不带尾斜杠均 app.js HTTP 200、SPA 启动（证据截图带 URL 标签 + lingzhen-loads-result.txt）；byok：两档强制差异化（byok-two-tier-result.txt）。evaluator 独立复核 PASS——其间逮到一次「两张截图字节相同」的弱证据、已重拍修正。
 
 ## In progress
 - （空）

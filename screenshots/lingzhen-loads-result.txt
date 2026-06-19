@@ -1,0 +1,4 @@
+lingzhen-noslash: 请求=http://localhost:3000/lingzhen  最终URL=http://localhost:3000/lingzhen  app.js HTTP=200  SPA启动=true  hero="灵阵 · AI 团队"
+lingzhen-slash: 请求=http://localhost:3000/lingzhen/  最终URL=http://localhost:3000/lingzhen/  app.js HTTP=200  SPA启动=true  hero="灵阵 · AI 团队"
+
+✅ 两个 URL 各自独立加载：app.js 均 200、SPA 均启动、非白屏

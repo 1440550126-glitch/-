@@ -6,13 +6,13 @@
     "evidence": "screenshots/smoke-result.txt（168 通过 / 0 失败）"
   },
   "lingzhen-loads": {
-    "passes": false,
+    "passes": true,
     "criteria": "/lingzhen 与 /lingzhen/（带与不带尾斜杠）均能加载 SPA、非白屏",
-    "evidence": ""
+    "evidence": "screenshots/lingzhen-noslash.png + lingzhen-slash.png（各带 URL 标签、SHA256 互不相同）+ lingzhen-loads-result.txt（两形式 app.js 均 HTTP 200、SPA 均启动、hero=灵阵·AI 团队）"
   },
   "byok-two-tier": {
-    "passes": false,
+    "passes": true,
     "criteria": "自带Key版不填Key走本地引擎、填后用自己模型；省心版零配置用平台模型；平台模型仅省心版可用",
-    "evidence": ""
+    "evidence": "screenshots/byok-two-tier-result.txt（自带Key版 by_llm=false→填Key=true；省心版 by_llm=true）"
   }
 }
