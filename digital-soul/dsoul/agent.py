@@ -2901,6 +2901,11 @@ class Agent:
             if any(k in u for k in ("不玩", "结束", "停", "不接了")):
                 self._game_mode = None
                 return "好，不玩咯，随时找我。"
+            # 明显是另问别的事（几号/几点/天气/提醒…）就别当成接龙，让它正常去回答
+            if any(k in u for k in ("几号", "几点", "星期几", "周几", "礼拜几", "多少", "天气",
+                                    "提醒", "吃药", "怎么", "为什么", "为啥", "哪", "谁", "吗",
+                                    "几月", "血压")):
+                return ""
             if looks_like_idiom(u):
                 nxt = chain_from(u)
                 if nxt:
