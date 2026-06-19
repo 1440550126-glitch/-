@@ -69,6 +69,10 @@ try {
   const c2gone = !dupSb.characters.some((c) => c.name === '能源核心');
   const danglingRef = dupSb.shots.some((sh) => (sh.characters || []).some((k) => !dupSb.characters.find((c) => c.key === k)));
   ok(c2gone && !danglingRef, '跨桶去重：分镜不残留悬空角色引用');
+  // 总控/摄影机参数随片：视频提示词应带摄影机参数 + 该镜角色锁定档案
+  const vprompt = dupSb.shots[0].video_prompt || '';
+  ok(/摄影/.test(vprompt) && /景深|mm|机位/.test(vprompt), '视频提示词含摄影机参数（焦段/景深/机位）');
+  ok(/角色锁定/.test(vprompt) && vprompt.includes('林夏') && /固定不变/.test(vprompt), '视频提示词含角色锁定档案（总控随片，防变形/换人/身高突变）');
 
   console.log('— 启动与基础 —');
   const boot = await until(async () => (await api('GET', '/api/bootstrap')).data, 10000);

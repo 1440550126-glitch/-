@@ -465,11 +465,12 @@ function alignStoryboard(sb) {
     parts.push(`【画面】${action}`);
     if (sh.emotion) parts.push(`【情绪】${chars[0]?.name || '主角'}：${sh.emotion}`);
     sh.image_prompt = parts.join(' ｜ ').slice(0, 900);
-    // 视频提示词：动作 + 摄影机参数（焦段/景深/运镜）+ 角色外观一致性锁定
-    const vp = cleanDesc(sh.video_prompt).slice(0, 80) || action;
+    // 视频提示词：动作 + 摄影机参数（焦段/景深/运镜）+ 该镜角色锁定档案（总控随片：把五官/发型/服装/身高体型逐字带进视频，防动画里变形/换人/身高突变）
+    const vp = cleanDesc(sh.video_prompt).slice(0, 70) || action;
     const cinema = shotCinema(sh.shot_type, sh.camera);
-    const charLine = chars.length ? `${chars.map((c) => c.name).join('、')}外观/服装/身高全程锁定不变` : '角色外观全程一致';
-    sh.video_prompt = `${vp}｜摄影：${cinema}｜${charLine}`.slice(0, 400);
+    const head = `${vp}｜摄影：${cinema}`;   // 动作+机位优先保留，锁定档案放尾部（截断只会少几个锁定细节）
+    const lockLine = chars.length ? `｜【角色锁定】${chars.map((c) => c.lock).join('；')}` : '｜角色外观全程一致';
+    sh.video_prompt = (head + lockLine).slice(0, 520);
   }
 }
 
