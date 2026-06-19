@@ -553,6 +553,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "dream_interpret")
                     return result
 
+        # --- 成语故事（"守株待兔的故事" / "亡羊补牢什么意思"）---
+        if action is None and who.get("obey"):
+            from .idiom_story import find as _idiom_find
+            from .idiom_story import is_idiom_query, tell
+            if is_idiom_query(utterance):
+                txt = tell(_idiom_find(utterance))
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "idiom_story")
+                    return result
+
         # --- 对对子（"天对什么" / "来对个对子"）---
         if action is None and who.get("obey"):
             from .couplets import is_couplet, respond
