@@ -1418,6 +1418,18 @@ class Agent:
                     self._log_journal(who, u, txt, "keep_in_touch")
                     return result
 
+        # --- 戏曲（"来段京剧" / "唱段戏" / "这是哪出戏"）：陪爱听戏的老人哼两句 ---
+        if action is None and who.get("obey"):
+            from . import opera as _op
+            if (_op.is_opera_request(utterance)
+                    or (any(k in (utterance or "") for k in ("哪出", "什么戏", "哪段", "哪个剧种"))
+                        and _op.recognize(utterance))):
+                txt = self.opera_handle(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "opera")
+                    return result
+
         # --- 唱歌（"唱给我听" / "一起唱" / "这是什么歌" / 歌词接龙）---
         if action is None and who.get("obey"):
             from . import songbook as sb
@@ -3527,6 +3539,17 @@ class Agent:
         if not region:
             return "我能说几地的乡音呢——" + "、".join(dl.regions()) + "。你想听哪儿的？"
         return dl.demo(region)
+
+    def opera_handle(self, utterance="") -> str:
+        """戏曲：点了剧种唱那个、没点挑一段；报戏词问"哪出"则帮认。"""
+        from . import opera as op
+        cfg = self.identity if isinstance(self.identity, dict) else None
+        u = utterance or ""
+        if any(k in u for k in ("哪出", "什么戏", "哪段", "哪个剧种")):
+            r = op.recognize(u, cfg)
+            if r:
+                return f"这是{r}呀，好戏！"
+        return op.sing_opera(op.detect_genre(u) or None, seed=u, config=cfg)
 
     def sleep_aid_handle(self, utterance="", who=None) -> str:
         """助眠：轻声给一段放松/数呼吸的引导。"""
