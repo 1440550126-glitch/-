@@ -529,6 +529,18 @@ class Agent:
                     self._log_journal(who, u, txt, "med_list")
                     return result
 
+        # --- 日常小问答（"三斤几公斤" / "今天星期几" / "二加七等于几"）：随口能答 ---
+        if action is None and who.get("obey") and any(
+                k in (utterance or "") for k in ("多少", "等于", "几公斤", "几斤", "几两", "几米",
+                                                 "几号", "星期几", "周几", "礼拜几", "几点",
+                                                 "加", "减", "乘", "除")):
+            from .everyday_qa import answer
+            ans = answer(utterance)
+            if ans:
+                result["reply"] = ans
+                self._log_journal(who, utterance, ans, "everyday_qa")
+                return result
+
         # --- 找东西（"我把钥匙放鞋柜上了" / "钥匙放哪了" / "我的老花镜呢"）---
         if action is None and who.get("obey") and self.belongings is not None and any(
                 k in (utterance or "") for k in ("放在", "放到", "搁在", "搁到", "收在", "摆在",
