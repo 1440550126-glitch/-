@@ -1,4 +1,5 @@
 // AI句灵 服务端入口：零依赖 Node 22+（内置 node:sqlite / fetch / http）
+import './lib/env.js';   // 最先加载 .env，确保后续模块顶层读取的 process.env 已就绪
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
