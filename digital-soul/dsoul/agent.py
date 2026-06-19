@@ -1779,6 +1779,16 @@ class Agent:
                     self._log_journal(who, utterance, txt, "memory_lane")
                     return result
 
+        # --- 花语（"玫瑰花语" / "送妈什么花" / "康乃馨代表什么"）：送花送对心意 ---
+        if action is None and who.get("obey"):
+            from . import flower_language as _fl
+            if _fl.is_flower_query(utterance):
+                txt = self.flower_handle(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "flower_language")
+                    return result
+
         # --- 送礼参考（"送爸什么礼物好" / "买什么礼"）---
         if action is None and who.get("obey") and any(
                 k in (utterance or "") for k in ("送什么礼", "送啥礼", "买什么礼", "买啥礼",
@@ -3726,6 +3736,20 @@ class Agent:
         cfg = self.identity if isinstance(self.identity, dict) else None
         name = self._addr(who) if who.get("known") else ""
         return for_utterance(utterance, name=name, config=cfg)
+
+    def flower_handle(self, utterance="") -> str:
+        """花语：查某花花语 / 按场合推荐送什么花 + 送花讲究。"""
+        from . import flower_language as fl
+        u = utterance or ""
+        flower = fl.find_flower(u)
+        if flower and any(k in u for k in ("花语", "代表", "什么意思", "寓意", "象征", "啥意思")):
+            return fl.meaning_of(flower)
+        if any(k in u for k in ("送什么花", "送啥花", "送花")):
+            r = fl.recommend(u)
+            return (r + " " + fl.gift_taboos()) if r else ("看心意挑——" + fl.gift_taboos())
+        if flower:
+            return fl.meaning_of(flower)
+        return fl.gift_taboos()
 
     def sweet_talk_handle(self, utterance="", who=None) -> str:
         """甜言蜜语：按要的种类来一句；对老伴加个昵称更亲。"""
