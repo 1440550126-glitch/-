@@ -715,6 +715,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "idiom_story")
                     return result
 
+        # --- 成语词典（"雪中送炭什么意思" / "解释一下卧薪尝胆"）：没典故的成语查释义 ---
+        if action is None and who.get("obey"):
+            from . import idioms_dict as _idict
+            _idcfg = self.identity if isinstance(self.identity, dict) else None
+            if _idict.is_idiom_lookup(utterance, _idcfg):
+                txt = _idict.explain(utterance, _idcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "idioms_dict")
+                    return result
+
         # --- 对对子（"天对什么" / "来对个对子"）---
         if action is None and who.get("obey"):
             from .couplets import is_couplet, respond
