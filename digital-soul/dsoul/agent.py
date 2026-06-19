@@ -1282,6 +1282,16 @@ class Agent:
                 self._log_journal(who, utterance, txt, "health")
                 return result
 
+        # --- 节气百科（"清明有什么讲究" / "冬至吃啥" / "大暑要注意啥"）---
+        if action is None and who.get("obey"):
+            from .solar_term_lore import is_term_lore_query, lore
+            if is_term_lore_query(utterance):
+                txt = lore(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "solar_term_lore")
+                    return result
+
         # --- 节气时令（"今天什么节气" / "这节气要注意啥"）---
         if action is None and who.get("obey") and "节气" in (utterance or ""):
             txt = self.solar_term_line() or self.seasonal_wisdom()
