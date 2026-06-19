@@ -868,6 +868,21 @@ class Agent:
                     self._log_journal(who, utterance, txt, "classic_books")
                     return result
 
+        # --- 古代发明（"四大发明是什么" / "造纸术谁发明的"）---
+        if action is None and who.get("obey"):
+            from . import inventions as _inv
+            _invcfg = self.identity if isinstance(self.identity, dict) else None
+            if _inv.is_invention_query(utterance, _invcfg):
+                u2 = utterance or ""
+                if "四大发明" in u2 and not _inv.find_invention(u2, _invcfg):
+                    txt = _inv.four_inventions()
+                else:
+                    txt = _inv.about(u2, _invcfg) or _inv.four_inventions()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "inventions")
+                    return result
+
         # --- 历史名人（"孔子是谁" / "李白哪个朝代" / "诸葛亮做了什么"）---
         if action is None and who.get("obey"):
             from . import historical_figures as _hf
