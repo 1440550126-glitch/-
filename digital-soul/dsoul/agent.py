@@ -600,6 +600,16 @@ class Agent:
                     self._log_journal(who, utterance, txt, "couplet")
                     return result
 
+        # --- 歇后语（"外甥打灯笼下半句" / "来个歇后语"）---
+        if action is None and who.get("obey"):
+            from .xiehouyu import is_xiehouyu_request
+            if is_xiehouyu_request(utterance):
+                txt = self.xiehouyu_handle(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "xiehouyu")
+                    return result
+
         # --- 背诗 / 对诗（"床前明月光下一句" / "背首静夜思"）---
         if action is None and who.get("obey") and not self._song_in(utterance):
             from .poetry import is_poetry, next_line
@@ -3368,6 +3378,18 @@ class Agent:
         if not region:
             return "我能说几地的乡音呢——" + "、".join(dl.regions()) + "。你想听哪儿的？"
         return dl.demo(region)
+
+    def xiehouyu_handle(self, utterance="") -> str:
+        """歇后语：认出前半截就接后半截+意思；泛泛求一句就随口来一条。"""
+        from . import xiehouyu as xh
+        cfg = self.identity if isinstance(self.identity, dict) else None
+        u = utterance or ""
+        f = xh.find_front(u, cfg)
+        if f:
+            return xh.answer(f, cfg)
+        if "歇后语" in u:
+            return xh.random_one(seed=u, config=cfg)
+        return ""
 
     def lifehack_handle(self, utterance="") -> str:
         """过日子小窍门：对症给一条；泛泛问就随口教一条。"""
