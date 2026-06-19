@@ -2,6 +2,7 @@
 // 纯手绘 SVG（矢量笔触 + 水墨晕染滤镜 + 宣纸纹理），渲染成 PNG 预览。
 // 用法: node gen.mjs [char|scene|start|all]
 import { render, FONTS } from './lib.mjs';
+import { cultivator } from './char.mjs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const OUT = dirname(fileURLToPath(import.meta.url));
@@ -154,7 +155,7 @@ function seal(x, y, size, ch, font = FONTS.brush) {
 
 /* ============================== 角色：Q版水墨修士 ==============================
    局部坐标 0..240 (宽) × 0..340 (高)，脚底约 y=312，头顶发髻约 y=18 */
-function cultivator({ x = 0, y = 0, scale = 1, gender = 'female', withGround = true } = {}) {
+function _cultivatorOld({ x = 0, y = 0, scale = 1, gender = 'female', withGround = true } = {}) {
   const female = gender === 'female';
   const accent = female ? C.indigo : C.cinnabar;     // 腰带主色
   const robe = female ? '#efe7d6' : '#e4dccb';       // 男装稍灰

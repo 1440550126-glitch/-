@@ -2,4 +2,6 @@ node_modules/
 art/fonts/*.ttf
 art/fonts/*.ttc
 art/solo.png
+art/solo.mjs
 art/smoke.*
+art/face.*
