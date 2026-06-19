@@ -269,7 +269,8 @@ class Agent:
                 return result
 
         # --- 场景 / 例程（"回家模式" / "我回来了"）---
-        if action is None and who.get("obey"):
+        from .lost_help import senses_lost as _senses_lost
+        if action is None and who.get("obey") and not _senses_lost(utterance):
             sret = self._scene_route(speaker_name, utterance)
             if sret is not None:
                 # 既开关灯、也当那个门口的人：离家/回家时把暖话缀在前头
@@ -407,6 +408,18 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, utterance, txt, "emergency")
+                    return result
+
+        # --- 迷路 / 走失（守护·高优先）：在外头找不到家，稳住并一步步教 TA 怎么办 ---
+        if action is None and who.get("obey"):
+            from .lost_help import senses_lost
+            if senses_lost(utterance):
+                txt = self.lost_help_handle(utterance, who)
+                if txt:
+                    result["reply"] = txt
+                    if self.social is not None:
+                        self.social.note(who.get("name"), emotion="惧", topic="迷路")
+                    self._log_journal(who, utterance, txt, "lost_help")
                     return result
 
         # --- 游戏进行中：先看这句是不是在接龙 / 报谜底（仅当真在玩时才接管）---
@@ -3502,6 +3515,27 @@ class Agent:
         if not region:
             return "我能说几地的乡音呢——" + "、".join(dl.regions()) + "。你想听哪儿的？"
         return dl.demo(region)
+
+    def _home_contact(self):
+        """取一个能打的家人电话（优先子女/老伴），迷路时好让 TA 求助。"""
+        if self.contacts is None:
+            return None
+        items = getattr(self.contacts, "items", []) or []
+        withphone = [c for c in items if c.get("phone")]
+        if not withphone:
+            return None
+        pref = ("儿子", "女儿", "子", "女", "老伴", "配偶", "老婆", "老公", "爱人")
+        for c in withphone:
+            if any(p in (c.get("relation") or "") for p in pref):
+                return c
+        return withphone[0]
+
+    def lost_help_handle(self, utterance="", who=None) -> str:
+        """迷路求助：稳住，给一步步指引，带上家人电话。"""
+        from .lost_help import guide
+        who = who or {}
+        name = who.get("name", "") if who.get("known") else ""
+        return guide(name=name, contact=self._home_contact())
 
     def inside_joke_handle(self, utterance="", who=None) -> str:
         """专属默契：踩中暗号就接梗；想听老梗就翻一个出来。没配则空（不硬占）。"""

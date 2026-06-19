@@ -37,7 +37,11 @@ def is_leaving(utterance) -> bool:
 
 
 def is_back(utterance) -> bool:
-    return any(k in str(utterance or "") for k in _BACK)
+    u = str(utterance or "")
+    # "找不到家了"里有"到家了"，但那是迷路求助，不是回到家——别误判
+    if any(neg in u for neg in ("找不到家", "找不着家", "回不去", "回不了", "迷路", "找不到回家")):
+        return False
+    return any(k in u for k in _BACK)
 
 
 def _pick(pool, seed):
