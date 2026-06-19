@@ -1464,6 +1464,19 @@ class Agent:
                 self._log_journal(who, utterance, txt, "digest")
                 return result
 
+        # --- 养花知识（"绿萝怎么养" / "茉莉叶子黄了"）：先于养生，免得"怎么养"被当养生 ---
+        if action is None and who.get("obey"):
+            from . import gardening as _gd
+            _gdcfg = self.identity if isinstance(self.identity, dict) else None
+            if _gd.is_gardening_query(utterance, _gdcfg):
+                txt = _gd.care_for(utterance, _gdcfg)
+                if not txt and "养花" in (utterance or ""):
+                    txt = "想养点啥？" + "、".join(_gd.plants()[:6]) + "……说个花名，我教你怎么伺候。"
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "gardening")
+                    return result
+
         # --- 节气养生（"这季节怎么养生" / "该补补了"）---
         if action is None and who.get("obey"):
             from .tcm_wellness import is_wellness_query
