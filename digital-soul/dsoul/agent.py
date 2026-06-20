@@ -610,8 +610,9 @@ class Agent:
         # --- 人生节点寄语（高考/成家/退休/创业…）：长辈那句过来人的话，比泛泛道喜更暖 ---
         if action is None and who.get("obey"):
             from .life_milestones import detect_milestone
+            from .retirement import is_retirement_query as _rt_is  # "退休了干点啥"是求主意，不是道喜
             _mcfg = self.identity if isinstance(self.identity, dict) else None
-            if detect_milestone(utterance, _mcfg):
+            if detect_milestone(utterance, _mcfg) and not _rt_is(utterance, _mcfg):
                 txt = self.milestone_handle(utterance, who)
                 if txt:
                     result["reply"] = txt
@@ -2614,6 +2615,18 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, u, txt, "contact_find")
+                    return result
+
+        # --- 退休生活（"退休了干点啥" / "退休咋过才充实"）：出主意，过得有奔头，先于解闷 ---
+        if action is None and who.get("obey"):
+            from . import retirement as _rt
+            _rtcfg = self.identity if isinstance(self.identity, dict) else None
+            if _rt.is_retirement_query(utterance, _rtcfg):
+                ar = _rt.find_area(utterance, _rtcfg)
+                txt = _rt.suggest(ar, _rtcfg) if ar else _rt.overview(_rtcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "retirement")
                     return result
 
         # --- 解闷（"好无聊" / "干点啥好"）：挑个事陪你打发 ---
