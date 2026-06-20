@@ -51,6 +51,16 @@
 > - 想要"带情绪的克隆" → **IndexTTS-2**。
 > - 只要"一个快嗓子、不克隆" → **Kokoro**。
 
+### 不想自己跑模型？也可以接云端（MiniMax）
+
+如果嫌本地部署麻烦、又想要现在就听到很顶的中文嗓音，可以接 **MiniMax**（语音模型 T2A v2）。
+它**不是开源**的，是付费云服务、**要联网**，但中文自然度和声音克隆质量在第一梯队，开箱即用。
+本项目已经备好接入脚本（`scripts/minimax_say.py` + `dsoul/minimax_tts.py`），见下文"五、接 MiniMax 云端嗓音"。
+
+> 本地 vs 云端，按需取舍：
+> - **离线、隐私、零月费、可永久保存** → 选上面的开源模型（GPT-SoVITS / CosyVoice…）。
+> - **不想配环境、要最省心、能联网且接受付费** → 接 MiniMax 这类云端服务。
+
 ---
 
 ## 二、给"复刻亲人声音"的推荐路线
@@ -134,6 +144,57 @@ python tests/test_say_clone.py
 
 # 手动念一句（没接真引擎时会用系统嗓音兜底）：
 python scripts/say_clone.py --engine system "你回来啦，外面冷不冷？"
+```
+
+---
+
+## 五、接 MiniMax 云端嗓音（不开源、付费、要联网）
+
+不想本地跑模型、又想现在就听到很顶的中文嗓音，就接 MiniMax 的语音模型（T2A v2）。
+本项目已备好两块：`dsoul/minimax_tts.py`（拼请求 / 解音频，纯逻辑可单测）+
+`scripts/minimax_say.py`（合成 → 播放，出错自动回落系统嗓音）。
+
+### 第 1 步：拿密钥，**只放进环境变量**（绝不写进配置/代码/仓库）
+
+到 MiniMax 开放平台拿一把 API Key，然后：
+
+```bash
+export MINIMAX_API_KEY=sk-...          # 必填
+export MINIMAX_VOICE_ID=...            # 选填：你的克隆音色 id（不填用内置温暖女声）
+export MINIMAX_GROUP_ID=...            # 选填：部分账号需要
+# 国内站点可切：export MINIMAX_TTS_HOST=https://api.minimaxi.chat/v1/t2a_v2
+```
+
+> 🔐 **安全红线**：密钥就像家门钥匙。**只放环境变量**（或一个 `.gitignore` 掉的本地文件里 `source`），
+> 永远别写进 `config/identity.yaml`、别写进任何会提交的文件。一旦不小心贴进聊天/截图/代码，
+> 立刻去平台**吊销重置**。本项目代码只从 `MINIMAX_API_KEY` 读，不会、也请你别把它落盘入库。
+
+### 第 2 步：填进配置
+
+```yaml
+voice:
+  tts_cmd: "python scripts/minimax_say.py {text}"
+```
+
+### 第 3 步：体检 + 试听
+
+```bash
+python scripts/minimax_say.py "你回来啦，外面冷不冷？"   # 单独验证：能合成会播放
+python scripts/voice_doctor.py                          # 克隆那一行应变 ✅
+```
+
+**接不通也绝不哑**：没设密钥 / 余额不足 / 断网，`minimax_say.py` 会非零退出，
+分身自动回落到系统 `say`/`espeak`，日子照过。
+
+### 想克隆"本人的声线"？
+
+先在 MiniMax 平台用一段本人录音做**声音克隆**，拿到一个 `voice_id`，
+填到 `MINIMAX_VOICE_ID` 即可——之后分身就用那个嗓音说话。
+（克隆的是**你有权使用**的声音：你自己、在世亲人同意、或家人留下的纪念素材；别拿去冒充行骗。）
+
+```bash
+# 单测（纯逻辑、不联网）：
+python tests/test_minimax_tts.py
 ```
 
 ---
