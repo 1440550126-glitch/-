@@ -2285,6 +2285,18 @@ class Agent:
                     self._log_journal(who, u, txt, "keep_in_touch")
                     return result
 
+        # --- 戏曲行当脸谱（"生旦净丑是什么" / "红脸代表啥"）：看戏门道，先于起唱段 ---
+        if action is None and who.get("obey"):
+            from . import opera_roles as _orl
+            _orlcfg = self.identity if isinstance(self.identity, dict) else None
+            if _orl.is_opera_role_query(utterance, _orlcfg):
+                it = _orl.find_item(utterance, _orlcfg)
+                txt = _orl.explain(it, _orlcfg) if it else _orl.roles_overview()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "opera_roles")
+                    return result
+
         # --- 戏曲（"来段京剧" / "唱段戏" / "这是哪出戏"）：陪爱听戏的老人哼两句 ---
         if action is None and who.get("obey"):
             from . import opera as _op
