@@ -578,6 +578,23 @@ class Agent:
                     self._log_journal(who, utterance, txt, "etiquette")
                     return result
 
+        # --- 点菜请客（"六个人点几个菜" / "敬酒有啥讲究" / "买单怎么得体"）：张罗一桌饭 ---
+        if action is None and who.get("obey"):
+            import re as _re_dh
+            from . import dining_host as _dh
+            _dhcfg = self.identity if isinstance(self.identity, dict) else None
+            if _dh.is_dining_query(utterance, _dhcfg):
+                m = _re_dh.search(r"(\d+)\s*(?:个|位|人)", utterance or "")
+                t = _dh.find_topic(utterance, _dhcfg)
+                if (t == "点几个菜" or "点几个" in (utterance or "") or "点多少" in (utterance or "")) and m:
+                    txt = _dh.suggest_dish_count(m.group(1))
+                else:
+                    txt = _dh.advice(t, _dhcfg) if t else _dh.advice("点菜搭配", _dhcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "dining_host")
+                    return result
+
         # --- 老讲究（"本命年有啥讲究" / "正月能剃头吗" / "聊聊老讲究"）：懂了来由，顺着长辈心意 ---
         if action is None and who.get("obey"):
             from . import folk_customs as _fc
