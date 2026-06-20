@@ -64,7 +64,7 @@ export async function renderProject(page, params) {
     const byKey = nodeByKey();
     const toShots = (shots) => shots.map((s) => {
       const n = byKey.get(s.key);
-      return { order: s.order, name: `镜头 ${s.order}`, url: n?.data.video || n?.data.image || '', poster: n?.data.image || '', audio: n?.data.audio || '', dialogue: s.dialogue, action: s.action, duration: s.duration };
+      return { order: s.order, name: `镜头 ${s.order}`, url: n?.data.video || n?.data.image || '', poster: n?.data.image || '', audio: n?.data.audio || '', dialogue: s.dialogue, action: s.action, duration: s.duration, shot_type: s.shot_type || '', camera: s.camera || '' };
     });
     const groups = [];
     if ((sb.episodes?.length || 0) > 1) {
