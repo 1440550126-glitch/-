@@ -2312,6 +2312,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "bank_help")
                     return result
 
+        # --- 立遗嘱常识（"遗嘱怎么写有效" / "自书遗嘱要点"）：身后事提前安排，建议找公证/律师 ---
+        if action is None and who.get("obey"):
+            from . import will_basics as _wb
+            _wbcfg = self.identity if isinstance(self.identity, dict) else None
+            if _wb.is_will_query(utterance, _wbcfg):
+                t = _wb.find_topic(utterance, _wbcfg)
+                txt = _wb.advice(t, _wbcfg) if t else _wb.overview()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "will_basics")
+                    return result
+
         # --- 办事指南（"身份证丢了怎么补" / "敬老卡怎么办" / "异地就医备案"）：去哪办带什么 ---
         if action is None and who.get("obey"):
             from . import civic_help as _civ
