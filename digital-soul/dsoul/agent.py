@@ -633,6 +633,23 @@ class Agent:
                     self._log_journal(who, utterance, txt, "worry")
                     return result
 
+        # --- 起名取名（"帮孩子起个名字" / "睿字什么寓意"）：家里添丁的大事，先于软聊路由 ---
+        if action is None and who.get("obey"):
+            from . import naming as _nm
+            _nmcfg = self.identity if isinstance(self.identity, dict) else None
+            _nm_ask = _nm.explain_request(utterance)
+            if _nm_ask:
+                txt = f"「{_nm_ask}」起名取意：{_nm.explain_char(_nm_ask, _nmcfg)}。给孩子一生的好彩头。"
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "naming")
+                return result
+            if _nm.is_naming_query(utterance, _nmcfg):
+                txt = self.naming_handle(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "naming")
+                    return result
+
         # --- 夸夸/肯定：明着求夸，或说起了值得肯定的事（孝顺/努力/善良…），走心地夸 ---
         if action is None and who.get("obey"):
             from .praise import detect_trait, is_praise_request
@@ -4297,6 +4314,32 @@ class Agent:
         if kw:
             return "来：" + kw
         return "练练嘴，跟我念——" + tt.random_one(seed=u, config=cfg)
+
+    def naming_handle(self, utterance="") -> str:
+        """起名：听出愿望就按愿望挑字配名；没听出就给一桌寓意类别让人挑。"""
+        from . import naming as nm
+        cfg = self.identity if isinstance(self.identity, dict) else None
+        u = utterance or ""
+        # 顺手认一下姓（用家人/本人的姓氏当默认）
+        surname = ""
+        for fam in (self.family or []) if isinstance(getattr(self, "family", None), list) else []:
+            nmn = (fam.get("name") if isinstance(fam, dict) else str(fam)) or ""
+            if nmn:
+                surname = nmn[0]
+                break
+        if not surname and isinstance(self.identity, dict):
+            surname = str(self.identity.get("name") or "")[:1]
+        wish = nm.find_wish(u, cfg)
+        if not wish:
+            cats = "、".join(nm.categories(cfg))
+            return (f"起名是大事，给孩子一生的彩头。你想往哪个寓意上靠？{cats}——"
+                    f"说一个，我配几个念着顺口的。")
+        names = nm.suggest_names(surname=surname, wish=wish, n=3, seed=u, config=cfg)
+        if not names:
+            return "我这会儿没凑出合适的，换个寓意再试试？"
+        lines = "；".join(f"{full}（{mean}）" for full, mean in names)
+        tip = nm.tips()[len(u) % len(nm.tips())]
+        return f"奔着「{wish}」起，给你三个：{lines}。定之前提醒一句：{tip}。连名带姓念几遍，顺口最要紧。"
 
     def mengxue_handle(self, utterance="") -> str:
         """蒙学：背开蒙经典开篇 / 九九乘法口诀（某列或整张）。"""
