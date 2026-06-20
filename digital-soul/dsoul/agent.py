@@ -1207,7 +1207,9 @@ class Agent:
                 return result
 
         # --- 找东西（"我把钥匙放鞋柜上了" / "钥匙放哪了" / "我的老花镜呢"）---
-        if action is None and who.get("obey") and self.belongings is not None and (
+        from .pay_bills import is_pay_query as _pay_is   # "电费在哪交"是问缴费，不是找东西
+        if action is None and who.get("obey") and self.belongings is not None \
+                and not _pay_is(utterance, self.identity if isinstance(self.identity, dict) else None) and (
                 any(k in (utterance or "") for k in ("放在", "放到", "搁在", "搁到", "收在", "摆在",
                                                      "放哪", "搁哪", "在哪", "哪儿去", "找不到",
                                                      "不见了", "呢"))
@@ -2167,6 +2169,18 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, utterance, txt, "bank_help")
+                    return result
+
+        # --- 缴费帮手（"电费怎么交" / "水费在哪交" / "缴费怎么弄"）：线上线下都教，带防骗 ---
+        if action is None and who.get("obey"):
+            from . import pay_bills as _pay
+            _paycfg = self.identity if isinstance(self.identity, dict) else None
+            if _pay.is_pay_query(utterance, _paycfg):
+                bill = _pay.find_bill(utterance, _paycfg)
+                txt = _pay.how_to(bill, _paycfg) if bill else _pay.general()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "pay_bills")
                     return result
 
         # --- 快递帮手（"驿站怎么取" / "快递柜怎么开" / "怎么寄快递"）：教明白、带防骗 ---
