@@ -1219,6 +1219,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "first_aid")
                     return result
 
+        # --- 导诊分诊（"胃疼挂什么科" / "头晕看哪个科"）：帮老人找对窗口；危险信号喊急诊 ---
+        #     放在应急/急救之后：胸痛、喘不上气等已被更专的应急路由接走，这里兜中风等导诊场景。
+        if action is None and who.get("obey"):
+            from . import triage as _tri
+            _tricfg = self.identity if isinstance(self.identity, dict) else None
+            if _tri.is_triage_query(utterance, _tricfg):
+                txt = _tri.advise(utterance, _tricfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "triage")
+                    return result
+
         # --- 急救信息卡（"念念急救卡" / "我的急救信息"）---
         if action is None and who.get("obey") and any(
                 k in (utterance or "") for k in ("急救卡", "急救信息", "救命信息", "急救信息卡")):
