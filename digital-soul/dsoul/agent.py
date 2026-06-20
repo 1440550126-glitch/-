@@ -611,6 +611,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "dining_host")
                     return result
 
+        # --- 酒文化（"白酒几种香型" / "喝多了怎么解酒" / "喝醉了怎么办"）：长见识，带节制提醒 ---
+        if action is None and who.get("obey"):
+            from . import liquor_culture as _lq
+            _lqcfg = self.identity if isinstance(self.identity, dict) else None
+            if _lq.is_liquor_query(utterance, _lqcfg):
+                t = _lq.find_topic(utterance, _lqcfg)
+                txt = _lq.info(t, _lqcfg) if t else _lq.overview()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "liquor_culture")
+                    return result
+
         # --- 老讲究（"本命年有啥讲究" / "正月能剃头吗" / "聊聊老讲究"）：懂了来由，顺着长辈心意 ---
         if action is None and who.get("obey"):
             from . import folk_customs as _fc
