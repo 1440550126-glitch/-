@@ -1290,6 +1290,18 @@ class Agent:
                     self._log_journal(who, u, txt, "vitals")
                     return result
 
+        # --- 看懂食品标签（"配料表怎么看" / "钠多少算高" / "无糖是真的吗"）：买得明白 ---
+        if action is None and who.get("obey"):
+            from . import food_label as _fl
+            _flcfg = self.identity if isinstance(self.identity, dict) else None
+            if _fl.is_label_query(utterance, _flcfg):
+                t = _fl.find_topic(utterance, _flcfg)
+                txt = _fl.explain(t, _flcfg) if t else _fl.overview()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "food_label")
+                    return result
+
         # --- 膳食养生（"补钙吃什么" / "护眼吃啥" / "老人吃什么好"）：日常吃啥补啥 ---
         if action is None and who.get("obey"):
             from . import nutrition as _nu
