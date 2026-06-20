@@ -2050,6 +2050,22 @@ class Agent:
                     self._log_journal(who, utterance, txt, "phone_help")
                     return result
 
+        # --- 出行帮手（"地铁怎么坐" / "打车软件怎么用" / "出门怕走丢"）：教长辈坐车问路 ---
+        if action is None and who.get("obey"):
+            from . import getting_around as _ga
+            _gacfg = self.identity if isinstance(self.identity, dict) else None
+            if _ga.is_getting_around_query(utterance, _gacfg):
+                u = utterance or ""
+                if any(k in u for k in ("走丢", "迷路", "防走丢", "出门")) and not _ga.find_mode(u, _gacfg):
+                    txt = "出门带齐这些、记牢这几条：" + " ".join(_ga.safety_tips())
+                else:
+                    txt = _ga.how_to(_ga.find_mode(u, _gacfg), _gacfg) or \
+                        ("出门别慌，想坐啥车、去哪儿，告诉我，我一步步教你。" + " ".join(_ga.safety_tips()[:2]))
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "getting_around")
+                    return result
+
         # --- 垃圾分类（"西瓜皮是什么垃圾" / "过期药怎么扔"）---
         if action is None and who.get("obey"):
             from . import garbage_sort as _gs
