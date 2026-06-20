@@ -2190,6 +2190,21 @@ class Agent:
                     self._log_journal(who, utterance, txt, "mahjong")
                     return result
 
+        # --- 怀旧影视（"推荐几部老电影" / "放个老动画片"）：陪长辈忆当年的经典老片 ---
+        if action is None and who.get("obey"):
+            from . import classic_films as _cf
+            _cfcfg = self.identity if isinstance(self.identity, dict) else None
+            if _cf.is_film_query(utterance, _cfcfg):
+                title = _cf.find_title(utterance, _cfcfg)
+                if title:
+                    txt = f"{_cf._fmt(title)} 这部我也有印象，你当年是在哪儿看的？"
+                else:
+                    txt = _cf.recommend(_cf.find_category(utterance, _cfcfg), seed=utterance, config=_cfcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "classic_films")
+                    return result
+
         # --- 玩游戏（"陪我玩个游戏" / "成语接龙" / "猜谜"）---
         if action is None and who.get("obey"):
             from .games import is_game_request
