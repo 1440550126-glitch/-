@@ -1351,6 +1351,17 @@ class Agent:
                     self._log_journal(who, utterance, fr, "food_remedy")
                     return result
 
+        # --- 护眼护耳（"白内障是啥" / "耳背了怎么办" / "助听器怎么配"）：日常养护 + 警示 ---
+        if action is None and who.get("obey"):
+            from . import vision_hearing as _vh
+            _vhcfg = self.identity if isinstance(self.identity, dict) else None
+            if _vh.is_vh_query(utterance, _vhcfg):
+                txt = _vh.advice(_vh.find_topic(utterance, _vhcfg), _vhcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "vision_hearing")
+                    return result
+
         # --- 换季防护（"夏天怎么防中暑" / "冬天烧炭注意啥" / "一氧化碳中毒"）：换季最容易出事 ---
         if action is None and who.get("obey"):
             from . import seasonal_care as _sc
