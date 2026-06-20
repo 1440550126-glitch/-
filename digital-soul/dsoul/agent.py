@@ -650,6 +650,24 @@ class Agent:
                     self._log_journal(who, utterance, txt, "naming")
                     return result
 
+        # --- 名言金句（"来句名言" / "关于坚持的名言" / "座右铭"）：有出处的名句，先于夸夸/打气 ---
+        #     放在软聊路由之前：免得"关于坚持的名言"里的"坚持"被当成夸点或打气场合。
+        if action is None and who.get("obey"):
+            from . import quotes as _q
+            _qcfg = self.identity if isinstance(self.identity, dict) else None
+            if _q.is_quote_query(utterance, _qcfg):
+                theme = _q.find_theme(utterance, _qcfg)
+                if theme and any(k in (utterance or "") for k in ("几句", "多来", "几条", "写贺卡", "勉励")):
+                    txt = "送你几句——" + _q.several(theme, n=3, seed=utterance, config=_qcfg)
+                else:
+                    txt = _q.a_quote(theme, seed=utterance, config=_qcfg)
+                    if theme:
+                        txt = f"说到{theme}：{txt}"
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "quotes")
+                    return result
+
         # --- 夸夸/肯定：明着求夸，或说起了值得肯定的事（孝顺/努力/善良…），走心地夸 ---
         if action is None and who.get("obey"):
             from .praise import detect_trait, is_praise_request
