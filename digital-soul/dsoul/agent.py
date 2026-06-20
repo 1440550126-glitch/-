@@ -1102,6 +1102,16 @@ class Agent:
                     self._log_journal(who, utterance, txt, "shichen")
                     return result
 
+        # --- 单位换算（"一斤多少克" / "一亩多大" / "华氏多少度"）：真换给你 ---
+        if action is None and who.get("obey"):
+            from . import unit_convert as _uc
+            if _uc.is_convert_query(utterance):
+                txt = _uc.answer(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "unit_convert")
+                    return result
+
         # --- 生活小计算（"100打8折是多少" / "身高170体重65 BMI"）---
         if action is None and who.get("obey"):
             from . import calc_helper as _calc
