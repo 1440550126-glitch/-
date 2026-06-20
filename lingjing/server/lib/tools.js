@@ -6,7 +6,7 @@ import { jparse, micro2yuan, now } from './util.js';
 import { llmEnabled, cfg } from './ark.js';
 import {
   createProject, getProject, projectOut, touchProject, generateScript, parseScript, addEpisode,
-  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral, generateDubbing, checkConsistency, buildCharacterProfile, listEntities, annotateEntities
+  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral, generateDubbing, checkConsistency, buildCharacterProfile, listEntities, annotateEntities, buildOmniReferencePrompt
 } from './pipeline.js';
 import { STYLES, STYLE_CATS } from './styles.js';
 import { bad } from './httpx.js';
@@ -316,6 +316,12 @@ export const TOOLS = [
     description: '列出解析后识别到的角色/场景/道具分类，供人工或 Agent 复核（含画布缩略图、是否被用户确认过、Agent 进化等级）。怀疑有道具被误标成角色时先调用它检查。',
     input_schema: { type: 'object', properties: { project_id: str('项目 id') }, required: ['project_id'] },
     execute({ project_id }) { return listEntities(project_id); }
+  },
+  {
+    name: 'omni_reference_script',
+    description: '全能参考：把项目分镜拼成"带编号图片引用"的多镜头剧本（如 女主【图片1】在【图片2】中…），并返回 编号→参考图（角色三视图/场景图）清单。用于支持多图参考的视频模型一次性产出人物/场景一致的连续成片，或整段复制到外部工具。每条镜头已含摄影机参数与光影词。',
+    input_schema: { type: 'object', properties: { project_id: str('项目 id'), episode: str('集 key，可空，默认全片') }, required: ['project_id'] },
+    execute({ project_id, episode }) { return buildOmniReferencePrompt(project_id, { episode: episode || '' }); }
   },
   {
     name: 'annotate_entities',

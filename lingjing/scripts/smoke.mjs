@@ -94,6 +94,9 @@ try {
   const ark = await import(path.join(ROOT, 'server', 'lib', 'ark.js'));
   ok(ark.isQwenChat('qwen-max') === true && ark.isQwenChat('doubao-seed-1-6-250615') === false, '千问对话模型按 ID 识别');
   ok(ark.llmEnabled() === false, '无任何大模型 Key 时 llmEnabled 为 false（走本地）');
+  // 电影级光影词库：场景按冷暖自适应（主控室=冷色调机房 → 冷调），分镜首帧含【光影】
+  ok(/冷色调|清冷|漫反射/.test(dupSb.scenes[0].image_prompt || ''), '场景定义图含电影级光影词（冷暖自适应）');
+  ok(/【光影】/.test(dupSb.shots[0].image_prompt || '') && /(丁达尔|暖调|冷色调|布光)/.test(dupSb.shots[0].image_prompt || ''), '分镜首帧注入光影词（丁达尔/暖冷调/布光）');
 
   console.log('— 启动与基础 —');
   const boot = await until(async () => (await api('GET', '/api/bootstrap')).data, 10000);
@@ -211,6 +214,7 @@ try {
   ok(agentTools.some((t) => t.name === 'check_consistency'), 'Agent 开放 check_consistency 工具');
   ok(agentTools.some((t) => t.name === 'get_character_profile'), 'Agent 开放 get_character_profile 工具（角色记忆）');
   ok(agentTools.some((t) => t.name === 'list_entities') && agentTools.some((t) => t.name === 'annotate_entities'), 'Agent 开放 list_entities/annotate_entities 工具');
+  ok(agentTools.some((t) => t.name === 'omni_reference_script'), 'Agent 开放 omni_reference_script 工具（全能参考）');
 
   console.log('— 角色预选标注 / Agent 进化 —');
   const pe = (await api('POST', '/api/projects', { title: '标注剧', genre: '悬疑反转', idea: '实验室停电夜' })).data;
@@ -365,6 +369,10 @@ try {
   ok(charTask.params?.pro === true && charTask.params?.ratio === '16:9', '角色图走顶配模型路由 + 三视图宽幅(16:9)');
   const sceneImg = (await api('POST', '/api/ai/image', { prompt: '废墟街道', kind: 'scene', project_id: p.id, name: '全场景测试' })).data;
   ok((await api('GET', `/api/ai/task/${sceneImg.taskId}`)).data.params?.pro === true, '全场景图走顶配模型路由');
+  // 全能参考：分镜拼成带编号图片引用的多镜头剧本 + 编号→参考图清单
+  const omni = (await api('GET', `/api/projects/${p.id}/omni-reference`)).data;
+  ok(/镜头1/.test(omni.prompt) && /图片1/.test(omni.prompt) && Array.isArray(omni.references) && omni.references.length >= 1, '全能参考：分镜拼成带编号图片引用的多镜头剧本');
+  ok(omni.references[0].n === 1 && omni.references.some((r) => r.type === '场景') && /摄影|景深/.test(omni.prompt), '全能参考：编号清单（角色优先+场景）+ 每镜含摄影机参数');
   // 多供应商安全回退：未配对应 Key 时选 GPT Image / Veo 3 → 回退本地占位，不报错也不假装成功
   const gptImg = (await api('POST', '/api/ai/image', { prompt: '测试', kind: 'scene', project_id: p.id, model: 'gpt-image-1' })).data;
   const gptTask = (await api('GET', `/api/ai/task/${gptImg.taskId}`)).data;

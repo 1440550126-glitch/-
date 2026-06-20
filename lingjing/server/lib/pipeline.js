@@ -400,12 +400,12 @@ function buildLocks(sb) {
   for (const s of sb.scenes) {
     const d = cleanDesc(s.desc).slice(0, 90);
     s.lock = `${s.name}（${d || s.name}，环境陈设光线固定一致）`;
-    s.image_prompt = `${style} ｜ 场景空镜 ｜ ${s.lock}`;
+    s.image_prompt = `${style} ｜ 场景空镜 ｜ ${s.lock} ｜ ${lightingFor(s.desc, 'scene')}`;
   }
   for (const p of sb.props) {
     const d = cleanDesc(p.desc).slice(0, 70);
     p.lock = `${p.name}（${d || p.name}，外形固定）`;
-    p.image_prompt = `${style} ｜ 道具特写 ｜ ${p.lock}`;
+    p.image_prompt = `${style} ｜ 道具特写 ｜ ${p.lock} ｜ ${lightingFor(p.desc, 'prop')}`;
   }
 }
 
@@ -448,6 +448,18 @@ function shotCinema(shotType, camera, style = '') {
   return `${cameraBody(style)}，${L.lens}，${L.dof}，${L.fix}，${move}`;
 }
 
+// 电影级光影/材质词库：按场景氛围（冷暖/昼夜/室内外/材质）自动选光，提升质感与真实感
+//  暖：丁达尔体积光 + 细腻空气感；冷：清冷月光 + 柔和漫反射；道具：极简干净材质漫反射
+function lightingFor(desc = '', kind = 'scene') {
+  if (kind === 'prop') return '柔和漫反射、极简干净材质、低饱和纯净背景、产品级精致布光';
+  const d = String(desc || '');
+  const cold = /夜|月|冷|阴|雨|雪|寒|幽|废墟|地下|金属|科技|霓虹|清晨|黎明/.test(d);
+  const warm = /暖|烛|火|日|黄昏|晨曦|夕阳|阳|温馨|闺房|灯|篝火|橘/.test(d);
+  if (warm) return '强化暖调光影、丁达尔体积光线、细腻空气感、柔和高光与丰富暗部层次、电影级布光';
+  if (cold) return '冷色调、清冷月光/环境光、柔和漫反射、低对比、细腻空气感、电影级布光';
+  return '电影级布光、自然光影过渡、通透空气感、柔和高光、丁达尔光线点缀';
+}
+
 /** 故事总纲（总控提示词）：写进每一张参考图，全片防跑偏 */
 function buildBible(sb) {
   const chars = sb.characters.map((c) => c.lock).join('；');
@@ -471,6 +483,7 @@ function alignStoryboard(sb) {
     if (chars.length) parts.push(`【角色】${chars.map((c) => c.lock).join('；')}`);
     if (sc) parts.push(`【场景】${sc.lock}`);
     if (props.length) parts.push(`【道具】${props.map((p) => p.name).join('、')}`);
+    parts.push(`【光影】${lightingFor(sc?.desc || '', 'scene')}`);
     parts.push(`【画面】${action}`);
     if (sh.emotion) parts.push(`【情绪】${chars[0]?.name || '主角'}：${sh.emotion}`);
     sh.image_prompt = parts.join(' ｜ ').slice(0, 1000);
@@ -1029,6 +1042,58 @@ export function restyleProject(projectId, styleName) {
   const canvasId = ensureCanvas(project, sb);
   touchProject(project.id, { storyboard: JSON.stringify(sb), canvas_id: canvasId });
   return sb;
+}
+
+// ---------- 全能参考：把分镜拼成"带编号图片引用"的多镜头剧本（女主【图片1】在【图片2】中…）----------
+// 思路同业内「全能参考」玩法：给若干张已编号参考图（角色三视图/场景图），写一段把它们按编号内联引用的
+// 连续多镜头剧本，让支持多图参考的视频模型一次产出人物/场景一致的成片；也可整段复制到外部工具使用。
+export function buildOmniReferencePrompt(projectId, { episode = '' } = {}) {
+  const project = getProject(projectId);
+  const sb = jparse(project.storyboard, null);
+  if (!sb?.shots?.length) throw bad('项目还没有分镜，先解析剧本');
+  const canvas = project.canvas_id ? getCanvas(project.canvas_id, { required: false }) : null;
+  const realImg = (u) => (u && !/\.svg$/i.test(u) ? u : '');
+  const imgByKey = new Map((canvas?.nodes || []).filter((n) => n.data?.key).map((n) => [n.data.key, realImg(n.data.image)]));
+  const charByKey = new Map((sb.characters || []).map((c) => [c.key, c]));
+  const sceneByKey = new Map((sb.scenes || []).map((s) => [s.key, s]));
+  const shots = (sb.shots || []).filter((s) => !episode || (s.episode || 'e1') === episode);
+
+  // 按出场顺序给【角色优先、其次场景】编号，建立 编号→参考图 清单
+  const refs = [];
+  const numByKey = new Map();
+  const addRef = (key, type, name) => {
+    if (!key || numByKey.has(key)) return numByKey.get(key);
+    const n = refs.length + 1;
+    numByKey.set(key, n);
+    refs.push({ n, type, key, name, image: imgByKey.get(key) || '' });
+    return n;
+  };
+  for (const sh of shots) {
+    for (const ck of (sh.characters || [])) { const c = charByKey.get(ck); if (c) addRef(c.key, c.role?.includes('主') ? '主角' : '角色', c.name); }
+    const sc = sceneByKey.get(sh.scene); if (sc) addRef(sc.key, '场景', sc.name);
+  }
+  const tag = (name, key) => `${name}【图片${numByKey.get(key)}】`;
+  const style = styleAnchor(sb);
+  const head = `生成一段完整剧情（爆款短剧节奏，根据剧情推演风格），影像风格：${style}。在严格保持人物一致性与场景一致性的基础上，可适当联想、补充更贴合脚本的镜头语言与运镜。为方便剪辑，请勿添加背景音乐。`;
+  const lines = [head];
+  shots.forEach((sh, i) => {
+    const chars = (sh.characters || []).map((k) => charByKey.get(k)).filter(Boolean);
+    const sc = sceneByKey.get(sh.scene);
+    const who = chars.map((c) => tag(c.name, c.key)).join('、');
+    const where = sc ? `在${tag(sc.name, sc.key)}` : '';
+    const cinema = shotCinema(sh.shot_type, sh.camera, style);
+    const light = lightingFor(sc?.desc || '', 'scene');
+    const act = cleanDesc(sh.action).slice(0, 90) || sh.name;
+    const say = cleanDesc(sh.dialogue).slice(0, 50);
+    lines.push(`镜头${i + 1}（${clamp(sh.duration || 5, 2, 12)}秒）：${sh.shot_type || '中景'}｜${cinema}｜${light}。${who}${where ? where : ''}${act ? '，' + act : ''}${say ? `，说道："${say}"` : ''}。`);
+  });
+  return {
+    project_id: project.id, title: sb.title, style,
+    prompt: lines.join('\n'),
+    references: refs,
+    shots: shots.length,
+    missing_images: refs.filter((r) => !r.image).map((r) => `图片${r.n} ${r.name}`)
+  };
 }
 
 // ---------- 角色记忆 character_profile.json：把锁定档案 + 已生成的定妆照/表情集导出为可查可下载的单一事实源 ----------
