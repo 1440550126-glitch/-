@@ -1351,6 +1351,22 @@ class Agent:
                     self._log_journal(who, utterance, fr, "food_remedy")
                     return result
 
+        # --- 换季防护（"夏天怎么防中暑" / "冬天烧炭注意啥" / "一氧化碳中毒"）：换季最容易出事 ---
+        if action is None and who.get("obey"):
+            from . import seasonal_care as _sc
+            _sccfg = self.identity if isinstance(self.identity, dict) else None
+            if _sc.is_seasonal_care_query(utterance, _sccfg):
+                t = _sc.find_topic(utterance, _sccfg)
+                if t:
+                    txt = _sc.advice(t, _sccfg)
+                else:
+                    from datetime import datetime
+                    txt = _sc.season_advice(_sc.season_of(datetime.now().month), _sccfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "seasonal_care")
+                    return result
+
         # --- 生活谣言辟谣（"隔夜菜致癌吗" / "酸碱体质真的吗"）：别被养生谣言唬住 ---
         if action is None and who.get("obey"):
             from . import debunk as _db
