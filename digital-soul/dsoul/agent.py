@@ -1483,6 +1483,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "debunk")
                     return result
 
+        # --- 防蚊虫叮咬（"蚊子咬了怎么止痒" / "蜂蜇了咋办" / "蜱虫叮上"）：有的咬一口要命 ---
+        if action is None and who.get("obey"):
+            from . import bug_bites as _bb
+            _bbcfg = self.identity if isinstance(self.identity, dict) else None
+            if _bb.is_bite_query(utterance, _bbcfg):
+                b = _bb.find_bug(utterance, _bbcfg)
+                txt = _bb.advice(b, _bbcfg) if b else _bb.overview()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "bug_bites")
+                    return result
+
         # --- 急救常识（"烫伤了怎么办" / "流鼻血咋办"）：给几步当下能做的处置 ---
         if action is None and who.get("obey"):
             from .first_aid import advice, is_firstaid_query
