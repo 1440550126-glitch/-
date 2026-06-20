@@ -2145,6 +2145,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "board_games")
                     return result
 
+        # --- 家电帮手（"洗衣机怎么用" / "空调遥控器咋调" / "燃气灶打不着火"）：教长辈用明白 ---
+        if action is None and who.get("obey"):
+            from . import appliances as _appl
+            _aplcfg = self.identity if isinstance(self.identity, dict) else None
+            if _appl.is_appliance_query(utterance, _aplcfg):
+                txt = _appl.how_to(_appl.find_appliance(utterance, _aplcfg), _aplcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "appliances")
+                    return result
+
         # --- 出行帮手（"地铁怎么坐" / "打车软件怎么用" / "出门怕走丢"）：教长辈坐车问路 ---
         if action is None and who.get("obey"):
             from . import getting_around as _ga
