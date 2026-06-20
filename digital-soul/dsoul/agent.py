@@ -2882,6 +2882,21 @@ class Agent:
             self._log_journal(who, utterance, reply, "calendar")
             return result
 
+        # --- 书信格式（"称呼怎么写" / "此致敬礼写哪" / "贺卡怎么写"）：格式怎么摆，先于代笔 ---
+        if action is None and who.get("obey"):
+            from . import letter_format as _lfmt
+            _lfcfg = self.identity if isinstance(self.identity, dict) else None
+            if _lfmt.is_letter_query(utterance, _lfcfg):
+                if any(k in (utterance or "") for k in ("贺卡", "卡片")):
+                    txt = _lfmt.card_format()
+                else:
+                    p = _lfmt.find_part(utterance, _lfcfg)
+                    txt = _lfmt.explain(p, _lfcfg) if p else _lfmt.overview()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "letter_format")
+                    return result
+
         # --- 代笔家书（"给小婷写封信" / "替你给妈写封生日信"）---
         if action is None and who.get("obey") and (
                 ("写" in (utterance or "") and "信" in (utterance or ""))
