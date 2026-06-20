@@ -2048,6 +2048,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "opera")
                     return result
 
+        # --- 曲艺（"相声是什么" / "讲讲评书" / "聊聊曲艺"）：收音机里听一辈子的说唱玩意儿 ---
+        if action is None and who.get("obey"):
+            from . import quyi as _qy
+            _qycfg = self.identity if isinstance(self.identity, dict) else None
+            if _qy.is_quyi_query(utterance, _qycfg):
+                f = _qy.find_form(utterance, _qycfg)
+                txt = _qy.describe(f, _qycfg) if f else _qy.recall(seed=utterance, config=_qycfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "quyi")
+                    return result
+
         # --- 唱歌（"唱给我听" / "一起唱" / "这是什么歌" / 歌词接龙）---
         if action is None and who.get("obey"):
             from . import songbook as sb
