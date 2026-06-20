@@ -19,6 +19,8 @@ export async function renderSettings(page) {
   const googleBaseIn = h('input', { class: 'input', value: s.google_base_url || '' });
   const dashKeyIn = h('input', { class: 'input', type: 'password', autocomplete: 'off', placeholder: s.dashscope_api_key_masked ? `已配置 ${s.dashscope_api_key_masked}（输入新值覆盖，clear 清除）` : '阿里云百炼 API Key（sk-...，统一 Key）' });
   const dashBaseIn = h('input', { class: 'input', value: s.dashscope_base_url || '' });
+  const viduKeyIn = h('input', { class: 'input', type: 'password', autocomplete: 'off', placeholder: s.vidu_api_key_masked ? `已配置 ${s.vidu_api_key_masked}（输入新值覆盖，clear 清除）` : 'Vidu API Key（platform.vidu.com）' });
+  const viduBaseIn = h('input', { class: 'input', value: s.vidu_base_url || '' });
   const extraIn = h('input', { class: 'input', value: s.video_extra_args || '', placeholder: '如 --camerafixed true' });
   const wmSel = h('select', { class: 'select' }, [['false', '不加水印'], ['true', '加 AI 水印']].map(([v, l]) => h('option', { value: v, selected: String(s.watermark) === v }, l)));
   const fbSel = h('select', { class: 'select' }, [['false', '关闭（推荐：失败时报真实错误，便于排查）'], ['true', '开启（失败时用本地占位图/视频兜底）']].map(([v, l]) => h('option', { value: v, selected: String(!!s.local_fallback) === v }, l)));
@@ -44,7 +46,7 @@ export async function renderSettings(page) {
         ark_base_url: baseIn.value.trim(), model_chat: chatIn.value.trim(), model_image: imageIn.value.trim(), model_image_pro: imageProIn.value.trim(), model_video: videoIn.value.trim(),
         model_video_options: videoOptsIn.value.trim(), video_extra_args: extraIn.value.trim(),
         model_image_options: imageOptsIn.value.trim(),
-        openai_base_url: openaiBaseIn.value.trim(), google_base_url: googleBaseIn.value.trim(), dashscope_base_url: dashBaseIn.value.trim(),
+        openai_base_url: openaiBaseIn.value.trim(), google_base_url: googleBaseIn.value.trim(), dashscope_base_url: dashBaseIn.value.trim(), vidu_base_url: viduBaseIn.value.trim(),
         watermark: wmSel.value === 'true', local_fallback: fbSel.value === 'true',
         qc_enabled: qcEnSel.value === 'true', qc_autofix: qcFixSel.value === 'true', qc_min_score: Number(qcScoreIn.value), video_chain: chainSel.value === 'true', auto_expressions: exprSel.value === 'true',
         user_name: nameIn.value.trim() || '创作者',
@@ -58,6 +60,8 @@ export async function renderSettings(page) {
       if (gk) body.google_api_key = gk;
       const dk = dashKeyIn.value.trim();
       if (dk) body.dashscope_api_key = dk;
+      const vk = viduKeyIn.value.trim();
+      if (vk) body.vidu_api_key = vk;
       const r = await PATCH('/api/settings', body);
       toast(r.ark_enabled ? '已保存，方舟模式已启用' : '已保存（当前本地引擎模式）', 'ok');
       keyIn.value = '';
@@ -140,6 +144,9 @@ export async function renderSettings(page) {
     h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' } },
       fld(h('span', {}, '阿里云百炼 API Key（千问/通义万相·统一）', pillState(s.alibaba_enabled)), dashKeyIn, '一个 Key 通用：对话用千问（model_chat 填 qwen-max 等），图/视频选通义万相'),
       fld('DashScope 接口地址', dashBaseIn, '默认 https://dashscope.aliyuncs.com')),
+    h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' } },
+      fld(h('span', {}, 'Vidu API Key（全能参考·多主体一致）', pillState(s.vidu_enabled)), viduKeyIn, '国产多图参考最强；视频选 Vidu Q1，配合「🎭 全能参考一键出片」'),
+      fld('Vidu 接口地址', viduBaseIn, '默认 https://api.vidu.com')),
     fld('创作框可选图像模型（每行：显示名|模型ID）', imageOptsIn, '加一行 GPT Image|gpt-image-1 或 通义万相|wanx2.1-t2i-turbo 即可在「生成图片」里下拉选用'));
 
   // 语音合成（配音）

@@ -6,7 +6,7 @@ import { jparse, micro2yuan, now } from './util.js';
 import { llmEnabled, cfg } from './ark.js';
 import {
   createProject, getProject, projectOut, touchProject, generateScript, parseScript, addEpisode,
-  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral, generateDubbing, checkConsistency, buildCharacterProfile, listEntities, annotateEntities, buildOmniReferencePrompt
+  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral, generateDubbing, checkConsistency, buildCharacterProfile, listEntities, annotateEntities, buildOmniReferencePrompt, generateOmniVideo
 } from './pipeline.js';
 import { STYLES, STYLE_CATS } from './styles.js';
 import { bad } from './httpx.js';
@@ -322,6 +322,12 @@ export const TOOLS = [
     description: '全能参考：把项目分镜拼成"带编号图片引用"的多镜头剧本（如 女主【图片1】在【图片2】中…），并返回 编号→参考图（角色三视图/场景图）清单。用于支持多图参考的视频模型一次性产出人物/场景一致的连续成片，或整段复制到外部工具。每条镜头已含摄影机参数与光影词。',
     input_schema: { type: 'object', properties: { project_id: str('项目 id'), episode: str('集 key，可空，默认全片') }, required: ['project_id'] },
     execute({ project_id, episode }) { return buildOmniReferencePrompt(project_id, { episode: episode || '' }); }
+  },
+  {
+    name: 'omni_reference_video',
+    description: '全能参考一键出片：用带编号图片引用的剧本 + 多张参考图（角色三视图/场景图），调多主体参考视频模型（默认 Vidu Q1，国产多主体一致最强；需 Vidu Key）一次产出人物/场景一致的连续短片。返回 taskId，用 get_task 轮询。未配 Vidu Key 会回退本地占位。需先生成角色/场景参考图。',
+    input_schema: { type: 'object', properties: { project_id: str('项目 id'), episode: str('集 key，可空'), model: str('多图参考视频模型，默认 viduq1'), duration: { type: 'number', description: '时长秒，默认 8' } }, required: ['project_id'] },
+    execute({ project_id, episode, model, duration }) { return generateOmniVideo({ projectId: project_id, episode: episode || '', model: model || 'viduq1', duration: duration || 8 }); }
   },
   {
     name: 'annotate_entities',

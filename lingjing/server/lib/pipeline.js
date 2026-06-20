@@ -3,7 +3,7 @@
 import { q, getSetting, setSetting } from './db.js';
 import { uid, now, jparse, clamp } from './util.js';
 import { arkEnabled, llmEnabled, arkChat, arkImage, arkVideoCreate, arkVideoGet, cfg } from './ark.js';
-import { pickImageProvider, pickVideoProvider, openaiImage, googleVeoCreate, googleVeoGet, dashscopeImage, dashscopeVideoCreate, dashscopeTaskGet } from './providers.js';
+import { pickImageProvider, pickVideoProvider, openaiImage, googleVeoCreate, googleVeoGet, dashscopeImage, dashscopeVideoCreate, dashscopeTaskGet, viduReferenceVideoCreate, viduTaskGet } from './providers.js';
 import { localScript, localParse, localImageSVG, localVideoSVG, saveSVG, localNextEpisode, localViralAnalysis, guessGender, splitScriptSegments } from './local.js';
 import { resolveStylePrompt } from './styles.js';
 import { bad, notFound } from './httpx.js';
@@ -1096,6 +1096,21 @@ export function buildOmniReferencePrompt(projectId, { episode = '' } = {}) {
   };
 }
 
+/** 全能参考一键出片：用「带编号图片引用」剧本 + 多张参考图（角色三视图/场景图），
+ *  调多图参考视频模型（默认 Vidu Q1，国产多主体一致最强）一次产出人物/场景一致的连续短片。 */
+export async function generateOmniVideo({ projectId, episode = '', model = 'viduq1', ratio = '', duration = 8 }) {
+  const omni = buildOmniReferencePrompt(projectId, { episode });
+  const images = omni.references.map((r) => r.image).filter(Boolean);
+  if (!images.length) throw bad('全能参考需要先生成角色三视图/场景图作为参考图（当前一张真实参考图都没有，请先出图）');
+  const project = getProject(projectId);
+  const r = await createVideoTask({
+    prompt: omni.prompt, refImages: images, model: model || 'viduq1',
+    ratio: ratio || project.ratio || '16:9', duration, projectId,
+    name: `全能参考·${omni.title || project.title}`
+  });
+  return { ...r, references: omni.references, used_images: images.length, missing_images: omni.missing_images };
+}
+
 // ---------- 角色记忆 character_profile.json：把锁定档案 + 已生成的定妆照/表情集导出为可查可下载的单一事实源 ----------
 // 这就是「禁止忽略 character_profile.json 里的角色记忆」中所指的那份记忆：
 // 解析时确定下来的逐字锁定档案，加上画布上真实生成的参考图 URL，全片生成都以此为准。
@@ -1166,7 +1181,7 @@ export async function generateDubbing({ projectId, episode = '', nodeId = '' }) 
 // ---------- 视频生成（异步任务） ----------
 const LOCAL_VIDEO_MS = () => ((process.env.LINGJING_FAST_LOCAL || process.env.QINGLUAN_FAST_LOCAL) ? 50 : 4000);
 
-export async function createVideoTask({ prompt, imageUrl = '', lastImageUrl = '', duration = 5, ratio = '', projectId = '', nodeId = '', name = '', order = 0, model = '', resolution = '' }) {
+export async function createVideoTask({ prompt, imageUrl = '', lastImageUrl = '', refImages = [], duration = 5, ratio = '', projectId = '', nodeId = '', name = '', order = 0, model = '', resolution = '' }) {
   if (!prompt?.trim()) throw bad('缺少视频提示词 prompt');
   const project = projectId ? getProject(projectId, { required: false }) : null;
   prompt = applyStyle(prompt.trim(), project?.style);
@@ -1175,10 +1190,11 @@ export async function createVideoTask({ prompt, imageUrl = '', lastImageUrl = ''
   ratio = ratio || project?.ratio || '16:9';
   duration = clamp(duration, 2, 12);
   const taskId = uid('t');
-  // 按模型 ID 路由：veo* → Google Veo 3，其余 → 火山 Seedance（各用各的 API Key）
+  // 按模型 ID 路由：veo*→Google Veo 3，vidu*→Vidu 全能参考（多图），wan/t2v/i2v→通义万相，其余→火山 Seedance（各用各的 Key）
   const vp = pickVideoProvider(model, { arkEnabled: arkEnabled(), arkModel: model || cfg().modelVideo });
-  const provLabel = vp.provider === 'google' ? 'Veo' : vp.provider === 'alibaba' ? '通义万相' : '方舟视频';
-  const params = { ratio, duration, imageUrl, lastImageUrl: lastImageUrl || '', name, order, model: vp.model || '', provider: vp.enabled ? vp.provider : 'local', resolution: resolution || '' };
+  const provLabel = vp.provider === 'google' ? 'Veo' : vp.provider === 'vidu' ? 'Vidu 全能参考' : vp.provider === 'alibaba' ? '通义万相' : '方舟视频';
+  const refList = (refImages || []).filter(Boolean);
+  const params = { ratio, duration, imageUrl, lastImageUrl: lastImageUrl || '', refs: refList.length, name, order, model: vp.model || '', provider: vp.enabled ? vp.provider : 'local', resolution: resolution || '' };
 
   let provider = 'local';
   let remoteId = '';
@@ -1187,9 +1203,11 @@ export async function createVideoTask({ prompt, imageUrl = '', lastImageUrl = ''
     try {
       const r = vp.provider === 'google'
         ? await googleVeoCreate({ prompt, imageUrl, ratio, model: vp.model })
-        : vp.provider === 'alibaba'
-          ? await dashscopeVideoCreate({ prompt, imageUrl, ratio, model: vp.model })
-          : await arkVideoCreate({ prompt, imageUrl, lastImageUrl, ratio, duration, model: vp.model, resolution });
+        : vp.provider === 'vidu'
+          ? await viduReferenceVideoCreate({ prompt, images: refList.length ? refList : [imageUrl].filter(Boolean), ratio, duration, model: vp.model, resolution: resolution || '1080p' })
+          : vp.provider === 'alibaba'
+            ? await dashscopeVideoCreate({ prompt, imageUrl, ratio, model: vp.model })
+            : await arkVideoCreate({ prompt, imageUrl, lastImageUrl, ratio, duration, model: vp.model, resolution });
       provider = vp.provider;
       remoteId = r.remoteId;
       model = r.model;
@@ -1249,19 +1267,22 @@ export async function pollTask(taskId) {
     return finish('failed', {}, '生成超时（超过 18 分钟未完成，已自动结束）');
   }
 
-  if ((t.provider === 'ark' || t.provider === 'google' || t.provider === 'alibaba') && t.remote_id) {
+  if (['ark', 'google', 'alibaba', 'vidu'].includes(t.provider) && t.remote_id) {
     try {
       const r = t.provider === 'google'
         ? await googleVeoGet(t.remote_id, { duration: params.duration || 8 })
-        : t.provider === 'alibaba'
-          ? await dashscopeTaskGet(t.remote_id, { kind: 'video', duration: params.duration || 5 })
-          : await arkVideoGet(t.remote_id, { duration: params.duration || 5 });
+        : t.provider === 'vidu'
+          ? await viduTaskGet(t.remote_id, { duration: params.duration || 5 })
+          : t.provider === 'alibaba'
+            ? await dashscopeTaskGet(t.remote_id, { kind: 'video', duration: params.duration || 5 })
+            : await arkVideoGet(t.remote_id, { duration: params.duration || 5 });
       if (r.status === 'succeeded') return finish('succeeded', { url: r.url });
       if (r.status === 'failed') return finish('failed', {}, r.error || '生成失败');
       return { ...t, params, result: {}, status: r.status };
     } catch (e) {
       // 查询接口连续报错也不再卡死：记录但保持 running，由超时兜底
-      console.warn(`[pollTask] ${t.provider === 'google' ? 'Veo' : t.provider === 'alibaba' ? '通义万相' : '方舟'}查询失败：`, e.message);
+      const label = { google: 'Veo', vidu: 'Vidu', alibaba: '通义万相' }[t.provider] || '方舟';
+      console.warn(`[pollTask] ${label}查询失败：`, e.message);
       return { ...t, params, result: {}, status: 'running', error: e.message };
     }
   }

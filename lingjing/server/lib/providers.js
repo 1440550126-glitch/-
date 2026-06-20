@@ -10,6 +10,7 @@ export const PROVIDER_DEFAULTS = {
   openai_base_url: 'https://api.openai.com/v1',
   google_base_url: 'https://generativelanguage.googleapis.com/v1beta',
   dashscope_base_url: 'https://dashscope.aliyuncs.com',   // 阿里云百炼·统一 API（千问/通义万相 图与视频共用一个 Key）
+  vidu_base_url: 'https://api.vidu.com',                   // Vidu（生数科技）·多主体参考「全能参考」视频，国产多图参考最强
   // 创作框「生成图片」可选的图像模型（每行「显示名|模型ID」），与视频模型列表对称
   model_image_options: [
     'Seedream 4.0（火山·默认）|doubao-seedream-4-0-250828',
@@ -36,6 +37,8 @@ export function providerCfg() {
     googleBase: String(g('google_base_url', 'GOOGLE_BASE_URL', PROVIDER_DEFAULTS.google_base_url)).replace(/\/+$/, ''),
     dashscopeKey: g('dashscope_api_key', 'DASHSCOPE_API_KEY', ''),
     dashscopeBase: String(g('dashscope_base_url', 'DASHSCOPE_BASE_URL', PROVIDER_DEFAULTS.dashscope_base_url)).replace(/\/+$/, ''),
+    viduKey: g('vidu_api_key', 'VIDU_API_KEY', ''),
+    viduBase: String(g('vidu_base_url', 'VIDU_BASE_URL', PROVIDER_DEFAULTS.vidu_base_url)).replace(/\/+$/, ''),
     modelImageOptions: String(g('model_image_options', 'MODEL_IMAGE_OPTIONS', PROVIDER_DEFAULTS.model_image_options))
   };
 }
@@ -43,6 +46,7 @@ export function providerCfg() {
 export const openaiEnabled = () => !!providerCfg().openaiKey;
 export const googleEnabled = () => !!providerCfg().googleKey;
 export const alibabaEnabled = () => !!providerCfg().dashscopeKey;
+export const viduEnabled = () => !!providerCfg().viduKey;
 
 // 按模型 ID 识别供应商：
 //  图像：gpt-image*/dall* → OpenAI；qwen-image/wanx*t2i/wan* → 阿里通义万相；其余 → 火山方舟
@@ -56,6 +60,7 @@ export function imageProviderOf(model) {
 export function videoProviderOf(model) {
   const m = String(model || '');
   if (/^veo/i.test(m) || /(google|gemini)/i.test(m)) return 'google';
+  if (/^vidu/i.test(m)) return 'vidu';
   if (/(t2v|i2v)/i.test(m) || (/^wan/i.test(m) && /video/i.test(m))) return 'alibaba';
   return 'ark';
 }
@@ -71,6 +76,7 @@ export function pickImageProvider(model, { arkEnabled, arkModel } = {}) {
 export function pickVideoProvider(model, { arkEnabled, arkModel } = {}) {
   const provider = videoProviderOf(model);
   if (provider === 'google') return { provider, enabled: googleEnabled(), model: model || 'veo-3.0-generate-001' };
+  if (provider === 'vidu') return { provider, enabled: viduEnabled(), model: model || 'viduq1' };
   if (provider === 'alibaba') return { provider, enabled: alibabaEnabled(), model: model || 'wanx2.1-i2v-turbo' };
   return { provider: 'ark', enabled: !!arkEnabled, model: model || arkModel || '' };
 }
@@ -246,6 +252,55 @@ export async function dashscopeImage({ prompt, ratio = '1:1', model = 'wanx2.1-t
     if (Date.now() > deadline) throw new Error('通义万相出图超时');
     await sleep(2500);
   }
+}
+
+// ===================== Vidu（生数科技）：多主体「全能参考」参考生视频（国产多图参考最强）=====================
+// 本地图片转参考输入：http(s) 原样，本地 /uploads 转 base64 data URL（Vidu 接受 URL 或 base64）
+function toRefImage(url) {
+  if (!url) return null;
+  if (/^https?:/i.test(url) || /^data:/i.test(url)) return url;
+  const f = localFilePath(url);
+  return f ? `data:${mimeOf(f)};base64,${fs.readFileSync(f).toString('base64')}` : null;
+}
+/** Vidu 参考生视频：images 为多张参考图（角色/场景，最多 7），prompt 内可按主体连贯叙事。返回 { remoteId, model }。 */
+export async function viduReferenceVideoCreate({ prompt, images = [], ratio = '16:9', duration = 5, model = 'viduq1', resolution = '1080p', bgm = false }) {
+  const c = providerCfg();
+  if (!c.viduKey) throw new Error('未配置 Vidu API Key（设置页填写）');
+  const imgs = images.map(toRefImage).filter(Boolean).slice(0, 7);
+  if (!imgs.length) throw new Error('Vidu 全能参考至少需要 1 张参考图');
+  const body = {
+    model, images: imgs, prompt: String(prompt || '').slice(0, 1500),
+    duration: Number(duration) >= 8 ? 8 : (Number(duration) >= 5 ? 5 : 4),
+    aspect_ratio: /9\s*[:：]\s*16/.test(ratio) ? '9:16' : /1\s*[:：]\s*1/.test(ratio) ? '1:1' : '16:9',
+    resolution, movement_amplitude: 'auto', bgm: !!bgm
+  };
+  const res = await fetch(`${c.viduBase}/ent/v2/reference2video`, {
+    method: 'POST', headers: { Authorization: `Token ${c.viduKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body), signal: AbortSignal.timeout(60_000)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || data?.error || `Vidu 任务创建失败 HTTP ${res.status}`);
+  const id = data?.task_id || data?.id;
+  if (!id) throw new Error('Vidu 未返回 task_id');
+  return { remoteId: id, model };
+}
+/** Vidu 任务查询。成功时落盘。返回 { status, url?, error? }。 */
+export async function viduTaskGet(taskId, { feature = 'video', duration = 5 } = {}) {
+  const c = providerCfg();
+  if (!c.viduKey) throw new Error('未配置 Vidu API Key');
+  const res = await fetch(`${c.viduBase}/ent/v2/tasks/${taskId}/creations`, {
+    headers: { Authorization: `Token ${c.viduKey}` }, signal: AbortSignal.timeout(30_000)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || `Vidu 查询失败 HTTP ${res.status}`);
+  const st = String(data?.state || data?.status || '').toLowerCase();
+  if (st === 'failed' || st === 'error') { logUsage({ feature, provider: 'vidu', model: 'viduq1', ok: 0 }); return { status: 'failed', error: data?.err_code || data?.message || 'Vidu 生成失败' }; }
+  if (st !== 'success' && st !== 'succeeded') return { status: 'running' };
+  const remote = (data.creations || [])[0]?.url || data.creations?.[0]?.video_url;
+  if (!remote) return { status: 'failed', error: 'Vidu 任务完成但未返回视频地址' };
+  logUsage({ feature, provider: 'vidu', model: 'viduq1', videoSeconds: duration });
+  try { return { status: 'succeeded', url: await downloadToUploads(remote, 'mp4') }; }
+  catch { return { status: 'succeeded', url: remote }; }
 }
 
 /** 通义万相 图/文生视频（异步任务）。返回 { remoteId, model }，由 pollTask 轮询 dashscopeTaskGet。 */

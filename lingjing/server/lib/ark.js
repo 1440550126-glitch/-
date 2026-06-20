@@ -27,7 +27,9 @@ export const DEFAULTS = {
     'Veo 3 Fast（Google）|veo-3.0-fast-generate-001',
     '通义万相 2.1 图生视频（阿里，需 DashScope Key）|wanx2.1-i2v-turbo',
     '通义万相 2.1 文生视频（阿里）|wanx2.1-t2v-turbo',
-    '通义万相 2.2 图生视频 Plus（阿里）|wan2.2-i2v-plus'
+    '通义万相 2.2 图生视频 Plus（阿里）|wan2.2-i2v-plus',
+    'Vidu Q1 全能参考（多主体一致，需 Vidu Key）|viduq1',
+    'Vidu 2.0 全能参考（多图参考）|vidu2.0'
   ].join('\n'),
   video_extra_args: '',     // 追加到视频任务文本命令的参数，如 --camerafixed true
   watermark: false,

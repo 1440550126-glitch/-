@@ -91,6 +91,7 @@ try {
   ok(prov.imageProviderOf('wanx2.1-t2i-turbo') === 'alibaba' && prov.imageProviderOf('qwen-image') === 'alibaba', '通义万相/Qwen-Image 路由到阿里');
   ok(prov.videoProviderOf('wanx2.1-i2v-turbo') === 'alibaba' && prov.videoProviderOf('wanx2.1-t2v-turbo') === 'alibaba', '通义万相视频（i2v/t2v）路由到阿里');
   ok(prov.pickVideoProvider('wanx2.1-i2v-turbo', { arkEnabled: true }).enabled === false, '未配 DashScope Key 时通义万相不启用（安全）');
+  ok(prov.videoProviderOf('viduq1') === 'vidu' && prov.videoProviderOf('vidu2.0') === 'vidu' && prov.pickVideoProvider('viduq1', { arkEnabled: true }).enabled === false, 'Vidu 全能参考按 ID 路由，未配 Key 不启用（安全）');
   const ark = await import(path.join(ROOT, 'server', 'lib', 'ark.js'));
   ok(ark.isQwenChat('qwen-max') === true && ark.isQwenChat('doubao-seed-1-6-250615') === false, '千问对话模型按 ID 识别');
   ok(ark.llmEnabled() === false, '无任何大模型 Key 时 llmEnabled 为 false（走本地）');
@@ -108,7 +109,8 @@ try {
   ok((boot.image_models || []).some((m) => /wanx/i.test(m.id)), '创作框可选图像模型含 通义万相（阿里）');
   ok((boot.video_models || []).some((m) => /veo/i.test(m.id)), '创作框可选视频模型含 Veo 3（Google）');
   ok((boot.video_models || []).some((m) => /wanx|wan2/i.test(m.id)), '创作框可选视频模型含 通义万相（阿里）');
-  ok(boot.providers && boot.providers.openai === false && boot.providers.google === false && boot.providers.alibaba === false, '多供应商开通状态暴露（未配 Key 为 false）');
+  ok((boot.video_models || []).some((m) => /vidu/i.test(m.id)), '创作框可选视频模型含 Vidu 全能参考');
+  ok(boot.providers && boot.providers.openai === false && boot.providers.google === false && boot.providers.alibaba === false && boot.providers.vidu === false, '多供应商开通状态暴露（未配 Key 为 false）');
   ok(typeof boot.llm_enabled === 'boolean', 'bootstrap 暴露 llm_enabled（对话大模型可用性）');
 
   console.log('— 项目与剧本 —');
@@ -214,7 +216,7 @@ try {
   ok(agentTools.some((t) => t.name === 'check_consistency'), 'Agent 开放 check_consistency 工具');
   ok(agentTools.some((t) => t.name === 'get_character_profile'), 'Agent 开放 get_character_profile 工具（角色记忆）');
   ok(agentTools.some((t) => t.name === 'list_entities') && agentTools.some((t) => t.name === 'annotate_entities'), 'Agent 开放 list_entities/annotate_entities 工具');
-  ok(agentTools.some((t) => t.name === 'omni_reference_script'), 'Agent 开放 omni_reference_script 工具（全能参考）');
+  ok(agentTools.some((t) => t.name === 'omni_reference_script') && agentTools.some((t) => t.name === 'omni_reference_video'), 'Agent 开放 omni_reference_script/video 工具（全能参考）');
 
   console.log('— 角色预选标注 / Agent 进化 —');
   const pe = (await api('POST', '/api/projects', { title: '标注剧', genre: '悬疑反转', idea: '实验室停电夜' })).data;
@@ -373,6 +375,14 @@ try {
   const omni = (await api('GET', `/api/projects/${p.id}/omni-reference`)).data;
   ok(/镜头1/.test(omni.prompt) && /图片1/.test(omni.prompt) && Array.isArray(omni.references) && omni.references.length >= 1, '全能参考：分镜拼成带编号图片引用的多镜头剧本');
   ok(omni.references[0].n === 1 && omni.references.some((r) => r.type === '场景') && /摄影|景深/.test(omni.prompt), '全能参考：编号清单（角色优先+场景）+ 每镜含摄影机参数');
+  // 全能参考一键出片（默认 Vidu Q1，多图参考）；未配 Vidu Key → 安全回退本地占位
+  const omniVid = (await api('POST', `/api/projects/${p.id}/omni-video`, {})).data;
+  ok(omniVid.taskId && omniVid.used_images >= 1, '全能参考一键出片：创建任务并带入多张参考图');
+  const omniDone = await until(async () => {
+    const t = (await api('GET', `/api/ai/task/${omniVid.taskId}`)).data;
+    return ['succeeded', 'failed'].includes(t.status) ? t : null;
+  });
+  ok(omniDone.provider === 'local' && omniDone.status === 'succeeded', '未配 Vidu Key 时全能参考出片回退本地占位');
   // 多供应商安全回退：未配对应 Key 时选 GPT Image / Veo 3 → 回退本地占位，不报错也不假装成功
   const gptImg = (await api('POST', '/api/ai/image', { prompt: '测试', kind: 'scene', project_id: p.id, model: 'gpt-image-1' })).data;
   const gptTask = (await api('GET', `/api/ai/task/${gptImg.taskId}`)).data;
@@ -503,6 +513,13 @@ try {
   ok((await api('GET', '/api/bootstrap')).data.llm_enabled === true, '选千问 + 配 DashScope Key → 对话大模型可用（llm_enabled）');
   await api('PATCH', '/api/settings', { model_chat: 'doubao-seed-1-6-250615', dashscope_api_key: 'clear' });   // 复位，避免真实外呼
   ok((await api('GET', '/api/settings')).data.alibaba_enabled === false, '清除 DashScope Key 后回到未配置');
+  // Vidu 全能参考 Key：脱敏保存 + 启用 + 接口地址
+  await api('PATCH', '/api/settings', { vidu_api_key: 'vidu-test-key-1234', vidu_base_url: 'https://vidu.example' });
+  const setVidu = (await api('GET', '/api/settings')).data;
+  ok(setVidu.vidu_api_key_masked.includes('****') && setVidu.vidu_enabled === true && setVidu.vidu_base_url === 'https://vidu.example', 'Vidu Key 脱敏保存、启用、接口地址生效');
+  ok((await api('GET', '/api/bootstrap')).data.providers.vidu === true, 'bootstrap 反映 Vidu 已开通');
+  await api('PATCH', '/api/settings', { vidu_api_key: 'clear' });   // 复位，避免真实外呼
+  ok((await api('GET', '/api/settings')).data.vidu_enabled === false, '清除 Vidu Key 后回到未配置');
   const stats = (await api('GET', '/api/stats')).data;
   ok(Number(stats.cost_total_yuan) === 0, '本地模式成本为 0');
 

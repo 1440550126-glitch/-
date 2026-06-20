@@ -5,8 +5,8 @@ import { GET, POST, PATCH, DEL, bad, notFound } from '../lib/httpx.js';
 import { q, getSetting, setSetting, UPLOAD_DIR, DB_PATH } from '../lib/db.js';
 import { uid, now, jparse, micro2yuan, token32 } from '../lib/util.js';
 import { arkEnabled, llmEnabled, cfg, arkChat, DEFAULTS, videoModelOptions } from '../lib/ark.js';
-import { providerCfg, openaiEnabled, googleEnabled, alibabaEnabled, imageModelOptions, PROVIDER_DEFAULTS } from '../lib/providers.js';
-import { createProject, getProject, projectOut, touchProject, getCanvas, checkConsistency, buildCharacterProfile, listEntities, annotateEntities, getAgentBrain, restyleProject, buildOmniReferencePrompt } from '../lib/pipeline.js';
+import { providerCfg, openaiEnabled, googleEnabled, alibabaEnabled, viduEnabled, imageModelOptions, PROVIDER_DEFAULTS } from '../lib/providers.js';
+import { createProject, getProject, projectOut, touchProject, getCanvas, checkConsistency, buildCharacterProfile, listEntities, annotateEntities, getAgentBrain, restyleProject, buildOmniReferencePrompt, generateOmniVideo } from '../lib/pipeline.js';
 
 // 画面一致性体检
 GET('/api/projects/:id/consistency', async ({ params }) => checkConsistency(params.id));
@@ -16,6 +16,8 @@ GET('/api/projects/:id/character-profile', async ({ params }) => buildCharacterP
 
 // 全能参考：把分镜拼成带编号图片引用的多镜头剧本（女主【图片1】在【图片2】中…）+ 编号→参考图清单
 GET('/api/projects/:id/omni-reference', async ({ params, query }) => buildOmniReferencePrompt(params.id, { episode: query.get('episode') || '' }));
+// 全能参考一键出片：多图参考模型（默认 Vidu Q1）一次产出人物/场景一致的连续短片
+POST('/api/projects/:id/omni-video', async ({ params, body }) => generateOmniVideo({ projectId: params.id, episode: body.episode || '', model: body.model || 'viduq1', ratio: body.ratio || '', duration: body.duration || 8 }));
 
 // 角色预选标注：列出实体分类供用户校验；提交校正即训练 Agent，全对则夸赞奖励
 GET('/api/projects/:id/entities', async ({ params }) => listEntities(params.id));
@@ -65,7 +67,7 @@ GET('/api/bootstrap', async () => {
     user_name: getSetting('user_name', '创作者'),
     ark: { enabled: arkEnabled(), base_url: c.baseUrl, model_chat: c.modelChat, model_image: c.modelImage, model_image_pro: c.modelImagePro, model_video: c.modelVideo },
     llm_enabled: llmEnabled(),   // 对话/剧本是否可用真实大模型（火山 或 千问+DashScope）
-    providers: { openai: openaiEnabled(), google: googleEnabled(), alibaba: alibabaEnabled() },   // 多供应商开通状态
+    providers: { openai: openaiEnabled(), google: googleEnabled(), alibaba: alibabaEnabled(), vidu: viduEnabled() },   // 多供应商开通状态
     video_models: videoModelOptions(),
     image_models: imageModelOptions(c.modelImage),
     video_resolutions: ['', '480p', '720p', '1080p'],
@@ -238,7 +240,7 @@ DEL('/api/canvases/:id', async ({ params }) => {
 });
 
 // ---------- 设置 ----------
-const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_image_pro', 'model_image_options', 'model_video', 'model_video_options', 'video_extra_args', 'openai_base_url', 'google_base_url', 'dashscope_base_url', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint', 'local_fallback', 'agent_temperature', 'agent_max_steps', 'agent_autorun', 'agent_thinking', 'agent_plan_first', 'qc_enabled', 'qc_autofix', 'qc_min_score', 'video_chain', 'auto_expressions'];
+const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_image_pro', 'model_image_options', 'model_video', 'model_video_options', 'video_extra_args', 'openai_base_url', 'google_base_url', 'dashscope_base_url', 'vidu_base_url', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint', 'local_fallback', 'agent_temperature', 'agent_max_steps', 'agent_autorun', 'agent_thinking', 'agent_plan_first', 'qc_enabled', 'qc_autofix', 'qc_min_score', 'video_chain', 'auto_expressions'];
 
 GET('/api/settings', async () => {
   const c = cfg();
@@ -252,6 +254,7 @@ GET('/api/settings', async () => {
     openai_api_key_masked: mask(pc.openaiKey), openai_base_url: pc.openaiBase, openai_enabled: openaiEnabled(),
     google_api_key_masked: mask(pc.googleKey), google_base_url: pc.googleBase, google_enabled: googleEnabled(),
     dashscope_api_key_masked: mask(pc.dashscopeKey), dashscope_base_url: pc.dashscopeBase, alibaba_enabled: alibabaEnabled(),
+    vidu_api_key_masked: mask(pc.viduKey), vidu_base_url: pc.viduBase, vidu_enabled: viduEnabled(),
     model_image_options: pc.modelImageOptions,
     ark_base_url: c.baseUrl, model_chat: c.modelChat, model_image: c.modelImage, model_image_pro: c.modelImagePro, model_video: c.modelVideo,
     model_video_options: c.modelVideoOptions, video_extra_args: c.videoExtraArgs,
@@ -304,6 +307,10 @@ PATCH('/api/settings', async ({ body }) => {
   if (body.dashscope_api_key !== undefined) {   // 阿里云百炼·统一 Key（千问 + 通义万相 图/视频）
     const k = String(body.dashscope_api_key).trim();
     setSetting('dashscope_api_key', k === 'clear' ? '' : k);
+  }
+  if (body.vidu_api_key !== undefined) {   // Vidu 全能参考（多主体一致）
+    const k = String(body.vidu_api_key).trim();
+    setSetting('vidu_api_key', k === 'clear' ? '' : k);
   }
   for (const k of SETTING_KEYS) {
     if (body[k] !== undefined) setSetting(k, body[k]);
