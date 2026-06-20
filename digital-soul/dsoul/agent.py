@@ -2157,6 +2157,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "bank_help")
                     return result
 
+        # --- 快递帮手（"驿站怎么取" / "快递柜怎么开" / "怎么寄快递"）：教明白、带防骗 ---
+        if action is None and who.get("obey"):
+            from . import parcel_help as _pcl
+            _pclcfg = self.identity if isinstance(self.identity, dict) else None
+            if _pcl.is_parcel_query(utterance, _pclcfg):
+                txt = _pcl.how_to(_pcl.find_topic(utterance, _pclcfg), _pclcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "parcel_help")
+                    return result
+
         # --- 家电帮手（"洗衣机怎么用" / "空调遥控器咋调" / "燃气灶打不着火"）：教长辈用明白 ---
         if action is None and who.get("obey"):
             from . import appliances as _appl
