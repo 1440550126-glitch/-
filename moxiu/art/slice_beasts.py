@@ -72,11 +72,14 @@ def montage(rows, out, cell=300):
     canvas.save(out); print("预览:", out, canvas.size)
 
 if __name__ == "__main__":
-    files = sys.argv[1:] or [f"{RAW}/beast_{n}.jpg" for n in ["tiger", "dragon", "eagle", "bear", "wolf"]]
+    files = sys.argv[1:] or [f"{RAW}/beast_{n}.jpg" for n in ["dragon", "eagle", "bear", "wolf", "tiger"]]
     rows = []
     for p in files:
         name = os.path.splitext(os.path.basename(p))[0].replace("beast_", "")
         poses = cut(p)
-        print(f"{name}: {len(poses)} 姿势  尺寸={[im.size for im in poses]}")
+        d = f"{ART}/sprites/beasts/{name}"; os.makedirs(d, exist_ok=True)
+        for i, im in enumerate(poses, 1):
+            im.save(f"{d}/action_{i:02d}.png")
+        print(f"{name}: {len(poses)} 姿势 -> sprites/beasts/{name}/action_*.png  尺寸={[im.size for im in poses]}")
         rows.append((name, poses))
     montage(rows, f"{ART}/_preview_beasts.png")
