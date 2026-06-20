@@ -1380,6 +1380,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "vision_hearing")
                     return result
 
+        # --- 老人疫苗（"流感疫苗该打吗" / "带状疱疹疫苗" / "老人打什么疫苗"）：该打的别漏 ---
+        if action is None and who.get("obey"):
+            from . import vaccines as _vac
+            _vaccfg = self.identity if isinstance(self.identity, dict) else None
+            if _vac.is_vaccine_query(utterance, _vaccfg):
+                v = _vac.find_vaccine(utterance, _vaccfg)
+                txt = _vac.info(v, _vaccfg) if v else _vac.overview()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "vaccines")
+                    return result
+
         # --- 口腔护理（"牙怎么刷干净" / "假牙怎么养" / "牙龈出血"）：护好牙才有口福 ---
         if action is None and who.get("obey"):
             from . import dental_care as _dc
