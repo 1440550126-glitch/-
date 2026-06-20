@@ -2082,6 +2082,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "phone_help")
                     return result
 
+        # --- 棋牌规则（"象棋怎么走" / "围棋规则" / "教我下五子棋"）：讲规矩、陪摆一盘 ---
+        #     放在出行帮手之前：免得"象棋怎么走"里的"怎么走"被问路截胡。
+        if action is None and who.get("obey"):
+            from . import board_games as _bg
+            _bgcfg = self.identity if isinstance(self.identity, dict) else None
+            if _bg.is_board_game_query(utterance, _bgcfg):
+                txt = _bg.how_to(_bg.find_game(utterance, _bgcfg), _bgcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "board_games")
+                    return result
+
         # --- 出行帮手（"地铁怎么坐" / "打车软件怎么用" / "出门怕走丢"）：教长辈坐车问路 ---
         if action is None and who.get("obey"):
             from . import getting_around as _ga
