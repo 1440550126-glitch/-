@@ -306,111 +306,179 @@ PAGE = r"""<!doctype html><html lang=zh><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>数字分身</title>
 <style>
-body{font-family:-apple-system,system-ui,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}
-.wrap{max-width:640px;margin:0 auto;padding:18px}
-h1{font-size:20px}
-.card{background:#1a1d24;border-radius:12px;padding:14px 16px;margin:12px 0}
-.k{color:#8aa0c0;font-size:13px;margin-bottom:8px}
-ul{margin:0;padding-left:18px} li{margin:3px 0}
-.dim{color:#666}
-.badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px}
-.on{background:#13402a;color:#5fdd9d} .off{background:#3a2a13;color:#e0b15f}
-.row{display:flex;gap:8px;align-items:center;margin:8px 0}
-select,input,button{font-size:15px;padding:8px;border-radius:8px;border:1px solid #2a2f3a;background:#0f1115;color:#e6e6e6}
-input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
-.chat{max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:6px;margin:8px 0}
-.msg{padding:7px 11px;border-radius:12px;max-width:80%;white-space:pre-wrap;word-break:break-word}
-.me{align-self:flex-end;background:#1565c0;color:#fff}
-.soul{align-self:flex-start;background:#26303a}
-.barrow{display:flex;align-items:center;gap:8px;margin:4px 0}
-.barlab{width:24px;font-size:15px;text-align:center}
-.bartrk{flex:1;height:8px;background:#0f1115;border-radius:6px;overflow:hidden}
-.bartrk i{display:block;height:100%;background:linear-gradient(90deg,#2e7d32,#5fdd9d)}
-.devrow{display:flex;align-items:center;gap:8px;margin:5px 0}
-.devname{width:46px} .devst{flex:1;color:#8aa0c0;font-size:13px}
-.devbtn{padding:3px 12px;font-size:13px;background:#2a2f3a;border:1px solid #3a4150;color:#e6e6e6;border-radius:8px}
-.tlyear{color:#5fdd9d;font-weight:600;margin:8px 0 2px;border-left:3px solid #2e7d32;padding-left:8px}
+:root{--card:rgba(28,34,50,.72);--line:rgba(255,255,255,.08);--fg:#e9edf5;--mut:#8b97ad;
+  --accent:#7fe0c0;--glow:#7fe0c0}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  margin:0;color:var(--fg);-webkit-font-smoothing:antialiased;
+  background:
+    radial-gradient(900px 520px at 50% -12%, rgba(127,224,192,.16), transparent 60%),
+    radial-gradient(700px 480px at 92% 8%, rgba(255,214,107,.10), transparent 60%),
+    linear-gradient(180deg,#0c0f16,#0a0c12);background-attachment:fixed}
+.wrap{max-width:680px;margin:0 auto;padding:16px 16px 64px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin:14px 0;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 10px 30px rgba(0,0,0,.26);
+  transition:box-shadow .25s}
+.card:hover{box-shadow:0 14px 38px rgba(0,0,0,.34)}
+.k{color:var(--mut);font-size:12.5px;font-weight:700;letter-spacing:.3px;margin-bottom:9px}
+.sub{color:var(--mut);font-size:12.5px;font-weight:700;margin:14px 0 6px}
+ul{margin:0;padding-left:18px}li{margin:4px 0;line-height:1.55}
+.dim{color:var(--mut)}
+.badge{display:inline-block;padding:3px 12px;border-radius:999px;font-size:12px;font-weight:700}
+.on{background:rgba(95,221,157,.16);color:#7fe7b4}.off{background:rgba(224,177,95,.16);color:#f0c878}
+.row{display:flex;gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap}
+select,input,button{font:inherit;font-size:15px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);
+  background:rgba(10,12,18,.55);color:var(--fg);outline:none;transition:border .2s}
+input:focus,select:focus{border-color:var(--accent)}
+input{flex:1;min-width:120px}
+button{background:linear-gradient(180deg,#34b88f,#1f8f6c);border:none;color:#06120d;font-weight:800;
+  padding:10px 16px;cursor:pointer;box-shadow:0 6px 16px rgba(31,143,108,.28);transition:transform .12s,filter .2s}
+button:hover{filter:brightness(1.08)}button:active{transform:translateY(1px)}
+.chat{max-height:300px;overflow:auto;display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.msg{padding:9px 13px;border-radius:16px;max-width:84%;white-space:pre-wrap;word-break:break-word;line-height:1.5;
+  animation:pop .25s ease}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.me{align-self:flex-end;background:linear-gradient(180deg,#3b82f6,#2563eb);color:#fff;border-bottom-right-radius:5px}
+.soul{align-self:flex-start;background:rgba(255,255,255,.06);border:1px solid var(--line);border-bottom-left-radius:5px}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin:2px 0 4px}
+.chip{padding:7px 13px;border-radius:999px;font-size:13.5px;background:rgba(127,224,192,.10);
+  border:1px solid rgba(127,224,192,.24);color:#bfeede;cursor:pointer;transition:background .2s,transform .1s;user-select:none}
+.chip:hover{background:rgba(127,224,192,.2)}.chip:active{transform:scale(.95)}
+.barrow{display:flex;align-items:center;gap:8px;margin:4px 0}.barlab{width:24px;font-size:15px;text-align:center}
+.bartrk{flex:1;height:8px;background:rgba(0,0,0,.35);border-radius:6px;overflow:hidden}
+.bartrk i{display:block;height:100%;background:linear-gradient(90deg,#1f8f6c,#7fe0c0)}
+.devrow{display:flex;align-items:center;gap:8px;margin:6px 0}.devname{width:46px}.devst{flex:1;color:var(--mut);font-size:13px}
+.devbtn{padding:6px 13px;font-size:13px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--fg);
+  border-radius:10px;cursor:pointer;box-shadow:none;font-weight:600}
+.devbtn:hover{filter:brightness(1.18)}
+.tlyear{color:var(--accent);font-weight:700;margin:8px 0 2px;border-left:3px solid var(--accent);padding-left:8px}
 .tlitem{color:#cbd5e1;font-size:13px;margin:2px 0 2px 16px;position:relative}
-.tlitem:before{content:"•";color:#2e7d32;position:absolute;left:-10px}
-/* —— 活过来的脸 —— */
-.avatarcard{text-align:center;background:radial-gradient(circle at 50% 30%,#20252e,#15181e)}
-.avatar{width:128px;height:128px;margin:8px auto;border-radius:50%;position:relative;
-  background:radial-gradient(circle at 50% 38%,#2c3644,#191c23);
-  box-shadow:0 0 18px 2px var(--glow,#5fdd9d);
+.tlitem:before{content:"\2022";color:var(--accent);position:absolute;left:-10px}
+.hero{text-align:center;position:relative;overflow:hidden;padding:24px 16px 18px}
+.halo{position:absolute;left:50%;top:18px;width:230px;height:230px;transform:translateX(-50%);border-radius:50%;
+  background:radial-gradient(circle,var(--glow) 0%,transparent 62%);opacity:.26;filter:blur(8px);
+  animation:halo 5s ease-in-out infinite;pointer-events:none}
+@keyframes halo{0%,100%{opacity:.18;transform:translateX(-50%) scale(1)}50%{opacity:.34;transform:translateX(-50%) scale(1.08)}}
+.avatar{width:144px;height:144px;margin:6px auto;border-radius:50%;position:relative;
+  background:radial-gradient(circle at 50% 36%,#33405a,#1a2030);
+  box-shadow:0 0 26px 3px var(--glow),inset 0 -10px 26px rgba(0,0,0,.35);
   animation:breathe 4.2s ease-in-out infinite;transition:box-shadow .7s,background .7s}
 @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
-.avatar.talk{box-shadow:0 0 34px 7px var(--glow,#5fdd9d)}
-.eye{position:absolute;top:48px;width:15px;height:15px;border-radius:50%;background:#eef3f8;
-  animation:blink 5.4s infinite;box-shadow:0 0 6px var(--glow,#5fdd9d)}
-.eye.l{left:36px}.eye.r{right:36px}
+.avatar.talk{box-shadow:0 0 44px 10px var(--glow),inset 0 -10px 26px rgba(0,0,0,.35)}
+.eye{position:absolute;top:55px;width:16px;height:16px;border-radius:50%;background:#f2f6fb;
+  animation:blink 5.4s infinite;box-shadow:0 0 8px var(--glow)}
+.eye.l{left:44px}.eye.r{right:44px}
 @keyframes blink{0%,92%,100%{transform:scaleY(1)}94%,98%{transform:scaleY(.08)}}
-.mouth{position:absolute;left:50%;top:84px;width:38px;height:11px;transform:translateX(-50%);
-  border:0;border-bottom:3px solid #eef3f8;border-radius:0 0 20px 20px;transition:all .4s}
-.mouth.sad{border-bottom:0;border-top:3px solid #eef3f8;border-radius:20px 20px 0 0;top:90px}
-.mouth.flat{height:3px;background:#eef3f8;border:0;border-radius:3px}
+.mouth{position:absolute;left:50%;top:94px;width:42px;height:12px;transform:translateX(-50%);
+  border-bottom:3px solid #f2f6fb;border-radius:0 0 22px 22px;transition:all .4s}
+.mouth.sad{border-bottom:0;border-top:3px solid #f2f6fb;border-radius:22px 22px 0 0;top:100px}
+.mouth.flat{height:3px;background:#f2f6fb;border:0;border-radius:3px}
 .mouth.talking{animation:talk .26s linear infinite}
-@keyframes talk{0%,100%{height:5px}50%{height:18px}}
+@keyframes talk{0%,100%{height:6px}50%{height:20px}}
+.heroname{font-size:21px;font-weight:800;margin-top:14px;letter-spacing:.6px}
+.heromood{color:var(--mut);font-size:14px;margin-top:4px}
+details.card>summary{cursor:pointer;list-style:none;font-weight:700;font-size:14.5px;color:var(--fg);
+  display:flex;align-items:center;justify-content:space-between}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary:after{content:"\25be";color:var(--mut);transition:transform .25s}
+details.card[open]>summary:after{transform:rotate(180deg)}
+details.card[open]>summary{margin-bottom:10px}
 </style></head>
 <body><div class=wrap>
-<h1 id=title>🧠 数字分身</h1>
-<div class="card avatarcard">
+<div class="card hero">
+  <div class=halo></div>
   <div id=avatar class=avatar><div class="eye l"></div><div class="eye r"></div><div id=mouth class=mouth></div></div>
-  <div id=avatarmood style="margin-top:8px;font-size:15px">🙂 安安静静守着</div>
-  <button id=voicebtn class=devbtn style="margin-top:8px">🔊 让 TA 出声</button>
+  <div id=title class=heroname>数字分身</div>
+  <div id=avatarmood class=heromood>🙂 安安静静守着</div>
+  <div class=row style="justify-content:center;margin-top:14px">
+    <span id=llm class="badge off">…</span>
+    <span id=memc class=dim style="font-size:13px">记忆 …</span>
+    <button id=voicebtn class=devbtn>🔊 让 TA 出声</button>
+  </div>
+  <div id=present class=dim style="font-size:13px;margin-top:10px">…</div>
 </div>
-<div class=card><span id=llm class="badge off">…</span>&nbsp;&nbsp;<span id=memc>记忆 …</span></div>
-<div class=card><div class=k>👁️ 现在看到谁</div><div id=present>…</div></div>
-<div class=card><div class=k>🏠 设备</div><div id=devices></div></div>
-<div class=card><div class=k>🎬 场景</div><div id=scenes></div></div>
-<div class=card><div class=k>⏰ 自动化</div><ul id=triggers></ul>
-  <form id=trigf class=row style="margin:6px 0"><input id=triginput placeholder="如：每天22点提醒锁门" autocomplete=off><button>添加</button></form>
-  <button id=clrtrig class=devbtn>清空</button></div>
-<div class=card><div class=k>💞 此刻心情</div><div id=mood>…</div><div id=moodbars></div></div>
-<div class=card><div class=k>💭 内心独白</div><ul id=thoughts></ul></div>
-<div class=card><div class=k>🔮 我预感</div><div id=anticipation class=dim>…</div></div>
-<div class=card><div class=k>❓ 我好奇的</div><ul id=curiosity></ul></div>
-<div class=card><div class=k>🌍 我眼中的世界</div><ul id=worldview></ul></div>
-<div class=card><div class=k>🤔 我还拿不准的</div><ul id=worldshaky></ul></div>
-<div class=card><div class=k>🪞 此刻的我</div><div id=selfnar style="font-size:14px;line-height:1.6">…</div>
-  <div class=k style="margin-top:10px">💎 我珍视的</div><div id=values class=dim></div>
-  <div class=k style="margin-top:10px">⚖️ 抉择留痕</div><ul id=decisions></ul>
-  <div class=k style="margin-top:10px">📈 成长史</div><ul id=selfhist></ul></div>
-<div class=card><div class=k>🤵 管家</div>
-  <button id=brief>☀️ 要一份简报</button>&nbsp;<button id=diag style="background:#37474f">🩺 系统自检</button></div>
-<div class=card><div class=k>💬 跟 TA 聊聊</div>
-  <div class=row><span class=dim>身份：</span><select id=speaker></select></div>
+
+<div class=card>
+  <div class=k>💬 跟 TA 聊聊</div>
+  <div class=row><span class=dim>身份</span><select id=speaker></select></div>
+  <div id=chips class=chips>
+    <span class=chip onclick="ask('你今天过得怎么样')">☀️ 今天怎么样</span>
+    <span class=chip onclick="ask('唱首歌')">🎵 唱首歌</span>
+    <span class=chip onclick="ask('给我讲个笑话')">😄 讲个笑话</span>
+    <span class=chip onclick="ask('你想我吗')">❤️ 想我吗</span>
+    <span class=chip onclick="ask('来个绕口令')">👅 绕口令</span>
+    <span class=chip onclick="ask('陪我聊聊')">🫶 陪我聊聊</span>
+    <span class=chip onclick="ask('出个谜语')">🧩 猜谜</span>
+    <span class=chip onclick="ask('简报')">📋 简报</span>
+  </div>
   <div id=chat class=chat></div>
   <form id=f class=row><input id=msg placeholder="说点什么…" autocomplete=off><button>发送</button></form>
 </div>
-<div class=card><div class=k>🗓️ 今天的计划</div><ul id=plan></ul></div>
-<div class=card><div class=k>💡 它最近的领悟</div><ul id=refl></ul></div>
-<div class=card><div class=k>🧠 正在淡忘</div><ul id=fading></ul></div>
-<div class=card><div class=k>🌙 昨夜的梦</div><div id=dreams></div></div>
-<div class=card><div class=k>🕸️ 关系图谱</div><div id=graph></div>
-  <div class=row style="margin-top:6px"><button id=gplay class=devbtn>▶ 生长</button><input id=gyslider type=range style="flex:1"><span id=gylabel class=dim>全部</span></div>
-  <div id=graphtop class=dim></div></div>
-<div class=card><div class=k>📜 一生时间线</div><div id=tlfilters></div><div id=timeline></div></div>
-<div class=card><div class=k>🕯️ TA 的一生</div><div id=chronicle style="font-size:14px;line-height:1.7;white-space:pre-wrap">…</div></div>
-<div class=card><div class=k>💌 想留给你的话</div><ul id=lastwords></ul>
-  <div class=k style="margin-top:10px">📖 家训</div><ul id=precepts></ul></div>
-<div class=card><div class=k>👪 这一家子</div><div id=family class=dim></div><div id=familychips style="margin-top:6px"></div></div>
-<div class=card><div class=k>🫶 守护惦记</div><ul id=care></ul></div>
-<div class=card><div class=k>🤖 此刻体态</div><div id=body class=dim>…</div></div>
-<div class=card id=facecard><div class=k>🙂 此刻神情 <span id=faceemoji></span></div><div id=face class=dim>…</div></div>
-<div class=card><div class=k>🧠 刚才怎么想的</div><ul id=reasoning></ul></div>
-<div class=card><div class=k>🫂 陪伴守护</div>
+
+<details class=card open><summary>🫂 此刻状态</summary>
+  <div class=sub>💞 心情</div><div id=mood>…</div><div id=moodbars></div>
+  <div class=sub>🤖 此刻体态</div><div id=body class=dim>…</div>
+  <div id=facecard><div class=sub>🙂 此刻神情 <span id=faceemoji></span></div><div id=face class=dim>…</div></div>
+  <div class=sub>💭 内心独白</div><ul id=thoughts></ul>
+  <div class=sub>🔮 我预感</div><div id=anticipation class=dim>…</div>
+  <div class=sub>🧠 刚才怎么想的</div><ul id=reasoning></ul>
+</details>
+
+<details class=card><summary>🧠 内心世界</summary>
+  <div class=sub>🪞 此刻的我</div><div id=selfnar style="font-size:14px;line-height:1.6">…</div>
+  <div class=sub>💎 我珍视的</div><div id=values class=dim></div>
+  <div class=sub>❓ 我好奇的</div><ul id=curiosity></ul>
+  <div class=sub>🌍 我眼中的世界</div><ul id=worldview></ul>
+  <div class=sub>🤔 我还拿不准的</div><ul id=worldshaky></ul>
+  <div class=sub>⚖️ 抉择留痕</div><ul id=decisions></ul>
+  <div class=sub>📈 成长史</div><ul id=selfhist></ul>
+  <div class=sub>💡 最近的领悟</div><ul id=refl></ul>
+  <div class=sub>🧠 正在淡忘</div><ul id=fading></ul>
+  <div class=sub>🌙 昨夜的梦</div><div id=dreams></div>
+</details>
+
+<details class=card><summary>🫶 陪伴守护</summary>
   <div id=muse class=dim style="font-style:italic;margin-bottom:8px">…</div>
-  <div class=k>💊 该吃的药</div><ul id=meds></ul>
-  <div class=k style="margin-top:6px">🏥 就医安排</div><ul id=appts></ul>
-  <div class=k style="margin-top:6px">🎯 习惯打卡</div><div id=habits class=dim></div>
-  <div class=k style="margin-top:6px">🌼 最近的小确幸</div><ul id=joys></ul></div>
-<div class=card><div class=k>🧩 最近记住</div><ul id=mems></ul></div>
-<div class=card><div class=k>🕘 最近对话</div><ul id=jour></ul></div>
-<div class=card><div class=k>🛰️ 最近派活 / 提议</div><ul id=disp></ul></div>
-<div class=card><div class=k>📋 待办看板 <span id=taskstat class=dim></span></div><ul id=tasks></ul>
-  <button id=retry style="display:none;margin-top:8px;background:#5a3a13">↻ 重试全部待办</button></div>
-<p class=dim style="text-align:center">状态每 3 秒自动刷新 · /api/status 提供 JSON</p>
+  <div class=sub>💊 该吃的药</div><ul id=meds></ul>
+  <div class=sub>🏥 就医安排</div><ul id=appts></ul>
+  <div class=sub>🎯 习惯打卡</div><div id=habits class=dim></div>
+  <div class=sub>🌼 最近的小确幸</div><ul id=joys></ul>
+  <div class=sub>🫶 守护惦记</div><ul id=care></ul>
+  <div class=row style="margin-top:12px"><button id=brief>☀️ 要一份简报</button>
+    <button id=diag class=devbtn>🩺 系统自检</button></div>
+</details>
+
+<details class=card><summary>🏠 家居控制</summary>
+  <div class=sub>设备</div><div id=devices></div>
+  <div class=sub>场景</div><div id=scenes></div>
+  <div class=sub>自动化</div><ul id=triggers></ul>
+  <form id=trigf class=row style="margin:6px 0"><input id=triginput placeholder="如：每天22点提醒锁门" autocomplete=off><button>添加</button></form>
+  <button id=clrtrig class=devbtn>清空</button>
+</details>
+
+<details class=card><summary>👪 家人与传承</summary>
+  <div class=sub>🗓️ 今天的计划</div><ul id=plan></ul>
+  <div class=sub>👪 这一家子</div><div id=family class=dim></div><div id=familychips style="margin-top:6px"></div>
+  <div class=sub>💌 想留给你的话</div><ul id=lastwords></ul>
+  <div class=sub>📖 家训</div><ul id=precepts></ul>
+  <div class=sub>🕯️ TA 的一生</div><div id=chronicle style="font-size:14px;line-height:1.7;white-space:pre-wrap">…</div>
+  <div class=sub>📜 一生时间线</div><div id=tlfilters></div><div id=timeline></div>
+  <div class=sub>🕸️ 关系图谱</div><div id=graph></div>
+  <div class=row style="margin-top:6px"><button id=gplay class=devbtn>▶ 生长</button><input id=gyslider type=range style="flex:1"><span id=gylabel class=dim>全部</span></div>
+  <div id=graphtop class=dim></div>
+</details>
+
+<details class=card><summary>🗂️ 记忆与待办</summary>
+  <div class=sub>🧩 最近记住</div><ul id=mems></ul>
+  <div class=sub>🕘 最近对话</div><ul id=jour></ul>
+  <div class=sub>🛰️ 最近派活 / 提议</div><ul id=disp></ul>
+  <div class=sub>📋 待办看板 <span id=taskstat class=dim></span></div><ul id=tasks></ul>
+  <button id=retry class=devbtn style="display:none;margin-top:8px">↻ 重试全部待办</button>
+</details>
+
+<p class=dim style="text-align:center;font-size:12px">状态每 3 秒自动刷新 · /api/status 提供 JSON</p>
 </div>
+
 <script>
 const $=s=>document.querySelector(s);
 const MOODS={"喜":"😄 愉悦","怒":"😠 生气","哀":"😢 低落","惧":"😨 不安","爱":"❤️ 满心欢喜","恶":"😒 有点反感","欲":"🥺 渴望陪伴"};
@@ -430,7 +498,7 @@ function speak(t){
     speechSynthesis.speak(u);}catch(e){}
 }
 function setFace(mood,color){
-  const a=$('#avatar'); if(a&&color)a.style.setProperty('--glow',color);
+  if(color)document.documentElement.style.setProperty('--glow',color);  // 头像/光晕/眼睛一起染上心情色
   const m=$('#mouth'); if(m){m.className='mouth'+(mood==='哀'||mood==='惧'?' sad':(mood==='怒'||mood==='恶'?' flat':''));}
   const am=$('#avatarmood'); if(am)am.textContent=(EMO[mood]||'🙂')+' '+((MOODS[mood]||'安安静静守着').replace(/^.. /,''));
 }
