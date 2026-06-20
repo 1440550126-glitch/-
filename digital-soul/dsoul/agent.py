@@ -1396,6 +1396,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "vision_hearing")
                     return result
 
+        # --- 照护卧床老人（"怎么防褥疮" / "喂饭老呛" / "照顾人太累了"）：少受罪、少并发症 ---
+        if action is None and who.get("obey"):
+            from . import caregiving as _cg
+            _cgcfg = self.identity if isinstance(self.identity, dict) else None
+            if _cg.is_caregiving_query(utterance, _cgcfg):
+                t = _cg.find_topic(utterance, _cgcfg)
+                txt = _cg.advice(t, _cgcfg) if t else _cg.overview()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "caregiving")
+                    return result
+
         # --- 老人疫苗（"流感疫苗该打吗" / "带状疱疹疫苗" / "老人打什么疫苗"）：该打的别漏 ---
         if action is None and who.get("obey"):
             from . import vaccines as _vac
