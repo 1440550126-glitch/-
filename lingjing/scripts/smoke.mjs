@@ -98,6 +98,20 @@ try {
   // 电影级光影词库：场景按冷暖自适应（主控室=冷色调机房 → 冷调），分镜首帧含【光影】
   ok(/冷色调|清冷|漫反射/.test(dupSb.scenes[0].image_prompt || ''), '场景定义图含电影级光影词（冷暖自适应）');
   ok(/【光影】/.test(dupSb.shots[0].image_prompt || '') && /(丁达尔|暖调|冷色调|布光)/.test(dupSb.shots[0].image_prompt || ''), '分镜首帧注入光影词（丁达尔/暖冷调/布光）');
+  // 穿越/换装剧：锁脸不锁衣——同一张脸可随年代换装（女子换上60年代蓝工装 / 民国学生装）
+  const eraSb = normalizeStoryboard({
+    title: '穿越', style: '写实电影质感',
+    characters: [{ key: 'c1', name: '女子', role: '主角', gender: '女', desc: '25岁女性，乌黑长发，现代米色衬衫' }],
+    scenes: [{ key: 's1', name: '办公室', desc: '60年代简陋办公室' }],
+    shots: [
+      { key: 'sh1', order: 1, scene: 's1', characters: ['c1'], shot_type: '近景', action: '女子换上60年代蓝工装，审视图纸' },
+      { key: 'sh2', order: 2, scene: 's1', characters: ['c1'], shot_type: '中景', wardrobe: '民国蓝布学生装', action: '女子站在游行队伍中' }
+    ]
+  });
+  ok(/脸型/.test(eraSb.characters[0].lock) && /(服装造型可随|仅换装不换脸)/.test(eraSb.characters[0].lock), '角色锁定改为锁脸（五官·脸型固定）+ 服装可换');
+  ok(/【本镜造型】/.test(eraSb.shots[0].image_prompt) && /蓝工装/.test(eraSb.shots[0].image_prompt), '动作里自动识别换装 → 本镜造型覆盖（60年代蓝工装）');
+  ok(/民国蓝布学生装/.test(eraSb.shots[1].image_prompt) && /(仍是同一人|脸型)/.test(eraSb.shots[1].image_prompt), '显式 wardrobe 字段 → 本镜造型（民国学生装）+ 脸不变');
+  ok(/民国蓝布学生装/.test(eraSb.shots[1].video_prompt), '本镜造型也带进视频提示词');
 
   console.log('— 启动与基础 —');
   const boot = await until(async () => (await api('GET', '/api/bootstrap')).data, 10000);
