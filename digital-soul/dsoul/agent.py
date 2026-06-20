@@ -341,7 +341,8 @@ class Agent:
                 return result
 
         # --- 主动派活：听出"有活儿没干"，主动提议（不擅自执行，等你点头）---
-        if action is None and self.hub is not None:
+        from .med_safety import is_med_safety_query as _ms_is  # "忘了吃药怎么办"是问服药，不是派活
+        if action is None and self.hub is not None and not _ms_is(utterance):
             prop = self.propose_dispatch(speaker_name, utterance)
             if prop is not None:
                 result["reply"] = prop["reply"]
@@ -754,6 +755,17 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, u, txt, "med_list")
+                    return result
+
+        # --- 服药常识（"饭前还是饭后" / "药能掰开吗" / "吃药能喝酒吗"）：怎么吃才对，不替代医嘱 ---
+        if action is None and who.get("obey"):
+            from . import med_safety as _ms
+            _mscfg = self.identity if isinstance(self.identity, dict) else None
+            if _ms.is_med_safety_query(utterance, _mscfg):
+                txt = _ms.advise(_ms.find_topic(utterance, _mscfg), _mscfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "med_safety")
                     return result
 
         # --- 解梦（"梦见蛇是什么意思"）：按民间说法给个宽心吉利的解释 ---
