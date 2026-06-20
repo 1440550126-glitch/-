@@ -413,6 +413,22 @@ class Agent:
                     self._log_journal(who, utterance, txt, "emergency")
                     return result
 
+        # --- 防走失（家人视角："怎么防老人走失" / "老人走失了怎么办" / "黄手环"）：
+        #     先于"现场迷路安抚"——这是帮家人防范和找人；当事人喊"我迷路了"仍走下面的 lost_help ---
+        if action is None and who.get("obey"):
+            from . import anti_wander as _aw
+            _awcfg = self.identity if isinstance(self.identity, dict) else None
+            if _aw.is_wander_query(utterance, _awcfg):
+                if _aw.wants_after(utterance):
+                    txt = _aw.what_to_do()
+                else:
+                    t = _aw.find_topic(utterance, _awcfg)
+                    txt = _aw.prevent_advice(t, _awcfg) if t else _aw.prevent_all(_awcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "anti_wander")
+                    return result
+
         # --- 迷路 / 走失（守护·高优先）：在外头找不到家，稳住并一步步教 TA 怎么办 ---
         if action is None and who.get("obey"):
             from .lost_help import senses_lost
