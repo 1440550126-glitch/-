@@ -2265,6 +2265,21 @@ class Agent:
                     self._log_journal(who, utterance, txt, "classic_films")
                     return result
 
+        # --- 怀旧老物件（"还记得搪瓷缸吗" / "聊聊老物件"）：一提就打开话匣子 ---
+        if action is None and who.get("obey"):
+            from . import old_objects as _oo
+            _oocfg = self.identity if isinstance(self.identity, dict) else None
+            if _oo.is_old_object_query(utterance, _oocfg):
+                obj = _oo.find_object(utterance, _oocfg)
+                if obj:
+                    txt = f"{obj[3]} 那会儿的{obj[0]}，你还有印象吧？"
+                else:
+                    txt = _oo.recall(seed=utterance, config=_oocfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "old_objects")
+                    return result
+
         # --- 玩游戏（"陪我玩个游戏" / "成语接龙" / "猜谜"）---
         if action is None and who.get("obey"):
             from .games import is_game_request
