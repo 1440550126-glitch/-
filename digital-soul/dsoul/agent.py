@@ -547,6 +547,21 @@ class Agent:
                     self._log_journal(who, utterance, txt, "blessing")
                     return result
 
+        # --- 红包（"过年红包写啥" / "份子钱包多少吉利"）：祝词 + 吉利数，先于送礼礼俗 ---
+        if action is None and who.get("obey"):
+            from . import red_packet as _rp
+            _rpcfg = self.identity if isinstance(self.identity, dict) else None
+            if _rp.is_red_packet_query(utterance, _rpcfg):
+                occ = _rp.find_occasion(utterance, _rpcfg)
+                txt = _rp.advise(occ, seed=utterance, config=_rpcfg) if occ else (
+                    "发红包看场合：过年压岁钱、婚礼份子、生日满月各有讲究。"
+                    "图吉利的数字像 6（顺）、8（发）、66/88/168/1314，封面写句应景的吉利话。"
+                    "（具体多少量力而行，心意最重要。）")
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "red_packet")
+                    return result
+
         # --- 人情礼俗（"喝喜酒有啥讲究" / "送礼忌讳" / "奔丧要注意啥"）：场面上的分寸 ---
         if action is None and who.get("obey"):
             from . import etiquette as _et
