@@ -1519,6 +1519,18 @@ class Agent:
                 self._log_journal(who, utterance, txt, "checkup")
                 return result
 
+        # --- 检查项目科普（"B超查什么" / "核磁有辐射吗" / "胃镜疼吗"）：每项检查干啥的 ---
+        if action is None and who.get("obey"):
+            from . import medical_exams as _me
+            _mecfg = self.identity if isinstance(self.identity, dict) else None
+            if _me.is_exam_query(utterance, _mecfg):
+                e = _me.find_exam(utterance, _mecfg)
+                txt = _me.info(e, _mecfg) if e else _me.overview()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "medical_exams")
+                    return result
+
         # --- 居家监测（"血压怎么量准" / "测血糖什么时候"）：在家测对了心里才有底 ---
         if action is None and who.get("obey"):
             from . import home_monitor as _hm
