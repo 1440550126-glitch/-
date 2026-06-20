@@ -24,7 +24,7 @@ _AGENT_HINTS = {"代码": "openclaw", "打包": "openclaw", "部署": "openclaw"
 # 贾维斯式管家指令词
 _BRIEF_KW = ("简报", "汇报", "报一下", "什么情况", "近况", "今天怎么安排", "今天的安排",
              "状态怎么样", "汇报一下", "brief")
-_DIAG_KW = ("自检", "系统状态", "运行状况", "诊断", "各系统", "系统自检", "体检", "diagnostic", "status")
+_DIAG_KW = ("自检", "系统状态", "运行状况", "诊断", "各系统", "系统自检", "系统体检", "diagnostic", "status")
 _CARE_KW = ("关怀简报", "晨间关怀", "早安简报", "今天要紧", "暖场白", "关心一下", "关怀一下")
 
 
@@ -1230,6 +1230,20 @@ class Agent:
                     result["reply"] = txt
                     self._log_journal(who, utterance, txt, "triage")
                     return result
+
+        # --- 体检报告解读（"尿酸高是啥意思" / "看看我的体检报告"）：看懂指标，不替代医生 ---
+        if action is None and who.get("obey"):
+            from . import checkup as _ck
+            _ckcfg = self.identity if isinstance(self.identity, dict) else None
+            if _ck.is_checkup_query(utterance, _ckcfg):
+                txt = _ck.interpret(utterance, _ckcfg)
+                if not txt:        # 泛问「体检报告」没点具体项 → 列举能解读啥
+                    its = "、".join(_ck.items(_ckcfg)[:10])
+                    txt = (f"把报告上带箭头、你拿不准的那项念给我，我用大白话讲讲。"
+                           f"常见的我都能说：{its}……（确诊用药还得听医生的。）")
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "checkup")
+                return result
 
         # --- 急救信息卡（"念念急救卡" / "我的急救信息"）---
         if action is None and who.get("obey") and any(
