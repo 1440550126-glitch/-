@@ -1249,6 +1249,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "triage")
                     return result
 
+        # --- 家庭小药箱（"家里该备什么药" / "拉肚子备啥药"）：该常备啥，分类清单 ---
+        if action is None and who.get("obey"):
+            from . import medicine_cabinet as _mc
+            _mccfg = self.identity if isinstance(self.identity, dict) else None
+            if _mc.is_cabinet_query(utterance, _mccfg):
+                cat = _mc.find_category(utterance, _mccfg)
+                txt = _mc.advise(cat, _mccfg) if cat else _mc.checklist(_mccfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "medicine_cabinet")
+                    return result
+
         # --- 体检报告解读（"尿酸高是啥意思" / "看看我的体检报告"）：看懂指标，不替代医生 ---
         if action is None and who.get("obey"):
             from . import checkup as _ck
