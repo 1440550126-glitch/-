@@ -1787,6 +1787,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "seasonal_food")
                     return result
 
+        # --- 节庆食物寓意（"过年为啥吃年糕" / "鱼图什么彩头"）：吃食里的好彩头 ---
+        if action is None and who.get("obey"):
+            from . import festive_foods as _ff
+            _ffcfg = self.identity if isinstance(self.identity, dict) else None
+            if _ff.is_festive_food_query(utterance, _ffcfg):
+                f = _ff.find_food(utterance, _ffcfg)
+                txt = _ff.meaning(f, _ffcfg) if f else _ff.recall(seed=utterance, config=_ffcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "festive_foods")
+                    return result
+
         # --- 家传菜谱（"外婆的红烧肉怎么做" / "你有什么拿手菜"）---
         if action is None and who.get("obey") and self.recipes and (
                 "怎么做" in (utterance or "") or "咋做" in (utterance or "")
