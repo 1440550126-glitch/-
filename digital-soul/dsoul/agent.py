@@ -577,6 +577,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "etiquette")
                     return result
 
+        # --- 老讲究（"本命年有啥讲究" / "正月能剃头吗" / "聊聊老讲究"）：懂了来由，顺着长辈心意 ---
+        if action is None and who.get("obey"):
+            from . import folk_customs as _fc
+            _fccfg = self.identity if isinstance(self.identity, dict) else None
+            if _fc.is_custom_query(utterance, _fccfg):
+                c = _fc.find_custom(utterance, _fccfg)
+                txt = _fc.explain(c, _fccfg) if c else _fc.recall(seed=utterance, config=_fccfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "folk_customs")
+                    return result
+
         # --- 人生节点寄语（高考/成家/退休/创业…）：长辈那句过来人的话，比泛泛道喜更暖 ---
         if action is None and who.get("obey"):
             from .life_milestones import detect_milestone
