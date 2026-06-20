@@ -1362,6 +1362,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "vision_hearing")
                     return result
 
+        # --- 口腔护理（"牙怎么刷干净" / "假牙怎么养" / "牙龈出血"）：护好牙才有口福 ---
+        if action is None and who.get("obey"):
+            from . import dental_care as _dc
+            _dccfg = self.identity if isinstance(self.identity, dict) else None
+            if _dc.is_dental_query(utterance, _dccfg):
+                txt = _dc.advice(_dc.find_topic(utterance, _dccfg), _dccfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "dental_care")
+                    return result
+
         # --- 换季防护（"夏天怎么防中暑" / "冬天烧炭注意啥" / "一氧化碳中毒"）：换季最容易出事 ---
         if action is None and who.get("obey"):
             from . import seasonal_care as _sc
