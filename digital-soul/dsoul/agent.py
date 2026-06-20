@@ -2755,6 +2755,18 @@ class Agent:
                     self._log_journal(who, u, txt, "contact_find")
                     return result
 
+        # --- 隔代教育（"带孙子要注意啥" / "孩子太溺爱" / "带娃太累"）：帮着带孙辈的建议 ---
+        if action is None and who.get("obey"):
+            from . import grandparenting as _gp
+            _gpcfg = self.identity if isinstance(self.identity, dict) else None
+            if _gp.is_grandparenting_query(utterance, _gpcfg):
+                t = _gp.find_topic(utterance, _gpcfg)
+                txt = _gp.advice(t, _gpcfg) if t else _gp.overview()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "grandparenting")
+                    return result
+
         # --- 退休生活（"退休了干点啥" / "退休咋过才充实"）：出主意，过得有奔头，先于解闷 ---
         if action is None and who.get("obey"):
             from . import retirement as _rt
