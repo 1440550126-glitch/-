@@ -1351,6 +1351,17 @@ class Agent:
                     self._log_journal(who, utterance, fr, "food_remedy")
                     return result
 
+        # --- 生活谣言辟谣（"隔夜菜致癌吗" / "酸碱体质真的吗"）：别被养生谣言唬住 ---
+        if action is None and who.get("obey"):
+            from . import debunk as _db
+            _dbcfg = self.identity if isinstance(self.identity, dict) else None
+            if _db.is_myth_query(utterance, _dbcfg):
+                txt = _db.truth(_db.find_myth(utterance, _dbcfg), _dbcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "debunk")
+                    return result
+
         # --- 急救常识（"烫伤了怎么办" / "流鼻血咋办"）：给几步当下能做的处置 ---
         if action is None and who.get("obey"):
             from .first_aid import advice, is_firstaid_query
