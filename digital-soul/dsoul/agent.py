@@ -2145,6 +2145,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "board_games")
                     return result
 
+        # --- 银行办事（"ATM怎么取钱" / "卡丢了怎么挂失" / "怎么转账"）：教明白、带防骗 ---
+        #     真遇到骗局（让你转账给"安全账户"等）由前面的防诈骗路由先拦；这里管日常怎么办。
+        if action is None and who.get("obey"):
+            from . import bank_help as _bh
+            _bhcfg = self.identity if isinstance(self.identity, dict) else None
+            if _bh.is_bank_query(utterance, _bhcfg):
+                txt = _bh.how_to(_bh.find_topic(utterance, _bhcfg), _bhcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "bank_help")
+                    return result
+
         # --- 家电帮手（"洗衣机怎么用" / "空调遥控器咋调" / "燃气灶打不着火"）：教长辈用明白 ---
         if action is None and who.get("obey"):
             from . import appliances as _appl
