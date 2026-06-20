@@ -1406,8 +1406,9 @@ class Agent:
         # --- 换季防护（"夏天怎么防中暑" / "冬天烧炭注意啥" / "一氧化碳中毒"）：换季最容易出事 ---
         if action is None and who.get("obey"):
             from . import seasonal_care as _sc
+            from .elder_proofing import is_proofing_query as _ep_is  # "卫生间怎么防摔"是适老改造，不是天冷防滑
             _sccfg = self.identity if isinstance(self.identity, dict) else None
-            if _sc.is_seasonal_care_query(utterance, _sccfg):
+            if _sc.is_seasonal_care_query(utterance, _sccfg) and not _ep_is(utterance, _sccfg):
                 t = _sc.find_topic(utterance, _sccfg)
                 if t:
                     txt = _sc.advice(t, _sccfg)
@@ -1507,6 +1508,18 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, utterance, txt, "disaster_safety")
+                    return result
+
+        # --- 居家适老改造（"卫生间怎么防摔" / "适老化改造"）：按房间改一改，防老人摔 ---
+        if action is None and who.get("obey"):
+            from . import elder_proofing as _ep
+            _epcfg = self.identity if isinstance(self.identity, dict) else None
+            if _ep.is_proofing_query(utterance, _epcfg):
+                ar = _ep.find_area(utterance, _epcfg)
+                txt = _ep.suggest(ar, _epcfg) if ar else _ep.checklist(_epcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "elder_proofing")
                     return result
 
         # --- 居家安全常识（"用电安全注意什么" / "燃气怎么防"）：讲常识，先于睡前清单 ---
