@@ -2416,6 +2416,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "dialect")
                     return result
 
+        # --- 付款码安全（"付款码和收款码区别" / "付款码能发人吗" / "手机丢了支付"）：先于手机帮手 ---
+        if action is None and who.get("obey"):
+            from . import qr_pay as _qr
+            _qrcfg = self.identity if isinstance(self.identity, dict) else None
+            if _qr.is_qr_query(utterance, _qrcfg):
+                t = _qr.find_topic(utterance, _qrcfg)
+                txt = _qr.advice(t, _qrcfg) if t else _qr.overview()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "qr_pay")
+                    return result
+
         # --- 手机帮手（"微信视频怎么打" / "字太小怎么调大" / "怎么连wifi"）---
         if action is None and who.get("obey"):
             from . import phone_help as _ph
