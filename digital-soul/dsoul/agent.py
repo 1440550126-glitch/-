@@ -992,6 +992,19 @@ class Agent:
                     self._log_journal(who, utterance, txt, "xiehouyu")
                     return result
 
+        # --- 穴位按摩（"头疼按哪个穴" / "合谷在哪" / "太阳穴怎么按"）：日常保健，
+        #     先于认星空/找东西/养生：免得"太阳穴"被当太阳、"穴位在哪"被当找东西 ---
+        if action is None and who.get("obey"):
+            from . import acupoints as _ap
+            _apcfg = self.identity if isinstance(self.identity, dict) else None
+            if _ap.is_acupoint_query(utterance, _apcfg):
+                pt = _ap.find_point(utterance, _apcfg)
+                txt = _ap.describe(pt[0], _apcfg) if pt else _ap.for_symptom(utterance, _apcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "acupoints")
+                    return result
+
         # --- 认星空（"北斗七星怎么找北极星" / "月食是怎么回事"）：夏夜抬头看天 ---
         if action is None and who.get("obey"):
             from . import astronomy as _ast
