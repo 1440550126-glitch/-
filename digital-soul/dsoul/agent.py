@@ -2135,6 +2135,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "folk_games")
                     return result
 
+        # --- 麻将（"麻将怎么玩" / "清一色是啥" / "碰是什么意思"）：陪长辈搓两圈、给晚辈讲规矩 ---
+        if action is None and who.get("obey"):
+            from . import mahjong as _mj
+            _mjcfg = self.identity if isinstance(self.identity, dict) else None
+            if _mj.is_mahjong_query(utterance, _mjcfg):
+                txt = self.mahjong_handle(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "mahjong")
+                    return result
+
         # --- 玩游戏（"陪我玩个游戏" / "成语接龙" / "猜谜"）---
         if action is None and who.get("obey"):
             from .games import is_game_request
@@ -4340,6 +4351,22 @@ class Agent:
         lines = "；".join(f"{full}（{mean}）" for full, mean in names)
         tip = nm.tips()[len(u) % len(nm.tips())]
         return f"奔着「{wish}」起，给你三个：{lines}。定之前提醒一句：{tip}。连名带姓念几遍，顺口最要紧。"
+
+    def mahjong_handle(self, utterance="") -> str:
+        """麻将：问番种讲番种，问术语讲术语，问规则讲基本玩法 + 牌型。"""
+        from . import mahjong as mj
+        cfg = self.identity if isinstance(self.identity, dict) else None
+        u = utterance or ""
+        pat = mj.find_pattern(u, cfg)
+        if pat:
+            return pat
+        u2 = u.replace("麻将", "")     # 别让"麻将"里的"将"被当成术语「将」
+        term = mj.find_term(u2, cfg)
+        if term and any(k in u for k in ("什么", "意思", "怎么", "啥", "讲讲", "规则")):
+            return f"{term}：{mj.explain_term(term, cfg)}"
+        if any(k in u for k in ("牌", "几种", "都有啥", "什么牌")):
+            return mj.tiles_intro()
+        return mj.basics()
 
     def mengxue_handle(self, utterance="") -> str:
         """蒙学：背开蒙经典开篇 / 九九乘法口诀（某列或整张）。"""
