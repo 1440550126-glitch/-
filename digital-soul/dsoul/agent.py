@@ -1708,7 +1708,8 @@ class Agent:
             buy_kw = next((k for k in ("买瓶", "买袋", "买盒", "买点", "买个", "买斤", "买把",
                                        "记得买", "要买", "买") if k in us), None)
             from .household_ledger import is_money_record
-            if buy_kw and ("买" in us) and not is_money_record(us):  # "买菜花了30"是记账，不是采买
+            from .online_shopping import is_shopping_query as _shop_is  # "网上买东西怎么付款"是问网购，不是采买
+            if buy_kw and ("买" in us) and not is_money_record(us) and not _shop_is(us):
                 item = us
                 for kw in ("记得", "帮我", "顺便", "记一下", "再来", "再", "还", "也", "给我",
                            "我想", "想", "要", "买瓶", "买袋", "买盒", "买点", "买个", "买斤",
@@ -2203,6 +2204,18 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, utterance, txt, "parcel_help")
+                    return result
+
+        # --- 网购帮手（"网购怎么弄" / "网上怎么付款" / "网购退货怎么退"）：教挑教买、防坑 ---
+        if action is None and who.get("obey"):
+            from . import online_shopping as _shop
+            _shopcfg = self.identity if isinstance(self.identity, dict) else None
+            if _shop.is_shopping_query(utterance, _shopcfg):
+                topic = _shop.find_topic(utterance, _shopcfg)
+                txt = _shop.how_to(topic, _shopcfg) if topic else _shop.general()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "online_shopping")
                     return result
 
         # --- 家电帮手（"洗衣机怎么用" / "空调遥控器咋调" / "燃气灶打不着火"）：教长辈用明白 ---
