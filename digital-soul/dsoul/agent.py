@@ -2541,6 +2541,17 @@ class Agent:
                 self._log_journal(who, u, txt, "habit")
                 return result
 
+        # --- 看懂天气预报（"降水概率啥意思" / "红色预警严重吗" / "AQI多少算好"）---
+        if action is None and who.get("obey"):
+            from . import weather_terms as _wt
+            _wtcfg = self.identity if isinstance(self.identity, dict) else None
+            if _wt.is_weather_term_query(utterance, _wtcfg):
+                txt = _wt.explain(_wt.find_term(utterance, _wtcfg), _wtcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "weather_terms")
+                    return result
+
         # --- 今天穿什么 / 要带伞吗（按气温天气叮嘱出门）---
         if action is None and who.get("obey") and any(
                 k in (utterance or "") for k in ("今天穿什么", "穿什么衣服", "穿啥", "要带伞",
