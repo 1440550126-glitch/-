@@ -332,9 +332,32 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 .tlyear{color:#5fdd9d;font-weight:600;margin:8px 0 2px;border-left:3px solid #2e7d32;padding-left:8px}
 .tlitem{color:#cbd5e1;font-size:13px;margin:2px 0 2px 16px;position:relative}
 .tlitem:before{content:"•";color:#2e7d32;position:absolute;left:-10px}
+/* —— 活过来的脸 —— */
+.avatarcard{text-align:center;background:radial-gradient(circle at 50% 30%,#20252e,#15181e)}
+.avatar{width:128px;height:128px;margin:8px auto;border-radius:50%;position:relative;
+  background:radial-gradient(circle at 50% 38%,#2c3644,#191c23);
+  box-shadow:0 0 18px 2px var(--glow,#5fdd9d);
+  animation:breathe 4.2s ease-in-out infinite;transition:box-shadow .7s,background .7s}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+.avatar.talk{box-shadow:0 0 34px 7px var(--glow,#5fdd9d)}
+.eye{position:absolute;top:48px;width:15px;height:15px;border-radius:50%;background:#eef3f8;
+  animation:blink 5.4s infinite;box-shadow:0 0 6px var(--glow,#5fdd9d)}
+.eye.l{left:36px}.eye.r{right:36px}
+@keyframes blink{0%,92%,100%{transform:scaleY(1)}94%,98%{transform:scaleY(.08)}}
+.mouth{position:absolute;left:50%;top:84px;width:38px;height:11px;transform:translateX(-50%);
+  border:0;border-bottom:3px solid #eef3f8;border-radius:0 0 20px 20px;transition:all .4s}
+.mouth.sad{border-bottom:0;border-top:3px solid #eef3f8;border-radius:20px 20px 0 0;top:90px}
+.mouth.flat{height:3px;background:#eef3f8;border:0;border-radius:3px}
+.mouth.talking{animation:talk .26s linear infinite}
+@keyframes talk{0%,100%{height:5px}50%{height:18px}}
 </style></head>
 <body><div class=wrap>
 <h1 id=title>🧠 数字分身</h1>
+<div class="card avatarcard">
+  <div id=avatar class=avatar><div class="eye l"></div><div class="eye r"></div><div id=mouth class=mouth></div></div>
+  <div id=avatarmood style="margin-top:8px;font-size:15px">🙂 安安静静守着</div>
+  <button id=voicebtn class=devbtn style="margin-top:8px">🔊 让 TA 出声</button>
+</div>
 <div class=card><span id=llm class="badge off">…</span>&nbsp;&nbsp;<span id=memc>记忆 …</span></div>
 <div class=card><div class=k>👁️ 现在看到谁</div><div id=present>…</div></div>
 <div class=card><div class=k>🏠 设备</div><div id=devices></div></div>
@@ -392,12 +415,35 @@ input{flex:1} button{background:#2e7d32;border:none;color:#fff;padding:8px 14px}
 const $=s=>document.querySelector(s);
 const MOODS={"喜":"😄 愉悦","怒":"😠 生气","哀":"😢 低落","惧":"😨 不安","爱":"❤️ 满心欢喜","恶":"😒 有点反感","欲":"🥺 渴望陪伴"};
 const EMO={"喜":"😄","怒":"😠","哀":"😢","惧":"😨","爱":"❤️","恶":"😒","欲":"🥺"};
+/* —— 让 TA 在浏览器里出声 + 那张脸跟着活 —— */
+let voiceOn=false, zhVoice=null;
+function pickVoice(){try{const vs=speechSynthesis.getVoices();zhVoice=vs.find(v=>/ting|sin|mei|yu|hui|chinese/i.test(v.name))||vs.find(v=>/^zh/i.test(v.lang))||null;}catch(e){}}
+if('speechSynthesis' in window){try{speechSynthesis.onvoiceschanged=pickVoice;pickVoice();}catch(e){}}
+function mouthTalk(on){const m=$('#mouth'),a=$('#avatar');if(m)m.classList.toggle('talking',on);if(a)a.classList.toggle('talk',on);}
+function speak(t){
+  if(!voiceOn||!t||!('speechSynthesis' in window))return;
+  const clean=String(t).replace(/（[^）]*）/g,'').replace(/\([^)]*\)/g,'').trim();  // 去掉（舞台提示）
+  if(!clean)return;
+  try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(clean);
+    if(zhVoice)u.voice=zhVoice; u.lang='zh-CN'; u.rate=1; u.pitch=1;
+    u.onstart=()=>mouthTalk(true); u.onend=()=>mouthTalk(false); u.onerror=()=>mouthTalk(false);
+    speechSynthesis.speak(u);}catch(e){}
+}
+function setFace(mood,color){
+  const a=$('#avatar'); if(a&&color)a.style.setProperty('--glow',color);
+  const m=$('#mouth'); if(m){m.className='mouth'+(mood==='哀'||mood==='惧'?' sad':(mood==='怒'||mood==='恶'?' flat':''));}
+  const am=$('#avatarmood'); if(am)am.textContent=(EMO[mood]||'🙂')+' '+((MOODS[mood]||'安安静静守着').replace(/^.. /,''));
+}
+window.addEventListener('load',()=>{const b=$('#voicebtn');if(b)b.onclick=()=>{
+  voiceOn=!voiceOn; b.textContent=voiceOn?'🔇 静音':'🔊 让 TA 出声';
+  if(voiceOn){pickVoice(); speak('我在呢，咱们聊聊。');}else{try{speechSynthesis.cancel();}catch(e){} mouthTalk(false);}
+};});
 const SEVEN=["喜","怒","哀","惧","爱","恶","欲"];
 function bars(lv){return SEVEN.map(e=>{const v=Math.max(0,Math.min(100,Math.round((lv[e]||0)*100)));return '<div class=barrow><span class=barlab title="'+e+'">'+EMO[e]+'</span><span class=bartrk><i style="width:'+v+'%"></i></span></div>';}).join('');}
 function radar(lv){const S=160,c=S/2,R=54,n=SEVEN.length;function pt(i,r){const a=-Math.PI/2+2*Math.PI*i/n;return [c+r*Math.cos(a),c+r*Math.sin(a)];}let s='<svg width="170" height="160" viewBox="0 0 '+S+' '+S+'">';[0.5,1].forEach(g=>{const pts=SEVEN.map((_,i)=>pt(i,R*g).map(v=>v.toFixed(1)).join(',')).join(' ');s+='<polygon points="'+pts+'" fill="none" stroke="#2a2f3a"/>';});SEVEN.forEach((e,i)=>{const[ax,ay]=pt(i,R);s+='<line x1='+c+' y1='+c+' x2='+ax.toFixed(1)+' y2='+ay.toFixed(1)+' stroke="#2a2f3a"/>';const[lx,ly]=pt(i,R+11);s+='<text x='+lx.toFixed(1)+' y='+ly.toFixed(1)+' font-size="11" text-anchor="middle" dominant-baseline="middle">'+EMO[e]+'</text>';});const vp=SEVEN.map((e,i)=>pt(i,R*Math.max(0,Math.min(1,lv[e]||0))).map(v=>v.toFixed(1)).join(',')).join(' ');s+='<polygon points="'+vp+'" fill="#5fdd9d" fill-opacity="0.35" stroke="#5fdd9d"/>';return s+'</svg>';}
 function devRow(d){const st=d.on?('开'+(d.detail?(' '+d.detail):'')):'关';return '<div class=devrow><span class=devname>'+d.label+'</span><span class=devst>'+st+'</span><button class=devbtn onclick="dev(\''+d.key+'\',\'on\')">开</button><button class=devbtn onclick="dev(\''+d.key+'\',\'off\')">关</button></div>';}
-async function dev(k,a){const sp=$('#speaker').value;try{const r=await (await fetch('/api/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device:k,action:a,speaker:sp})})).json();add(soulName,r.reply,'soul');}catch(e){}refresh();}
-async function scene(n){const sp=$('#speaker').value;try{const r=await (await fetch('/api/scene',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scene:n,speaker:sp})})).json();add(soulName,r.reply,'soul');}catch(e){}refresh();}
+async function dev(k,a){const sp=$('#speaker').value;try{const r=await (await fetch('/api/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device:k,action:a,speaker:sp})})).json();add(soulName,r.reply,'soul');speak(r.reply);}catch(e){}refresh();}
+async function scene(n){const sp=$('#speaker').value;try{const r=await (await fetch('/api/scene',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scene:n,speaker:sp})})).json();add(soulName,r.reply,'soul');speak(r.reply);}catch(e){}refresh();}
 function talkTo(name){ask('我想和'+name+'说说话');}
 let inited=false, soulName="它";
 function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
@@ -463,6 +509,7 @@ async function refresh(){
     $('#face').textContent=cp.face||'神情平和';
     $('#faceemoji').textContent=cp.face_emoji||'';
     if(cp.face_color){$('#facecard').style.borderLeft='4px solid '+cp.face_color;}
+    setFace(s.mood, cp.face_color);              // 那张脸跟着心情活
     $('#reasoning').innerHTML=(cp.reasoning&&cp.reasoning.length)?li(cp.reasoning):'<li class=dim>（还没开口想事）</li>';
     $('#muse').textContent=cp.muse||'';
     $('#meds').innerHTML=(cp.meds&&cp.meds.length)?li(cp.meds):'<li class=dim>这会儿没有要吃的药</li>';
@@ -481,6 +528,7 @@ async function ask(t){
   try{
     const r=await (await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t,speaker:sp})})).json();
     add(soulName, r.reply, 'soul');
+    speak(r.reply);                              // 当场念出来，嘴跟着动
     if(r.associations&&r.associations.length){const c=$('#chat');const d=document.createElement('div');d.className='msg soul';d.style.opacity='0.7';d.style.fontSize='12px';d.textContent='💭 这让我想起：'+r.associations.join('；');c.appendChild(d);c.scrollTop=c.scrollHeight;}
   }catch(e){ add(soulName,'（网络出错）','soul'); }
   refresh();
