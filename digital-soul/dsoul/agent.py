@@ -1143,6 +1143,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "measure_words")
                     return result
 
+        # --- 世界时间/时差（"纽约现在几点" / "东京和北京时差"）：惦记国外的亲人，先于本地报时 ---
+        if action is None and who.get("obey"):
+            from . import timezones as _tzm
+            _tzcfg = self.identity if isinstance(self.identity, dict) else None
+            if _tzm.is_timezone_query(utterance, _tzcfg):
+                txt = _tzm.answer(utterance, config=_tzcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "timezones")
+                    return result
+
         # --- 日常小问答（"三斤几公斤" / "今天星期几" / "二加七等于几"）：随口能答 ---
         if action is None and who.get("obey") and any(
                 k in (utterance or "") for k in ("多少", "等于", "几公斤", "几斤", "几两", "几米",
