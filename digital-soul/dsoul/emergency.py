@@ -33,9 +33,14 @@ def detect_situation(utterance):
 
 
 def senses_emergency(utterance) -> bool:
+    import re
     u = utterance or ""
-    return detect_situation(u) is not None or any(k in u for k in _SOS) \
-        or any(k in u for k in ("很不舒服", "好难受", "不舒服得厉害"))
+    sos = [k for k in _SOS if k != "120"]
+    if detect_situation(u) is not None or any(k in u for k in sos):
+        return True
+    if re.search(r"(?<!\d)120(?!\d)", u):    # 120 当急救电话认，别被 12000 这类数字误触
+        return True
+    return any(k in u for k in ("很不舒服", "好难受", "不舒服得厉害"))
 
 
 def guide(utterance="", name="", contacts_line="") -> str:

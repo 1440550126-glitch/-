@@ -1112,6 +1112,16 @@ class Agent:
                     self._log_journal(who, utterance, txt, "unit_convert")
                     return result
 
+        # --- 金额大写（"1250元大写怎么写"）：写收据借条用，照财务规矩转 ---
+        if action is None and who.get("obey"):
+            from . import rmb_capital as _rc
+            if _rc.is_capital_query(utterance):
+                txt = _rc.answer(utterance)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "rmb_capital")
+                    return result
+
         # --- 生活小计算（"100打8折是多少" / "身高170体重65 BMI"）---
         if action is None and who.get("obey"):
             from . import calc_helper as _calc
