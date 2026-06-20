@@ -768,6 +768,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "med_safety")
                     return result
 
+        # --- 看懂药品说明书（"适应症啥意思" / "OTC红绿怎么看" / "药品说明书怎么看"）---
+        if action is None and who.get("obey"):
+            from . import drug_label as _dl
+            _dlcfg = self.identity if isinstance(self.identity, dict) else None
+            if _dl.is_drug_label_query(utterance, _dlcfg):
+                sec = _dl.find_section(utterance, _dlcfg)
+                txt = _dl.explain(sec, _dlcfg) if sec else _dl.overview()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "drug_label")
+                    return result
+
         # --- 解梦（"梦见蛇是什么意思"）：按民间说法给个宽心吉利的解释 ---
         if action is None and who.get("obey"):
             from .dream_interpret import interpret, is_dream_query
