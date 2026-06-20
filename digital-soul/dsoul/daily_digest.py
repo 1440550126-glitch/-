@@ -24,7 +24,7 @@ def gather(agent, now=None) -> dict:
                         if (getattr(agent, "sensors", None) or {}).get("temperature") is not None
                         else "")
     d["festival"] = _try(lambda: agent.festival_today() or "")
-    d["birthday"] = _try(lambda: agent.birthday_reminders(within=3) if getattr(agent, "family", None) else "")
+    d["birthday"] = _try(lambda: agent.birthday_reminders(within=3, now=now) if getattr(agent, "family", None) else "")
     d["anniversary"] = _try(lambda: agent.spouse_anniversary() or agent.spouse_anniversary_countdown()
                             if getattr(agent, "spouse", None) else "")
     d["meds"] = _try(lambda: "；".join(agent.medications.reminders(now))
