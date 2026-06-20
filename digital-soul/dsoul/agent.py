@@ -880,6 +880,18 @@ class Agent:
                     self._log_journal(who, utterance, txt, "crafts")
                     return result
 
+        # --- 文房四宝（"笔墨纸砚啥讲究" / "毛笔怎么养" / "砚台哪里好"）：写字用什么，先于书法 ---
+        if action is None and who.get("obey"):
+            from . import scholar_tools as _sch
+            _schcfg = self.identity if isinstance(self.identity, dict) else None
+            if _sch.is_scholar_query(utterance, _schcfg):
+                t = _sch.find_treasure(utterance, _schcfg)
+                txt = _sch.explain(t, _schcfg) if t else _sch.overview()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "scholar_tools")
+                    return result
+
         # --- 书法字体（"楷书是什么样" / "楷书四大家" / "想练毛笔字"）---
         if action is None and who.get("obey"):
             from . import calligraphy as _cal
