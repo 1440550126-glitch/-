@@ -1363,6 +1363,18 @@ class Agent:
                     self._log_journal(who, u, txt, "vitals")
                     return result
 
+        # --- 食物保存（"冰箱怎么放" / "剩菜能放多久" / "哪些不能放冰箱"）：存对了不浪费不闹肚子 ---
+        if action is None and who.get("obey"):
+            from . import food_storage as _fst
+            _fstcfg = self.identity if isinstance(self.identity, dict) else None
+            if _fst.is_storage_query(utterance, _fstcfg):
+                t = _fst.find_topic(utterance, _fstcfg)
+                txt = _fst.advice(t, _fstcfg) if t else _fst.overview()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "food_storage")
+                    return result
+
         # --- 看懂食品标签（"配料表怎么看" / "钠多少算高" / "无糖是真的吗"）：买得明白 ---
         if action is None and who.get("obey"):
             from . import food_label as _fl
