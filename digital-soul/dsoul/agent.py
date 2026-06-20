@@ -1219,9 +1219,12 @@ class Agent:
                 return result
 
         # --- 找东西（"我把钥匙放鞋柜上了" / "钥匙放哪了" / "我的老花镜呢"）---
-        from .pay_bills import is_pay_query as _pay_is   # "电费在哪交"是问缴费，不是找东西
+        # "电费在哪交""社保卡在哪办"是问缴费/办事，不是找东西
+        from .civic_help import is_civic_query as _civ_is
+        from .pay_bills import is_pay_query as _pay_is
+        _bcfg = self.identity if isinstance(self.identity, dict) else None
         if action is None and who.get("obey") and self.belongings is not None \
-                and not _pay_is(utterance, self.identity if isinstance(self.identity, dict) else None) and (
+                and not _pay_is(utterance, _bcfg) and not _civ_is(utterance, _bcfg) and (
                 any(k in (utterance or "") for k in ("放在", "放到", "搁在", "搁到", "收在", "摆在",
                                                      "放哪", "搁哪", "在哪", "哪儿去", "找不到",
                                                      "不见了", "呢"))
@@ -2205,6 +2208,17 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, utterance, txt, "bank_help")
+                    return result
+
+        # --- 办事指南（"身份证丢了怎么补" / "敬老卡怎么办" / "异地就医备案"）：去哪办带什么 ---
+        if action is None and who.get("obey"):
+            from . import civic_help as _civ
+            _civcfg = self.identity if isinstance(self.identity, dict) else None
+            if _civ.is_civic_query(utterance, _civcfg):
+                txt = _civ.how_to(_civ.find_matter(utterance, _civcfg), _civcfg)
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "civic_help")
                     return result
 
         # --- 缴费帮手（"电费怎么交" / "水费在哪交" / "缴费怎么弄"）：线上线下都教，带防骗 ---
