@@ -1423,8 +1423,9 @@ class Agent:
         # --- 照护卧床老人（"怎么防褥疮" / "喂饭老呛" / "照顾人太累了"）：少受罪、少并发症 ---
         if action is None and who.get("obey"):
             from . import caregiving as _cg
+            from .foot_care import is_foot_query as _foot_is  # "糖尿病人的脚怎么护理"归足部护理
             _cgcfg = self.identity if isinstance(self.identity, dict) else None
-            if _cg.is_caregiving_query(utterance, _cgcfg):
+            if _cg.is_caregiving_query(utterance, _cgcfg) and not _foot_is(utterance, _cgcfg):
                 t = _cg.find_topic(utterance, _cgcfg)
                 txt = _cg.advice(t, _cgcfg) if t else _cg.overview()
                 if txt:
@@ -1442,6 +1443,18 @@ class Agent:
                 if txt:
                     result["reply"] = txt
                     self._log_journal(who, utterance, txt, "vaccines")
+                    return result
+
+        # --- 足部护理（"泡脚水温" / "脚气怎么治" / "糖尿病人的脚"）：人老脚先老 ---
+        if action is None and who.get("obey"):
+            from . import foot_care as _fc2
+            _fc2cfg = self.identity if isinstance(self.identity, dict) else None
+            if _fc2.is_foot_query(utterance, _fc2cfg):
+                t = _fc2.find_topic(utterance, _fc2cfg)
+                txt = _fc2.advice(t, _fc2cfg) if t else _fc2.overview()
+                if txt:
+                    result["reply"] = txt
+                    self._log_journal(who, utterance, txt, "foot_care")
                     return result
 
         # --- 口腔护理（"牙怎么刷干净" / "假牙怎么养" / "牙龈出血"）：护好牙才有口福 ---
