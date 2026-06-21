@@ -17,6 +17,7 @@
 - 整站回归走查 lingzhen-regression：13 个主要页面逐页加载，关键选择器在场 + 0 JS 错误（screenshots/regression-result.txt + reg-01..13-*.png）。evaluator 抽看 5 页确认渲染正常、互异 → PASS。
 
 - 部署套件 deploy/：DEPLOY.md 手册 + bootstrap.sh 一键脚本 + systemd 单元 + Caddy/nginx 反代（含 SSE 关缓冲）+ deploy.sh 更新脚本。已验证：脚本语法、生产模式启动无安全告警、/api/health 正常。
+- 品牌改名：用户可见「灵阵」→「SoloCompany OS」（前端全量 + 飞书通知消息 + 关键词），副标题改「单人公司 · AI 团队」。内部目录/路由 lingzhen 与 /lingzhen 保留不动。check 59/59、smoke 168/0、登录页截图确认。
 
 ## In progress
 - （空）

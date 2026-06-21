@@ -1,4 +1,4 @@
-// 灵阵 · 多智能体编排引擎（平台核心）
+// SoloCompany OS · 多智能体编排引擎（平台核心）
 // 一次运行：① 队长拆解任务并分派 → ② 成员各自带工具 ReAct 产出（共享黑板记忆）→ ③ 总编整合交付。
 // 三种策略：orchestrate(编排) / sequential(流水线) / route(路由) / debate(论战)。
 // 铁律：每个大模型调用都有确定性本地兜底——无 Key / 断网 / 超预算时全程走规则引擎，真实调用工具、产出结构化成果。
@@ -569,10 +569,10 @@ export function isFeishuHook(u) {
 export function feishuMessage(run) {
   const ok = run.status === 'done';
   const head = ok ? '✅ 任务完成' : run.status === 'failed' ? '❌ 任务失败' : 'ℹ️ 任务结束';
-  let text = `【灵阵 · AI 团队】${head}\n团队：${run.team_name}\n任务：${run.task}`;
+  let text = `【SoloCompany OS · AI 团队】${head}\n团队：${run.team_name}\n任务：${run.task}`;
   if (ok && run.result) text += `\n\n交付：\n${String(run.result).slice(0, 900)}`;
   else if (run.error) text += `\n\n原因：${run.error}`;
-  return { msg_type: 'text', content: { text } };   // 飞书机器人若设关键词安全策略，加「灵阵」即可放行
+  return { msg_type: 'text', content: { text } };   // 飞书机器人若设关键词安全策略，加「SoloCompany OS」即可放行
 }
 async function fireWebhook(url, run) {
   const body = isFeishuHook(url)

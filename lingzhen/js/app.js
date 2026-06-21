@@ -1,4 +1,4 @@
-// 灵阵 · AI 团队（独立站）：登录 → 团队广场/模板 → 派单 → 作战室实时直播 → 历史 → 建队。
+// SoloCompany OS · AI 团队（独立站）：登录 → 团队广场/模板 → 派单 → 作战室实时直播 → 历史 → 建队。
 // 对接 AI句灵 服务端现有 /api/agents·/api/teams·/api/runs 接口；无大模型 Key 时后端走本地引擎，零成本可跑通。
 import { GET, POST, PUT, PATCH, DEL, sse, getToken, setToken } from './api.js';
 
@@ -150,7 +150,7 @@ function header() {
   return h('header', { class: 'lz-top' },
     h('div', { class: 'lz-brand', onclick: () => nav('#/') },
       h('span', { class: 'lz-logo' }, '🛰'),
-      h('div', {}, h('b', {}, '灵阵'), h('small', {}, 'AI 团队 · 对标扣子'))),
+      h('div', {}, h('b', {}, 'SoloCompany OS'), h('small', {}, '单人公司 · AI 团队'))),
     h('nav', { class: 'lz-nav' }, NAV.map((it) =>
       h('a', { class: it.primary ? 'primary' : (it.match.includes(sec) ? 'on' : ''), onclick: () => nav(it.hash) }, it.label))),
     h('div', { class: 'lz-user' },
@@ -202,7 +202,7 @@ function teamCard(t, opts = {}) {
 
 // ---------------- 登录 ----------------
 function renderLogin() {
-  document.title = '灵阵 · AI 团队';
+  document.title = 'SoloCompany OS · AI 团队';
   let mode = 'guest';
   const box = h('div', { class: 'lz-auth-box' });
   function draw() {
@@ -232,7 +232,7 @@ function renderLogin() {
           data = await POST('/api/auth/register', { username: u.value.trim(), password: p.value, nickname: nick.value.trim() || undefined });
         }
         setToken(data.token); state.me = data.user; state.meta = null;
-        toast('欢迎来到灵阵 🛰');
+        toast('欢迎来到 SoloCompany OS 🛰');
         if (!location.hash || location.hash === '#/login') location.hash = '#/';
         route();
       } catch (e) { toast(e.message, 'warn'); submit.disabled = false; }
@@ -246,7 +246,7 @@ function renderLogin() {
   mount(h('div', { class: 'lz-auth' },
     h('div', { class: 'lz-auth-hero' },
       h('div', { class: 'lz-logo xl' }, '🛰'),
-      h('h1', {}, '灵阵 · AI 团队'),
+      h('h1', {}, 'SoloCompany OS · AI 团队'),
       h('p', { class: 'lz-tagline' }, '一句话，调动一支会分工的专业 AI 团队替你干活。'),
       h('div', { class: 'lz-hero-feats' },
         h('span', {}, '拆解→分派→整合'), h('span', {}, '作战室实时直播'), h('span', {}, '12 智能体 · 8 团队模板'), h('span', {}, '无 Key 也能零成本跑通'))),
@@ -290,7 +290,7 @@ async function renderHome() {
       welcome = h('div', { class: 'lz-welcome' },
         h('button', { class: 'lz-welcome-x', title: '关闭', onclick: () => { localStorage.setItem('lz_seen_intro', '1'); welcome.remove(); } }, '✕'),
         h('div', { class: 'lz-welcome-i' }, '🛰'),
-        h('h2', {}, '欢迎来到灵阵'),
+        h('h2', {}, '欢迎来到 SoloCompany OS'),
         h('p', {}, '一句话，调动一支会分工的专业 AI 团队替你干活。要不要现在就看一支团队跑起来？'),
         demoBtn,
         h('div', { class: 'lz-welcome-steps' }, h('span', {}, '① 选团队'), h('span', {}, '② 下达任务'), h('span', {}, '③ 作战室看协作交付')));
@@ -425,7 +425,7 @@ function webhookPanel(team) {
     box.innerHTML = '';
     box.append(
       h('div', { class: 'lz-sec-t' }, '🔔 完成通知 / 出站 Webhook'),
-      h('p', { class: 'lz-api-desc' }, '任务完成（通过验收）后自动推送结果到这个地址。粘贴飞书自定义机器人 webhook 即按飞书格式发送通知（机器人安全设置加关键词「灵阵」即可放行）；其它地址按通用 JSON 推送，可对接企业微信、n8n 等。'));
+      h('p', { class: 'lz-api-desc' }, '任务完成（通过验收）后自动推送结果到这个地址。粘贴飞书自定义机器人 webhook 即按飞书格式发送通知（机器人安全设置加关键词「SoloCompany OS」即可放行）；其它地址按通用 JSON 推送，可对接企业微信、n8n 等。'));
     const urlIn = h('input', { class: 'lz-in', placeholder: 'https://open.feishu.cn/open-apis/bot/v2/hook/…', value: url || '' });
     const saveBtn = h('button', { class: 'lz-btn sm' }, url ? '更新' : '保存');
     saveBtn.addEventListener('click', async () => {
@@ -557,11 +557,11 @@ function shareModal(url) {
 function shareTopbar() {
   const go = () => { location.hash = '#/'; };
   return h('header', { class: 'lz-top' },
-    h('div', { class: 'lz-brand', onclick: go }, h('span', { class: 'lz-logo' }, '🛰'), h('div', {}, h('b', {}, '灵阵'), h('small', {}, 'AI 团队 · 对标扣子'))),
-    h('a', { class: 'lz-btn sm', onclick: go }, '进入灵阵 →'));
+    h('div', { class: 'lz-brand', onclick: go }, h('span', { class: 'lz-logo' }, '🛰'), h('div', {}, h('b', {}, 'SoloCompany OS'), h('small', {}, '单人公司 · AI 团队'))),
+    h('a', { class: 'lz-btn sm', onclick: go }, '进入 SoloCompany OS →'));
 }
 async function renderShare(shareId) {
-  document.title = '灵阵 · 协作分享';
+  document.title = 'SoloCompany OS · 协作分享';
   mount(h('div', { class: 'lz-shell' }, shareTopbar(), h('main', { class: 'lz-main' }, spinner())));
   let data;
   try { data = await GET(`/api/public/share/${encodeURIComponent(shareId)}`); }
@@ -571,7 +571,7 @@ async function renderShare(shareId) {
   mount(h('div', { class: 'lz-shell' }, shareTopbar(),
     h('main', { class: 'lz-main lz-share' },
       h('div', { class: 'lz-share-hero' },
-        h('div', { class: 'lz-share-badge' }, '🛰 灵阵 · AI 团队协作回放'),
+        h('div', { class: 'lz-share-badge' }, '🛰 SoloCompany OS · AI 团队协作回放'),
         h('h1', {}, r.team_name),
         h('p', { class: 'lz-rh-task' }, '🎯 ' + r.task),
         h('div', { class: 'lz-share-meta' },
@@ -584,7 +584,7 @@ async function renderShare(shareId) {
         h('div', { class: 'lz-result-h' }, h('span', {}, '🧩 最终交付'), h('button', { class: 'lz-btn mini ghost', onclick: () => copy(r.result) }, '复制')),
         mdBody(r.result)) : null,
       h('div', { class: 'lz-share-foot' },
-        h('p', {}, '这支团队由「灵阵」零代码组建 · 一句话，调动一支会分工的 AI 团队替你干活'),
+        h('p', {}, '这支团队由「SoloCompany OS」零代码组建 · 一句话，调动一支会分工的 AI 团队替你干活'),
         cta('🚀 免费试一支团队')))));
 }
 
@@ -1398,7 +1398,7 @@ function route() {
   if (hash.startsWith('#/s/')) return renderShare(hash.slice(4));   // 公开分享：免登录
   if (!state.me) { renderLogin(); return; }
   const [path, p1] = hash.replace(/^#\//, '').split('/');
-  document.title = '灵阵 · ' + (TITLES[path] ?? 'AI 团队');
+  document.title = 'SoloCompany OS · ' + (TITLES[path] ?? 'AI 团队');
   if (path === 'agents') return renderAgents();
   if (path === 'agent' && p1) return renderAgentEdit(p1);
   if (path === 'team' && p1) return renderTeam(p1);

@@ -1,4 +1,4 @@
-// 灵阵独立站 · API 客户端（自包含：统一鉴权 / 错误结构 / SSE）。
+// SoloCompany OS独立站 · API 客户端（自包含：统一鉴权 / 错误结构 / SSE）。
 // 复用主站同一 token key（jl_token），登录态可与主站互通；但本站可独立登录运行。
 export const TOKEN_KEY = 'jl_token';
 export const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
