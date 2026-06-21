@@ -372,7 +372,9 @@ export async function renderProject(page, params) {
         h('span', { class: 'no' }, String(shot.order).padStart(2, '0')),
         h('div', { class: 'desc' },
           h('b', {}, multiEp ? h('span', { class: 'pill teal', style: { marginRight: '6px' } }, `第${epOrder(shot.episode || "e1")}${U()}`) : null,
-            `${shot.shot_type} · ${sceneName(shot.scene)} · ${shot.duration}s`),
+            `${shot.shot_type} · ${shot.camera || '固定'} · ${sceneName(shot.scene)} · ${shot.duration}s`,
+            shot.emotion ? h('span', { class: 'pill', style: { marginLeft: '6px' } }, `😶 ${shot.emotion}`) : null,
+            shot.wardrobe ? h('span', { class: 'pill', style: { marginLeft: '6px' } }, `👗 ${shot.wardrobe}`) : null),
           h('span', {}, shot.action),
           shot.dialogue ? h('div', { class: 'dlg' }, `「${shot.dialogue}」`) : null),
         mediaBtns));

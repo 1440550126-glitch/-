@@ -6,6 +6,7 @@ import { q, getSetting, setSetting, UPLOAD_DIR, DB_PATH } from '../lib/db.js';
 import { uid, now, jparse, micro2yuan, token32 } from '../lib/util.js';
 import { arkEnabled, llmEnabled, cfg, arkChat, DEFAULTS, videoModelOptions } from '../lib/ark.js';
 import { providerCfg, openaiEnabled, googleEnabled, alibabaEnabled, viduEnabled, imageModelOptions, PROVIDER_DEFAULTS } from '../lib/providers.js';
+import { listExpressions } from '../lib/expressions.js';
 import { createProject, getProject, projectOut, touchProject, getCanvas, checkConsistency, buildCharacterProfile, listEntities, annotateEntities, getAgentBrain, restyleProject, buildOmniReferencePrompt, generateOmniVideo } from '../lib/pipeline.js';
 
 // 画面一致性体检
@@ -13,6 +14,9 @@ GET('/api/projects/:id/consistency', async ({ params }) => checkConsistency(para
 
 // 角色记忆 character_profile.json：全片形象事实源（锁定档案 + 已生成定妆照/表情集），可查看/下载
 GET('/api/projects/:id/character-profile', async ({ params }) => buildCharacterProfile(params.id));
+
+// AI 微表情提示词库（喜/怒/哀/惊 × 10），供分镜情绪选择器/表情库生成/Agent 使用
+GET('/api/expressions', async () => ({ categories: listExpressions() }));
 
 // 全能参考：把分镜拼成带编号图片引用的多镜头剧本（女主【图片1】在【图片2】中…）+ 编号→参考图清单
 GET('/api/projects/:id/omni-reference', async ({ params, query }) => buildOmniReferencePrompt(params.id, { episode: query.get('episode') || '' }));

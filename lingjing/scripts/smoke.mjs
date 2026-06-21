@@ -112,6 +112,19 @@ try {
   ok(/【本镜造型】/.test(eraSb.shots[0].image_prompt) && /蓝工装/.test(eraSb.shots[0].image_prompt), '动作里自动识别换装 → 本镜造型覆盖（60年代蓝工装）');
   ok(/民国蓝布学生装/.test(eraSb.shots[1].image_prompt) && /(仍是同一人|脸型)/.test(eraSb.shots[1].image_prompt), '显式 wardrobe 字段 → 本镜造型（民国学生装）+ 脸不变');
   ok(/民国蓝布学生装/.test(eraSb.shots[1].video_prompt), '本镜造型也带进视频提示词');
+  // AI 微表情提示词库：精确微表情名→细节面部描述；粗情绪词→大类通用线索；注入分镜首帧
+  const mexp = await import(path.join(ROOT, 'server', 'lib', 'expressions.js'));
+  ok(/脸颊泛绯红/.test(mexp.resolveExpression('心动羞涩笑')), '微表情精确名→细节面部描述（眉/眼/嘴/肌肉）');
+  ok(mexp.resolveExpression('微笑').includes('微笑') && /嘴角上扬|眉眼/.test(mexp.resolveExpression('微笑')), '粗情绪词→大类通用面部线索');
+  ok(mexp.listExpressions().length === 4 && mexp.listExpressions().every((c) => c.items.length === 10), '微表情库：喜/怒/哀/惊 4 大情绪 × 10');
+  const emoSb = normalizeStoryboard({
+    title: '表情', style: '写实电影质感',
+    characters: [{ key: 'c1', name: '小满', role: '主角', gender: '女', desc: '20岁少女' }],
+    scenes: [{ key: 's1', name: '房间', desc: '室内' }],
+    shots: [{ key: 'sh1', order: 1, scene: 's1', characters: ['c1'], shot_type: '特写', emotion: '瞪眼质问', action: '小满质问对方' }]
+  });
+  ok(/【微表情】/.test(emoSb.shots[0].image_prompt) && /眼神锐利|瞪眼质问/.test(emoSb.shots[0].image_prompt), '分镜情绪解析为细节微表情注入首帧');
+  ok(/【微表情】/.test(emoSb.shots[0].video_prompt), '微表情也带进视频提示词');
 
   console.log('— 启动与基础 —');
   const boot = await until(async () => (await api('GET', '/api/bootstrap')).data, 10000);
@@ -231,6 +244,9 @@ try {
   ok(agentTools.some((t) => t.name === 'get_character_profile'), 'Agent 开放 get_character_profile 工具（角色记忆）');
   ok(agentTools.some((t) => t.name === 'list_entities') && agentTools.some((t) => t.name === 'annotate_entities'), 'Agent 开放 list_entities/annotate_entities 工具');
   ok(agentTools.some((t) => t.name === 'omni_reference_script') && agentTools.some((t) => t.name === 'omni_reference_video'), 'Agent 开放 omni_reference_script/video 工具（全能参考）');
+  ok(agentTools.some((t) => t.name === 'list_expressions'), 'Agent 开放 list_expressions 工具（微表情库）');
+  const exps = (await api('GET', '/api/expressions')).data;
+  ok(exps.categories?.length === 4 && exps.categories.every((c) => c.items.length === 10), 'GET /api/expressions 返回 4×10 微表情库');
 
   console.log('— 角色预选标注 / Agent 进化 —');
   const pe = (await api('POST', '/api/projects', { title: '标注剧', genre: '悬疑反转', idea: '实验室停电夜' })).data;

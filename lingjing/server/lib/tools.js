@@ -9,6 +9,7 @@ import {
   getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral, generateDubbing, checkConsistency, buildCharacterProfile, listEntities, annotateEntities, buildOmniReferencePrompt, generateOmniVideo
 } from './pipeline.js';
 import { STYLES, STYLE_CATS } from './styles.js';
+import { listExpressions } from './expressions.js';
 import { bad } from './httpx.js';
 
 const str = (desc, extra = {}) => ({ type: 'string', description: desc, ...extra });
@@ -316,6 +317,12 @@ export const TOOLS = [
     description: '列出解析后识别到的角色/场景/道具分类，供人工或 Agent 复核（含画布缩略图、是否被用户确认过、Agent 进化等级）。怀疑有道具被误标成角色时先调用它检查。',
     input_schema: { type: 'object', properties: { project_id: str('项目 id') }, required: ['project_id'] },
     execute({ project_id }) { return listEntities(project_id); }
+  },
+  {
+    name: 'list_expressions',
+    description: 'AI 微表情提示词库（喜/怒/哀/惊 四大情绪 × 10 个细分微表情，各带眉/眼/嘴/面部肌肉细节）。设置分镜情绪或生成表情库时，从中选具体微表情名（如"心动羞涩笑""瞪眼质问""含泪哽咽""目瞪口呆"）填到 shot.emotion，画面表情更精准、不出恐怖谷。',
+    input_schema: { type: 'object', properties: {} },
+    execute() { return { categories: listExpressions() }; }
   },
   {
     name: 'omni_reference_script',
