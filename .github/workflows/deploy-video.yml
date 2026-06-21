@@ -1,0 +1,46 @@
+# 推送即部署：push 到 main（或手动点 Run workflow）→ GitHub 跑机 SSH 进你的服务器跑 deploy.sh
+# 你不用在本地/服务器敲任何命令。私钥放 GitHub Secret，绝不进代码/对话。
+name: Deploy video.lingmirror.com.cn
+
+on:
+  push:
+    branches: [main]
+    paths: ['lingjing/**', '.github/workflows/deploy-video.yml']
+  workflow_dispatch: {}        # GitHub 网页上一个「Run workflow」按钮，手动触发
+
+concurrency:
+  group: deploy-video
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 准备 SSH 私钥（来自 GitHub Secret，落临时文件）
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          PORT="${{ secrets.DEPLOY_PORT }}"; PORT="${PORT:-22}"
+          ssh-keyscan -p "$PORT" -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: 同步代码到服务器 /opt/video（不碰 /opt/lingmirror、不删数据/.env）
+        run: |
+          PORT="${{ secrets.DEPLOY_PORT }}"; PORT="${PORT:-22}"
+          rsync -az --delete \
+            --exclude '.env' --exclude 'data/' --exclude 'logs/' --exclude '*.bak.*' \
+            -e "ssh -i ~/.ssh/id_deploy -p $PORT -o StrictHostKeyChecking=accept-new" \
+            ./lingjing/ "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/video/lingjing/"
+
+      - name: 在服务器执行一键部署（构建→起容器→等 healthy→Caddy→证书→健康检查）
+        run: |
+          PORT="${{ secrets.DEPLOY_PORT }}"; PORT="${PORT:-22}"
+          ssh -i ~/.ssh/id_deploy -p "$PORT" -o StrictHostKeyChecking=accept-new \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            'sudo bash /opt/video/lingjing/deploy/deploy.sh'
+
+      - name: 清理私钥
+        if: always()
+        run: rm -f ~/.ssh/id_deploy
