@@ -6,6 +6,10 @@ var
 **/*.sqlite-*
 .env
 **/.env
+*.pem
+*.key
+id_rsa*
+keys/
 deploy/*.bak.*
 logs
 *.log

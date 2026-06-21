@@ -5,5 +5,12 @@ var/
 *.sqlite-wal
 *.sqlite-shm
 .env
+# 密钥永不入库（SSO 公私钥 / SSH / 证书）——只以文件形式放服务器，env 用路径引用
+*.pem
+*.key
+*.p12
+id_rsa*
+id_ed25519*
+keys/
 .DS_Store
 npm-debug.log*
