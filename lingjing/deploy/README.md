@@ -40,5 +40,7 @@ docker compose up -d --build      # 更新代码后重建
 见 `video.service` 顶部注释：`systemctl enable --now lingmirror-video`（端口直接 3002，Caddy 同样反代 3002）。
 
 ## 账号互通 / 钱包 / 计费（预留接口）
-`.env` 末段已预留 `LINGMIRROR_SSO_*`、`LINGMIRROR_WALLET_API`、`LINGMIRROR_BILLING_API`、`OAUTH_*`、`PAYPAL_*`。
-当前版本先把 **AI 视频生成内核** 上线；与主站 SSO 登录、共用钱包、按秒/按模型/按 GPU 扣费、会员订阅为后续接入项（接口已留位）。
+- **账号互通（共用登录）**：`.env` 的 `LINGMIRROR_SSO_*` —— 登录身份走主站（PayPal/Google/GitHub/邮箱）。
+- **钱包【不互通】（视频站独立）**：`VIDEO_WALLET_*`、`VIDEO_BILLING_*`、本站独立 `PAYPAL_*` —— 本站自有余额与账单，
+  与主站钱包**分开**，按秒 / 按模型 / 按 GPU / 会员订阅独立计费。
+当前版本先把 **AI 视频生成内核** 上线；SSO 登录与独立钱包/计费为后续接入项（接口已留位）。
