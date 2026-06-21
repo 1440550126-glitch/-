@@ -11,6 +11,17 @@ git checkout claude/gracious-ride-p4z988   # 或先合并到 main
 mkdir -p data logs                          # SQLite 与日志的持久化目录
 ```
 
+## ⚡ 一行搞定（推荐）
+SSH 进服务器后，上面 clone 完，直接：
+```bash
+cd /opt/agent && sudo bash deploy/agent-up.sh
+```
+脚本会：生成含随机 `APP_SECRET` 的 `.env`（问你管理员账号/密码、可选大模型 Key）→
+`docker compose up -d --build` → 等容器 healthy → 本机健康检查 → 追加 Caddy 反代块并 reload →
+`curl https://agent.lingmirror.com.cn` 验 HTTPS → **按真实结果**打印成功/诊断。幂等，可重复跑。
+
+下面是等价的手动分步（想自己控制每一步时看）：
+
 ## 2. 配置 .env（所有 Key 放这里，不写死）
 ```bash
 cp .env.example .env && nano .env
