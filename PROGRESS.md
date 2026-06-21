@@ -18,6 +18,7 @@
 
 - 部署套件 deploy/：DEPLOY.md 手册 + bootstrap.sh 一键脚本 + systemd 单元 + Caddy/nginx 反代（含 SSE 关缓冲）+ deploy.sh 更新脚本。已验证：脚本语法、生产模式启动无安全告警、/api/health 正常。
 - 品牌改名：用户可见「灵阵」→「SoloCompany OS」（前端全量 + 飞书通知消息 + 关键词），副标题改「单人公司 · AI 团队」。内部目录/路由 lingzhen 与 /lingzhen 保留不动。check 59/59、smoke 168/0、登录页截图确认。
+- 换 Logo：去掉 🛰 表情包，改为 lingzhen/logo.svg（渐变圆角 + 白色中枢-成员节点网络），用于 favicon/顶栏/登录/欢迎横幅。截图确认 img 加载渲染正常。团队/智能体头像仍用 emoji 头像系统（非品牌 logo，未动）。
 
 ## In progress
 - （空）

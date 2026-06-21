@@ -149,7 +149,7 @@ function header() {
   const m = state.me, sec = sectionOf();
   return h('header', { class: 'lz-top' },
     h('div', { class: 'lz-brand', onclick: () => nav('#/') },
-      h('span', { class: 'lz-logo' }, '🛰'),
+      h('img', { class: 'lz-logo', src: '/lingzhen/logo.svg', alt: 'SoloCompany OS' }),
       h('div', {}, h('b', {}, 'SoloCompany OS'), h('small', {}, '单人公司 · AI 团队'))),
     h('nav', { class: 'lz-nav' }, NAV.map((it) =>
       h('a', { class: it.primary ? 'primary' : (it.match.includes(sec) ? 'on' : ''), onclick: () => nav(it.hash) }, it.label))),
@@ -232,7 +232,7 @@ function renderLogin() {
           data = await POST('/api/auth/register', { username: u.value.trim(), password: p.value, nickname: nick.value.trim() || undefined });
         }
         setToken(data.token); state.me = data.user; state.meta = null;
-        toast('欢迎来到 SoloCompany OS 🛰');
+        toast('欢迎来到 SoloCompany OS');
         if (!location.hash || location.hash === '#/login') location.hash = '#/';
         route();
       } catch (e) { toast(e.message, 'warn'); submit.disabled = false; }
@@ -245,7 +245,7 @@ function renderLogin() {
   draw();
   mount(h('div', { class: 'lz-auth' },
     h('div', { class: 'lz-auth-hero' },
-      h('div', { class: 'lz-logo xl' }, '🛰'),
+      h('img', { class: 'lz-logo xl', src: '/lingzhen/logo.svg', alt: '' }),
       h('h1', {}, 'SoloCompany OS · AI 团队'),
       h('p', { class: 'lz-tagline' }, '一句话，调动一支会分工的专业 AI 团队替你干活。'),
       h('div', { class: 'lz-hero-feats' },
@@ -289,7 +289,7 @@ async function renderHome() {
       });
       welcome = h('div', { class: 'lz-welcome' },
         h('button', { class: 'lz-welcome-x', title: '关闭', onclick: () => { localStorage.setItem('lz_seen_intro', '1'); welcome.remove(); } }, '✕'),
-        h('div', { class: 'lz-welcome-i' }, '🛰'),
+        h('img', { class: 'lz-welcome-i', src: '/lingzhen/logo.svg', alt: '' }),
         h('h2', {}, '欢迎来到 SoloCompany OS'),
         h('p', {}, '一句话，调动一支会分工的专业 AI 团队替你干活。要不要现在就看一支团队跑起来？'),
         demoBtn,
@@ -557,7 +557,7 @@ function shareModal(url) {
 function shareTopbar() {
   const go = () => { location.hash = '#/'; };
   return h('header', { class: 'lz-top' },
-    h('div', { class: 'lz-brand', onclick: go }, h('span', { class: 'lz-logo' }, '🛰'), h('div', {}, h('b', {}, 'SoloCompany OS'), h('small', {}, '单人公司 · AI 团队'))),
+    h('div', { class: 'lz-brand', onclick: go }, h('img', { class: 'lz-logo', src: '/lingzhen/logo.svg', alt: 'SoloCompany OS' }), h('div', {}, h('b', {}, 'SoloCompany OS'), h('small', {}, '单人公司 · AI 团队'))),
     h('a', { class: 'lz-btn sm', onclick: go }, '进入 SoloCompany OS →'));
 }
 async function renderShare(shareId) {
@@ -571,7 +571,7 @@ async function renderShare(shareId) {
   mount(h('div', { class: 'lz-shell' }, shareTopbar(),
     h('main', { class: 'lz-main lz-share' },
       h('div', { class: 'lz-share-hero' },
-        h('div', { class: 'lz-share-badge' }, '🛰 SoloCompany OS · AI 团队协作回放'),
+        h('div', { class: 'lz-share-badge' }, 'SoloCompany OS · AI 团队协作回放'),
         h('h1', {}, r.team_name),
         h('p', { class: 'lz-rh-task' }, '🎯 ' + r.task),
         h('div', { class: 'lz-share-meta' },

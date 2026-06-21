@@ -23,8 +23,8 @@ a{cursor:pointer;color:inherit}
 .lz-top{display:flex;align-items:center;gap:14px;padding:14px 4px;position:sticky;top:0;z-index:20;
   background:linear-gradient(var(--bg),rgba(11,13,18,.86) 80%,transparent);backdrop-filter:blur(8px)}
 .lz-brand{display:flex;align-items:center;gap:10px;cursor:pointer}
-.lz-logo{font-size:24px;filter:drop-shadow(0 2px 8px rgba(110,168,254,.5))}
-.lz-logo.xl{font-size:60px}
+.lz-logo{width:30px;height:30px;display:block;filter:drop-shadow(0 2px 8px rgba(110,168,254,.5))}
+.lz-logo.xl{width:64px;height:64px;margin:0 auto}
 .lz-brand b{font-size:18px;letter-spacing:.5px}
 .lz-brand small{display:block;color:var(--mut);font-size:11px;margin-top:-2px}
 .lz-nav{display:flex;gap:6px;margin-left:auto;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
@@ -303,7 +303,7 @@ a{cursor:pointer;color:inherit}
 
 /* ---- 新手首跑 ---- */
 .lz-welcome{position:relative;background:linear-gradient(135deg,rgba(110,168,254,.16),rgba(155,140,255,.14));border:1px solid rgba(110,168,254,.3);border-radius:18px;padding:28px 24px;margin-bottom:18px;text-align:center;overflow:hidden}
-.lz-welcome-i{font-size:40px;filter:drop-shadow(0 3px 12px rgba(110,168,254,.55))}
+.lz-welcome-i{width:46px;height:46px;display:inline-block;filter:drop-shadow(0 3px 12px rgba(110,168,254,.55))}
 .lz-welcome h2{margin:8px 0 6px;font-size:23px}
 .lz-welcome p{color:var(--mut);font-size:14px;margin:0 auto 16px;max-width:520px;line-height:1.6}
 .lz-welcome-x{position:absolute;top:12px;right:12px;width:28px;height:28px;border:none;background:rgba(255,255,255,.07);color:var(--mut);border-radius:8px;cursor:pointer;font-size:12px}
