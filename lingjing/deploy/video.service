@@ -1,0 +1,31 @@
+# 非 Docker 备选：systemd 直跑（Node 22）。开机自启、崩溃自重启、日志落 /opt/video/logs。
+# 安装：
+#   sudo cp /opt/video/lingjing/deploy/video.service /etc/systemd/system/lingmirror-video.service
+#   sudo cp /opt/video/lingjing/deploy/.env.example /opt/video/.env   # 按需填 Key
+#   sudo mkdir -p /opt/video/data/uploads /opt/video/logs
+#   sudo systemctl daemon-reload && sudo systemctl enable --now lingmirror-video
+# 然后 Caddy 反代 127.0.0.1:3002（见 Caddyfile.video.snippet）。
+[Unit]
+Description=LingMirror AI Video (LingJing studio)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/video
+EnvironmentFile=/opt/video/.env
+Environment=LINGJING_PORT=3002
+Environment=LINGJING_DB_PATH=/opt/video/data/lingjing.sqlite
+Environment=LINGJING_UPLOAD_DIR=/opt/video/data/uploads
+Environment=FFMPEG_PATH=ffmpeg
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning /opt/video/lingjing/server/index.js
+Restart=always
+RestartSec=3
+StandardOutput=append:/opt/video/logs/video.log
+StandardError=append:/opt/video/logs/video.log
+# 安全加固（数据/日志可写，其余只读）
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/opt/video/data /opt/video/logs
+
+[Install]
+WantedBy=multi-user.target

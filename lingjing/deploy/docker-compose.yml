@@ -1,0 +1,35 @@
+# LingMirror AI 视频 · 独立部署（与 /opt/lingmirror 完全隔离）
+# 对外端口 3002，仅绑定 127.0.0.1（由 Caddy 反代）；绝不占用 80/443/3000/3001。
+name: lingmirror-video
+
+services:
+  video:
+    container_name: lingmirror-video
+    build:
+      context: ..                  # 构建上下文 = lingjing/ 子项目
+      dockerfile: deploy/Dockerfile
+    image: lingmirror-video:latest
+    restart: unless-stopped
+    init: true                     # 用 tini 正确转发信号/回收僵尸进程
+    env_file:
+      - /opt/video/.env            # 所有 API Key 走环境变量，不写死在代码
+    environment:
+      - LINGJING_PORT=4399
+      - LINGJING_DB_PATH=/data/lingjing.sqlite
+      - LINGJING_UPLOAD_DIR=/data/uploads
+    ports:
+      - "127.0.0.1:${VIDEO_PORT:-3002}:4399"   # 主机 3002 → 容器 4399；仅本机可访问
+    volumes:
+      - /opt/video/data:/data      # SQLite + 上传/生成文件（持久化）
+      - /opt/video/logs:/app/logs  # 运行日志
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4399/api/bootstrap').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 8s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

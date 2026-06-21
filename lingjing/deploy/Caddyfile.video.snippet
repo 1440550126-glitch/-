@@ -1,0 +1,7 @@
+# 追加到 /etc/caddy/Caddyfile（不要删改其它站点）。deploy.sh 会用下面的标记幂等管理本块。
+# >>> lingmirror-video (managed) >>>
+video.lingmirror.com.cn {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:3002
+}
+# <<< lingmirror-video (managed) <<<

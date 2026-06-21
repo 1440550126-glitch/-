@@ -1,0 +1,12 @@
+# Docker 构建上下文 = lingjing/（见 deploy/docker-compose.yml）。排除无关/敏感文件。
+.git
+**/node_modules
+var
+**/*.sqlite
+**/*.sqlite-*
+.env
+**/.env
+deploy/*.bak.*
+logs
+*.log
+.DS_Store

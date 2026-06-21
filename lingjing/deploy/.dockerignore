@@ -1,0 +1,9 @@
+.git
+**/node_modules
+var
+**/*.sqlite
+**/*.sqlite-*
+.env
+**/.env
+deploy/*.bak.*
+logs
