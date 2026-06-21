@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+var/
+data/
+logs/
+screenshots/
+cwc-long-running-agents/
+.claude/
+node_modules/
+*.log
+*.sqlite
+*.sqlite-*
