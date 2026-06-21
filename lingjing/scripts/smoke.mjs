@@ -80,6 +80,10 @@ try {
   ok(/ARRI|电影摄影机/.test(vprompt), '写实画风点名真实电影摄影机机身');
   // 角色定义图升级为三视图设定图（正/侧/背），全片定海神针参考
   ok(/三视图/.test(dupSb.characters[0].image_prompt || ''), '角色定义图为三视图设定图（正面·侧面·背面）');
+  // 借鉴"身份板"：角色参考升级为角色设定板（结构化标注 + 多姿态 + 表情研究 + 细节研究）+ 视觉签名锚点
+  ok(/角色设定板/.test(dupSb.characters[0].image_prompt) && /视觉签名/.test(dupSb.characters[0].image_prompt) && /表情研究/.test(dupSb.characters[0].image_prompt), '角色参考升级为身份板（标注+多姿态+表情研究+细节）');
+  ok(/视觉签名\(必出特征\)/.test(dupSb.characters[0].lock) && /短发/.test(dupSb.characters[0].lock), '锁定档案含视觉签名（必出识别特征锚点）');
+  ok(/视觉签名/.test(dupSb.shots[0].image_prompt), '视觉签名随锁定档案进入每个分镜（复杂景别下仍锁角色）');
   // 多供应商：按模型 ID 路由（OpenAI GPT Image / Google Veo 3 / 火山方舟），未配 Key 时不启用
   const prov = await import(path.join(ROOT, 'server', 'lib', 'providers.js'));
   ok(prov.imageProviderOf('gpt-image-1') === 'openai' && prov.imageProviderOf('doubao-seedream-4-0-250828') === 'ark', '图像供应商按模型ID路由（gpt-image→openai）');
@@ -232,6 +236,7 @@ try {
   const prof = (await api('GET', `/api/projects/${p.id}/character-profile`)).data;
   ok(prof.schema === 'lingjing.character_profile/1' && Array.isArray(prof.characters) && prof.characters.length, `角色记忆导出（角色 ${prof.characters.length}）`);
   ok(prof.characters.every((c) => c.lock && c.name), '每个角色都带逐字锁定档案 lock');
+  ok(prof.characters.every((c) => 'visual_signature' in c && 'default_wardrobe' in c), '角色记忆含视觉签名 + 默认造型（身份板字段）');
   ok(prof.characters.some((c) => c.ready && c.portrait === upC.url), '已生成定妆照写进角色记忆（portrait）');
   ok(/全片总控|铁律/.test(prof.master_control || '') && Array.isArray(prof.forbidden_rules) && prof.forbidden_rules.length >= 8, '角色记忆含总控提示词 + 全部禁止项');
   ok(/画风铁律|切换画风/.test(prof.master_control || ''), '画风锚定：总控含"全片只用一种画风"铁律（防日漫↔2D跳风）');

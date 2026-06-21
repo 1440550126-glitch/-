@@ -69,6 +69,7 @@ export async function openCharacterProfile({ projectId }) {
         h('span', { class: 'pill teal' }, c.role),
         h('span', { class: 'pill' }, `${c.gender}·${c.age}`),
         c.ready ? h('span', { class: 'pill gold' }, '✓ 已锁定') : h('span', { class: 'pill', style: { color: 'var(--warn)' } }, '待生成定妆照')),
+      c.visual_signature ? h('div', { style: { fontSize: '12px', marginTop: '5px' } }, h('span', { class: 'pill', style: { background: 'rgba(132,204,22,.16)', color: '#84cc16' } }, `🪪 视觉签名 ${c.visual_signature}`)) : null,
       h('div', { style: { fontSize: '12px', color: 'var(--ink2)', marginTop: '4px', lineHeight: 1.5 } }, c.lock || c.appearance),
       c.expressions?.length
         ? h('div', { style: { display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' } },
