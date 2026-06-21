@@ -7,7 +7,7 @@ import { uid, now, jparse, micro2yuan, token32 } from '../lib/util.js';
 import { arkEnabled, llmEnabled, cfg, arkChat, DEFAULTS, videoModelOptions } from '../lib/ark.js';
 import { providerCfg, openaiEnabled, googleEnabled, alibabaEnabled, viduEnabled, imageModelOptions, PROVIDER_DEFAULTS } from '../lib/providers.js';
 import { listExpressions } from '../lib/expressions.js';
-import { createProject, getProject, projectOut, touchProject, getCanvas, checkConsistency, buildCharacterProfile, listEntities, annotateEntities, getAgentBrain, restyleProject, buildOmniReferencePrompt, generateOmniVideo } from '../lib/pipeline.js';
+import { createProject, getProject, projectOut, touchProject, getCanvas, checkConsistency, buildCharacterProfile, listEntities, annotateEntities, getAgentBrain, restyleProject, buildOmniReferencePrompt, generateOmniVideo, buildStoryboardSheet, generateStoryboardSheet } from '../lib/pipeline.js';
 
 // 画面一致性体检
 GET('/api/projects/:id/consistency', async ({ params }) => checkConsistency(params.id));
@@ -22,6 +22,9 @@ GET('/api/expressions', async () => ({ categories: listExpressions() }));
 GET('/api/projects/:id/omni-reference', async ({ params, query }) => buildOmniReferencePrompt(params.id, { episode: query.get('episode') || '' }));
 // 全能参考一键出片：多图参考模型（默认 Vidu Q1）一次产出人物/场景一致的连续短片
 POST('/api/projects/:id/omni-video', async ({ params, body }) => generateOmniVideo({ projectId: params.id, episode: body.episode || '', model: body.model || 'viduq1', ratio: body.ratio || '', duration: body.duration || 8 }));
+// 故事板图：把整段分镜画成一张 N 宫格故事板（限定景别与运动）。GET 取提示词预览，POST 出图
+GET('/api/projects/:id/storyboard-sheet', async ({ params, query }) => buildStoryboardSheet(params.id, { episode: query.get('episode') || '', max: Number(query.get('max')) || 12 }));
+POST('/api/projects/:id/storyboard-sheet', async ({ params, body }) => generateStoryboardSheet(params.id, { episode: body.episode || '', model: body.model || '', max: body.max || 12 }));
 
 // 角色预选标注：列出实体分类供用户校验；提交校正即训练 Agent，全对则夸赞奖励
 GET('/api/projects/:id/entities', async ({ params }) => listEntities(params.id));

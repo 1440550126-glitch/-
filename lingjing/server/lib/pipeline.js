@@ -83,6 +83,9 @@ function framingGuide(kind, shotType = '') {
   if (kind === 'prop') {
     return `，道具静物特写，物件完整居中、细节清晰，纯净或虚化背景，无人物。${NEG_TAIL}`;
   }
+  if (kind === 'sheet') {
+    return `，规整网格分镜表排版（每格等大、白色分隔线与边框、镜号与景别运镜标注清晰），电影分镜草图/单色线稿或淡彩风格，每格构图明确、画面简洁，同一角色跨格保持外观一致、限定景别与运动。`;
+  }
   // frame：按景别决定取景，强约束人物完整
   const st = String(shotType || '');
   let framing = '人物完整入镜、不被画框裁断';
@@ -868,9 +871,9 @@ export async function generateImage({ prompt, name = '', kind = 'scene', ratio =
   const seed = project?.seed || 0;
   // 角色三视图需横向排布 正/侧/背 三个视角 → 角色用宽幅；场景/首帧/道具沿用项目画幅
   if (kind === 'character') ratio = '16:9';
-  // 角色三视图 / 全场景图是全片"定海神针"参考，交给最强图像模型（model_image_pro）；分镜首帧/道具用默认模型。
+  // 角色三视图 / 全场景图 / 故事板图 是全片"定海神针"参考，交给最强图像模型（model_image_pro）；分镜首帧/道具用默认模型。
   // 显式传入 model（创作框选择）> 顶配/默认。再按模型 ID 路由到 火山 Seedream 或 OpenAI GPT Image（各用各的 Key）。
-  const proKind = (kind === 'character' || kind === 'scene');
+  const proKind = (kind === 'character' || kind === 'scene' || kind === 'sheet');
   const chosenModel = model || (proKind ? cfg().modelImagePro : cfg().modelImage);
   const ip = pickImageProvider(chosenModel, { arkEnabled: arkEnabled(), arkModel: chosenModel });
   const imageModel = ip.enabled ? ip.model : 'local';
@@ -1158,6 +1161,44 @@ export async function generateOmniVideo({ projectId, episode = '', model = 'vidu
     name: `全能参考·${omni.title || project.title}`
   });
   return { ...r, references: omni.references, used_images: images.length, missing_images: omni.missing_images };
+}
+
+// ---------- 故事板图：把整段分镜画成一张 N 宫格故事板（限定景别与运动），可作视频/剪辑的视觉参考 ----------
+export function buildStoryboardSheet(projectId, { episode = '', max = 12 } = {}) {
+  const project = getProject(projectId);
+  const sb = jparse(project.storyboard, null);
+  if (!sb?.shots?.length) throw bad('项目还没有分镜，先解析剧本');
+  const charByKey = new Map((sb.characters || []).map((c) => [c.key, c]));
+  const sceneByKey = new Map((sb.scenes || []).map((s) => [s.key, s]));
+  const all = (sb.shots || []).filter((s) => !episode || (s.episode || 'e1') === episode);
+  const shots = all.slice(0, clamp(max, 4, 25));
+  const count = shots.length;
+  const cols = count <= 9 ? 3 : count <= 16 ? 4 : 5;
+  const rows = Math.ceil(count / cols);
+  const sigs = [...new Set(shots.flatMap((sh) => (sh.characters || []).map((k) => charByKey.get(k)).filter(Boolean)
+    .map((c) => `${c.name}${c.signature ? '(' + c.signature + ')' : ''}`)))].slice(0, 4);
+  const panels = shots.map((sh, i) => {
+    const who = (sh.characters || []).map((k) => charByKey.get(k)?.name).filter(Boolean).join('、');
+    const sc = sceneByKey.get(sh.scene);
+    const act = cleanDesc(sh.action).slice(0, 36) || sh.name;
+    return `第${i + 1}格[${sh.shot_type || '中景'}·${sh.camera || '固定'}]：${who ? who + '，' : ''}${sc ? sc.name + '，' : ''}${act}`;
+  });
+  const style = styleAnchor(sb);
+  const prompt = `${style} ｜ 电影分镜故事板 storyboard sheet ｜ ${count} 宫格（${cols} 列 × ${rows} 行）规整网格，从左到右、从上到下按顺序排列，格与格之间清晰白色分隔线与边框 ｜ 单色铅笔线稿/淡彩分镜草图风格、电影质感构图、动态箭头标运镜 ｜ 每格左上角标注镜号与景别·运镜 ｜ 全片同一角色跨格外观严格一致${sigs.length ? `（视觉签名：${sigs.join('；')}）` : ''}，限定景别与运动 ｜ 分格画面：${panels.join('；')}`;
+  return { project_id: project.id, title: sb.title, prompt: prompt.slice(0, 1800), cols, rows, count };
+}
+
+/** 生成故事板图（N 宫格）：以角色身份板作参考保持网格里角色一致，交给最强图像模型 */
+export async function generateStoryboardSheet(projectId, { episode = '', model = '', max = 12 } = {}) {
+  const sheet = buildStoryboardSheet(projectId, { episode, max });
+  const project = getProject(projectId);
+  const c = project.canvas_id ? getCanvas(project.canvas_id, { required: false }) : null;
+  const refs = (c?.nodes || []).filter((n) => n.type === 'character' && n.data.image && !/\.svg$/i.test(n.data.image)).map((n) => n.data.image).slice(0, 4);
+  const r = await generateImage({
+    prompt: sheet.prompt, name: `故事板·${sheet.title || project.title}`, kind: 'sheet',
+    ratio: project.ratio || '16:9', projectId, refImages: refs, model, tab: 'material'
+  });
+  return { ...r, cols: sheet.cols, rows: sheet.rows, count: sheet.count };
 }
 
 // ---------- 角色记忆 character_profile.json：把锁定档案 + 已生成的定妆照/表情集导出为可查可下载的单一事实源 ----------

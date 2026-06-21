@@ -249,6 +249,7 @@ try {
   ok(agentTools.some((t) => t.name === 'get_character_profile'), 'Agent 开放 get_character_profile 工具（角色记忆）');
   ok(agentTools.some((t) => t.name === 'list_entities') && agentTools.some((t) => t.name === 'annotate_entities'), 'Agent 开放 list_entities/annotate_entities 工具');
   ok(agentTools.some((t) => t.name === 'omni_reference_script') && agentTools.some((t) => t.name === 'omni_reference_video'), 'Agent 开放 omni_reference_script/video 工具（全能参考）');
+  ok(agentTools.some((t) => t.name === 'storyboard_sheet'), 'Agent 开放 storyboard_sheet 工具（故事板图）');
   ok(agentTools.some((t) => t.name === 'list_expressions'), 'Agent 开放 list_expressions 工具（微表情库）');
   const exps = (await api('GET', '/api/expressions')).data;
   ok(exps.categories?.length === 4 && exps.categories.every((c) => c.items.length === 10), 'GET /api/expressions 返回 4×10 微表情库');
@@ -418,6 +419,11 @@ try {
     return ['succeeded', 'failed'].includes(t.status) ? t : null;
   });
   ok(omniDone.provider === 'local' && omniDone.status === 'succeeded', '未配 Vidu Key 时全能参考出片回退本地占位');
+  // 故事板图：整段分镜画成 N 宫格故事板（限定景别与运动）
+  const sheetPrev = (await api('GET', `/api/projects/${p.id}/storyboard-sheet?max=9`)).data;
+  ok(/宫格/.test(sheetPrev.prompt) && /第1格\[/.test(sheetPrev.prompt) && sheetPrev.count === 9 && sheetPrev.cols === 3, '故事板提示词：N 宫格 + 每格镜号/景别/运镜');
+  const sheetGen = (await api('POST', `/api/projects/${p.id}/storyboard-sheet`, { max: 12 })).data;
+  ok(sheetGen.url && sheetGen.count === 12 && sheetGen.cols === 4 && sheetGen.rows === 3, '生成故事板图（12 宫格 4×3，已入资产库）');
   // 多供应商安全回退：未配对应 Key 时选 GPT Image / Veo 3 → 回退本地占位，不报错也不假装成功
   const gptImg = (await api('POST', '/api/ai/image', { prompt: '测试', kind: 'scene', project_id: p.id, model: 'gpt-image-1' })).data;
   const gptTask = (await api('GET', `/api/ai/task/${gptImg.taskId}`)).data;

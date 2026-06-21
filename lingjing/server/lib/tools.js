@@ -6,7 +6,7 @@ import { jparse, micro2yuan, now } from './util.js';
 import { llmEnabled, cfg } from './ark.js';
 import {
   createProject, getProject, projectOut, touchProject, generateScript, parseScript, addEpisode,
-  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral, generateDubbing, checkConsistency, buildCharacterProfile, listEntities, annotateEntities, buildOmniReferencePrompt, generateOmniVideo
+  getCanvas, patchCanvasNode, generateImage, generateExpressions, createVideoTask, pollTask, addAsset, remakeViral, generateDubbing, checkConsistency, buildCharacterProfile, listEntities, annotateEntities, buildOmniReferencePrompt, generateOmniVideo, generateStoryboardSheet
 } from './pipeline.js';
 import { STYLES, STYLE_CATS } from './styles.js';
 import { listExpressions } from './expressions.js';
@@ -329,6 +329,12 @@ export const TOOLS = [
     description: '全能参考：把项目分镜拼成"带编号图片引用"的多镜头剧本（如 女主【图片1】在【图片2】中…），并返回 编号→参考图（角色三视图/场景图）清单。用于支持多图参考的视频模型一次性产出人物/场景一致的连续成片，或整段复制到外部工具。每条镜头已含摄影机参数与光影词。',
     input_schema: { type: 'object', properties: { project_id: str('项目 id'), episode: str('集 key，可空，默认全片') }, required: ['project_id'] },
     execute({ project_id, episode }) { return buildOmniReferencePrompt(project_id, { episode: episode || '' }); }
+  },
+  {
+    name: 'storyboard_sheet',
+    description: '故事板图：把整段分镜画成一张 N 宫格故事板图（电影分镜草图，每格标镜号+景别+运镜，限定景别与运动），以角色身份板作参考保持网格里角色一致。返回出图任务与 url，用作视频/剪辑的视觉蓝图。max 可设 4-25（默认 12 宫格）。',
+    input_schema: { type: 'object', properties: { project_id: str('项目 id'), episode: str('集 key，可空'), max: { type: 'number', description: '宫格数 4-25，默认 12' } }, required: ['project_id'] },
+    execute({ project_id, episode, max }) { return generateStoryboardSheet(project_id, { episode: episode || '', max: max || 12 }); }
   },
   {
     name: 'omni_reference_video',

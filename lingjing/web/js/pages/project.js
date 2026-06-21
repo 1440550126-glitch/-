@@ -117,6 +117,22 @@ export async function renderProject(page, params) {
   } });
   omniBtn.innerHTML = `${icon('film', 15)} 全能参考`;
 
+  // 故事板图：把整段分镜画成一张 N 宫格故事板（限定景别与运动），作视频/剪辑的视觉蓝图
+  const sheetBtn = h('button', { class: 'btn', title: '生成 N 宫格故事板图：整段分镜画成一张网格草图（每格标镜号+景别+运镜），以角色身份板作参考保持一致', onclick: async () => {
+    if (!project.storyboard) return toast('先解析剧本', 'err');
+    sheetBtn.disabled = true;
+    const old = sheetBtn.innerHTML;
+    sheetBtn.innerHTML = `${icon('loader', 15)} 故事板出图中…`;
+    try {
+      const r = await POST(`/api/projects/${project.id}/storyboard-sheet`, {});
+      toast(`${r.cols}×${r.rows} 宫格故事板已生成（${r.count} 镜），已存入资产库`, 'ok');
+      if (r.url) modal({ wide: true, title: `故事板 · ${r.cols}×${r.rows} 宫格（${r.count} 镜）`, body: (() => { const el = mediaEl(r.url); el.style.width = '100%'; el.style.borderRadius = '12px'; return el; })(), actions: [{ label: '关闭', kind: 'primary' }] });
+    } catch (e) { toast(e.message, 'err'); }
+    sheetBtn.disabled = false;
+    sheetBtn.innerHTML = old;
+  } });
+  sheetBtn.innerHTML = `${icon('layout', 15)} 故事板图`;
+
   // ---------- 全流程工作流（一键托管） ----------
   const WF_ICON = { pending: '◌', running: '', done: '✓', skipped: '↷', failed: '✗' };
   const WF_COLOR = { done: 'var(--ok)', skipped: 'var(--ink3)', failed: 'var(--err)', running: 'var(--accent)' };
@@ -468,7 +484,7 @@ export async function renderProject(page, params) {
     h('div', { class: 'topbar line' },
       h('button', { class: 'btn ghost sm', html: icon('back'), onclick: () => nav('/home') }),
       titleInput, statusPill, h('span', { class: 'grow' }),
-      ratioSel, styleBtn, parseBtn, canvasBtn, entBtn, checkBtn, qcBtn, playBtn2, omniBtn, wfBtn, batchBtn),
+      ratioSel, styleBtn, parseBtn, canvasBtn, entBtn, checkBtn, qcBtn, playBtn2, omniBtn, sheetBtn, wfBtn, batchBtn),
     h('div', { class: 'wrap', style: { maxWidth: '1440px', marginTop: '16px' } },
       h('div', { class: 'work-grid' }, leftCard, rightCard)));
   renderRight();
