@@ -259,7 +259,7 @@ POST('/api/teams', async (ctx) => {
   const r = q.run(
     `INSERT INTO teams (owner_id, name, avatar, goal, strategy, manager_note, member_ids, knowledge_ids, max_rounds, is_template, published, created_at, updated_at)
      VALUES (?,?,?,?,?,?,?,?,?,0,0,?,?)`,
-    ctx.user.id, name, sanitizeEmoji(b.avatar, '🛰'), sanitizeText(b.goal, 300), strategy, sanitizeText(b.manager_note, 400),
+    ctx.user.id, name, sanitizeEmoji(b.avatar, '🤖'), sanitizeText(b.goal, 300), strategy, sanitizeText(b.manager_note, 400),
     JSON.stringify(members), JSON.stringify(validateKbs(b.knowledge_ids, ctx.user.id)),
     clamp(b.max_rounds ?? 3, 1, AGENT_QUOTA.MAX_TOOL_ROUNDS), ts, ts
   );

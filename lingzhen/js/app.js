@@ -189,7 +189,7 @@ const empty = (title, sub) => h('div', { class: 'lz-empty' }, h('div', { class: 
 function teamCard(t, opts = {}) {
   return h('article', { class: 'lz-card', onclick: () => nav(`#/team/${t.id}`) },
     h('div', { class: 'lz-card-h' },
-      h('span', { class: 'lz-ava lg' }, t.avatar || '🛰'),
+      h('span', { class: 'lz-ava lg' }, t.avatar || '🤖'),
       h('div', { class: 'lz-card-ti' },
         h('b', {}, t.name),
         h('span', { class: 'lz-strat' }, stratIcon(t.strategy) + ' ' + stratName(t.strategy))),
@@ -342,7 +342,7 @@ async function renderTeam(id) {
     mount(shell(
       h('button', { class: 'lz-back', onclick: () => nav('#/') }, '‹ 返回'),
       h('section', { class: 'lz-team-hero' },
-        h('span', { class: 'lz-ava xl' }, team.avatar || '🛰'),
+        h('span', { class: 'lz-ava xl' }, team.avatar || '🤖'),
         h('div', { class: 'lz-team-meta' },
           h('h1', {}, team.name),
           h('div', { class: 'lz-strat-row' },
@@ -760,7 +760,7 @@ async function renderBuilder(editId) {
     const [agents, kbsData] = await Promise.all([GET('/api/agents'), GET('/api/kb')]);
     const allAgents = [...agents.mine, ...agents.templates];
     const allKbs = [...kbsData.mine, ...kbsData.templates];
-    let team = { name: '', avatar: '🛰', goal: '', strategy: 'orchestrate', manager_note: '', member_ids: [], knowledge_ids: [], max_rounds: 3 };
+    let team = { name: '', avatar: '🤖', goal: '', strategy: 'orchestrate', manager_note: '', member_ids: [], knowledge_ids: [], max_rounds: 3 };
     if (editId) {
       const d = await GET(`/api/teams/${editId}`);
       if (!d.team.mine) { mount(shell(empty('只能编辑自己的团队', '可先「复制为我的」'))); return; }
@@ -802,7 +802,7 @@ async function renderBuilder(editId) {
 
     const save = h('button', { class: 'lz-btn block xl' }, editId ? '保存修改' : '创建团队');
     save.addEventListener('click', async () => {
-      const body = { name: fName.value.trim(), avatar: fAva.value.trim() || '🛰', goal: fGoal.value.trim(), strategy: team.strategy, manager_note: fNote.value.trim(), member_ids: [...sel], knowledge_ids: [...kbSel], max_rounds: Number(fRounds.value) || 3 };
+      const body = { name: fName.value.trim(), avatar: fAva.value.trim() || '🤖', goal: fGoal.value.trim(), strategy: team.strategy, manager_note: fNote.value.trim(), member_ids: [...sel], knowledge_ids: [...kbSel], max_rounds: Number(fRounds.value) || 3 };
       if (!body.name) { toast('给团队起个名字', 'warn'); return; }
       if (!body.member_ids.length) { toast('至少选 1 名成员', 'warn'); return; }
       save.disabled = true;
