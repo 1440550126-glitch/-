@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-const roots = ['server', 'web', 'admin', 'scripts'];
+const roots = ['server', 'web', 'admin', 'scripts', 'mojing'];
 let bad = 0, total = 0;
 function walk(dir) {
   for (const name of readdirSync(dir)) {

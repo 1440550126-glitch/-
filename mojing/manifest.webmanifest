@@ -1,0 +1,19 @@
+{
+  "name": "魔镜魔镜 · 一键瘦身美颜相机",
+  "short_name": "魔镜魔镜",
+  "description": "手机摄像头一键瘦身美颜，拍照拍视频都能美，支持自定义修图，全程本地处理不上传。",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0b14",
+  "theme_color": "#0d0b14",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23ff9ec6'/><stop offset='1' stop-color='%23b9a6ff'/></linearGradient></defs><rect width='100' height='100' rx='24' fill='%230d0b14'/><ellipse cx='50' cy='48' rx='28' ry='34' fill='none' stroke='url(%23g)' stroke-width='5'/><ellipse cx='50' cy='48' rx='28' ry='34' fill='url(%23g)' opacity='.18'/><path d='M40 32 Q44 28 50 28' stroke='%23fff' stroke-width='4' fill='none' stroke-linecap='round' opacity='.8'/></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

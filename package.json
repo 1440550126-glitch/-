@@ -15,6 +15,7 @@
     "studio": "node --disable-warning=ExperimentalWarning lingjing/server/index.js",
     "studio:dev": "node --disable-warning=ExperimentalWarning --watch lingjing/server/index.js",
     "studio:smoke": "node --disable-warning=ExperimentalWarning lingjing/scripts/smoke.mjs",
-    "studio:diagnose": "node --disable-warning=ExperimentalWarning lingjing/scripts/diagnose.mjs"
+    "studio:diagnose": "node --disable-warning=ExperimentalWarning lingjing/scripts/diagnose.mjs",
+    "mirror": "node --disable-warning=ExperimentalWarning mojing/server.js"
   }
 }

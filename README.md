@@ -15,6 +15,19 @@ npm run studio          # http://localhost:4399   （文档见 lingjing/README.m
 npm run studio:smoke    # 108 项冒烟测试（API + Agent + MCP stdio/HTTP）
 ```
 
+## 🪞 新成员：魔镜魔镜 · 一键瘦身美颜相机
+
+仓库里的第三个产品——**[魔镜魔镜](mojing/README.md)**：手机摄像头**一键瘦身美颜**相机。
+拍照、拍视频都能美，也能**自定义修图**；磨皮/美白/红润/瘦脸/瘦身/滤镜全部用 **WebGL 着色器实时**完成，
+**画面只在本地处理、绝不上传**。零构建、零依赖，和主站一脉相承。
+
+```bash
+npm run mirror          # http://localhost:3100   （独立运行）
+# 或随主站：npm start → http://localhost:3000/mojing/
+```
+
+> ⚠️ 摄像头需要安全环境：`localhost` 直接可用；公网部署需 **HTTPS**。
+
 ## 一键运行（零依赖）
 
 只需要 **Node.js ≥ 22.5**（内置 SQLite / fetch），不需要 `npm install`，不需要数据库服务：
@@ -65,6 +78,7 @@ npm run dev     # 开发模式（文件变更自动重启）
 │     ├ game/      游戏框架 core + 卧底/狼人杀双引擎
 │     └ warmup/    AI 暖场调度器
 ├── miniprogram/  微信小程序版（历史版本，可作为渠道端）
+├── mojing/   🪞 魔镜魔镜：一键瘦身美颜相机（纯前端 WebGL，拍照/拍视频，本地不上传）
 └── docs/     产品定位 / API / 数据库 / 合规
 ```
 

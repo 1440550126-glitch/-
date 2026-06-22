@@ -166,7 +166,13 @@ const MIME = {
   '.webmanifest': 'application/manifest+json'
 };
 
-export function serveStatic(res, rootDir, urlPath) {
+const DEFAULT_CSP =
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+  "img-src 'self' data:; connect-src 'self'; media-src 'self'; font-src 'self'; " +
+  "object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+
+// opts.csp 覆盖默认 CSP（如相机应用需放行 blob:）；opts.extraHeaders 追加响应头
+export function serveStatic(res, rootDir, urlPath, opts = {}) {
   let rel = urlPath.replace(/^\/+/, '');
   if (!rel) rel = 'index.html';
   const full = path.normalize(path.join(rootDir, rel));
@@ -182,12 +188,8 @@ export function serveStatic(res, rootDir, urlPath) {
     'Content-Type': MIME[ext] || 'application/octet-stream',
     'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=300',
     ...SEC_HEADERS,
-    ...(ext === '.html' ? {
-      'Content-Security-Policy':
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-        "img-src 'self' data:; connect-src 'self'; media-src 'self'; font-src 'self'; " +
-        "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
-    } : {})
+    ...(ext === '.html' ? { 'Content-Security-Policy': opts.csp || DEFAULT_CSP } : {}),
+    ...(opts.extraHeaders || {})
   });
   fs.createReadStream(file).pipe(res);
   return true;

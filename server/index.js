@@ -22,7 +22,14 @@ import './routes/admin.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(__dirname, '..', 'web');
 const ADMIN_DIR = path.join(__dirname, '..', 'admin');
+const MOJING_DIR = path.join(__dirname, '..', 'mojing');
 const PORT = Number(process.env.PORT) || 3000;
+
+// 魔镜魔镜（相机美颜应用）：纯客户端，需放行 blob:（拍照/录像回放）+ 相机权限
+const MOJING_CSP =
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+  "img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; " +
+  "font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
 
 GET('/api/health', async () => ({ status: 'ok', time: Date.now(), llm: llmEnabled() ? 'enabled' : 'local-fallback' }));
 
@@ -54,6 +61,18 @@ const server = http.createServer((req, res) => {
     const rel = pathname.replace(/^\/admin\/?/, '') || 'index.html';
     if (serveStatic(res, ADMIN_DIR, rel)) return;
   }
+  if (pathname === '/mojing') {
+    // 相对路径资源需挂在 /mojing/ 下才能正确解析
+    res.writeHead(301, { Location: '/mojing/' });
+    return res.end();
+  }
+  if (pathname.startsWith('/mojing/')) {
+    const rel = pathname.replace(/^\/mojing\//, '') || 'index.html';
+    if (serveStatic(res, MOJING_DIR, rel, {
+      csp: MOJING_CSP,
+      extraHeaders: { 'Permissions-Policy': 'camera=(self), microphone=(self)' }
+    })) return;
+  }
   if (serveStatic(res, WEB_DIR, pathname)) return;
   res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
   res.end('404');
@@ -73,6 +92,7 @@ server.listen(PORT, () => {
   console.log(`\n  ✨ AI句灵 已启动`);
   console.log(`  📱 用户端   http://localhost:${PORT}`);
   console.log(`  🛠  管理后台 http://localhost:${PORT}/admin`);
+  console.log(`  🪞 魔镜魔镜 http://localhost:${PORT}/mojing/  （也可独立运行：npm run mirror）`);
   console.log(`  🤖 大模型   ${llmEnabled() ? '已接入 ' + process.env.LLM_PROVIDER : '未配置（本地规则引擎模式，零成本可完整体验）'}\n`);
 });
 
