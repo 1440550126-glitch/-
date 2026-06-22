@@ -112,6 +112,26 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
   background:var(--glass-2);border:1px solid var(--line);}
 .rbtn.primary{background:linear-gradient(135deg,var(--pink),var(--violet));border-color:transparent;}
 
+/* 设备选择浮层 */
+.sheet{position:fixed;inset:0;z-index:45;display:flex;align-items:flex-end;justify-content:center;
+  background:rgba(0,0,0,.5);}
+.sheet-card{width:100%;max-width:520px;background:#16131f;border:1px solid var(--line);
+  border-radius:20px 20px 0 0;padding:18px 18px calc(18px + var(--safe-b));}
+.sheet-title{font-size:15px;font-weight:600;margin-bottom:12px;text-align:center;}
+.sheet-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;
+  font-size:14px;border-top:1px solid rgba(255,255,255,.06);}
+.sheet-row span{color:var(--dim);flex:0 0 auto;}
+.sheet-row select{flex:1;min-width:0;max-width:70%;padding:9px 10px;border-radius:10px;font-size:14px;
+  color:#fff;background:var(--glass-2);border:1px solid var(--line);}
+.sheet-row.switch input{width:46px;height:26px;-webkit-appearance:none;appearance:none;border-radius:14px;
+  background:rgba(255,255,255,.2);position:relative;transition:background .2s;}
+.sheet-row.switch input::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+  background:#fff;transition:transform .2s;}
+.sheet-row.switch input:checked{background:linear-gradient(135deg,var(--pink),var(--violet));}
+.sheet-row.switch input:checked::after{transform:translateX(20px);}
+.sheet-close{margin-top:16px;width:100%;padding:13px;border-radius:14px;font-size:15px;font-weight:600;
+  background:linear-gradient(135deg,var(--pink),var(--violet));}
+
 /* 提示 */
 .toast{position:fixed;top:calc(var(--safe-t) + 120px);left:50%;transform:translateX(-50%);z-index:50;
   background:rgba(0,0,0,.82);color:#fff;font-size:13px;padding:9px 18px;border-radius:20px;

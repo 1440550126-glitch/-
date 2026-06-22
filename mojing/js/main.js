@@ -18,6 +18,7 @@ let mirror = true;          // 前置默认镜像
 let mode = 'photo';         // photo | video
 let compare = false;        // 长按看原图
 let recTimer = 0, recStart = 0;
+let selVideoId = null, selAudioId = null;   // 当前选中的摄像头/麦克风
 
 const ui = createUI(store, {
   applyPreset: (preset, intensity) => applyPreset(store, preset, intensity)
@@ -58,6 +59,7 @@ async function boot() {
     $('#btn-face').hidden = false;
     $('#btn-face').classList.add('on');
   }
+  await initDevices();
   loop();
 }
 
@@ -88,8 +90,73 @@ $('#btn-flip').addEventListener('click', async () => {
     const info = await camera.switchCamera();
     mirror = info.isFront;
     setFlash(false);
-  } catch { ui.toast('切换摄像头失败'); }
+    selVideoId = camera.currentVideoId();
+    selAudioId = camera.currentAudioId();
+    $('#chk-mirror').checked = mirror;
+    await refreshDeviceList();
+  } catch { ui.toast('切换摄像头失败（手机才有前后摄像头，桌面请用「设备」选择）'); }
 });
+
+// —— 设备选择（外接 USB 摄像头/麦克风；桌面端「翻转」无效时用这个）——
+async function initDevices() {
+  selVideoId = camera.currentVideoId();
+  selAudioId = camera.currentAudioId();
+  $('#chk-mirror').checked = mirror;
+  await refreshDeviceList();
+  navigator.mediaDevices?.addEventListener?.('devicechange', refreshDeviceList);
+}
+
+async function refreshDeviceList() {
+  const { cameras, mics } = await camera.listDevices();
+  fillSelect($('#sel-cam'), cameras, selVideoId);
+  fillSelect($('#sel-mic'), mics, selAudioId);
+}
+
+function fillSelect(sel, items, currentId) {
+  if (!sel) return;
+  sel.innerHTML = '';
+  if (!items.length) {
+    const o = document.createElement('option');
+    o.textContent = '（未检测到）';
+    sel.append(o);
+    return;
+  }
+  items.forEach((d) => {
+    const o = document.createElement('option');
+    o.value = d.id;
+    o.textContent = d.label;
+    if (d.id === currentId) o.selected = true;
+    sel.append(o);
+  });
+}
+
+async function restartCamera(changes) {
+  if (camera.isRecording()) return ui.toast('录像中不能切换设备');
+  try {
+    await camera.start({
+      videoDeviceId: changes.video ?? selVideoId,
+      audioDeviceId: changes.audio ?? selAudioId
+    });
+    selVideoId = camera.currentVideoId();
+    selAudioId = camera.currentAudioId();
+    await refreshDeviceList();
+    ui.toast('已切换设备');
+  } catch (e) {
+    ui.toast('切换设备失败：' + (e?.message || e));
+  }
+}
+
+$('#btn-devices').addEventListener('click', async () => {
+  await refreshDeviceList();
+  $('#device-sheet').hidden = false;
+});
+$('#sheet-close').addEventListener('click', () => { $('#device-sheet').hidden = true; });
+$('#device-sheet').addEventListener('click', (e) => {
+  if (e.target.id === 'device-sheet') $('#device-sheet').hidden = true;
+});
+$('#sel-cam').addEventListener('change', (e) => restartCamera({ video: e.target.value }));
+$('#sel-mic').addEventListener('change', (e) => restartCamera({ audio: e.target.value }));
+$('#chk-mirror').addEventListener('change', (e) => { mirror = e.target.checked; });
 
 $('#btn-close').addEventListener('click', () => {
   if (history.length > 1) history.back();

@@ -7,19 +7,19 @@ export function createCamera(videoEl) {
   let videoTrack = null;
   let audioTrack = null;
 
-  async function start(facingMode = facing) {
+  // opts 可为 'user'/'environment' 字符串，或 { facingMode, videoDeviceId, audioDeviceId }
+  async function start(opts = {}) {
+    if (typeof opts === 'string') opts = { facingMode: opts };
     stop();
-    facing = facingMode;
-    const constraints = {
-      audio: true,
-      video: {
-        facingMode: { ideal: facingMode },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-        frameRate: { ideal: 30 }
-      }
-    };
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    facing = opts.facingMode || facing;
+    const videoC = opts.videoDeviceId
+      ? { deviceId: { exact: opts.videoDeviceId } }     // 指定设备（外接 USB 摄像头优先）
+      : { facingMode: { ideal: facing } };              // 手机前后摄像头
+    videoC.width = { ideal: 1280 };
+    videoC.height = { ideal: 720 };
+    videoC.frameRate = { ideal: 30 };
+    const audioC = opts.audioDeviceId ? { deviceId: { exact: opts.audioDeviceId } } : true;
+    stream = await navigator.mediaDevices.getUserMedia({ audio: audioC, video: videoC });
     videoTrack = stream.getVideoTracks()[0] || null;
     audioTrack = stream.getAudioTracks()[0] || null;
     videoEl.srcObject = stream;
@@ -30,7 +30,19 @@ export function createCamera(videoEl) {
       if (videoEl.readyState >= 2) return res();
       videoEl.onloadedmetadata = () => res();
     });
-    return { facing, isFront: facing === 'user' };
+    return { facing, isFront: facing === 'user', videoDeviceId: currentVideoId(), audioDeviceId: currentAudioId() };
+  }
+
+  const currentVideoId = () => (videoTrack && videoTrack.getSettings ? videoTrack.getSettings().deviceId : null) || null;
+  const currentAudioId = () => (audioTrack && audioTrack.getSettings ? audioTrack.getSettings().deviceId : null) || null;
+
+  // 枚举可用设备（label 需授权后才有值，所以在 start 成功后再调）
+  async function listDevices() {
+    if (!navigator.mediaDevices?.enumerateDevices) return { cameras: [], mics: [] };
+    const all = await navigator.mediaDevices.enumerateDevices();
+    const pick = (kind, fallback) => all.filter((d) => d.kind === kind)
+      .map((d, i) => ({ id: d.deviceId, label: d.label || `${fallback} ${i + 1}` }));
+    return { cameras: pick('videoinput', '摄像头'), mics: pick('audioinput', '麦克风') };
   }
 
   function stop() {
@@ -98,6 +110,7 @@ export function createCamera(videoEl) {
   return {
     start, stop, switchCamera, setTorch,
     startRecording, stopRecording, isRecording,
+    listDevices, currentVideoId, currentAudioId,
     get facing() { return facing; },
     get isFront() { return facing === 'user'; }
   };

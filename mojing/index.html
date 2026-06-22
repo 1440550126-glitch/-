@@ -23,6 +23,7 @@
     <div class="top-right">
       <button id="btn-flash" class="icon-btn" aria-label="补光">💡<span>补光</span></button>
       <button id="btn-face" class="icon-btn" aria-label="自动瘦脸" hidden>🎯<span>瘦脸</span></button>
+      <button id="btn-devices" class="icon-btn" aria-label="选择设备">📷<span>设备</span></button>
       <button id="btn-flip" class="icon-btn" aria-label="翻转镜头">🔄<span>翻转</span></button>
     </div>
   </header>
@@ -48,6 +49,17 @@
       <button data-mode="video">录像</button>
     </div>
   </footer>
+
+  <!-- 设备选择（外接 USB 摄像头/麦克风时用，桌面端尤其需要） -->
+  <div id="device-sheet" class="sheet" hidden>
+    <div class="sheet-card">
+      <div class="sheet-title">选择设备</div>
+      <label class="sheet-row"><span>摄像头</span><select id="sel-cam"></select></label>
+      <label class="sheet-row"><span>麦克风</span><select id="sel-mic"></select></label>
+      <label class="sheet-row switch"><span>镜像画面</span><input type="checkbox" id="chk-mirror" /></label>
+      <button id="sheet-close" class="sheet-close">完成</button>
+    </div>
+  </div>
 
   <div id="result" class="result" hidden></div>
   <div id="toast" class="toast" hidden></div>
