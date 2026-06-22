@@ -1,0 +1,6 @@
+{
+  "name": "echo-provider",
+  "version": "0.1.0",
+  "description": "示例：注册一个自定义大模型后端（Provider）+ 配套工具",
+  "entry": "entry.py"
+}

@@ -1,0 +1,6 @@
+{
+  "name": "hello",
+  "version": "0.1.0",
+  "description": "示例插件：演示如何新增工具 / 技能 / 接入新大模型后端",
+  "entry": "entry.py"
+}

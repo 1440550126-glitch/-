@@ -1,0 +1,454 @@
+"""工具系统：Agent 通过通用文本协议调用这些工具与真实世界交互。
+
+插件可调用 registry.register() 注入新工具，实现能力无限扩展。
+"""
+from __future__ import annotations
+
+import re
+import shutil
+import subprocess
+import urllib.error
+import urllib.request
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Callable
+
+# 明显高危、直接拒绝执行的 shell 模式（防误伤，非完整沙箱）
+_SHELL_DENY = [
+    r"rm\s+-rf\s+/(?:\s|$)", r":\(\)\s*\{", r"mkfs", r"\bdd\s+if=",
+    r">\s*/dev/sd", r"chmod\s+-R\s+777\s+/", r"\bshutdown\b", r"\breboot\b",
+]
+
+
+@dataclass
+class ToolContext:
+    """工具运行时上下文。"""
+    memory: object = None
+    config: object = None
+    cwd: str = "."
+    auto_approve: bool = True   # daemon/非交互下自动放行；交互模式可由 CLI 改写
+    confirm: Callable[[str], bool] | None = None
+    agent: object = None        # 当前 Agent（供 delegate 派生子 Agent）
+    deny: tuple = ()            # 被策略禁用的工具名（始终拒绝）
+
+
+@dataclass
+class Tool:
+    name: str
+    description: str
+    parameters: dict          # 参数名 -> 说明
+    func: Callable            # (args: dict, ctx: ToolContext) -> str
+    danger: bool = False      # 是否需要确认（写入/执行类）
+
+    def spec(self) -> str:
+        params = ", ".join(f"{k}（{v}）" for k, v in self.parameters.items()) or "无"
+        flag = " ⚠需确认" if self.danger else ""
+        return f"- {self.name}: {self.description}{flag}\n  参数: {params}"
+
+
+class ToolRegistry:
+    def __init__(self):
+        self._tools: dict[str, Tool] = {}
+
+    def register(self, tool: Tool) -> None:
+        self._tools[tool.name] = tool
+
+    def add(self, name, description, parameters, func, danger=False) -> None:
+        self.register(Tool(name, description, parameters, func, danger))
+
+    def get(self, name: str) -> Tool | None:
+        return self._tools.get(name)
+
+    def names(self) -> list[str]:
+        return list(self._tools)
+
+    def specs(self) -> str:
+        return "\n".join(t.spec() for t in self._tools.values())
+
+    def run(self, name: str, args: dict, ctx: ToolContext) -> str:
+        tool = self._tools.get(name)
+        if not tool:
+            return f"[错误] 未知工具：{name}。可用：{', '.join(self.names())}"
+        if name in (ctx.deny or ()):
+            return f"[已拒绝] 工具 {name} 被安全策略禁用（tools.deny）"
+        if tool.danger and not ctx.auto_approve:
+            ok = ctx.confirm(f"执行高危工具 {name}({args})？") if ctx.confirm else False
+            if not ok:
+                return f"[已取消] 用户拒绝执行 {name}"
+        try:
+            return tool.func(args or {}, ctx)
+        except Exception as e:  # noqa: BLE001
+            return f"[工具异常] {name}: {e}"
+
+
+# ---------------- 内置工具实现 ----------------
+
+def _t_read_file(args, ctx):
+    path = Path(ctx.cwd) / args["path"]
+    if not path.is_file():
+        return f"[错误] 文件不存在：{path}"
+    data = path.read_text(encoding="utf-8", errors="replace")
+    return data[:20000] + ("\n…(已截断)" if len(data) > 20000 else "")
+
+
+def _t_write_file(args, ctx):
+    path = Path(ctx.cwd) / args["path"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(args.get("content", ""), encoding="utf-8")
+    return f"已写入 {path}（{len(args.get('content', ''))} 字符）"
+
+
+def _t_edit_file(args, ctx):
+    """精准编辑：把文件中唯一出现的 old 替换为 new（比整文件覆盖更安全）。"""
+    path = Path(ctx.cwd) / args.get("path", "")
+    if not path.is_file():
+        return f"[错误] 文件不存在：{path}"
+    old = args.get("old", "")
+    new = args.get("new", "")
+    if not old:
+        return "[错误] 需要 old（要替换的原文）"
+    text = path.read_text(encoding="utf-8", errors="replace")
+    count = text.count(old)
+    if count == 0:
+        return "[错误] 未找到要替换的文本（old 未命中）"
+    all_ = bool(args.get("all"))
+    if count > 1 and not all_:
+        return f"[错误] old 出现 {count} 次，不唯一。提供更长上下文，或设 all=true 全部替换"
+    text = text.replace(old, new) if all_ else text.replace(old, new, 1)
+    path.write_text(text, encoding="utf-8")
+    return f"已编辑 {path}（替换 {count if all_ else 1} 处）"
+
+
+def _t_list_dir(args, ctx):
+    path = Path(ctx.cwd) / args.get("path", ".")
+    if not path.is_dir():
+        return f"[错误] 目录不存在：{path}"
+    items = sorted(p.name + ("/" if p.is_dir() else "") for p in path.iterdir())
+    return "\n".join(items[:200]) or "(空目录)"
+
+
+def _t_search_files(args, ctx):
+    """在目录中按正则搜索文件内容（grep 风格），返回 文件:行号: 片段。只读、有界。"""
+    pattern = args.get("pattern", "")
+    if not pattern:
+        return "[错误] 缺少 pattern"
+    try:
+        rx = re.compile(pattern)
+    except re.error as e:
+        return f"[错误] 非法正则：{e}"
+    base = Path(ctx.cwd) / args.get("path", ".")
+    if not base.exists():
+        return f"[错误] 路径不存在：{base}"
+    glob = args.get("glob") or "*"
+    targets = [base] if base.is_file() else base.rglob(glob)
+    results: list[str] = []
+    scanned = 0
+    for p in targets:
+        if not p.is_file():
+            continue
+        rel = p.relative_to(base if base.is_dir() else base.parent)
+        if any(seg.startswith(".") for seg in rel.parts):
+            continue                       # 跳过隐藏目录/文件（.git/.venv 等）
+        scanned += 1
+        if scanned > 3000:
+            break
+        try:
+            if p.stat().st_size > 1_000_000:
+                continue
+            for i, line in enumerate(p.read_text(encoding="utf-8", errors="replace")
+                                     .splitlines(), 1):
+                if rx.search(line):
+                    results.append(f"{p}:{i}: {line.strip()[:160]}")
+                    if len(results) >= 50:
+                        return "\n".join(results) + "\n…(已截断)"
+        except OSError:
+            continue
+    return "\n".join(results) if results else "(无匹配)"
+
+
+def _t_run_shell(args, ctx):
+    cmd = args.get("command", "")
+    if ctx.config and not ctx.config.get("allow_shell", True):
+        return "[已禁用] 配置 allow_shell=false，已拒绝执行 shell。"
+    for pat in _SHELL_DENY:
+        if re.search(pat, cmd):
+            return f"[已拦截] 命令命中高危模式，拒绝执行：{pat}"
+    timeout = int(ctx.config.get("shell_timeout", 60)) if ctx.config else 60
+    engine = ctx.config.get("sandbox.engine", "none") if ctx.config else "none"
+    try:
+        if engine and engine != "none":
+            if not shutil.which(engine):
+                return f"[沙箱不可用] 配置了 sandbox.engine={engine} 但系统无此命令；为安全已拒绝执行。"
+            image = ctx.config.get("sandbox.image", "python:3.11-slim")
+            workdir = str(Path(ctx.cwd).resolve())
+            full = [engine, "run", "--rm", "--network", "none",
+                    "-v", f"{workdir}:/work", "-w", "/work", image, "sh", "-c", cmd]
+            r = subprocess.run(full, capture_output=True, text=True, timeout=timeout)
+        else:
+            r = subprocess.run(cmd, shell=True, cwd=ctx.cwd, capture_output=True,
+                               text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return f"[超时] 命令超过 {timeout}s 被终止"
+    out = (r.stdout or "") + (("\n[stderr]\n" + r.stderr) if r.stderr else "")
+    out = out.strip() or "(无输出)"
+    tag = f"[沙箱:{engine}] " if engine and engine != "none" else ""
+    return f"{tag}[退出码 {r.returncode}]\n{out[:8000]}"
+
+
+def _t_web_fetch(args, ctx):
+    url = args["url"]
+    if not re.match(r"^https?://", url):
+        return "[错误] 仅支持 http(s) URL"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mnemo/0.1"})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        raw = resp.read(2_000_000).decode("utf-8", "replace")
+    raw = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", raw)
+    text = re.sub(r"(?s)<[^>]+>", " ", raw)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:6000] + ("\n…(已截断)" if len(text) > 6000 else "")
+
+
+def _t_web_search(args, ctx):
+    query = (args.get("query") or "").strip()
+    if not query:
+        return "[错误] 缺少 query"
+    from .websearch import search
+    try:
+        results = search(query, int(args.get("limit", 6)))
+    except Exception as e:  # noqa: BLE001
+        return f"[web_search] 检索失败：{e}（可改用 web_fetch 直接抓取已知 URL）"
+    if not results:
+        return "(没有检索到结果)"
+    return "\n".join(
+        f"{i}. {r['title']}\n   {r['url']}" + (f"\n   {r['snippet']}" if r["snippet"] else "")
+        for i, r in enumerate(results, 1))
+
+
+def _t_http_request(args, ctx):
+    """通用 REST 调用：支持方法/请求头/JSON 或文本 body。比 web_fetch 更通用。"""
+    import json as _json
+    url = args.get("url", "")
+    if not re.match(r"^https?://", url):
+        return "[错误] 仅支持 http(s) URL"
+    method = (args.get("method") or "GET").upper()
+    headers = dict(args.get("headers") or {})
+    body = args.get("body")
+    data = None
+    if body is not None:
+        if isinstance(body, (dict, list)):
+            data = _json.dumps(body).encode("utf-8")
+            headers.setdefault("Content-Type", "application/json")
+        else:
+            data = str(body).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method=method)
+    req.add_header("User-Agent", "Mnemo/0.1")
+    for k, v in headers.items():
+        req.add_header(k, str(v))
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read(1_000_000).decode("utf-8", "replace")
+        return f"[{getattr(resp, 'status', 200)}]\n{raw[:6000]}" + (
+            "\n…(已截断)" if len(raw) > 6000 else "")
+    except urllib.error.HTTPError as e:
+        return f"[HTTP {e.code}] {e.read().decode('utf-8', 'replace')[:2000]}"
+    except Exception as e:  # noqa: BLE001
+        return f"[http_request] 失败：{e}"
+
+
+def _t_remember(args, ctx):
+    if not ctx.memory:
+        return "[错误] 记忆不可用"
+    fid = ctx.memory.add_fact(args["text"], kind=args.get("kind", "fact"),
+                              importance=int(args.get("importance", 3)), source="tool")
+    return f"已记住（#{fid}）：{args['text']}"
+
+
+def _t_recall(args, ctx):
+    if not ctx.memory:
+        return "[错误] 记忆不可用"
+    hits = ctx.memory.recall(args["query"], limit=int(args.get("limit", 6)))
+    if not hits:
+        return "(没有相关记忆)"
+    return "\n".join(f"#{h['id']} {h['text']}" for h in hits)
+
+
+def _t_forget(args, ctx):
+    if not ctx.memory:
+        return "[错误] 记忆不可用"
+    fid = args.get("id")
+    if fid is None:
+        return "[错误] 需要 id（先用 recall 查到记忆编号）"
+    try:
+        ok = ctx.memory.forget(int(fid))
+    except (ValueError, TypeError):
+        return f"[错误] 非法 id：{fid!r}"
+    return f"已删除记忆 #{fid}" if ok else f"未找到记忆 #{fid}"
+
+
+def _t_now(args, ctx):
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S %A")
+
+
+# 安全计算器：用 ast 解析，仅允许算术与白名单数学函数，绝不 eval 任意代码
+import ast as _ast  # noqa: E402
+import math as _math  # noqa: E402
+import operator as _op  # noqa: E402
+
+_CALC_OPS = {_ast.Add: _op.add, _ast.Sub: _op.sub, _ast.Mult: _op.mul,
+             _ast.Div: _op.truediv, _ast.Pow: _op.pow, _ast.Mod: _op.mod,
+             _ast.FloorDiv: _op.floordiv, _ast.USub: _op.neg, _ast.UAdd: _op.pos}
+_CALC_FUNCS = {k: getattr(_math, k) for k in
+               ("sqrt", "sin", "cos", "tan", "log", "log2", "log10",
+                "exp", "floor", "ceil", "fabs", "factorial")}
+_CALC_CONSTS = {"pi": _math.pi, "e": _math.e, "tau": _math.tau}
+
+
+def _calc_eval(node):
+    if isinstance(node, _ast.Constant) and isinstance(node.value, (int, float)):
+        return node.value
+    if isinstance(node, _ast.BinOp) and type(node.op) in _CALC_OPS:
+        return _CALC_OPS[type(node.op)](_calc_eval(node.left), _calc_eval(node.right))
+    if isinstance(node, _ast.UnaryOp) and type(node.op) in _CALC_OPS:
+        return _CALC_OPS[type(node.op)](_calc_eval(node.operand))
+    if isinstance(node, _ast.Name) and node.id in _CALC_CONSTS:
+        return _CALC_CONSTS[node.id]
+    if isinstance(node, _ast.Call) and isinstance(node.func, _ast.Name) \
+            and node.func.id in _CALC_FUNCS and not node.keywords:
+        return _CALC_FUNCS[node.func.id](*[_calc_eval(a) for a in node.args])
+    raise ValueError("不支持的表达式元素")
+
+
+def _t_calc(args, ctx):
+    expr = (args.get("expr") or args.get("expression") or "").strip()
+    if not expr:
+        return "[calc] 缺少 expr"
+    try:
+        return str(_calc_eval(_ast.parse(expr, mode="eval").body))
+    except Exception as e:  # noqa: BLE001
+        return f"[calc] 无法计算「{expr}」：{e}"
+
+
+def _t_view_image(args, ctx):
+    """多模态：用带视觉能力的后端理解一张本地图片。"""
+    prov = getattr(ctx.agent, "provider", None) if ctx.agent else None
+    if not prov or not getattr(prov, "supports_vision", lambda: False)():
+        return "[view_image] 当前后端不支持视觉，请配置视觉模型（如 gpt-4o / claude）"
+    path = Path(ctx.cwd) / args["path"]
+    if not path.is_file():
+        return f"[错误] 图片不存在：{path}"
+    return prov.vision(str(path), args.get("prompt", "详细描述这张图片"))
+
+
+# 语音合成：按可用性挑选系统 TTS
+_TTS = [("say", lambda t: ["say", t]), ("spd-say", lambda t: ["spd-say", t]),
+        ("espeak-ng", lambda t: ["espeak-ng", t]), ("espeak", lambda t: ["espeak", t])]
+
+
+def _t_speak(args, ctx):
+    text = args.get("text", "")
+    for cmd, build in _TTS:
+        if shutil.which(cmd):
+            try:
+                subprocess.run(build(text), timeout=60, capture_output=True)
+                return f"已朗读（{cmd}）：{text[:40]}"
+            except Exception as e:  # noqa: BLE001
+                return f"[speak] 调用 {cmd} 失败：{e}"
+    return "[speak] 未找到系统 TTS（macOS say / Linux espeak/spd-say）。原文：" + text[:120]
+
+
+def _t_transcribe(args, ctx):
+    path = Path(ctx.cwd) / args.get("path", "")
+    if not path.is_file():
+        return f"[错误] 音频文件不存在：{path}"
+    path = str(path)
+    for cmd in ("whisper", "whisper-cli", "whisper-cpp"):
+        if shutil.which(cmd):
+            try:
+                r = subprocess.run([cmd, path], capture_output=True, text=True, timeout=600)
+                return (r.stdout or r.stderr or "(无输出)")[:4000]
+            except Exception as e:  # noqa: BLE001
+                return f"[transcribe] 调用 {cmd} 失败：{e}"
+    return "[transcribe] 未找到本地语音识别。可 `pip install openai-whisper` 或安装 whisper.cpp。"
+
+
+def _t_delegate(args, ctx):
+    """把一个聚焦的子任务委派给子 Agent（多 Agent 协作），返回其结果。"""
+    parent = ctx.agent
+    if parent is None or not hasattr(parent, "_make_subagent"):
+        return "[delegate] 当前环境不支持委派"
+    if getattr(parent, "_depth", 0) >= 2:
+        return "[delegate] 已达最大委派深度（防止无限递归）"
+    sub = parent._make_subagent()
+    role = args.get("role", "专家助手")
+    task = args.get("task", "")
+    out = sub.run(f"你的角色是「{role}」。聚焦完成这个子任务，直接给结论：\n{task}",
+                  session="subagent", cwd=ctx.cwd, auto_approve=ctx.auto_approve)
+    return f"[{role} 的结果]\n{out}"[:2500]
+
+
+def _t_notify(args, ctx):
+    from .notify import notify
+    msg = (args.get("message") or args.get("text") or "").strip()
+    if not msg:
+        return "[notify] 缺少 message"
+    ch = notify(ctx.config, msg, title=args.get("title", "Mnemo"))
+    return f"已通过 {ch} 渠道通知：{msg[:60]}"
+
+
+def _t_remind(args, ctx):
+    if not ctx.memory:
+        return "[错误] 记忆不可用"
+    from .memory import parse_when
+    when = parse_when(args.get("when", ""))
+    if when is None:
+        return "[错误] 无法解析时间，请用：in 2h / 18:30 / 2026-06-17 09:00"
+    import time
+    repeat = args.get("repeat") or None
+    rid = ctx.memory.add_reminder(args["text"], when, repeat=repeat)
+    rep = f"，每 {repeat} 重复" if repeat else ""
+    return (f"已设提醒 #{rid}：{args['text']}"
+            f"（{time.strftime('%m-%d %H:%M', time.localtime(when))}{rep}）")
+
+
+def build_default_registry() -> ToolRegistry:
+    r = ToolRegistry()
+    r.add("read_file", "读取文本文件内容", {"path": "相对/绝对路径"}, _t_read_file)
+    r.add("write_file", "写入/覆盖文本文件", {"path": "路径", "content": "内容"},
+          _t_write_file, danger=True)
+    r.add("edit_file", "精准编辑：把文件中唯一出现的 old 替换为 new（不覆盖整文件）",
+          {"path": "路径", "old": "原文(需唯一)", "new": "新文本", "all": "可选,true=全部替换"},
+          _t_edit_file, danger=True)
+    r.add("list_dir", "列出目录内容", {"path": "目录，默认当前"}, _t_list_dir)
+    r.add("search_files", "在目录中按正则搜索文件内容（grep 风格）",
+          {"pattern": "正则", "path": "目录，默认当前", "glob": "可选,如 *.py"}, _t_search_files)
+    r.add("run_shell", "执行 shell 命令并返回输出", {"command": "命令"},
+          _t_run_shell, danger=True)
+    r.add("web_search", "用搜索引擎检索网页，返回标题/链接/摘要（再用 web_fetch 抓正文）",
+          {"query": "搜索词", "limit": "结果条数，默认6"}, _t_web_search)
+    r.add("web_fetch", "抓取网页并返回纯文本", {"url": "http(s) 链接"}, _t_web_fetch)
+    r.add("http_request", "调用任意 REST API（GET/POST/PUT…，可带 headers 与 JSON body）",
+          {"url": "链接", "method": "默认GET", "headers": "可选对象", "body": "可选，对象自动转JSON"},
+          _t_http_request, danger=True)
+    r.add("remember", "把一条信息写入长期记忆",
+          {"text": "要记住的内容", "importance": "1-5，默认3"}, _t_remember)
+    r.add("recall", "从长期记忆检索（返回带 #编号）", {"query": "查询词", "limit": "条数"}, _t_recall)
+    r.add("forget", "删除一条过时/错误的长期记忆（先用 recall 查编号）",
+          {"id": "记忆编号"}, _t_forget, danger=True)
+    r.add("now", "获取当前日期时间", {}, _t_now)
+    r.add("calc", "精确计算数学表达式（支持 + - * / ** % 与 sqrt/sin/log 等）",
+          {"expr": "如 (3+4)*2 或 sqrt(2)*pi"}, _t_calc)
+    r.add("remind", "设置定时提醒（守护进程到点触发，可周期重复）",
+          {"text": "提醒内容", "when": "时间：in 2h / 18:30 / 2026-06-17 09:00",
+           "repeat": "可选：daily/weekly/hourly 或 every 3d"}, _t_remind)
+    r.add("notify", "立即推送一条通知给用户（桌面/webhook）",
+          {"message": "通知内容", "title": "标题，默认 Mnemo"}, _t_notify)
+    r.add("delegate", "把一个聚焦子任务交给子 Agent 处理并拿回结果（多 Agent 协作）",
+          {"role": "子 Agent 的角色，如 研究员/程序员/审阅者", "task": "子任务描述"},
+          _t_delegate)
+    r.add("view_image", "用视觉模型理解一张本地图片（多模态）",
+          {"path": "图片路径", "prompt": "想问什么，默认描述图片"}, _t_view_image)
+    r.add("speak", "用系统 TTS 朗读文本（语音输出）", {"text": "要朗读的文本"}, _t_speak)
+    r.add("transcribe", "把本地音频转写成文字（需 whisper，语音输入）",
+          {"path": "音频文件路径"}, _t_transcribe)
+    return r
