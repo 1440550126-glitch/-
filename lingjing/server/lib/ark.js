@@ -17,19 +17,21 @@ export const DEFAULTS = {
   model_image_pro: 'doubao-seedream-4-0-250828',
   model_video: 'doubao-seedance-1-0-pro-250528',
   // 创作框可选的视频模型（每行「显示名|模型ID」）；以方舟控制台「开通管理」里的准确 ID 为准。
-  // 想用最强：去控制台复制 Seedance 2.0 / Pro 的模型 ID 或推理接入点 ep-xxxx 替换下面对应行。
+  // 2026 最新：Seedance 2.5（30s/原生4K/50参考素材）、Veo 3.1、通义万相 2.5（音画同步）、Vidu Q2。
+  // 想用最强：去控制台复制对应模型 ID 或推理接入点 ep-xxxx 替换下面带「核对ID」的行。
   model_video_options: [
-    'Seedance 2.0 Pro（最强，请核对ID）|doubao-seedance-2-0-pro',
-    'Seedance 2.0|doubao-seedance-2-0',
-    'Seedance 1.0 Pro|doubao-seedance-1-0-pro-250528',
+    'Seedance 2.5（字节·最强 30s/原生4K/50参考素材，核对ID）|doubao-seedance-2-5',
+    'Seedance 2.0 Pro（多模态参考，核对ID）|doubao-seedance-2-0-pro',
+    'Seedance 2.0（核对ID）|doubao-seedance-2-0',
+    'Seedance 1.0 Pro（稳定）|doubao-seedance-1-0-pro-250528',
     'Seedance 1.0 Lite 图生视频|doubao-seedance-1-0-lite-i2v-250428',
-    'Veo 3（Google，需 Google Key）|veo-3.0-generate-001',
-    'Veo 3 Fast（Google）|veo-3.0-fast-generate-001',
-    '通义万相 2.1 图生视频（阿里，需 DashScope Key）|wanx2.1-i2v-turbo',
-    '通义万相 2.1 文生视频（阿里）|wanx2.1-t2v-turbo',
+    'Veo 3.1（Google·4K音画同步，需 Google Key，核对ID）|veo-3.1-generate-preview',
+    'Veo 3（Google）|veo-3.0-generate-001',
+    '通义万相 2.5（阿里·音画同步，需 DashScope Key，核对ID）|wan2.5-i2v-preview',
     '通义万相 2.2 图生视频 Plus（阿里）|wan2.2-i2v-plus',
-    'Vidu Q1 全能参考（多主体一致，需 Vidu Key）|viduq1',
-    'Vidu 2.0 全能参考（多图参考）|vidu2.0'
+    '通义万相 2.1 图生视频（阿里）|wanx2.1-i2v-turbo',
+    'Vidu Q2 全能参考（多主体一致，需 Vidu Key，核对ID）|viduq2',
+    'Vidu Q1 全能参考|viduq1'
   ].join('\n'),
   video_extra_args: '',     // 追加到视频任务文本命令的参数，如 --camerafixed true
   watermark: false,

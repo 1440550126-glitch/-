@@ -11,12 +11,13 @@ export const PROVIDER_DEFAULTS = {
   google_base_url: 'https://generativelanguage.googleapis.com/v1beta',
   dashscope_base_url: 'https://dashscope.aliyuncs.com',   // 阿里云百炼·统一 API（千问/通义万相 图与视频共用一个 Key）
   vidu_base_url: 'https://api.vidu.com',                   // Vidu（生数科技）·多主体参考「全能参考」视频，国产多图参考最强
-  // 创作框「生成图片」可选的图像模型（每行「显示名|模型ID」），与视频模型列表对称
+  // 创作框「生成图片」可选的图像模型（每行「显示名|模型ID」），与视频模型列表对称。2026 最新：Seedream 5.0 / 通义万相 2.5。
   model_image_options: [
+    'Seedream 5.0（火山·最新，核对ID）|doubao-seedream-5-0',
     'Seedream 4.0（火山·默认）|doubao-seedream-4-0-250828',
     'GPT Image（OpenAI，需 OpenAI Key）|gpt-image-1',
+    '通义万相 2.5 文生图（阿里·音画同步系列，核对ID）|wan2.5-t2i-preview',
     '通义万相 2.1 文生图 Turbo（阿里，需 DashScope Key）|wanx2.1-t2i-turbo',
-    '通义万相 2.1 文生图 Plus（阿里）|wanx2.1-t2i-plus',
     'Qwen-Image 文生图（阿里）|qwen-image'
   ].join('\n')
 };
