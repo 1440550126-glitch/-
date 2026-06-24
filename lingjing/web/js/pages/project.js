@@ -102,16 +102,17 @@ export async function renderProject(page, params) {
   } });
   entBtn.innerHTML = `${icon('user', 15)} 校验角色`;
 
-  // 全能参考一键出片：角色三视图+场景图作多图参考，调多主体一致模型（默认 Vidu Q1）一次出连续短片
-  const omniBtn = h('button', { class: 'btn', title: '全能参考：用角色三视图+场景图作多图参考，调 Vidu Q1 等多主体一致模型一次产出人物/场景一致的连续短片（建议先出参考图、并在设置页配 Vidu Key）', onclick: async () => {
+  // 全能参考一键出片：角色三视图+场景图作多图参考，模型跟随顶栏「视频模型」（Vidu/可灵 真·多主体参考）
+  const omniBtn = h('button', { class: 'btn', title: '全能参考：用角色三视图+场景图作多图参考，一次产出人物/场景一致的连续短片。模型跟随顶栏「视频模型」——选 Vidu 或可灵才是真·多主体参考', onclick: async () => {
     if (!project.storyboard) return toast('先解析剧本', 'err');
     omniBtn.disabled = true;
     const old = omniBtn.innerHTML;
     omniBtn.innerHTML = `${icon('loader', 15)} 全能参考出片中…`;
     try {
-      const r = await POST(`/api/projects/${project.id}/omni-video`, {});
+      const r = await POST(`/api/projects/${project.id}/omni-video`, { model: vidModelSel.value || '' });
       if (r.missing_images?.length) toast(`${r.missing_images.length} 个参考图还没生成，建议先出图再用全能参考`, 'err');
-      toast(`已提交全能参考出片（带入 ${r.used_images} 张参考图），生成中…`, 'ok');
+      if (r.note) toast(r.note, 'err');
+      toast(`已提交全能参考出片（${r.model}，带入 ${r.used_images} 张参考图），生成中…`, 'ok');
       const t = await pollUntilDone(r.taskId);
       if (t.status === 'succeeded') { toast('全能参考短片已生成，已存入资产库', 'ok'); reload(true); }
       else toast('全能参考出片失败：' + (t.error || ''), 'err');

@@ -98,6 +98,7 @@ try {
   ok(prov.videoProviderOf('viduq1') === 'vidu' && prov.videoProviderOf('vidu2.0') === 'vidu' && prov.pickVideoProvider('viduq1', { arkEnabled: true }).enabled === false, 'Vidu 全能参考按 ID 路由，未配 Key 不启用（安全）');
   ok(prov.videoProviderOf('kling-v2-1') === 'kling' && prov.videoProviderOf('kling-v1-6') === 'kling' && prov.pickVideoProvider('kling-v2-5', { arkEnabled: true }).enabled === false, '可灵 Kling 按 ID 路由，未配 AK/SK 不启用（安全）');
   ok(prov.klingEnabled() === false, '未配 Kling AK/SK 时 klingEnabled 为 false');
+  ok(prov.supportsMultiRef('viduq1') === true && prov.supportsMultiRef('kling-v2-1') === true && prov.supportsMultiRef('doubao-seedance-2-5') === false, '多主体参考能力：Vidu/可灵 支持，Seedance 不支持');
   const ark = await import(path.join(ROOT, 'server', 'lib', 'ark.js'));
   ok(ark.isQwenChat('qwen-max') === true && ark.isQwenChat('doubao-seed-1-6-250615') === false, '千问对话模型按 ID 识别');
   ok(ark.llmEnabled() === false, '无任何大模型 Key 时 llmEnabled 为 false（走本地）');
@@ -422,7 +423,11 @@ try {
   const omni = (await api('GET', `/api/projects/${p.id}/omni-reference`)).data;
   ok(/镜头1/.test(omni.prompt) && /图片1/.test(omni.prompt) && Array.isArray(omni.references) && omni.references.length >= 1, '全能参考：分镜拼成带编号图片引用的多镜头剧本');
   ok(omni.references[0].n === 1 && omni.references.some((r) => r.type === '场景') && /摄影|景深/.test(omni.prompt), '全能参考：编号清单（角色优先+场景）+ 每镜含摄影机参数');
-  // 全能参考一键出片（默认 Vidu Q1，多图参考）；未配 Vidu Key → 安全回退本地占位
+  // 全能参考一键出片：模型跟随所选视频模型；Vidu/可灵=真·多主体参考，其余退化首图并标注
+  const omniVidu = (await api('POST', `/api/projects/${p.id}/omni-video`, { model: 'viduq1' })).data;
+  ok(omniVidu.multi_ref === true && !omniVidu.note, '选 Vidu 时全能参考为真·多主体参考');
+  const omniSd = (await api('POST', `/api/projects/${p.id}/omni-video`, { model: 'doubao-seedance-2-5' })).data;
+  ok(omniSd.multi_ref === false && /多主体参考/.test(omniSd.note || ''), '选非多图模型时退化为首图参考并标注');
   const omniVid = (await api('POST', `/api/projects/${p.id}/omni-video`, {})).data;
   ok(omniVid.taskId && omniVid.used_images >= 1, '全能参考一键出片：创建任务并带入多张参考图');
   const omniDone = await until(async () => {

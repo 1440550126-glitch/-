@@ -21,7 +21,7 @@ GET('/api/expressions', async () => ({ categories: listExpressions() }));
 // 全能参考：把分镜拼成带编号图片引用的多镜头剧本（女主【图片1】在【图片2】中…）+ 编号→参考图清单
 GET('/api/projects/:id/omni-reference', async ({ params, query }) => buildOmniReferencePrompt(params.id, { episode: query.get('episode') || '' }));
 // 全能参考一键出片：多图参考模型（默认 Vidu Q1）一次产出人物/场景一致的连续短片
-POST('/api/projects/:id/omni-video', async ({ params, body }) => generateOmniVideo({ projectId: params.id, episode: body.episode || '', model: body.model || 'viduq1', ratio: body.ratio || '', duration: body.duration || 8 }));
+POST('/api/projects/:id/omni-video', async ({ params, body }) => generateOmniVideo({ projectId: params.id, episode: body.episode || '', model: body.model || '', ratio: body.ratio || '', duration: body.duration || 8 }));
 // 故事板图：把整段分镜画成一张 N 宫格故事板（限定景别与运动）。GET 取提示词预览，POST 出图
 GET('/api/projects/:id/storyboard-sheet', async ({ params, query }) => buildStoryboardSheet(params.id, { episode: query.get('episode') || '', max: Number(query.get('max')) || 12 }));
 POST('/api/projects/:id/storyboard-sheet', async ({ params, body }) => generateStoryboardSheet(params.id, { episode: body.episode || '', model: body.model || '', max: body.max || 12 }));

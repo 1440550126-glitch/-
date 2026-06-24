@@ -3,7 +3,7 @@
 import { q, getSetting, setSetting } from './db.js';
 import { uid, now, jparse, clamp } from './util.js';
 import { arkEnabled, llmEnabled, arkChat, arkImage, arkVideoCreate, arkVideoGet, cfg } from './ark.js';
-import { pickImageProvider, pickVideoProvider, maxVideoDuration, openaiImage, googleVeoCreate, googleVeoGet, dashscopeImage, dashscopeVideoCreate, dashscopeTaskGet, viduReferenceVideoCreate, viduTaskGet, klingVideoCreate, klingTaskGet } from './providers.js';
+import { pickImageProvider, pickVideoProvider, maxVideoDuration, supportsMultiRef, openaiImage, googleVeoCreate, googleVeoGet, dashscopeImage, dashscopeVideoCreate, dashscopeTaskGet, viduReferenceVideoCreate, viduTaskGet, klingVideoCreate, klingTaskGet } from './providers.js';
 import { localScript, localParse, localImageSVG, localVideoSVG, saveSVG, localNextEpisode, localViralAnalysis, guessGender, splitScriptSegments } from './local.js';
 import { resolveStylePrompt } from './styles.js';
 import { resolveExpression } from './expressions.js';
@@ -1148,19 +1148,25 @@ export function buildOmniReferencePrompt(projectId, { episode = '' } = {}) {
   };
 }
 
-/** 全能参考一键出片：用「带编号图片引用」剧本 + 多张参考图（角色三视图/场景图），
- *  调多图参考视频模型（默认 Vidu Q1，国产多主体一致最强）一次产出人物/场景一致的连续短片。 */
-export async function generateOmniVideo({ projectId, episode = '', model = 'viduq1', ratio = '', duration = 8 }) {
+/** 全能参考一键出片：用「带编号图片引用」剧本 + 多张参考图（角色三视图/场景图）。
+ *  模型默认跟随所选项目视频模型；Vidu/可灵 做真·多主体参考，其余只吃首图（会标注）。 */
+export async function generateOmniVideo({ projectId, episode = '', model = '', ratio = '', duration = 8 }) {
   const omni = buildOmniReferencePrompt(projectId, { episode });
   const images = omni.references.map((r) => r.image).filter(Boolean);
   if (!images.length) throw bad('全能参考需要先生成角色三视图/场景图作为参考图（当前一张真实参考图都没有，请先出图）');
   const project = getProject(projectId);
+  const useModel = model || cfg().modelVideo || 'viduq1';
+  const multiRef = supportsMultiRef(useModel);
   const r = await createVideoTask({
-    prompt: omni.prompt, refImages: images, model: model || 'viduq1',
+    prompt: omni.prompt, refImages: images, model: useModel,
     ratio: ratio || project.ratio || '16:9', duration, projectId,
     name: `全能参考·${omni.title || project.title}`
   });
-  return { ...r, references: omni.references, used_images: images.length, missing_images: omni.missing_images };
+  return {
+    ...r, model: useModel, multi_ref: multiRef,
+    note: multiRef ? '' : `当前模型不支持多主体参考，已退化为「首图参考＋剧本」；要真·全能参考请选 Vidu 或可灵`,
+    references: omni.references, used_images: images.length, missing_images: omni.missing_images
+  };
 }
 
 // ---------- 故事板图：把整段分镜画成一张 N 宫格故事板（限定景别与运动），可作视频/剪辑的视觉参考 ----------

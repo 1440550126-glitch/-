@@ -90,6 +90,12 @@ export function pickVideoProvider(model, { arkEnabled, arkModel } = {}) {
   return { provider: 'ark', enabled: !!arkEnabled, model: model || arkModel || '' };
 }
 
+/** 是否支持「多主体参考」（全能参考）：Vidu / 可灵 支持多图主体一致；其余只吃首帧。 */
+export function supportsMultiRef(model) {
+  const p = videoProviderOf(model);
+  return p === 'vidu' || p === 'kling';
+}
+
 /** 各模型支持的最大时长（秒）：Seedance 2.5→30、2.0→15，其余按各家上限，默认 12（Seedance 1.0）。 */
 export function maxVideoDuration(model) {
   const m = String(model || '');

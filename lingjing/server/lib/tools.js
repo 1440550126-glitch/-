@@ -340,7 +340,7 @@ export const TOOLS = [
     name: 'omni_reference_video',
     description: '全能参考一键出片：用带编号图片引用的剧本 + 多张参考图（角色三视图/场景图），调多主体参考视频模型（默认 Vidu Q1，国产多主体一致最强；需 Vidu Key）一次产出人物/场景一致的连续短片。返回 taskId，用 get_task 轮询。未配 Vidu Key 会回退本地占位。需先生成角色/场景参考图。',
     input_schema: { type: 'object', properties: { project_id: str('项目 id'), episode: str('集 key，可空'), model: str('多图参考视频模型，默认 viduq1'), duration: { type: 'number', description: '时长秒，默认 8' } }, required: ['project_id'] },
-    execute({ project_id, episode, model, duration }) { return generateOmniVideo({ projectId: project_id, episode: episode || '', model: model || 'viduq1', duration: duration || 8 }); }
+    execute({ project_id, episode, model, duration }) { return generateOmniVideo({ projectId: project_id, episode: episode || '', model: model || '', duration: duration || 8 }); }
   },
   {
     name: 'annotate_entities',
