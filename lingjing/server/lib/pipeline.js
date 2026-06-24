@@ -3,7 +3,7 @@
 import { q, getSetting, setSetting } from './db.js';
 import { uid, now, jparse, clamp } from './util.js';
 import { arkEnabled, llmEnabled, arkChat, arkImage, arkVideoCreate, arkVideoGet, cfg } from './ark.js';
-import { pickImageProvider, pickVideoProvider, openaiImage, googleVeoCreate, googleVeoGet, dashscopeImage, dashscopeVideoCreate, dashscopeTaskGet, viduReferenceVideoCreate, viduTaskGet, klingVideoCreate, klingTaskGet } from './providers.js';
+import { pickImageProvider, pickVideoProvider, maxVideoDuration, openaiImage, googleVeoCreate, googleVeoGet, dashscopeImage, dashscopeVideoCreate, dashscopeTaskGet, viduReferenceVideoCreate, viduTaskGet, klingVideoCreate, klingTaskGet } from './providers.js';
 import { localScript, localParse, localImageSVG, localVideoSVG, saveSVG, localNextEpisode, localViralAnalysis, guessGender, splitScriptSegments } from './local.js';
 import { resolveStylePrompt } from './styles.js';
 import { resolveExpression } from './expressions.js';
@@ -1280,10 +1280,11 @@ export async function createVideoTask({ prompt, imageUrl = '', lastImageUrl = ''
   // 注入视频硬性禁止项（穿模/下沉/换人/改外观）
   if (!prompt.includes('【视频禁止】')) prompt += `。${VIDEO_NEG}`;
   ratio = ratio || project?.ratio || '16:9';
-  duration = clamp(duration, 2, 12);
   const taskId = uid('t');
-  // 按模型 ID 路由：veo*→Google Veo 3，vidu*→Vidu 全能参考（多图），wan/t2v/i2v→通义万相，其余→火山 Seedance（各用各的 Key）
+  // 按模型 ID 路由：veo*→Google Veo 3，vidu*→Vidu 全能参考（多图），kling*→可灵，wan/t2v/i2v→通义万相，其余→火山 Seedance（各用各的 Key）
   const vp = pickVideoProvider(model, { arkEnabled: arkEnabled(), arkModel: model || cfg().modelVideo });
+  // 时长按所选模型上限裁剪：Seedance 2.5 最长 30s、2.0 最长 15s，Veo/Vidu ~8s，可灵/万相 ~10s，默认 12s
+  duration = clamp(duration, 2, maxVideoDuration(vp.model));
   const provLabel = vp.provider === 'google' ? 'Veo' : vp.provider === 'vidu' ? 'Vidu 全能参考' : vp.provider === 'kling' ? '可灵 Kling' : vp.provider === 'alibaba' ? '通义万相' : '方舟视频';
   const refList = (refImages || []).filter(Boolean);
   const params = { ratio, duration, imageUrl, lastImageUrl: lastImageUrl || '', refs: refList.length, name, order, model: vp.model || '', provider: vp.enabled ? vp.provider : 'local', resolution: resolution || '' };

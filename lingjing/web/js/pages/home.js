@@ -31,7 +31,18 @@ export async function renderHome(page) {
     const imgModelSel = h('select', { class: 'select', title: '图像模型（仅本次生效，列表在设置页维护）' },
       (boot.image_models || []).map((m) => h('option', { value: m.id, selected: m.id === boot.ark.model_image }, m.label)));
     const ratioQ = h('select', { class: 'select' }, ['16:9', '9:16', '1:1'].map((r) => h('option', { value: r }, r)));
-    const durSel = h('select', { class: 'select' }, [3, 5, 8, 10].map((n) => h('option', { value: n, selected: n === 5 }, `${n} 秒`)));
+    const durSel = h('select', { class: 'select', title: '时长（随所选视频模型上限变化：Seedance 2.5→30s、2.0→15s）' });
+    const durFor = (id) => /seedance[-.]?2[-.]?5/i.test(id) ? [3, 5, 8, 10, 15, 30]
+      : /seedance[-.]?2[-.]?0/i.test(id) ? [3, 5, 8, 10, 15]
+        : /^kling/i.test(id) ? [5, 10]
+          : /^veo|^vidu/i.test(id) ? [4, 8] : [3, 5, 8, 10];
+    const fillDur = () => {
+      const opts = durFor(modelSel.value);
+      durSel.innerHTML = '';
+      opts.forEach((n, i) => durSel.append(h('option', { value: n, selected: i === Math.min(1, opts.length - 1) }, `${n} 秒`)));
+    };
+    modelSel.addEventListener('change', fillDur);
+    fillDur();
     const resSel = h('select', { class: 'select', title: '分辨率' }, [['', '分辨率·自动'], ['480p', '480P'], ['720p', '720P'], ['1080p', '1080P']].map(([v, l]) => h('option', { value: v }, l)));
     // 一镜到底：首帧 + 尾帧（可选，Seedance 首尾帧自然过渡）
     let frameA = null;

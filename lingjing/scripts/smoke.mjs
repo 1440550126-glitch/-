@@ -448,6 +448,11 @@ try {
   const klingFb = (await api('POST', '/api/ai/video', { prompt: '测试', model: 'kling-v2-1', ratio: '16:9', duration: 5 })).data;
   const klingDone = await until(async () => { const t = (await api('GET', `/api/ai/task/${klingFb.taskId}`)).data; return ['succeeded', 'failed'].includes(t.status) ? t : null; });
   ok(klingDone.provider === 'local' && klingDone.status === 'succeeded', '未配 Kling AK/SK 选可灵 → 安全回退本地占位');
+  // 时长按模型上限：Seedance 2.5→30s、2.0→15s，其余默认 12s
+  const d25 = (await api('GET', `/api/ai/task/${(await api('POST', '/api/ai/video', { prompt: '长片', model: 'doubao-seedance-2-5', duration: 30 })).data.taskId}`)).data;
+  const d20 = (await api('GET', `/api/ai/task/${(await api('POST', '/api/ai/video', { prompt: '长片', model: 'doubao-seedance-2-0', duration: 30 })).data.taskId}`)).data;
+  const d10 = (await api('GET', `/api/ai/task/${(await api('POST', '/api/ai/video', { prompt: '默认', duration: 30 })).data.taskId}`)).data;
+  ok(d25.params.duration === 30 && d20.params.duration === 15 && d10.params.duration === 12, '视频时长按模型上限裁剪（2.5→30s / 2.0→15s / 默认→12s）');
 
   console.log('— MCP over HTTP（远程助理通道） —');
   const mh = async (msg) => {

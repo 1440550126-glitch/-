@@ -90,6 +90,18 @@ export function pickVideoProvider(model, { arkEnabled, arkModel } = {}) {
   return { provider: 'ark', enabled: !!arkEnabled, model: model || arkModel || '' };
 }
 
+/** 各模型支持的最大时长（秒）：Seedance 2.5→30、2.0→15，其余按各家上限，默认 12（Seedance 1.0）。 */
+export function maxVideoDuration(model) {
+  const m = String(model || '');
+  if (/seedance[-.]?2[-.]?5/i.test(m)) return 30;
+  if (/seedance[-.]?2[-.]?0/i.test(m)) return 15;
+  if (/^kling/i.test(m)) return 10;                 // 可灵 5/10s
+  if (/^veo/i.test(m)) return 8;                    // Veo ~8s
+  if (/^vidu/i.test(m)) return 8;                   // Vidu 4/8s
+  if (/wan|t2v|i2v/i.test(m)) return 10;            // 通义万相 ~10s
+  return 12;
+}
+
 /** 创作框可选图像模型列表 [{label,id}]（默认模型自动置顶） */
 export function imageModelOptions(arkModel = '') {
   const list = providerCfg().modelImageOptions.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
