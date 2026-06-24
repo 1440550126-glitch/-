@@ -131,6 +131,14 @@ try {
   });
   ok(/【微表情】/.test(emoSb.shots[0].image_prompt) && /眼神锐利|瞪眼质问/.test(emoSb.shots[0].image_prompt), '分镜情绪解析为细节微表情注入首帧');
   ok(/【微表情】/.test(emoSb.shots[0].video_prompt), '微表情也带进视频提示词');
+  // 分镜级时长上限放开到 30（存"意图时长"，出片时再按所选模型裁剪）
+  const longShot = normalizeStoryboard({
+    title: '长镜', style: '写实电影质感',
+    characters: [{ key: 'c1', name: 'A', role: '主角', gender: '男', desc: '30岁男性' }],
+    scenes: [{ key: 's1', name: 'S', desc: '室内' }],
+    shots: [{ key: 'sh1', order: 1, scene: 's1', characters: ['c1'], shot_type: '全景', action: '长镜头慢推', duration: 25 }]
+  });
+  ok(longShot.shots[0].duration === 25, '分镜级时长不再被截到 12（存意图时长上限 30）');
 
   console.log('— 启动与基础 —');
   const boot = await until(async () => (await api('GET', '/api/bootstrap')).data, 10000);
