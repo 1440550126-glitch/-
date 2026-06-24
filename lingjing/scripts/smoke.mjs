@@ -266,6 +266,27 @@ try {
   const exps = (await api('GET', '/api/expressions')).data;
   ok(exps.categories?.length === 4 && exps.categories.every((c) => c.items.length === 10), 'GET /api/expressions 返回 4×10 微表情库');
 
+  console.log('— LLM Wiki 自维护知识库 —');
+  // 解析后自动摄入：项目角色/场景/总览建页（domain=video, namespace=项目id）
+  const wpages = (await api('GET', `/api/wiki?domain=video&namespace=${p.id}`)).data.pages;
+  ok(Array.isArray(wpages) && wpages.length >= 2 && wpages.some((x) => /^角色·/.test(x.title)) && wpages.some((x) => /^作品总览·/.test(x.title)), '解析后自动摄入知识库：角色/场景/总览建页');
+  const charPage = wpages.find((x) => /^角色·/.test(x.title));
+  const wq = (await api('POST', '/api/wiki/query', { query: charPage.title.replace('角色·', ''), domain: 'video', namespace: p.id, synthesize: false })).data;
+  ok(wq.hits >= 1 && wq.pages.some((x) => x.id === charPage.id), 'wiki 查询命中角色页');
+  // 摄入 global 页并查到
+  await api('POST', '/api/wiki/ingest', { title: '品牌规范·LingMirror', content: '暗黑科技风、苹果质感、中英双语国际化', domain: 'global', source: 'test' });
+  const wq2 = (await api('POST', '/api/wiki/query', { query: '品牌 暗黑科技 苹果', synthesize: false })).data;
+  ok(wq2.pages.some((x) => x.title === '品牌规范·LingMirror'), 'wiki 摄入页可被查询命中');
+  // 域分区：music 域页不串入 video（音乐/视频/Agent 共库不串味）
+  await api('POST', '/api/wiki/ingest', { title: '音乐风格·赛博', content: '合成器、未来感、电子节拍', domain: 'music', source: 'test' });
+  const wMusic = (await api('POST', '/api/wiki/query', { query: '赛博 合成器', domain: 'music', synthesize: false })).data;
+  const wVideo = (await api('POST', '/api/wiki/query', { query: '赛博 合成器', domain: 'video', synthesize: false })).data;
+  ok(wMusic.hits >= 1 && wVideo.pages.every((x) => x.title !== '音乐风格·赛博'), 'wiki 域分区：music 页不串入 video（视频/音乐/Agent 同库不串味）');
+  const waudit = (await api('GET', '/api/wiki/audit')).data;
+  ok(typeof waudit.total === 'number' && waudit.domains.includes('music') && waudit.domains.includes('video'), 'wiki 审计返回总数与域分布');
+  const wtools = (await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools;
+  ok(['wiki_query', 'wiki_ingest', 'wiki_audit', 'wiki_page'].every((n) => wtools.some((t) => t.name === n)), 'Agent/MCP 开放 wiki_query/ingest/audit/page（外部音乐站经 MCP 共享同库）');
+
   console.log('— 角色预选标注 / Agent 进化 —');
   const pe = (await api('POST', '/api/projects', { title: '标注剧', genre: '悬疑反转', idea: '实验室停电夜' })).data;
   await api('POST', '/api/ai/script', { project_id: pe.id });

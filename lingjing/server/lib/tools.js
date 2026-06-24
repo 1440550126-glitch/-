@@ -10,6 +10,7 @@ import {
 } from './pipeline.js';
 import { STYLES, STYLE_CATS } from './styles.js';
 import { listExpressions } from './expressions.js';
+import { wikiQuery, wikiIngest, wikiAudit, wikiPage, wikiList } from './wiki.js';
 import { bad } from './httpx.js';
 
 const str = (desc, extra = {}) => ({ type: 'string', description: desc, ...extra });
@@ -317,6 +318,30 @@ export const TOOLS = [
     description: '列出解析后识别到的角色/场景/道具分类，供人工或 Agent 复核（含画布缩略图、是否被用户确认过、Agent 进化等级）。怀疑有道具被误标成角色时先调用它检查。',
     input_schema: { type: 'object', properties: { project_id: str('项目 id') }, required: ['project_id'] },
     execute({ project_id }) { return listEntities(project_id); }
+  },
+  {
+    name: 'wiki_query',
+    description: 'LLM Wiki 知识库查询：依据自维护的结构化知识库回答问题并标注来源（domain 分区 video/music/agent/global，可跨 App/音乐站/Agent 共享同一份知识）。出图/出片/写剧本前查画风、品牌、模型最佳实践、角色设定都走它。',
+    input_schema: { type: 'object', properties: { query: str('要问的问题'), domain: str('分区 video/music/agent/global，可空=全部'), namespace: str('命名空间如项目 id，可空'), limit: num('返回命中页数，默认 6') }, required: ['query'] },
+    async execute({ query, domain, namespace, limit }) { return wikiQuery({ query, domain: domain || '', namespace: namespace || '', limit: limit || 6 }); }
+  },
+  {
+    name: 'wiki_ingest',
+    description: 'LLM Wiki 摄入/更新一页知识（同 domain+namespace+title 自动 upsert，自动摘要+交叉引用）。把品牌规范、画风约定、模型笔记、角色设定等沉淀进知识库，供所有工作流复用。',
+    input_schema: { type: 'object', properties: { title: str('页标题'), content: str('正文'), domain: str('分区 video/music/agent/global，默认 global'), namespace: str('命名空间，可空'), summary: str('摘要，可空自动生成'), source: str('来源，可空') }, required: ['title', 'content'] },
+    execute({ title, content, domain, namespace, summary, source }) { return wikiIngest({ title, content, domain: domain || 'global', namespace: namespace || '', summary: summary || '', source: source || '' }); }
+  },
+  {
+    name: 'wiki_audit',
+    description: 'LLM Wiki 审计：列出孤立页（无人引用）、过期页、域分布与总数，提示哪些知识需补充或合并（知识库自进化的 Audit 环节）。',
+    input_schema: { type: 'object', properties: { domain: str('分区，可空'), namespace: str('命名空间，可空') } },
+    execute({ domain, namespace } = {}) { return wikiAudit({ domain: domain || '', namespace: namespace || '' }); }
+  },
+  {
+    name: 'wiki_page',
+    description: 'LLM Wiki 读取整页（按 id 或 domain+namespace+title）。不传任何过滤则用 list 模式列出索引。',
+    input_schema: { type: 'object', properties: { id: str('页 id，可空'), title: str('页标题，可空'), domain: str('分区，默认 global'), namespace: str('命名空间，可空'), list: { type: 'boolean', description: '为真则列出索引而非读单页' } } },
+    execute({ id, title, domain, namespace, list } = {}) { return list ? { pages: wikiList({ domain: domain || '', namespace: namespace || '' }) } : (wikiPage({ id: id || '', title: title || '', domain: domain || 'global', namespace: namespace || '' }) || { error: '页不存在' }); }
   },
   {
     name: 'list_expressions',

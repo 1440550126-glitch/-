@@ -7,6 +7,7 @@ import { pickImageProvider, pickVideoProvider, maxVideoDuration, supportsMultiRe
 import { localScript, localParse, localImageSVG, localVideoSVG, saveSVG, localNextEpisode, localViralAnalysis, guessGender, splitScriptSegments } from './local.js';
 import { resolveStylePrompt } from './styles.js';
 import { resolveExpression } from './expressions.js';
+import { wikiIngestMany } from './wiki.js';
 import { bad, notFound } from './httpx.js';
 
 // 已接入方舟时，生成失败是否静默落本地占位（默认否：诚实暴露真实错误，便于排查模型配置）
@@ -681,7 +682,21 @@ export async function parseScript({ projectId }) {
     ...((project.title === '未命名短剧' || project.title === '未命名作品') && sb.title ? { title: sb.title } : {}),
     ...(sb.style && !project.style ? { style: sb.style.slice(0, 300) } : {})
   });
+  try { ingestStoryboardToWiki(project.id, sb); } catch { /* 知识库摄入失败不阻塞解析 */ }
   return { project: projectOut(q.get('SELECT * FROM projects WHERE id = ?', project.id)), storyboard: sb, byLLM, warn, canvasId };
+}
+
+/** 解析后把角色/场景/道具/总览自动摄入 LLM Wiki（domain=video，namespace=项目id），全流程可查 */
+function ingestStoryboardToWiki(projectId, sb) {
+  const ns = projectId;
+  const pages = [{
+    domain: 'video', namespace: ns, title: `作品总览·${sb.title || ''}`, source: 'parse',
+    content: `片名：${sb.title}；一句话：${sb.logline || ''}；画风：${sb.style || ''}；角色：${(sb.characters || []).map((c) => c.name).join('、')}；场景：${(sb.scenes || []).map((s) => s.name).join('、')}；共 ${(sb.shots || []).length} 个分镜。`
+  }];
+  for (const c of (sb.characters || [])) pages.push({ domain: 'video', namespace: ns, title: `角色·${c.name}`, source: 'parse', content: `${c.lock || c.desc || ''}${c.signature ? `\n视觉签名：${c.signature}` : ''}${c.wardrobe ? `\n默认造型：${c.wardrobe}` : ''}` });
+  for (const s of (sb.scenes || [])) pages.push({ domain: 'video', namespace: ns, title: `场景·${s.name}`, source: 'parse', content: s.lock || s.desc || s.name });
+  for (const p of (sb.props || [])) pages.push({ domain: 'video', namespace: ns, title: `道具·${p.name}`, source: 'parse', content: p.lock || p.desc || p.name });
+  wikiIngestMany(pages);
 }
 
 // ---------- 续写一集 ----------

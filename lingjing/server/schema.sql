@@ -119,3 +119,18 @@ CREATE TABLE IF NOT EXISTS qc_records (
 CREATE INDEX IF NOT EXISTS idx_qc_proj ON qc_records(project_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+
+-- LLM Wiki：自维护知识库页（按 domain 分区：video/music/agent/global），App工作流+Agent+外部应用经 MCP 共享
+CREATE TABLE IF NOT EXISTS wiki_pages (
+  id         TEXT PRIMARY KEY,
+  domain     TEXT NOT NULL DEFAULT 'global',  -- 分区：video/music/agent/global
+  namespace  TEXT NOT NULL DEFAULT '',        -- 命名空间（如项目 id），可空
+  title      TEXT NOT NULL,                   -- 页标题（同 domain+namespace 内唯一）
+  summary    TEXT NOT NULL DEFAULT '',        -- 摘要
+  content    TEXT NOT NULL DEFAULT '',        -- 正文
+  refs       TEXT NOT NULL DEFAULT '[]',      -- 交叉引用的页标题
+  source     TEXT NOT NULL DEFAULT '',        -- 来源
+  updated_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wiki_key ON wiki_pages(domain, namespace, title);
+CREATE INDEX IF NOT EXISTS idx_wiki_dom ON wiki_pages(domain, updated_at DESC);

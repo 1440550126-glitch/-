@@ -7,6 +7,7 @@ import { uid, now, jparse, micro2yuan, token32 } from '../lib/util.js';
 import { arkEnabled, llmEnabled, cfg, arkChat, DEFAULTS, videoModelOptions } from '../lib/ark.js';
 import { providerCfg, openaiEnabled, googleEnabled, alibabaEnabled, viduEnabled, klingEnabled, imageModelOptions, PROVIDER_DEFAULTS } from '../lib/providers.js';
 import { listExpressions } from '../lib/expressions.js';
+import { wikiQuery, wikiIngest, wikiPage, wikiList, wikiAudit } from '../lib/wiki.js';
 import { createProject, getProject, projectOut, touchProject, getCanvas, checkConsistency, buildCharacterProfile, listEntities, annotateEntities, getAgentBrain, restyleProject, buildOmniReferencePrompt, generateOmniVideo, buildStoryboardSheet, generateStoryboardSheet } from '../lib/pipeline.js';
 
 // 画面一致性体检
@@ -17,6 +18,13 @@ GET('/api/projects/:id/character-profile', async ({ params }) => buildCharacterP
 
 // AI 微表情提示词库（喜/怒/哀/惊 × 10），供分镜情绪选择器/表情库生成/Agent 使用
 GET('/api/expressions', async () => ({ categories: listExpressions() }));
+
+// LLM Wiki 自维护知识库（domain 分区，App工作流+Agent+外部应用经 MCP 共享同一份）
+GET('/api/wiki', async ({ query }) => ({ pages: wikiList({ domain: query.get('domain') || '', namespace: query.get('namespace') || '' }) }));
+POST('/api/wiki/query', async ({ body }) => wikiQuery({ query: body.query, domain: body.domain || '', namespace: body.namespace || '', limit: body.limit || 6, synthesize: body.synthesize !== false }));
+POST('/api/wiki/ingest', async ({ body }) => wikiIngest({ domain: body.domain || 'global', namespace: body.namespace || '', title: body.title, content: body.content || '', summary: body.summary || '', source: body.source || '' }));
+GET('/api/wiki/page', async ({ query }) => wikiPage({ id: query.get('id') || '', domain: query.get('domain') || 'global', namespace: query.get('namespace') || '', title: query.get('title') || '' }) || {});
+GET('/api/wiki/audit', async ({ query }) => wikiAudit({ domain: query.get('domain') || '', namespace: query.get('namespace') || '' }));
 
 // 全能参考：把分镜拼成带编号图片引用的多镜头剧本（女主【图片1】在【图片2】中…）+ 编号→参考图清单
 GET('/api/projects/:id/omni-reference', async ({ params, query }) => buildOmniReferencePrompt(params.id, { episode: query.get('episode') || '' }));
