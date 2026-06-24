@@ -2791,6 +2791,19 @@ class Agent:
                     self._log_journal(who, utterance, txt, "retirement")
                     return result
 
+        # --- 照镜子·表情自省（"照照镜子" / "你笑一个看自然不自然" / "表情到位吗"）：
+        #     用视觉读回自己脸上的神情，跟想要的比一比，差了一点点自我修正 ---
+        if action is None and who.get("obey") and any(
+                k in (utterance or "") for k in ("照镜子", "照照镜子", "对着镜子", "对镜子",
+                                                 "表情到位", "表情自然", "表情对不对", "笑一个",
+                                                 "自然不自然", "看看自然", "自检表情", "检查表情",
+                                                 "看看自己的表情", "调表情", "表情自省")):
+            txt = self.mirror_check(utterance)
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "expression_feedback")
+                return result
+
         # --- 解闷（"好无聊" / "干点啥好"）：挑个事陪你打发 ---
         if action is None and who.get("obey"):
             from .boredom import senses_boredom
@@ -3567,6 +3580,31 @@ class Agent:
         if not getattr(self, "mannerisms", None):
             return text
         return apply_style(text, self.mannerisms, particle=particle)
+
+    def mirror_check(self, utterance="", perceive=None) -> str:
+        """照镜子：用视觉读回自己脸上的表情，跟想要的比一比，差了就一点点自我修正。
+        想摆哪个情绪：话里点了就用（"你笑一个"→喜），否则用此刻的主导心情，再不然就笑一个。
+        真有摄像头/截图时把 perceive 传进来（动作→看到的特征）；没有就用一面模拟镜子演示这套闭环。"""
+        from . import expression_feedback as ef
+        u = utterance or ""
+        want = {"笑": "喜", "乐": "乐", "哭": "哀", "难过": "哀", "生气": "怒", "凶": "怒",
+                "害怕": "惧", "温柔": "爱", "爱": "爱"}
+        emo = next((v for k, v in want.items() if k in u), None)
+        if not emo and getattr(self, "emotions", None) is not None:
+            try:
+                emo = self.emotions.mood()[0]
+            except Exception:
+                emo = None
+        emo = emo or "喜"
+        cfg = self.identity if isinstance(self.identity, dict) else None
+        if perceive is None:
+            # 没真摄像头：模拟一张"做表情只有七八成力、还带点天生神态"的脸，演示自我修正会收敛
+            seed = len(u)
+            perceive = ef.make_mirror(damping=0.75,
+                                      bias={"mouth_curve": -0.15, "brow": -0.05},
+                                      noise=0.0, seed=seed)
+        result = ef.self_correct(emo, perceive, gain=0.7, steps=10, tol=0.08, config=cfg)
+        return ef.describe(emo, result, cfg)
 
     def speech_habits(self) -> str:
         """自述说话习惯（"你说话有什么习惯"）。"""

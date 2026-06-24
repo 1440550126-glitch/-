@@ -92,8 +92,8 @@ class AppointmentBook:
             lines.append(head + "。" + (prep if prep else ""))
         return lines
 
-    def describe(self) -> str:
-        up = self.upcoming(within=30)
+    def describe(self, now=None) -> str:
+        up = self.upcoming(now, within=30)
         if not up:
             return "近一个月没排什么事。"
         return "近期安排：" + "；".join(

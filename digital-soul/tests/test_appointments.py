@@ -48,8 +48,9 @@ def test_add_md_only_and_persist():
 
 
 def test_describe():
-    assert "复诊" in _book(SEED).describe()
-    assert "没排什么事" in _book().describe()
+    # 传定值 now，别让真实时钟漂移把固定日期的安排"过期"掉
+    assert "复诊" in _book(SEED).describe(now=datetime(2026, 6, 19))
+    assert "没排什么事" in _book().describe(now=datetime(2026, 6, 19))
 
 
 if __name__ == "__main__":
