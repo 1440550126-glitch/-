@@ -30,6 +30,14 @@ class RobotInterface(ABC):
         """
         return None
 
+    def face(self, channels: dict) -> None:
+        """驱动面部舵机：channels 形如 {"mouth_l": 1700, "jaw": 1300, ...}（通道→脉宽微秒）。
+
+        默认不做；有脸的机器人实现成给每个舵机发 PWM。配合 face_motors 把"表情"换成舵机角度，
+        再配合 expression_feedback 的视觉闭环，就能边看自己边把表情调到位。
+        """
+        return None
+
 
 class SimulationRobot(RobotInterface):
     """把动作打印到控制台，便于在没有硬件时调试。"""
@@ -48,3 +56,7 @@ class SimulationRobot(RobotInterface):
 
     def gesture(self, name: str, detail: str = "") -> None:
         print(f"🤖 [体态] {name}" + (f"（{detail}）" if detail else ""))
+
+    def face(self, channels: dict) -> None:
+        pretty = "  ".join(f"{c}={int(v)}" for c, v in sorted((channels or {}).items()))
+        print(f"😶 [面部舵机] {pretty}")

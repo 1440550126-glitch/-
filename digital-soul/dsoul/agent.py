@@ -2792,7 +2792,7 @@ class Agent:
                     return result
 
         # --- 照镜子·表情自省（"照照镜子" / "你笑一个看自然不自然" / "表情到位吗"）：
-        #     用视觉读回自己脸上的神情，跟想要的比一比，差了一点点自我修正 ---
+        #     用视觉读回自己脸上的神情，跟想要的比一比，差了一点点自我修正（每步驱动面部舵机）---
         if action is None and who.get("obey") and any(
                 k in (utterance or "") for k in ("照镜子", "照照镜子", "对着镜子", "对镜子",
                                                  "表情到位", "表情自然", "表情对不对", "笑一个",
@@ -2802,6 +2802,17 @@ class Agent:
             if txt:
                 result["reply"] = txt
                 self._log_journal(who, utterance, txt, "expression_feedback")
+                return result
+
+        # --- 做个表情（"做个笑脸" / "把脸摆成X" / "板个脸"）：开环驱动面部舵机到目标表情 ---
+        if action is None and who.get("obey") and any(
+                k in (utterance or "") for k in ("做个表情", "做个笑脸", "做个鬼脸", "摆个表情",
+                                                 "把脸摆成", "给我个笑脸", "板个脸", "扮个鬼脸",
+                                                 "做个哭脸", "摆张脸")):
+            txt = self.set_face(utterance=utterance)
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "face_motors")
                 return result
 
         # --- 解闷（"好无聊" / "干点啥好"）：挑个事陪你打发 ---
@@ -3581,30 +3592,62 @@ class Agent:
             return text
         return apply_style(text, self.mannerisms, particle=particle)
 
-    def mirror_check(self, utterance="", perceive=None) -> str:
-        """照镜子：用视觉读回自己脸上的表情，跟想要的比一比，差了就一点点自我修正。
-        想摆哪个情绪：话里点了就用（"你笑一个"→喜），否则用此刻的主导心情，再不然就笑一个。
-        真有摄像头/截图时把 perceive 传进来（动作→看到的特征）；没有就用一面模拟镜子演示这套闭环。"""
-        from . import expression_feedback as ef
+    def _want_emotion(self, utterance):
+        """从话里认出想摆的情绪；认不出用当下主导心情；再不然笑一个。"""
         u = utterance or ""
         want = {"笑": "喜", "乐": "乐", "哭": "哀", "难过": "哀", "生气": "怒", "凶": "怒",
-                "害怕": "惧", "温柔": "爱", "爱": "爱"}
+                "害怕": "惧", "温柔": "爱", "爱": "爱", "中性": "中", "板着脸": "中"}
         emo = next((v for k, v in want.items() if k in u), None)
         if not emo and getattr(self, "emotions", None) is not None:
             try:
                 emo = self.emotions.mood()[0]
             except Exception:
                 emo = None
-        emo = emo or "喜"
+        return emo or "喜"
+
+    def set_face(self, emotion=None, utterance="") -> str:
+        """开环：直接把某个情绪做到机器人脸上（驱动面部舵机到目标表情）。没脸的机器人优雅降级为只描述。"""
+        from . import face_motors as fm
+        emo = emotion or self._want_emotion(utterance)
         cfg = self.identity if isinstance(self.identity, dict) else None
+        send = fm.robot_sender(getattr(self, "robot", None))
+        fm.express_on_face(emo, send, perceive=None, config=cfg)
+        moved = "，舵机到位了" if send is not None else "（这台没接面部舵机，先在心里摆好）"
+        return f"我把脸摆成「{emo}」{moved}。"
+
+    def mirror_check(self, utterance="", perceive=None) -> str:
+        """照镜子：用视觉读回自己脸上的表情，跟想要的比一比，差了就一点点自我修正——
+        每一步都把动作发给面部舵机（有脸的话真动），再让视觉看回来。
+        真有摄像头把 perceive 传进来（看脸→特征）；没有就用一面"模拟舵机+摄像头"演示这套闭环。"""
+        from . import expression_feedback as ef
+        from . import face_motors as fm
+        u = utterance or ""
+        emo = self._want_emotion(u)
+        cfg = self.identity if isinstance(self.identity, dict) else None
+        robot_send = fm.robot_sender(getattr(self, "robot", None))
+
         if perceive is None:
-            # 没真摄像头：模拟一张"做表情只有七八成力、还带点天生神态"的脸，演示自我修正会收敛
-            seed = len(u)
-            perceive = ef.make_mirror(damping=0.75,
-                                      bias={"mouth_curve": -0.15, "brow": -0.05},
-                                      noise=0.0, seed=seed)
-        result = ef.self_correct(emo, perceive, gain=0.7, steps=10, tol=0.08, config=cfg)
-        return ef.describe(emo, result, cfg)
+            # 没真摄像头：造一对"模拟舵机+摄像头"（脸做表情只有七八成力、还带点天生神态）
+            sim_send, perceive = fm.make_sim_face(
+                damping=0.75, bias={"mouth_curve": -0.15, "brow": -0.05}, seed=len(u))
+
+            def render(act):
+                pulses = fm.feature_to_pulses(act)
+                sim_send(pulses)                 # 模拟摄像头才看得见
+                if robot_send is not None:
+                    robot_send(pulses)           # 真有脸就一起动
+        else:
+            def render(act):
+                pulses = fm.feature_to_pulses(act)
+                if robot_send is not None:
+                    robot_send(pulses)
+
+        result = ef.self_correct(emo, perceive, gain=0.7, steps=10, tol=0.08,
+                                 config=cfg, render=render)
+        desc = ef.describe(emo, result, cfg)
+        if robot_send is not None and result.get("at_limit"):
+            desc += " （有个舵机顶到限位了，这张脸再使劲也就这样了。）"
+        return desc
 
     def speech_habits(self) -> str:
         """自述说话习惯（"你说话有什么习惯"）。"""

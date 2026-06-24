@@ -44,6 +44,7 @@ class Ros2Robot(RobotInterface):
         self.pub_mode = self.node.create_publisher(String, "/soul/mode", 10)
         self.pub_cmd = self.node.create_publisher(Twist, "/cmd_vel", 10)
         self.pub_gesture = self.node.create_publisher(String, "/soul/gesture", 10)
+        self.pub_face = self.node.create_publisher(String, "/soul/face", 10)
 
     def say(self, text: str) -> None:
         msg = self._String()
@@ -72,6 +73,12 @@ class Ros2Robot(RobotInterface):
         msg = self._String()
         msg.data = f"{name}|{detail}"          # 下游订阅 /soul/gesture，映射成头部/舵机/灯效
         self.pub_gesture.publish(msg)
+
+    def face(self, channels: dict) -> None:
+        # 发到 /soul/face，下游舵机节点（PCA9685/串口）按"通道:脉宽"驱动每个面部舵机
+        msg = self._String()
+        msg.data = ",".join(f"{c}:{int(v)}" for c, v in sorted((channels or {}).items()))
+        self.pub_face.publish(msg)
 
     def shutdown(self) -> None:
         self.node.destroy_node()

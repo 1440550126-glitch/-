@@ -88,9 +88,10 @@ def read_expression(observed, config=None) -> str:
 
 
 def self_correct(emotion, perceive, actuation=None, gain=0.6, steps=8,
-                 tol=0.08, config=None) -> dict:
+                 tol=0.08, config=None, render=None) -> dict:
     """照镜子自我修正的闭环。
     perceive(actuation)->observed：外部"视觉"，看当前做出来的脸、读回特征（摄像头/截图）。
+    render(actuation)：可选，先把当前动作"做出来"（如驱动面部舵机），再让 perceive 去看。
     一步步把动作往"想要的表情"上调，直到看着对了（score<=tol）或试够 steps 次。
     """
     target = target_features(emotion, config)
@@ -98,6 +99,11 @@ def self_correct(emotion, perceive, actuation=None, gain=0.6, steps=8,
     trace = []
     last_score = 1.0
     for i in range(max(1, int(steps))):
+        if render is not None:
+            try:
+                render(act)
+            except Exception:
+                pass
         observed = perceive(act) or {}
         m = mismatch(target, observed)
         last_score = m["score"]
