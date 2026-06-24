@@ -497,8 +497,9 @@ try {
 
   console.log('— 全流程工作流 —');
   const p9 = (await api('POST', '/api/projects', { title: '工作流剧', genre: '都市逆袭', idea: '保安逆袭成集团总裁' })).data;
-  const wf = (await api('POST', '/api/workflows', { project_id: p9.id })).data;
+  const wf = (await api('POST', '/api/workflows', { project_id: p9.id, video_model: 'doubao-seedance-2-5' })).data;
   ok(wf.id && wf.status === 'running' && wf.steps.length === 9, '工作流启动（9 步含表情+AIQC）');
+  ok((await api('GET', `/api/workflows/${wf.id}`)).data.video_model === 'doubao-seedance-2-5', '工作流记住所选视频模型（批量出片用）');
   const wfDone = await until(async () => {
     const w = (await api('GET', `/api/workflows/${wf.id}`)).data;
     return w.status !== 'running' ? w : null;

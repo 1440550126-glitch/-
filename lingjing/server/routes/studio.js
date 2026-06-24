@@ -48,7 +48,7 @@ POST('/api/qc/:id/resolve', async ({ params }) => {
 // 工作流：一键托管全流程
 POST('/api/workflows', async ({ body }) => {
   if (!body.project_id) throw bad('缺少 project_id');
-  return startWorkflow({ projectId: body.project_id, episode: body.episode || '', steps: body.steps || null });
+  return startWorkflow({ projectId: body.project_id, episode: body.episode || '', steps: body.steps || null, videoModel: body.video_model || body.model || '' });
 });
 GET('/api/workflows/:id', async ({ params }) => getWorkflow(params.id));
 POST('/api/workflows/:id/cancel', async ({ params }) => cancelWorkflow(params.id));

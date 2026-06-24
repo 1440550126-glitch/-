@@ -7,7 +7,7 @@ import { h, toast } from './ui.js';
  * @param {{onNode?:(nodeId:string)=>void, includeVideos?:boolean, episode?:string}} opts
  * episode：只处理该集的分镜节点（角色/场景/道具出图不受限）。返回 {cancel}
  */
-export function runBatchGenerate(canvasId, { onNode, includeVideos = true, episode = '', onDone } = {}) {
+export function runBatchGenerate(canvasId, { onNode, includeVideos = true, episode = '', videoModel = '', onDone } = {}) {
   let cancelled = false;
   const bar = h('div', { class: 'batchbar' });
   const label = h('div', { class: 'row' });
@@ -67,7 +67,7 @@ export function runBatchGenerate(canvasId, { onNode, includeVideos = true, episo
           const r = await POST('/api/ai/video', {
             prompt: n.data.video_prompt || n.data.action || n.data.name,
             image_url: cur?.data.image || '', duration: n.data.duration || 5,
-            project_id: projectId, node_id: n.id, name: n.data.name, order: n.data.order
+            project_id: projectId, node_id: n.id, name: n.data.name, order: n.data.order, model: videoModel || ''
           });
           tasks.push({ node: n, taskId: r.taskId });
           onNode?.(n.id);

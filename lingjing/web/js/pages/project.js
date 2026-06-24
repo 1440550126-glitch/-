@@ -1,5 +1,5 @@
 // 项目工作台：剧本编辑 / AI 生成 / 分镜表 / 角色场景卡 / Agent
-import { GET, POST, PATCH, pollUntilDone } from '../api.js';
+import { GET, POST, PATCH, pollUntilDone, bootstrap } from '../api.js';
 import { h, icon, toast, debounce, mediaEl, modal, STATUS_CN, isVideoUrl, stagger } from '../ui.js';
 import { nav, refreshSidebarProjects } from '../main.js';
 import { runBatchGenerate } from '../batch.js';
@@ -15,6 +15,7 @@ const RATIOS = ['16:9', '9:16', '1:1', '4:3', '21:9'];
 export async function renderProject(page, params) {
   let project = await GET(`/api/projects/${params.id}`);
   let canvas = project.canvas_id ? await GET(`/api/canvases/${project.canvas_id}`).catch(() => null) : null;
+  const boot = await bootstrap().catch(() => null);
   let rightTab = project.storyboard ? ((project.storyboard.episodes?.length || 0) > 1 ? 'episodes' : 'shots') : 'agent';
   const U = () => project.storyboard?.unit || '集';   // 分段单位：电影=幕，短剧=集
 
@@ -39,6 +40,9 @@ export async function renderProject(page, params) {
   const ratioSel = h('select', { class: 'select', style: { width: '96px' },
     onchange: async (e) => { project = await PATCH(`/api/projects/${project.id}`, { ratio: e.target.value }); toast('画幅已更新', 'ok'); } },
     RATIOS.map((r) => h('option', { value: r, selected: r === project.ratio }, r)));
+  // 视频模型（应用于 单镜出片 / 一键生成 / 全流程；默认走设置里的默认视频模型）
+  const vidModelSel = h('select', { class: 'select', style: { maxWidth: '210px' }, title: '本项目出片用的视频模型（决定时长上限：Seedance 2.5→30s 等）' },
+    (boot?.video_models || [{ id: boot?.ark?.model_video || '', label: '默认视频模型' }]).map((m) => h('option', { value: m.id, selected: m.id === (boot?.ark?.model_video || '') }, m.label)));
 
   const styleBtn = h('button', {
     class: 'btn', title: project.style ? `当前风格：${project.style}` : '选择画面风格（影响生图/生视频）',
@@ -176,7 +180,7 @@ export async function renderProject(page, params) {
       // 已有进行中的托管 → 直接重开面板，而不是再起一个
       const running = (await GET(`/api/workflows?project_id=${project.id}`)).find((w) => w.status === 'running');
       if (running) { openWorkflow(running.id); }
-      else { const w = await POST('/api/workflows', { project_id: project.id }); openWorkflow(w.id); }
+      else { const w = await POST('/api/workflows', { project_id: project.id, video_model: vidModelSel.value || '' }); openWorkflow(w.id); }
     } catch (e) { toast(e.message, 'err'); }
     wfBtn.disabled = false;
   } });
@@ -210,7 +214,7 @@ export async function renderProject(page, params) {
   const batchBtn = h('button', { class: 'btn primary', onclick: () => {
     if (!project.canvas_id) return toast('先解析剧本生成画布', 'err');
     batchBtn.disabled = true;
-    runBatchGenerate(project.canvas_id, { onDone: async () => { batchBtn.disabled = false; await reload(); } });
+    runBatchGenerate(project.canvas_id, { videoModel: vidModelSel.value || '', onDone: async () => { batchBtn.disabled = false; await reload(); } });
   } });
   batchBtn.innerHTML = `${icon('wand')} 一键生成`;
 
@@ -325,7 +329,7 @@ export async function renderProject(page, params) {
       const running = nodes.some((n) => n.data.task_status === 'running');
       const genBtn2 = h('button', { class: 'btn sm', disabled: !project.canvas_id, onclick: () => {
         genBtn2.disabled = true;
-        runBatchGenerate(project.canvas_id, { episode: ep.key, onDone: async () => { genBtn2.disabled = false; await reload(true); } });
+        runBatchGenerate(project.canvas_id, { episode: ep.key, videoModel: vidModelSel.value || '', onDone: async () => { genBtn2.disabled = false; await reload(true); } });
       } });
       genBtn2.innerHTML = `${icon('wand', 14)} 本${U()}一键生成`;
       const playEpBtn = h('button', { class: 'btn sm ghost', title: `连播预览本${U()}`, html: icon('play', 15), onclick: () => openRoom(ep.key) });
@@ -421,7 +425,7 @@ export async function renderProject(page, params) {
       const cur = fresh.nodes.find((n) => n.id === node.id);
       const r = await POST('/api/ai/video', {
         prompt: shot.video_prompt || shot.action, image_url: cur?.data.image || '', duration: shot.duration,
-        project_id: project.id, node_id: node.id, name: `镜头 ${shot.order}`, order: shot.order
+        project_id: project.id, node_id: node.id, name: `镜头 ${shot.order}`, order: shot.order, model: vidModelSel.value || ''
       });
       await reload(true);
       pollUntilDone(r.taskId).then(async (t) => {
@@ -484,7 +488,7 @@ export async function renderProject(page, params) {
     h('div', { class: 'topbar line' },
       h('button', { class: 'btn ghost sm', html: icon('back'), onclick: () => nav('/home') }),
       titleInput, statusPill, h('span', { class: 'grow' }),
-      ratioSel, styleBtn, parseBtn, canvasBtn, entBtn, checkBtn, qcBtn, playBtn2, omniBtn, sheetBtn, wfBtn, batchBtn),
+      ratioSel, vidModelSel, styleBtn, parseBtn, canvasBtn, entBtn, checkBtn, qcBtn, playBtn2, omniBtn, sheetBtn, wfBtn, batchBtn),
     h('div', { class: 'wrap', style: { maxWidth: '1440px', marginTop: '16px' } },
       h('div', { class: 'work-grid' }, leftCard, rightCard)));
   renderRight();

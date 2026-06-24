@@ -41,7 +41,7 @@ export function cancelWorkflow(id) {
   return { cancelling: true };
 }
 
-export function startWorkflow({ projectId, episode = '', steps = null }) {
+export function startWorkflow({ projectId, episode = '', steps = null, videoModel = '' }) {
   getProject(projectId);
   const running = q.get(`SELECT id FROM workflows WHERE project_id = ? AND status = 'running'`, projectId);
   if (running) throw bad(`该项目已有进行中的工作流（${running.id}），可先取消它`);
@@ -49,8 +49,8 @@ export function startWorkflow({ projectId, episode = '', steps = null }) {
     .map((s) => ({ ...s, status: 'pending', detail: '', ms: 0 }));
   if (!chosen.length) throw bad('没有可执行的步骤');
   const id = uid('wf');
-  q.run('INSERT INTO workflows (id, project_id, episode, steps, created_at, updated_at) VALUES (?,?,?,?,?,?)',
-    id, projectId, episode, JSON.stringify(chosen), now(), now());
+  q.run('INSERT INTO workflows (id, project_id, episode, steps, video_model, created_at, updated_at) VALUES (?,?,?,?,?,?,?)',
+    id, projectId, episode, JSON.stringify(chosen), String(videoModel || '').slice(0, 80), now(), now());
   runWorkflow(id).catch((e) => {
     console.error('[workflow]', id, e);
     q.run(`UPDATE workflows SET status = 'failed', error = ?, updated_at = ? WHERE id = ? AND status = 'running'`,
@@ -200,7 +200,7 @@ async function execStep(name, wf, cancelled) {
           try {
             r = await createVideoTask({
               prompt: (n.data.video_prompt || n.data.action || n.data.name) + (continuous ? '，紧接上一镜，画面与角色无缝衔接、外观身高一致' : ''),
-              imageUrl: firstFrame, duration: n.data.duration, projectId, nodeId: n.id, name: n.data.name, order: n.data.order
+              imageUrl: firstFrame, duration: n.data.duration, projectId, nodeId: n.id, name: n.data.name, order: n.data.order, model: wf.video_model || ''
             });
           } catch (e) { failC++; prevFrame = ''; if (!okC && todo.indexOf(n) === 0) throw bad(e.message); continue; }
           if (continuous) chained++;
@@ -222,7 +222,7 @@ async function execStep(name, wf, cancelled) {
         try {
           const r = await createVideoTask({
             prompt: n.data.video_prompt || n.data.action || n.data.name, imageUrl: n.data.image,
-            duration: n.data.duration, projectId, nodeId: n.id, name: n.data.name, order: n.data.order
+            duration: n.data.duration, projectId, nodeId: n.id, name: n.data.name, order: n.data.order, model: wf.video_model || ''
           });
           tasks.push(r.taskId);
         } catch (e) { if (!firstErr) firstErr = e.message; console.warn('[workflow] 视频任务失败：', n.data.name, e.message); }
