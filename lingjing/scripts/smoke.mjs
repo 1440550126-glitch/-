@@ -286,6 +286,15 @@ try {
   ok(typeof waudit.total === 'number' && waudit.domains.includes('music') && waudit.domains.includes('video'), 'wiki 审计返回总数与域分布');
   const wtools = (await api('GET', '/api/agent/v1/tools', undefined, boot.agent_token)).data.tools;
   ok(['wiki_query', 'wiki_ingest', 'wiki_audit', 'wiki_page'].every((n) => wtools.some((t) => t.name === n)), 'Agent/MCP 开放 wiki_query/ingest/audit/page（外部音乐站经 MCP 共享同库）');
+  // 外部应用（音乐站）经 knowledge-client.js → HTTP MCP 读写同库（ingest→query 闭环）
+  const { knowledge } = await import(path.join(ROOT, 'integrations', 'knowledge-client.js'));
+  const kb = knowledge({ baseUrl: BASE, token: boot.agent_token, domain: 'music' });
+  await kb.ingest({ title: '客户端·音乐测试页', content: '通过 MCP 客户端写入的音乐知识：合成器、未来感、电子节拍' });
+  const kbq = await kb.query('客户端 音乐测试');
+  ok(kbq.pages?.some((x) => x.title === '客户端·音乐测试页'), '音乐站客户端经 MCP ingest→query 成功（与视频站共享同库）');
+  let kbAuthErr = '';
+  try { await knowledge({ baseUrl: BASE, token: 'wrong-token', domain: 'music' }).query('x'); } catch (e) { kbAuthErr = e.message; }
+  ok(/鉴权失败|Token/.test(kbAuthErr), '客户端 Token 不对时鉴权失败（跨站安全）');
 
   console.log('— 角色预选标注 / Agent 进化 —');
   const pe = (await api('POST', '/api/projects', { title: '标注剧', genre: '悬疑反转', idea: '实验室停电夜' })).data;
