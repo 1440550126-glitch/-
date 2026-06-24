@@ -5,7 +5,7 @@ import { GET, POST, PATCH, DEL, bad, notFound } from '../lib/httpx.js';
 import { q, getSetting, setSetting, UPLOAD_DIR, DB_PATH } from '../lib/db.js';
 import { uid, now, jparse, micro2yuan, token32 } from '../lib/util.js';
 import { arkEnabled, llmEnabled, cfg, arkChat, DEFAULTS, videoModelOptions } from '../lib/ark.js';
-import { providerCfg, openaiEnabled, googleEnabled, alibabaEnabled, viduEnabled, imageModelOptions, PROVIDER_DEFAULTS } from '../lib/providers.js';
+import { providerCfg, openaiEnabled, googleEnabled, alibabaEnabled, viduEnabled, klingEnabled, imageModelOptions, PROVIDER_DEFAULTS } from '../lib/providers.js';
 import { listExpressions } from '../lib/expressions.js';
 import { createProject, getProject, projectOut, touchProject, getCanvas, checkConsistency, buildCharacterProfile, listEntities, annotateEntities, getAgentBrain, restyleProject, buildOmniReferencePrompt, generateOmniVideo, buildStoryboardSheet, generateStoryboardSheet } from '../lib/pipeline.js';
 
@@ -74,7 +74,7 @@ GET('/api/bootstrap', async () => {
     user_name: getSetting('user_name', '创作者'),
     ark: { enabled: arkEnabled(), base_url: c.baseUrl, model_chat: c.modelChat, model_image: c.modelImage, model_image_pro: c.modelImagePro, model_video: c.modelVideo },
     llm_enabled: llmEnabled(),   // 对话/剧本是否可用真实大模型（火山 或 千问+DashScope）
-    providers: { openai: openaiEnabled(), google: googleEnabled(), alibaba: alibabaEnabled(), vidu: viduEnabled() },   // 多供应商开通状态
+    providers: { openai: openaiEnabled(), google: googleEnabled(), alibaba: alibabaEnabled(), vidu: viduEnabled(), kling: klingEnabled() },   // 多供应商开通状态
     video_models: videoModelOptions(),
     image_models: imageModelOptions(c.modelImage),
     video_resolutions: ['', '480p', '720p', '1080p'],
@@ -247,7 +247,7 @@ DEL('/api/canvases/:id', async ({ params }) => {
 });
 
 // ---------- 设置 ----------
-const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_image_pro', 'model_image_options', 'model_video', 'model_video_options', 'video_extra_args', 'openai_base_url', 'google_base_url', 'dashscope_base_url', 'vidu_base_url', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint', 'local_fallback', 'agent_temperature', 'agent_max_steps', 'agent_autorun', 'agent_thinking', 'agent_plan_first', 'qc_enabled', 'qc_autofix', 'qc_min_score', 'video_chain', 'auto_expressions'];
+const SETTING_KEYS = ['ark_base_url', 'model_chat', 'model_image', 'model_image_pro', 'model_image_options', 'model_video', 'model_video_options', 'video_extra_args', 'openai_base_url', 'google_base_url', 'dashscope_base_url', 'vidu_base_url', 'kling_base_url', 'watermark', 'price_chat_in', 'price_chat_out', 'price_image', 'price_video_sec', 'user_name', 'default_ratio', 'tts_appid', 'tts_voice', 'tts_cluster', 'tts_endpoint', 'local_fallback', 'agent_temperature', 'agent_max_steps', 'agent_autorun', 'agent_thinking', 'agent_plan_first', 'qc_enabled', 'qc_autofix', 'qc_min_score', 'video_chain', 'auto_expressions'];
 
 GET('/api/settings', async () => {
   const c = cfg();
@@ -262,6 +262,7 @@ GET('/api/settings', async () => {
     google_api_key_masked: mask(pc.googleKey), google_base_url: pc.googleBase, google_enabled: googleEnabled(),
     dashscope_api_key_masked: mask(pc.dashscopeKey), dashscope_base_url: pc.dashscopeBase, alibaba_enabled: alibabaEnabled(),
     vidu_api_key_masked: mask(pc.viduKey), vidu_base_url: pc.viduBase, vidu_enabled: viduEnabled(),
+    kling_access_key_masked: mask(pc.klingAccessKey), kling_secret_key_masked: mask(pc.klingSecretKey), kling_base_url: pc.klingBase, kling_enabled: klingEnabled(),
     model_image_options: pc.modelImageOptions,
     ark_base_url: c.baseUrl, model_chat: c.modelChat, model_image: c.modelImage, model_image_pro: c.modelImagePro, model_video: c.modelVideo,
     model_video_options: c.modelVideoOptions, video_extra_args: c.videoExtraArgs,
@@ -318,6 +319,14 @@ PATCH('/api/settings', async ({ body }) => {
   if (body.vidu_api_key !== undefined) {   // Vidu 全能参考（多主体一致）
     const k = String(body.vidu_api_key).trim();
     setSetting('vidu_api_key', k === 'clear' ? '' : k);
+  }
+  if (body.kling_access_key !== undefined) {   // 可灵 Kling AccessKey
+    const k = String(body.kling_access_key).trim();
+    setSetting('kling_access_key', k === 'clear' ? '' : k);
+  }
+  if (body.kling_secret_key !== undefined) {   // 可灵 Kling SecretKey
+    const k = String(body.kling_secret_key).trim();
+    setSetting('kling_secret_key', k === 'clear' ? '' : k);
   }
   for (const k of SETTING_KEYS) {
     if (body[k] !== undefined) setSetting(k, body[k]);

@@ -96,6 +96,8 @@ try {
   ok(prov.videoProviderOf('wanx2.1-i2v-turbo') === 'alibaba' && prov.videoProviderOf('wanx2.1-t2v-turbo') === 'alibaba', '通义万相视频（i2v/t2v）路由到阿里');
   ok(prov.pickVideoProvider('wanx2.1-i2v-turbo', { arkEnabled: true }).enabled === false, '未配 DashScope Key 时通义万相不启用（安全）');
   ok(prov.videoProviderOf('viduq1') === 'vidu' && prov.videoProviderOf('vidu2.0') === 'vidu' && prov.pickVideoProvider('viduq1', { arkEnabled: true }).enabled === false, 'Vidu 全能参考按 ID 路由，未配 Key 不启用（安全）');
+  ok(prov.videoProviderOf('kling-v2-1') === 'kling' && prov.videoProviderOf('kling-v1-6') === 'kling' && prov.pickVideoProvider('kling-v2-5', { arkEnabled: true }).enabled === false, '可灵 Kling 按 ID 路由，未配 AK/SK 不启用（安全）');
+  ok(prov.klingEnabled() === false, '未配 Kling AK/SK 时 klingEnabled 为 false');
   const ark = await import(path.join(ROOT, 'server', 'lib', 'ark.js'));
   ok(ark.isQwenChat('qwen-max') === true && ark.isQwenChat('doubao-seed-1-6-250615') === false, '千问对话模型按 ID 识别');
   ok(ark.llmEnabled() === false, '无任何大模型 Key 时 llmEnabled 为 false（走本地）');
@@ -141,7 +143,8 @@ try {
   ok((boot.video_models || []).some((m) => /veo/i.test(m.id)), '创作框可选视频模型含 Veo 3（Google）');
   ok((boot.video_models || []).some((m) => /wanx|wan2/i.test(m.id)), '创作框可选视频模型含 通义万相（阿里）');
   ok((boot.video_models || []).some((m) => /vidu/i.test(m.id)), '创作框可选视频模型含 Vidu 全能参考');
-  ok(boot.providers && boot.providers.openai === false && boot.providers.google === false && boot.providers.alibaba === false && boot.providers.vidu === false, '多供应商开通状态暴露（未配 Key 为 false）');
+  ok((boot.video_models || []).some((m) => /kling/i.test(m.id)), '创作框可选视频模型含 可灵 Kling');
+  ok(boot.providers && boot.providers.openai === false && boot.providers.google === false && boot.providers.alibaba === false && boot.providers.vidu === false && boot.providers.kling === false, '多供应商开通状态暴露（未配 Key 为 false）');
   ok(typeof boot.llm_enabled === 'boolean', 'bootstrap 暴露 llm_enabled（对话大模型可用性）');
 
   console.log('— 项目与剧本 —');
@@ -442,6 +445,9 @@ try {
     return ['succeeded', 'failed'].includes(t.status) ? t : null;
   });
   ok(wanDone.provider === 'local' && wanDone.status === 'succeeded', '未配 DashScope Key 选通义万相视频 → 安全回退本地占位');
+  const klingFb = (await api('POST', '/api/ai/video', { prompt: '测试', model: 'kling-v2-1', ratio: '16:9', duration: 5 })).data;
+  const klingDone = await until(async () => { const t = (await api('GET', `/api/ai/task/${klingFb.taskId}`)).data; return ['succeeded', 'failed'].includes(t.status) ? t : null; });
+  ok(klingDone.provider === 'local' && klingDone.status === 'succeeded', '未配 Kling AK/SK 选可灵 → 安全回退本地占位');
 
   console.log('— MCP over HTTP（远程助理通道） —');
   const mh = async (msg) => {
@@ -561,6 +567,13 @@ try {
   ok((await api('GET', '/api/bootstrap')).data.providers.vidu === true, 'bootstrap 反映 Vidu 已开通');
   await api('PATCH', '/api/settings', { vidu_api_key: 'clear' });   // 复位，避免真实外呼
   ok((await api('GET', '/api/settings')).data.vidu_enabled === false, '清除 Vidu Key 后回到未配置');
+  // 可灵 Kling：AK/SK 双密钥，两者齐备才启用
+  await api('PATCH', '/api/settings', { kling_access_key: 'kl-ak-test-1234', kling_secret_key: 'kl-sk-test-5678' });
+  const setKling = (await api('GET', '/api/settings')).data;
+  ok(setKling.kling_access_key_masked.includes('****') && setKling.kling_secret_key_masked.includes('****') && setKling.kling_enabled === true, '可灵 AK/SK 脱敏保存并启用');
+  await api('PATCH', '/api/settings', { kling_secret_key: 'clear' });
+  ok((await api('GET', '/api/settings')).data.kling_enabled === false, '仅 AK 无 SK 时可灵不启用（需双密钥）');
+  await api('PATCH', '/api/settings', { kling_access_key: 'clear' });   // 复位
   const stats = (await api('GET', '/api/stats')).data;
   ok(Number(stats.cost_total_yuan) === 0, '本地模式成本为 0');
 

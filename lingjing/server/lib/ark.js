@@ -31,7 +31,10 @@ export const DEFAULTS = {
     '通义万相 2.2 图生视频 Plus（阿里）|wan2.2-i2v-plus',
     '通义万相 2.1 图生视频（阿里）|wanx2.1-i2v-turbo',
     'Vidu Q2 全能参考（多主体一致，需 Vidu Key，核对ID）|viduq2',
-    'Vidu Q1 全能参考|viduq1'
+    'Vidu Q1 全能参考|viduq1',
+    '可灵 Kling 2.5（快手·第一梯队，需 Kling AK/SK，核对ID）|kling-v2-5',
+    '可灵 Kling 2.1|kling-v2-1',
+    '可灵 Kling 1.6（多图参考/全能参考）|kling-v1-6'
   ].join('\n'),
   video_extra_args: '',     // 追加到视频任务文本命令的参数，如 --camerafixed true
   watermark: false,

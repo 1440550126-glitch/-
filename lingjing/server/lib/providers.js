@@ -2,6 +2,7 @@
 // 各家用各自独立的 API Key / Base URL（设置页或环境变量配置）。零依赖：原生 fetch / FormData / Blob。
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { getSetting, UPLOAD_DIR } from './db.js';
 import { uid } from './util.js';
 import { downloadToUploads, logUsage } from './ark.js';
@@ -11,6 +12,7 @@ export const PROVIDER_DEFAULTS = {
   google_base_url: 'https://generativelanguage.googleapis.com/v1beta',
   dashscope_base_url: 'https://dashscope.aliyuncs.com',   // 阿里云百炼·统一 API（千问/通义万相 图与视频共用一个 Key）
   vidu_base_url: 'https://api.vidu.com',                   // Vidu（生数科技）·多主体参考「全能参考」视频，国产多图参考最强
+  kling_base_url: 'https://api-beijing.klingai.com',       // 可灵 Kling（快手）·国产视频第一梯队；JWT(AccessKey/SecretKey) 鉴权
   // 创作框「生成图片」可选的图像模型（每行「显示名|模型ID」），与视频模型列表对称。2026 最新：Seedream 5.0 / 通义万相 2.5。
   model_image_options: [
     'Seedream 5.0（火山·最新，核对ID）|doubao-seedream-5-0',
@@ -40,6 +42,9 @@ export function providerCfg() {
     dashscopeBase: String(g('dashscope_base_url', 'DASHSCOPE_BASE_URL', PROVIDER_DEFAULTS.dashscope_base_url)).replace(/\/+$/, ''),
     viduKey: g('vidu_api_key', 'VIDU_API_KEY', ''),
     viduBase: String(g('vidu_base_url', 'VIDU_BASE_URL', PROVIDER_DEFAULTS.vidu_base_url)).replace(/\/+$/, ''),
+    klingAccessKey: g('kling_access_key', 'KLING_ACCESS_KEY', ''),
+    klingSecretKey: g('kling_secret_key', 'KLING_SECRET_KEY', ''),
+    klingBase: String(g('kling_base_url', 'KLING_BASE_URL', PROVIDER_DEFAULTS.kling_base_url)).replace(/\/+$/, ''),
     modelImageOptions: String(g('model_image_options', 'MODEL_IMAGE_OPTIONS', PROVIDER_DEFAULTS.model_image_options))
   };
 }
@@ -48,6 +53,7 @@ export const openaiEnabled = () => !!providerCfg().openaiKey;
 export const googleEnabled = () => !!providerCfg().googleKey;
 export const alibabaEnabled = () => !!providerCfg().dashscopeKey;
 export const viduEnabled = () => !!providerCfg().viduKey;
+export const klingEnabled = () => { const c = providerCfg(); return !!(c.klingAccessKey && c.klingSecretKey); };
 
 // 按模型 ID 识别供应商：
 //  图像：gpt-image*/dall* → OpenAI；qwen-image/wanx*t2i/wan* → 阿里通义万相；其余 → 火山方舟
@@ -62,6 +68,7 @@ export function videoProviderOf(model) {
   const m = String(model || '');
   if (/^veo/i.test(m) || /(google|gemini)/i.test(m)) return 'google';
   if (/^vidu/i.test(m)) return 'vidu';
+  if (/^kling|kuaishou|可灵/i.test(m)) return 'kling';
   if (/(t2v|i2v)/i.test(m) || (/^wan/i.test(m) && /video/i.test(m))) return 'alibaba';
   return 'ark';
 }
@@ -78,6 +85,7 @@ export function pickVideoProvider(model, { arkEnabled, arkModel } = {}) {
   const provider = videoProviderOf(model);
   if (provider === 'google') return { provider, enabled: googleEnabled(), model: model || 'veo-3.0-generate-001' };
   if (provider === 'vidu') return { provider, enabled: viduEnabled(), model: model || 'viduq1' };
+  if (provider === 'kling') return { provider, enabled: klingEnabled(), model: model || 'kling-v2-1' };
   if (provider === 'alibaba') return { provider, enabled: alibabaEnabled(), model: model || 'wanx2.1-i2v-turbo' };
   return { provider: 'ark', enabled: !!arkEnabled, model: model || arkModel || '' };
 }
@@ -300,6 +308,75 @@ export async function viduTaskGet(taskId, { feature = 'video', duration = 5 } = 
   const remote = (data.creations || [])[0]?.url || data.creations?.[0]?.video_url;
   if (!remote) return { status: 'failed', error: 'Vidu 任务完成但未返回视频地址' };
   logUsage({ feature, provider: 'vidu', model: 'viduq1', videoSeconds: duration });
+  try { return { status: 'succeeded', url: await downloadToUploads(remote, 'mp4') }; }
+  catch { return { status: 'succeeded', url: remote }; }
+}
+
+// ===================== 可灵 Kling（快手）：国产视频第一梯队，JWT(AccessKey/SecretKey) 鉴权 =====================
+const b64url = (buf) => Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+/** 生成 Kling JWT（HS256，30 分钟有效） */
+function klingJWT(ak, sk) {
+  const now = Math.floor(Date.now() / 1000);
+  const head = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const payload = b64url(JSON.stringify({ iss: ak, exp: now + 1800, nbf: now - 5 }));
+  const sig = b64url(crypto.createHmac('sha256', sk).update(`${head}.${payload}`).digest());
+  return `${head}.${payload}.${sig}`;
+}
+// Kling 图片入参：http(s) 原样；本地转【裸 base64】（不带 data: 前缀）
+function toKlingImage(url) {
+  if (!url) return null;
+  if (/^https?:/i.test(url)) return url;
+  const f = localFilePath(url);
+  return f ? fs.readFileSync(f).toString('base64') : null;
+}
+/**
+ * Kling 创建视频：多图→multi-image2video（全能参考·多主体一致），单图→image2video，无图→text2video。
+ * remoteId 编码为 "type:task_id" 供轮询用对应端点。
+ */
+export async function klingVideoCreate({ prompt, imageUrl = '', images = [], ratio = '16:9', duration = 5, model = 'kling-v2-1' }) {
+  const c = providerCfg();
+  if (!c.klingAccessKey || !c.klingSecretKey) throw new Error('未配置 Kling AccessKey/SecretKey（设置页填写）');
+  const jwt = klingJWT(c.klingAccessKey, c.klingSecretKey);
+  const ar = /9\s*[:：]\s*16/.test(ratio) ? '9:16' : /1\s*[:：]\s*1/.test(ratio) ? '1:1' : '16:9';
+  const dur = Number(duration) >= 10 ? '10' : '5';
+  const refs = (images || []).map(toKlingImage).filter(Boolean).slice(0, 4);
+  const p = String(prompt || '').slice(0, 2000);
+  let type, body;
+  if (refs.length > 1) {
+    type = 'multi-image2video';
+    body = { model_name: model, image_list: refs.map((im) => ({ image: im })), prompt: p, duration: dur, aspect_ratio: ar, mode: 'std' };
+  } else {
+    const one = refs[0] || toKlingImage(imageUrl);
+    if (one) { type = 'image2video'; body = { model_name: model, image: one, prompt: p, duration: dur, aspect_ratio: ar, mode: 'std' }; }
+    else { type = 'text2video'; body = { model_name: model, prompt: p, duration: dur, aspect_ratio: ar, mode: 'std' }; }
+  }
+  const res = await fetch(`${c.klingBase}/v1/videos/${type}`, {
+    method: 'POST', headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body), signal: AbortSignal.timeout(60_000)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || (data?.code && data.code !== 0)) throw new Error(data?.message || `Kling 任务创建失败 HTTP ${res.status}`);
+  const id = data?.data?.task_id;
+  if (!id) throw new Error('Kling 未返回 task_id');
+  return { remoteId: `${type}:${id}`, model };
+}
+/** Kling 任务查询（remoteId="type:task_id"）。成功落盘。返回 { status, url?, error? }。 */
+export async function klingTaskGet(remoteId, { feature = 'video', duration = 5 } = {}) {
+  const c = providerCfg();
+  if (!c.klingAccessKey || !c.klingSecretKey) throw new Error('未配置 Kling Key');
+  const i = String(remoteId).indexOf(':');
+  const type = String(remoteId).slice(0, i) || 'image2video';
+  const id = String(remoteId).slice(i + 1);
+  const jwt = klingJWT(c.klingAccessKey, c.klingSecretKey);
+  const res = await fetch(`${c.klingBase}/v1/videos/${type}/${id}`, { headers: { Authorization: `Bearer ${jwt}` }, signal: AbortSignal.timeout(30_000) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || `Kling 查询失败 HTTP ${res.status}`);
+  const st = String(data?.data?.task_status || '').toLowerCase();
+  if (st === 'failed') { logUsage({ feature, provider: 'kling', model: 'kling', ok: 0 }); return { status: 'failed', error: data?.data?.task_status_msg || 'Kling 生成失败' }; }
+  if (st !== 'succeed' && st !== 'succeeded') return { status: 'running' };
+  const remote = data?.data?.task_result?.videos?.[0]?.url;
+  if (!remote) return { status: 'failed', error: 'Kling 完成但未返回视频地址' };
+  logUsage({ feature, provider: 'kling', model: 'kling', videoSeconds: duration });
   try { return { status: 'succeeded', url: await downloadToUploads(remote, 'mp4') }; }
   catch { return { status: 'succeeded', url: remote }; }
 }
