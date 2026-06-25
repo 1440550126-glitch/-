@@ -98,6 +98,8 @@ try {
   ok(prov.videoProviderOf('viduq1') === 'vidu' && prov.videoProviderOf('vidu2.0') === 'vidu' && prov.pickVideoProvider('viduq1', { arkEnabled: true }).enabled === false, 'Vidu 全能参考按 ID 路由，未配 Key 不启用（安全）');
   ok(prov.videoProviderOf('kling-v2-1') === 'kling' && prov.videoProviderOf('kling-v1-6') === 'kling' && prov.pickVideoProvider('kling-v2-5', { arkEnabled: true }).enabled === false, '可灵 Kling 按 ID 路由，未配 AK/SK 不启用（安全）');
   ok(prov.klingEnabled() === false, '未配 Kling AK/SK 时 klingEnabled 为 false');
+  ok(prov.videoProviderOf('moxing/Kling-V3') === 'moxing' && prov.videoProviderOf('moxing/Sora-2-Pro') === 'moxing' && prov.pickVideoProvider('moxing/Kling-V3', { arkEnabled: true }).enabled === false, '墨行AI 聚合站按 moxing/ 前缀路由，未配 Key 不启用（安全）');
+  ok(prov.moxingEnabled() === false && prov.maxVideoDuration('moxing/doubao-seedance-2-5') === 30, '墨行AI：未配 Key 为 false；时长按底层模型名判定（聚合 Seedance2.5→30s）');
   ok(prov.supportsMultiRef('viduq1') === true && prov.supportsMultiRef('kling-v2-1') === true && prov.supportsMultiRef('doubao-seedance-2-5') === false, '多主体参考能力：Vidu/可灵 支持，Seedance 不支持');
   const ark = await import(path.join(ROOT, 'server', 'lib', 'ark.js'));
   ok(ark.isQwenChat('qwen-max') === true && ark.isQwenChat('doubao-seed-1-6-250615') === false, '千问对话模型按 ID 识别');
@@ -153,7 +155,8 @@ try {
   ok((boot.video_models || []).some((m) => /wanx|wan2/i.test(m.id)), '创作框可选视频模型含 通义万相（阿里）');
   ok((boot.video_models || []).some((m) => /vidu/i.test(m.id)), '创作框可选视频模型含 Vidu 全能参考');
   ok((boot.video_models || []).some((m) => /kling/i.test(m.id)), '创作框可选视频模型含 可灵 Kling');
-  ok(boot.providers && boot.providers.openai === false && boot.providers.google === false && boot.providers.alibaba === false && boot.providers.vidu === false && boot.providers.kling === false, '多供应商开通状态暴露（未配 Key 为 false）');
+  ok((boot.video_models || []).some((m) => /^moxing\//i.test(m.id)), '创作框可选视频模型含 墨行AI 聚合站（moxing/…）');
+  ok(boot.providers && boot.providers.openai === false && boot.providers.google === false && boot.providers.alibaba === false && boot.providers.vidu === false && boot.providers.kling === false && boot.providers.moxing === false, '多供应商开通状态暴露（未配 Key 为 false）');
   ok(typeof boot.llm_enabled === 'boolean', 'bootstrap 暴露 llm_enabled（对话大模型可用性）');
 
   console.log('— 项目与剧本 —');
@@ -491,6 +494,9 @@ try {
   const klingFb = (await api('POST', '/api/ai/video', { prompt: '测试', model: 'kling-v2-1', ratio: '16:9', duration: 5 })).data;
   const klingDone = await until(async () => { const t = (await api('GET', `/api/ai/task/${klingFb.taskId}`)).data; return ['succeeded', 'failed'].includes(t.status) ? t : null; });
   ok(klingDone.provider === 'local' && klingDone.status === 'succeeded', '未配 Kling AK/SK 选可灵 → 安全回退本地占位');
+  const moxFb = (await api('POST', '/api/ai/video', { prompt: '测试', model: 'moxing/Kling-V3', ratio: '16:9', duration: 5 })).data;
+  const moxDone = await until(async () => { const t = (await api('GET', `/api/ai/task/${moxFb.taskId}`)).data; return ['succeeded', 'failed'].includes(t.status) ? t : null; });
+  ok(moxDone.provider === 'local' && moxDone.status === 'succeeded', '未配 墨行AI Key 选聚合站模型 → 安全回退本地占位');
   // 时长按模型上限：Seedance 2.5→30s、2.0→15s，其余默认 12s
   const d25 = (await api('GET', `/api/ai/task/${(await api('POST', '/api/ai/video', { prompt: '长片', model: 'doubao-seedance-2-5', duration: 30 })).data.taskId}`)).data;
   const d20 = (await api('GET', `/api/ai/task/${(await api('POST', '/api/ai/video', { prompt: '长片', model: 'doubao-seedance-2-0', duration: 30 })).data.taskId}`)).data;
@@ -623,6 +629,13 @@ try {
   await api('PATCH', '/api/settings', { kling_secret_key: 'clear' });
   ok((await api('GET', '/api/settings')).data.kling_enabled === false, '仅 AK 无 SK 时可灵不启用（需双密钥）');
   await api('PATCH', '/api/settings', { kling_access_key: 'clear' });   // 复位
+  // 墨行AI 聚合站：脱敏保存 + 启用 + 接口地址
+  await api('PATCH', '/api/settings', { moxing_api_key: 'sk-moxing-test-1234', moxing_base_url: 'https://moxing.example/v1' });
+  const setMox = (await api('GET', '/api/settings')).data;
+  ok(setMox.moxing_api_key_masked.includes('****') && setMox.moxing_enabled === true && setMox.moxing_base_url === 'https://moxing.example/v1', '墨行AI Key 脱敏保存、启用、接口地址生效');
+  ok((await api('GET', '/api/bootstrap')).data.providers.moxing === true, 'bootstrap 反映 墨行AI 已开通');
+  await api('PATCH', '/api/settings', { moxing_api_key: 'clear' });   // 复位，避免真实外呼
+  ok((await api('GET', '/api/settings')).data.moxing_enabled === false, '清除 墨行AI Key 后回到未配置');
   const stats = (await api('GET', '/api/stats')).data;
   ok(Number(stats.cost_total_yuan) === 0, '本地模式成本为 0');
 

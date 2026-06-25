@@ -24,6 +24,8 @@ export async function renderSettings(page) {
   const klingAkIn = h('input', { class: 'input', type: 'password', autocomplete: 'off', placeholder: s.kling_access_key_masked ? `已配置 ${s.kling_access_key_masked}（覆盖，clear 清除）` : 'Kling AccessKey' });
   const klingSkIn = h('input', { class: 'input', type: 'password', autocomplete: 'off', placeholder: s.kling_secret_key_masked ? `已配置 ${s.kling_secret_key_masked}（覆盖，clear 清除）` : 'Kling SecretKey' });
   const klingBaseIn = h('input', { class: 'input', value: s.kling_base_url || '' });
+  const moxingKeyIn = h('input', { class: 'input', type: 'password', autocomplete: 'off', placeholder: s.moxing_api_key_masked ? `已配置 ${s.moxing_api_key_masked}（输入新值覆盖，clear 清除）` : '墨行AI API Key（sk-...，moxing.pro）' });
+  const moxingBaseIn = h('input', { class: 'input', value: s.moxing_base_url || '' });
   const extraIn = h('input', { class: 'input', value: s.video_extra_args || '', placeholder: '如 --camerafixed true' });
   const wmSel = h('select', { class: 'select' }, [['false', '不加水印'], ['true', '加 AI 水印']].map(([v, l]) => h('option', { value: v, selected: String(s.watermark) === v }, l)));
   const fbSel = h('select', { class: 'select' }, [['false', '关闭（推荐：失败时报真实错误，便于排查）'], ['true', '开启（失败时用本地占位图/视频兜底）']].map(([v, l]) => h('option', { value: v, selected: String(!!s.local_fallback) === v }, l)));
@@ -49,7 +51,7 @@ export async function renderSettings(page) {
         ark_base_url: baseIn.value.trim(), model_chat: chatIn.value.trim(), model_image: imageIn.value.trim(), model_image_pro: imageProIn.value.trim(), model_video: videoIn.value.trim(),
         model_video_options: videoOptsIn.value.trim(), video_extra_args: extraIn.value.trim(),
         model_image_options: imageOptsIn.value.trim(),
-        openai_base_url: openaiBaseIn.value.trim(), google_base_url: googleBaseIn.value.trim(), dashscope_base_url: dashBaseIn.value.trim(), vidu_base_url: viduBaseIn.value.trim(), kling_base_url: klingBaseIn.value.trim(),
+        openai_base_url: openaiBaseIn.value.trim(), google_base_url: googleBaseIn.value.trim(), dashscope_base_url: dashBaseIn.value.trim(), vidu_base_url: viduBaseIn.value.trim(), kling_base_url: klingBaseIn.value.trim(), moxing_base_url: moxingBaseIn.value.trim(),
         watermark: wmSel.value === 'true', local_fallback: fbSel.value === 'true',
         qc_enabled: qcEnSel.value === 'true', qc_autofix: qcFixSel.value === 'true', qc_min_score: Number(qcScoreIn.value), video_chain: chainSel.value === 'true', auto_expressions: exprSel.value === 'true',
         user_name: nameIn.value.trim() || '创作者',
@@ -69,6 +71,8 @@ export async function renderSettings(page) {
       if (kak) body.kling_access_key = kak;
       const ksk = klingSkIn.value.trim();
       if (ksk) body.kling_secret_key = ksk;
+      const mxk = moxingKeyIn.value.trim();
+      if (mxk) body.moxing_api_key = mxk;
       const r = await PATCH('/api/settings', body);
       toast(r.ark_enabled ? '已保存，方舟模式已启用' : '已保存（当前本地引擎模式）', 'ok');
       keyIn.value = '';
@@ -158,6 +162,9 @@ export async function renderSettings(page) {
       fld(h('span', {}, 'Kling AccessKey（可灵·快手）', pillState(s.kling_enabled)), klingAkIn, '国产视频第一梯队'),
       fld('Kling SecretKey', klingSkIn, 'AK/SK 在快手开放平台获取'),
       fld('Kling 接口地址', klingBaseIn, '默认 api-beijing.klingai.com')),
+    h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' } },
+      fld(h('span', {}, '墨行AI Key（聚合站·一个 Key 调多家）', pillState(s.moxing_enabled)), moxingKeyIn, '一个 sk- Key 调 Kling-V3/Sora/Veo/Seedance；视频选「墨行AI·…」开头的模型即走聚合站'),
+      fld('墨行AI 接口地址', moxingBaseIn, '默认 https://www.moxing.pro/v1')),
     fld('创作框可选图像模型（每行：显示名|模型ID）', imageOptsIn, '加一行 GPT Image|gpt-image-1 或 通义万相|wanx2.1-t2i-turbo 即可在「生成图片」里下拉选用'));
 
   // 语音合成（配音）

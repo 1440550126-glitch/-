@@ -13,6 +13,7 @@ export const PROVIDER_DEFAULTS = {
   dashscope_base_url: 'https://dashscope.aliyuncs.com',   // 阿里云百炼·统一 API（千问/通义万相 图与视频共用一个 Key）
   vidu_base_url: 'https://api.vidu.com',                   // Vidu（生数科技）·多主体参考「全能参考」视频，国产多图参考最强
   kling_base_url: 'https://api-beijing.klingai.com',       // 可灵 Kling（快手）·国产视频第一梯队；JWT(AccessKey/SecretKey) 鉴权
+  moxing_base_url: 'https://www.moxing.pro/v1',            // 墨行AI moxing.pro·聚合站（一个 sk- Key 调 Kling/Sora/Veo/Seedance 等多家）；OpenAI 兼容·统一异步媒体任务
   // 创作框「生成图片」可选的图像模型（每行「显示名|模型ID」），与视频模型列表对称。2026 最新：Seedream 5.0 / 通义万相 2.5。
   model_image_options: [
     'Seedream 5.0（火山·最新，核对ID）|doubao-seedream-5-0',
@@ -45,6 +46,8 @@ export function providerCfg() {
     klingAccessKey: g('kling_access_key', 'KLING_ACCESS_KEY', ''),
     klingSecretKey: g('kling_secret_key', 'KLING_SECRET_KEY', ''),
     klingBase: String(g('kling_base_url', 'KLING_BASE_URL', PROVIDER_DEFAULTS.kling_base_url)).replace(/\/+$/, ''),
+    moxingKey: g('moxing_api_key', 'MOXING_API_KEY', ''),
+    moxingBase: String(g('moxing_base_url', 'MOXING_BASE_URL', PROVIDER_DEFAULTS.moxing_base_url)).replace(/\/+$/, ''),
     modelImageOptions: String(g('model_image_options', 'MODEL_IMAGE_OPTIONS', PROVIDER_DEFAULTS.model_image_options))
   };
 }
@@ -54,6 +57,7 @@ export const googleEnabled = () => !!providerCfg().googleKey;
 export const alibabaEnabled = () => !!providerCfg().dashscopeKey;
 export const viduEnabled = () => !!providerCfg().viduKey;
 export const klingEnabled = () => { const c = providerCfg(); return !!(c.klingAccessKey && c.klingSecretKey); };
+export const moxingEnabled = () => !!providerCfg().moxingKey;
 
 // 按模型 ID 识别供应商：
 //  图像：gpt-image*/dall* → OpenAI；qwen-image/wanx*t2i/wan* → 阿里通义万相；其余 → 火山方舟
@@ -66,6 +70,7 @@ export function imageProviderOf(model) {
 }
 export function videoProviderOf(model) {
   const m = String(model || '');
+  if (/^moxing[/:]/i.test(m)) return 'moxing';   // 聚合站显式前缀：moxing/<真实模型名>，避免与原生 Kling 等撞车
   if (/^veo/i.test(m) || /(google|gemini)/i.test(m)) return 'google';
   if (/^vidu/i.test(m)) return 'vidu';
   if (/^kling|kuaishou|可灵/i.test(m)) return 'kling';
@@ -86,6 +91,7 @@ export function pickVideoProvider(model, { arkEnabled, arkModel } = {}) {
   if (provider === 'google') return { provider, enabled: googleEnabled(), model: model || 'veo-3.0-generate-001' };
   if (provider === 'vidu') return { provider, enabled: viduEnabled(), model: model || 'viduq1' };
   if (provider === 'kling') return { provider, enabled: klingEnabled(), model: model || 'kling-v2-1' };
+  if (provider === 'moxing') return { provider, enabled: moxingEnabled(), model: model || 'moxing/Kling-V3' };
   if (provider === 'alibaba') return { provider, enabled: alibabaEnabled(), model: model || 'wanx2.1-i2v-turbo' };
   return { provider: 'ark', enabled: !!arkEnabled, model: model || arkModel || '' };
 }
@@ -98,7 +104,7 @@ export function supportsMultiRef(model) {
 
 /** 各模型支持的最大时长（秒）：Seedance 2.5→30、2.0→15，其余按各家上限，默认 12（Seedance 1.0）。 */
 export function maxVideoDuration(model) {
-  const m = String(model || '');
+  const m = String(model || '').replace(/^moxing[/:]/i, '');   // 聚合站按其底层模型名判定上限（如 moxing/Seedance-2-5）
   if (/seedance[-.]?2[-.]?5/i.test(m)) return 30;
   if (/seedance[-.]?2[-.]?0/i.test(m)) return 15;
   if (/^kling/i.test(m)) return 10;                 // 可灵 5/10s
@@ -409,4 +415,79 @@ export async function dashscopeVideoCreate({ prompt, imageUrl = '', ratio = '16:
     model, input, parameters: { size: wanSize(ratio) }
   });
   return { remoteId, model };
+}
+
+// ===================== 墨行AI moxing.pro：聚合站（一个 sk- Key 调 Kling/Sora/Veo/Seedance 等多家）=====================
+// OpenAI 兼容·统一异步媒体任务：创建 POST {base}/media/generations，查询 GET {base}/media/tasks/:id，Bearer sk- 鉴权。
+// 模型 ID 形如 "moxing/Kling-V3"，发墨行时剥掉前缀取真实模型名。文档域当前出口被封，响应字段做防御式解析。
+function moxingModelName(model) {
+  return String(model || '').replace(/^moxing[/:]/i, '').trim() || 'Kling-V3';
+}
+// 墨行图片入参：http(s)/data: 原样；本地 /uploads 转 data URL
+function toMoxingImage(url) {
+  if (!url) return null;
+  if (/^https?:/i.test(url) || /^data:/i.test(url)) return url;
+  const f = localFilePath(url);
+  return f ? `data:${mimeOf(f)};base64,${fs.readFileSync(f).toString('base64')}` : null;
+}
+function moxAspect(ratio) {
+  return /9\s*[:：]\s*16/.test(ratio) ? '9:16' : /1\s*[:：]\s*1/.test(ratio) ? '1:1' : '16:9';
+}
+/** 墨行AI 创建视频任务（异步）。有图→图生视频(input_mode=image)，无图→文生视频。返回 { remoteId, model }。 */
+export async function moxingVideoCreate({ prompt, imageUrl = '', images = [], ratio = '16:9', duration = 5, model = 'moxing/Kling-V3', withAudio = false }) {
+  const c = providerCfg();
+  if (!c.moxingKey) throw new Error('未配置 墨行AI（moxing.pro）API Key（设置页填 sk- 开头）');
+  const realModel = moxingModelName(model);
+  const refs = (images || []).map(toMoxingImage).filter(Boolean);
+  const first = refs[0] || toMoxingImage(imageUrl);
+  const body = {
+    model: realModel,
+    prompt: String(prompt || '').slice(0, 2000),
+    capability: 'video_generation',
+    input_mode: first ? 'image' : 'text',
+    aspect_ratio: moxAspect(ratio),
+    duration_seconds: Number(duration) || 5,
+    with_audio: !!withAudio
+  };
+  if (first) body.image = first;             // 图生视频首帧
+  if (refs.length > 1) body.images = refs;   // 多图参考（聚合站底层若支持）
+  const res = await fetch(`${c.moxingBase}/media/generations`, {
+    method: 'POST', headers: { Authorization: `Bearer ${c.moxingKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body), signal: AbortSignal.timeout(60_000)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || (data?.code !== undefined && data.code !== 0 && data.code !== 200)) {
+    throw new Error(data?.error?.message || data?.message || `墨行AI 任务创建失败 HTTP ${res.status}`);
+  }
+  const d = data?.data || data;
+  const id = d?.id || d?.task_id || data?.id || data?.task_id;
+  if (!id) throw new Error('墨行AI 未返回任务 ID');
+  return { remoteId: String(id), model };
+}
+/** 墨行AI 任务查询。成功落盘。防御式解析多种返回形态（status 字符串/数值；视频地址多路径）。返回 { status, url?, error? }。 */
+export async function moxingTaskGet(taskId, { feature = 'video', duration = 5 } = {}) {
+  const c = providerCfg();
+  if (!c.moxingKey) throw new Error('未配置 墨行AI API Key');
+  const res = await fetch(`${c.moxingBase}/media/tasks/${taskId}`, {
+    headers: { Authorization: `Bearer ${c.moxingKey}` }, signal: AbortSignal.timeout(30_000)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error?.message || data?.message || `墨行AI 查询失败 HTTP ${res.status}`);
+  const d = data?.data || data;
+  const raw = d?.status ?? d?.state ?? d?.task_status;
+  const st = String(raw).toLowerCase();
+  const isFail = ['failed', 'fail', 'error', 'cancelled', 'canceled'].includes(st) || raw === 50 || raw === '50';
+  const isDone = ['succeed', 'succeeded', 'success', 'completed', 'finished', 'done'].includes(st) || raw === 99 || raw === '99';
+  if (isFail) { logUsage({ feature, provider: 'moxing', model: 'moxing', ok: 0 }); return { status: 'failed', error: d?.error?.message || d?.fail_reason || d?.message || '墨行AI 生成失败' }; }
+  if (!isDone) return { status: 'running' };
+  const out = d?.output || d?.result || d;
+  const remote = out?.video_url || out?.url
+    || (Array.isArray(out?.videos) ? (out.videos[0]?.url || out.videos[0]) : null)
+    || (Array.isArray(out?.outputs) ? (out.outputs[0]?.url || out.outputs[0]) : null)
+    || (Array.isArray(d?.data) ? (d.data[0]?.url || d.data[0]?.video_url) : null)
+    || d?.video_url;
+  if (!remote) return { status: 'failed', error: '墨行AI 任务完成但未返回视频地址' };
+  logUsage({ feature, provider: 'moxing', model: 'moxing', videoSeconds: duration });
+  try { return { status: 'succeeded', url: await downloadToUploads(remote, 'mp4') }; }
+  catch { return { status: 'succeeded', url: remote }; }
 }

@@ -3,7 +3,7 @@
 import { q, getSetting, setSetting } from './db.js';
 import { uid, now, jparse, clamp } from './util.js';
 import { arkEnabled, llmEnabled, arkChat, arkImage, arkVideoCreate, arkVideoGet, cfg } from './ark.js';
-import { pickImageProvider, pickVideoProvider, maxVideoDuration, supportsMultiRef, openaiImage, googleVeoCreate, googleVeoGet, dashscopeImage, dashscopeVideoCreate, dashscopeTaskGet, viduReferenceVideoCreate, viduTaskGet, klingVideoCreate, klingTaskGet } from './providers.js';
+import { pickImageProvider, pickVideoProvider, maxVideoDuration, supportsMultiRef, openaiImage, googleVeoCreate, googleVeoGet, dashscopeImage, dashscopeVideoCreate, dashscopeTaskGet, viduReferenceVideoCreate, viduTaskGet, klingVideoCreate, klingTaskGet, moxingVideoCreate, moxingTaskGet } from './providers.js';
 import { localScript, localParse, localImageSVG, localVideoSVG, saveSVG, localNextEpisode, localViralAnalysis, guessGender, splitScriptSegments } from './local.js';
 import { resolveStylePrompt } from './styles.js';
 import { resolveExpression } from './expressions.js';
@@ -1306,7 +1306,7 @@ export async function createVideoTask({ prompt, imageUrl = '', lastImageUrl = ''
   const vp = pickVideoProvider(model, { arkEnabled: arkEnabled(), arkModel: model || cfg().modelVideo });
   // 时长按所选模型上限裁剪：Seedance 2.5 最长 30s、2.0 最长 15s，Veo/Vidu ~8s，可灵/万相 ~10s，默认 12s
   duration = clamp(duration, 2, maxVideoDuration(vp.model));
-  const provLabel = vp.provider === 'google' ? 'Veo' : vp.provider === 'vidu' ? 'Vidu 全能参考' : vp.provider === 'kling' ? '可灵 Kling' : vp.provider === 'alibaba' ? '通义万相' : '方舟视频';
+  const provLabel = vp.provider === 'google' ? 'Veo' : vp.provider === 'vidu' ? 'Vidu 全能参考' : vp.provider === 'kling' ? '可灵 Kling' : vp.provider === 'moxing' ? '墨行AI' : vp.provider === 'alibaba' ? '通义万相' : '方舟视频';
   const refList = (refImages || []).filter(Boolean);
   const params = { ratio, duration, imageUrl, lastImageUrl: lastImageUrl || '', refs: refList.length, name, order, model: vp.model || '', provider: vp.enabled ? vp.provider : 'local', resolution: resolution || '' };
 
@@ -1321,9 +1321,11 @@ export async function createVideoTask({ prompt, imageUrl = '', lastImageUrl = ''
           ? await viduReferenceVideoCreate({ prompt, images: refList.length ? refList : [imageUrl].filter(Boolean), ratio, duration, model: vp.model, resolution: resolution || '1080p' })
           : vp.provider === 'kling'
             ? await klingVideoCreate({ prompt, imageUrl, images: refList, ratio, duration, model: vp.model })
-            : vp.provider === 'alibaba'
-              ? await dashscopeVideoCreate({ prompt, imageUrl, ratio, model: vp.model })
-              : await arkVideoCreate({ prompt, imageUrl, lastImageUrl, ratio, duration, model: vp.model, resolution });
+            : vp.provider === 'moxing'
+              ? await moxingVideoCreate({ prompt, imageUrl, images: refList, ratio, duration, model: vp.model })
+              : vp.provider === 'alibaba'
+                ? await dashscopeVideoCreate({ prompt, imageUrl, ratio, model: vp.model })
+                : await arkVideoCreate({ prompt, imageUrl, lastImageUrl, ratio, duration, model: vp.model, resolution });
       provider = vp.provider;
       remoteId = r.remoteId;
       model = r.model;
@@ -1383,7 +1385,7 @@ export async function pollTask(taskId) {
     return finish('failed', {}, '生成超时（超过 18 分钟未完成，已自动结束）');
   }
 
-  if (['ark', 'google', 'alibaba', 'vidu', 'kling'].includes(t.provider) && t.remote_id) {
+  if (['ark', 'google', 'alibaba', 'vidu', 'kling', 'moxing'].includes(t.provider) && t.remote_id) {
     try {
       const r = t.provider === 'google'
         ? await googleVeoGet(t.remote_id, { duration: params.duration || 8 })
@@ -1391,15 +1393,17 @@ export async function pollTask(taskId) {
           ? await viduTaskGet(t.remote_id, { duration: params.duration || 5 })
           : t.provider === 'kling'
             ? await klingTaskGet(t.remote_id, { duration: params.duration || 5 })
-            : t.provider === 'alibaba'
-              ? await dashscopeTaskGet(t.remote_id, { kind: 'video', duration: params.duration || 5 })
-              : await arkVideoGet(t.remote_id, { duration: params.duration || 5 });
+            : t.provider === 'moxing'
+              ? await moxingTaskGet(t.remote_id, { duration: params.duration || 5 })
+              : t.provider === 'alibaba'
+                ? await dashscopeTaskGet(t.remote_id, { kind: 'video', duration: params.duration || 5 })
+                : await arkVideoGet(t.remote_id, { duration: params.duration || 5 });
       if (r.status === 'succeeded') return finish('succeeded', { url: r.url });
       if (r.status === 'failed') return finish('failed', {}, r.error || '生成失败');
       return { ...t, params, result: {}, status: r.status };
     } catch (e) {
       // 查询接口连续报错也不再卡死：记录但保持 running，由超时兜底
-      const label = { google: 'Veo', vidu: 'Vidu', kling: '可灵', alibaba: '通义万相' }[t.provider] || '方舟';
+      const label = { google: 'Veo', vidu: 'Vidu', kling: '可灵', moxing: '墨行AI', alibaba: '通义万相' }[t.provider] || '方舟';
       console.warn(`[pollTask] ${label}查询失败：`, e.message);
       return { ...t, params, result: {}, status: 'running', error: e.message };
     }

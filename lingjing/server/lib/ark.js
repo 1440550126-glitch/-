@@ -34,7 +34,11 @@ export const DEFAULTS = {
     'Vidu Q1 全能参考|viduq1',
     '可灵 Kling 2.5（快手·第一梯队，需 Kling AK/SK，核对ID）|kling-v2-5',
     '可灵 Kling 2.1|kling-v2-1',
-    '可灵 Kling 1.6（多图参考/全能参考）|kling-v1-6'
+    '可灵 Kling 1.6（多图参考/全能参考）|kling-v1-6',
+    '墨行AI·可灵3.0 Kling-V3（聚合站·一个 sk- Key 调多家）|moxing/Kling-V3',
+    '墨行AI·Sora 2 Pro（聚合站，核对模型名）|moxing/Sora-2-Pro',
+    '墨行AI·Veo 3.1（聚合站，核对模型名）|moxing/Veo-3.1',
+    '墨行AI·Seedance 1 Pro（聚合站，核对模型名）|moxing/Seedance-1-Pro'
   ].join('\n'),
   video_extra_args: '',     // 追加到视频任务文本命令的参数，如 --camerafixed true
   watermark: false,
