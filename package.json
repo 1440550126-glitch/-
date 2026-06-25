@@ -2,7 +2,7 @@
   "name": "jvling",
   "version": "0.1.0",
   "private": true,
-  "description": "AI句灵：让文案活过来的年轻人社交圈（H5 App + 零依赖 Node 服务端 + 管理后台）＋ 灵境AI：短剧创作工坊",
+  "description": "AI句灵：让文案活过来的年轻人社交圈（H5 App + 零依赖 Node 服务端 + 管理后台）＋ 灵境AI：短剧创作工坊 ＋ 爆款工厂：AI 电商带货视频",
   "type": "module",
   "engines": {
     "node": ">=22.5.0"
@@ -15,6 +15,9 @@
     "studio": "node --disable-warning=ExperimentalWarning lingjing/server/index.js",
     "studio:dev": "node --disable-warning=ExperimentalWarning --watch lingjing/server/index.js",
     "studio:smoke": "node --disable-warning=ExperimentalWarning lingjing/scripts/smoke.mjs",
-    "studio:diagnose": "node --disable-warning=ExperimentalWarning lingjing/scripts/diagnose.mjs"
+    "studio:diagnose": "node --disable-warning=ExperimentalWarning lingjing/scripts/diagnose.mjs",
+    "topview": "node --disable-warning=ExperimentalWarning topview/server/index.js",
+    "topview:dev": "node --disable-warning=ExperimentalWarning --watch topview/server/index.js",
+    "topview:smoke": "node --disable-warning=ExperimentalWarning topview/scripts/smoke.mjs"
   }
 }
