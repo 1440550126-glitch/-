@@ -29,6 +29,14 @@ def one_cycle(agent) -> None:
     )
     for m in report["learned"]:
         print(f"  + {m}")
+    if report.get("learned") and hasattr(agent, "sediment_memories"):   # 巩固出的记忆也连进知识库
+        try:
+            mrep = agent.sediment_memories(report["learned"])
+            if mrep.get("touched"):
+                print(f"🕸️  记忆入库 {len(mrep['touched'])} 条，连上人物："
+                      + "、".join(mrep["people_linked"][:8] or ["—"]))
+        except Exception as e:
+            print(f"🕸️  记忆入库跳过（{str(e)[:30]}）")
     if hasattr(agent, "sediment_knowledge"):    # 睡前把当天聊到的知识沉进知识库
         try:
             sed = agent.sediment_knowledge()

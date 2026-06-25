@@ -37,6 +37,20 @@
 代码在 `dsoul/vault_sediment.py`（`KNOWLEDGE_ROUTES` 决定哪些路由的回复值得沉淀），
 入口 `Agent.sediment_knowledge()`。
 
+## 记忆也连进来（两层记忆连成一张网）
+
+睡眠巩固（`scripts/sleep.py` / daemon）把日记提炼成**私人长期记忆**时，会**同时在知识库里**：
+- 每条记忆建一篇 `#记忆` 笔记（正文就是那句话）；
+- 认出其中提到的家人/熟人，建/连 `[[人物]]` 笔记（`#人物`，带关系）；
+- 人物笔记就这样**攒着 ta 相关的所有记忆**——越连越懂这个人。
+
+于是分身的三层记忆在 Obsidian 里连成一张图：
+- **RAG 记忆库**(`memory.py`)：语义检索"我和谁发生过什么"
+- **记忆图谱**(`graph.py`)：人/事/主题的关系网
+- **Obsidian 知识库**(`knowledge_vault.py`)：能直接翻、自己越长越大；`#知识`(世界是什么样) 与 `#记忆`/`#人物`(我和谁) 同处一图
+
+代码：`dsoul/memory_vault.py`（`sediment_memories`），入口 `Agent.sediment_memories(memories)`。
+
 ## 命令行（`scripts/vault.py`，操作的是同一座 `data/vault`）
 
 ```bash

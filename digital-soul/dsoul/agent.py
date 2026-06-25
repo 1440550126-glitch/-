@@ -3644,6 +3644,40 @@ class Agent:
                 pass
         return rep
 
+    def _known_people(self) -> list:
+        """已知的人（名, 关系）：家人 + 登记过的人，给记忆入库认人/连 [[人物]] 用。"""
+        out, seen = [], set()
+        try:
+            from .family import members
+            for m in (members(self.family) if getattr(self, "family", None) else []):
+                nm = m.get("name")
+                if nm and nm not in seen:
+                    seen.add(nm)
+                    out.append((nm, m.get("relation", "")))
+        except Exception:
+            pass
+        try:
+            for nm, p in (getattr(self.authority, "people", {}) or {}).items():
+                rel = (p.get("relation", "") if isinstance(p, dict) else "")
+                if nm and nm not in seen:
+                    seen.add(nm)
+                    out.append((nm, rel))
+        except Exception:
+            pass
+        return out
+
+    def sediment_memories(self, memories, now=None) -> dict:
+        """把已巩固的私人长期记忆也写进知识库，连上其中的 [[人物]]（让两层记忆连成一张网）。"""
+        from . import memory_vault as mv
+        v = self.knowledge_vault()
+        rep = mv.sediment_memories(v, memories or [], self._known_people(), now=now)
+        if rep["touched"]:
+            try:
+                v.build_index(now=now)
+            except Exception:
+                pass
+        return rep
+
     def sediment_report(self, now=None) -> str:
         """沉淀一遍并说成人话（睡前 / 手动整理时用）。"""
         try:
