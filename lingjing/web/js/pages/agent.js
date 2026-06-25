@@ -50,8 +50,64 @@ export async function renderAgent(page) {
     setTimeout(() => location.reload(), 800);
   } }, '重置 Token');
 
-  // 工具列表
+  // 工具列表（与下方 MCP 测试窗口共用一次拉取）
   const toolsBox = h('div', { class: 'card', style: { marginTop: '16px', overflow: 'hidden' } });
+
+  // —— MCP 测试窗口：直接对 HTTP 版 MCP 端点发 JSON-RPC（和外部 MCP 客户端走同一条路），实时看返回 ——
+  const schemaByName = {};
+  const skeleton = (schema) => {
+    const props = schema?.properties || {};
+    const req = new Set(schema?.required || []);
+    const sample = (s) => (s?.type === 'number' || s?.type === 'integer') ? 0 : s?.type === 'boolean' ? false : s?.type === 'array' ? [] : s?.type === 'object' ? {} : (s?.enum?.[0] ?? '');
+    const o = {};
+    for (const [k, s] of Object.entries(props)) if (req.has(k) || Object.keys(props).length <= 4) o[k] = sample(s);
+    return o;
+  };
+  const mcpMethodSel = h('select', { class: 'select', style: { width: 'auto' } },
+    ['tools/call', 'tools/list', 'initialize', 'ping'].map((m) => h('option', { value: m }, m)));
+  const mcpToolSel = h('select', { class: 'select', style: { width: 'auto', maxWidth: '260px' } });
+  const mcpArgsIn = h('textarea', { class: 'textarea', rows: 4, value: '{}' });
+  mcpToolSel.addEventListener('change', () => { mcpArgsIn.value = JSON.stringify(skeleton(schemaByName[mcpToolSel.value]), null, 2); });
+  const mcpOut = h('pre', { class: 'code', style: { marginTop: '12px', maxHeight: '320px', overflow: 'auto', whiteSpace: 'pre-wrap' } }, '选方法 →「发送」，这里显示 POST /api/agent/v1/mcp 的真实 JSON-RPC 返回');
+  const callRow = h('div', { style: { marginTop: '10px' } },
+    h('label', { class: 'ag-field', style: { marginBottom: '8px' } }, h('span', {}, '工具'), mcpToolSel),
+    h('label', { class: 'fld', style: { marginTop: '6px' } }, '参数（JSON · 选工具自动预填骨架）'), mcpArgsIn);
+  const syncRow = () => { callRow.style.display = mcpMethodSel.value === 'tools/call' ? '' : 'none'; };
+  mcpMethodSel.addEventListener('change', syncRow);
+  const mcpSendBtn = h('button', { class: 'btn primary', onclick: async () => {
+    const method = mcpMethodSel.value;
+    let params;
+    if (method === 'tools/call') {
+      let args;
+      try { args = JSON.parse(mcpArgsIn.value || '{}'); }
+      catch (e) { mcpOut.textContent = '参数不是合法 JSON：' + e.message; return; }
+      params = { name: mcpToolSel.value, arguments: args };
+    } else if (method === 'initialize') {
+      params = { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'lingjing-web-tester', version: '1' } };
+    }
+    mcpSendBtn.disabled = true; mcpOut.textContent = '请求中…';
+    const t0 = performance.now();
+    try {
+      const res = await fetch('/api/agent/v1/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params })
+      });
+      const data = await res.json().catch(() => ({}));
+      const ms = Math.round(performance.now() - t0);
+      const isErr = data?.error || data?.result?.isError;
+      mcpOut.textContent = `HTTP ${res.status} · ${ms}ms · ${isErr ? '⚠️ 错误/失败' : '✓ 成功'}\n\n` + JSON.stringify(data, null, 2);
+    } catch (e) { mcpOut.textContent = '请求失败：' + e.message; }
+    mcpSendBtn.disabled = false;
+  } }, '发送');
+  const mcpTestBox = h('div', { class: 'card pad', style: { marginTop: '16px' } },
+    h('h3', { style: { fontSize: '15px', marginBottom: '6px', display: 'flex', gap: '8px', alignItems: 'center' } }, '🔌 MCP 测试窗口', h('span', { class: 'pill teal' }, 'HTTP /api/agent/v1/mcp')),
+    h('p', { style: { fontSize: '12.5px', color: 'var(--ink3)', marginBottom: '10px' } }, '直接给 HTTP 版 MCP 端点发 JSON-RPC（外部 MCP 客户端走的就是这条路），实时看返回；Token 自动带上。'),
+    h('div', { style: { display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' } },
+      h('label', { class: 'ag-field' }, h('span', {}, '方法'), mcpMethodSel), mcpSendBtn),
+    callRow, mcpOut);
+  syncRow();
+
   (async () => {
     try {
       const res = await fetch('/api/agent/v1/tools', { headers: { Authorization: `Bearer ${token}` } });
@@ -63,6 +119,9 @@ export async function renderAgent(page) {
         h('div', { class: 'panel-head' }, h('b', {}, `开放工具（${data.tools.length} 个）`), h('span', { class: 'grow' }),
           h('a', { href: '/api/agent/v1/openapi.json', target: '_blank' }, 'OpenAPI 描述 ↗')),
         h('div', { style: { maxHeight: '380px', overflowY: 'auto' } }, table));
+      for (const t of data.tools) { schemaByName[t.name] = t.input_schema || t.inputSchema || {}; mcpToolSel.append(h('option', { value: t.name }, t.name)); }
+      const first = data.tools.find((t) => t.name === 'studio_overview') || data.tools[0];
+      if (first) { mcpToolSel.value = first.name; mcpArgsIn.value = JSON.stringify(skeleton(schemaByName[first.name]), null, 2); }
     } catch (e) { toolsBox.append(h('div', { class: 'empty' }, h('p', {}, '工具列表加载失败：' + e.message))); }
   })();
 
@@ -155,5 +214,5 @@ export async function renderAgent(page) {
             '不接外部工具也能用：每个项目工作台自带 Agent 对话，由同一套工具驱动，像聊天一样完成「建项目 → 写剧本 → 解析 → 生图 → 出片」全流程。'),
           h('p', { style: { fontSize: '12.5px', color: 'var(--ink2)', marginTop: '8px' } },
             '配置火山方舟 Key 后升级为大模型函数调用循环；未配置时为本地规则模式，主流程同样可走通。'))),
-      toolsBox, agentCfgBox, playBox, logsBox));
+      toolsBox, mcpTestBox, agentCfgBox, playBox, logsBox));
 }

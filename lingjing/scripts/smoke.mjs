@@ -298,6 +298,17 @@ try {
   let kbAuthErr = '';
   try { await knowledge({ baseUrl: BASE, token: 'wrong-token', domain: 'music' }).query('x'); } catch (e) { kbAuthErr = e.message; }
   ok(/鉴权失败|Token/.test(kbAuthErr), '客户端 Token 不对时鉴权失败（跨站安全）');
+  // HTTP 版 MCP 端点（设置页「MCP 测试窗口」走的同一条路）：initialize / tools/list / ping / tools/call
+  const mcpInit = (await api('POST', '/api/agent/v1/mcp', { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05' } }, boot.agent_token));
+  ok(mcpInit.result?.serverInfo?.name === 'lingjing-studio' && !!mcpInit.result?.protocolVersion, 'HTTP MCP initialize 返回 serverInfo/protocolVersion');
+  const mcpList = (await api('POST', '/api/agent/v1/mcp', { jsonrpc: '2.0', id: 2, method: 'tools/list' }, boot.agent_token));
+  ok(Array.isArray(mcpList.result?.tools) && mcpList.result.tools.every((t) => t.name && t.inputSchema), 'HTTP MCP tools/list 返回带 inputSchema 的工具');
+  const mcpPing = (await api('POST', '/api/agent/v1/mcp', { jsonrpc: '2.0', id: 3, method: 'ping' }, boot.agent_token));
+  ok(mcpPing.result && Object.keys(mcpPing.result).length === 0 && !mcpPing.error, 'HTTP MCP ping 返回空结果');
+  const mcpCall = (await api('POST', '/api/agent/v1/mcp', { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'studio_overview', arguments: {} } }, boot.agent_token));
+  ok(typeof mcpCall.result?.content?.[0]?.text === 'string' && !mcpCall.result?.isError, 'HTTP MCP tools/call(studio_overview) 返回 content 文本');
+  const mcpBad = (await api('POST', '/api/agent/v1/mcp', { jsonrpc: '2.0', id: 5, method: 'no_such_method' }, boot.agent_token));
+  ok(mcpBad.error?.code === -32601, 'HTTP MCP 未知方法返回 JSON-RPC -32601');
 
   console.log('— 角色预选标注 / Agent 进化 —');
   const pe = (await api('POST', '/api/projects', { title: '标注剧', genre: '悬疑反转', idea: '实验室停电夜' })).data;
