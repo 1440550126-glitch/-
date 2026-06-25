@@ -73,3 +73,6 @@ data/belongings.json
 config/secrets.local.sh
 config/*.local.yaml
 secrets.local*
+
+# 自生长知识库（个人知识，不入库；可单独用 Obsidian 打开）
+data/vault/

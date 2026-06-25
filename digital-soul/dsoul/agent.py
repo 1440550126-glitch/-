@@ -413,6 +413,17 @@ class Agent:
                     self._log_journal(who, utterance, txt, "emergency")
                     return result
 
+        # --- 自生长知识库（"把…记进知识库" / "知识库里关于X" / "整理知识库"）：
+        #     写成 Obsidian 笔记、自动连成图谱、越长越大。门控很专（必带"知识库"），故置前，
+        #     免得"把川菜记进知识库"被川菜知识路由截胡 ---
+        if action is None and who.get("obey") and \
+                ("知识库" in (utterance or "") or "知识图谱" in (utterance or "")):
+            txt = self.knowledge_vault_handle(utterance)
+            if txt:
+                result["reply"] = txt
+                self._log_journal(who, utterance, txt, "knowledge_vault")
+                return result
+
         # --- 防走失（家人视角："怎么防老人走失" / "老人走失了怎么办" / "黄手环"）：
         #     先于"现场迷路安抚"——这是帮家人防范和找人；当事人喊"我迷路了"仍走下面的 lost_help ---
         if action is None and who.get("obey"):
@@ -3584,6 +3595,99 @@ class Agent:
     def _deceased_name(self) -> str:
         """这具分身所承载的人的名字（缅怀/仪式里称呼用）。"""
         return (self.identity or {}).get("name") or "TA"
+
+    def knowledge_vault(self):
+        """惰性拿到自生长知识库（Obsidian 库，根在 data/vault；config.knowledge_vault 可改路径）。"""
+        if getattr(self, "_kvault", None) is None:
+            import pathlib
+            from .knowledge_vault import Vault
+            root = None
+            if isinstance(self.identity, dict) and self.identity.get("knowledge_vault"):
+                root = pathlib.Path(self.identity["knowledge_vault"])
+            if root is None:
+                try:
+                    root = pathlib.Path(self.journal.path).resolve().parent.parent / "vault"
+                except Exception:
+                    root = pathlib.Path("data") / "vault"
+            self._kvault = Vault(root)
+        return self._kvault
+
+    def knowledge_vault_handle(self, utterance="") -> str:
+        """知识库：整理 / 查 / 记。让分身把知识写成 Obsidian 笔记、连成图谱、越长越大。"""
+        import re
+        u = utterance or ""
+        try:
+            v = self.knowledge_vault()
+        except Exception as e:
+            return f"知识库一时打不开（{str(e)[:30]}）。"
+
+        # ① 整理 / 现状 / 总览
+        if any(k in u for k in ("整理知识库", "知识库现状", "知识库统计", "知识库总览",
+                                "知识库情况", "知识库长成", "巩固知识库")):
+            c = v.consolidate()
+            s = c["stats"]
+            v.build_index()
+            line = (f"知识库现在有 {s['notes']} 篇、{s['links']} 条链接、{s['tags']} 个标签"
+                    f"（{s['orphans']} 座孤岛、{s['stubs']} 篇待充实）。已更新总览 _index.md。")
+            if c["suggestions"]:
+                t, sug = next(iter(c["suggestions"].items()))
+                line += f" 顺手提一句：「{t}」也许可以连上 " + "、".join(f"「{x}」" for x in sug) + "。"
+            return line
+
+        # ② 查 / 看（"知识库里关于X" / "查知识库X" / "知识库有X吗"）
+        m = re.search(r"(?:关于|查|搜|看看|里有没有|里有|查查)\s*([^，。,.\s的吗呢？?]{1,20})", u)
+        is_query = any(k in u for k in ("关于", "查", "搜", "看看", "有没有", "里有", "有哪些", "都有啥", "有啥"))
+        if is_query and not any(k in u for k in ("记", "写进", "存进", "收进", "加进")):
+            if any(k in u for k in ("有哪些", "都有啥", "有啥", "里有啥")) and not (m and v.has(m.group(1))):
+                ts = v.titles()
+                if not ts:
+                    return "知识库还空着呢。跟我说「把……记进知识库」，我就开始给你攒。"
+                return f"知识库里有 {len(ts)} 篇，比如：" + "、".join(f"「{t}」" for t in ts[:12]) + "……"
+            if m:
+                topic = m.group(1).strip()
+                n = v.note(topic)
+                if n:
+                    body = (n["body"] or "").strip().splitlines()
+                    head = next((ln for ln in body if ln and not ln.startswith("#")), "")
+                    bl = v.backlinks(topic)
+                    sg = v.suggest_links(topic, limit=3)
+                    extra = ""
+                    if bl:
+                        extra += " 被这些提到：" + "、".join(f"「{x}」" for x in bl[:5]) + "。"
+                    if sg:
+                        extra += " 也许还能连上：" + "、".join(f"「{x}」" for x in sg) + "。"
+                    return f"「{topic}」：{head[:120]}{extra}"
+                return f"知识库里还没有「{topic}」这篇。要我建一篇吗？说「把关于{topic}的……记进知识库」就行。"
+
+        # ③ 记 / 写（捕获成笔记）
+        # 标题：「X」 / 把X记进知识库 / 关于X
+        title = None
+        mt = (re.search(r"[「『\"]([^」』\"]{1,24})[」』\"]", u)
+              or re.search(r"把\s*([^，。:：「」\s的]{1,16})\s*(?:记|写|存|收|加)\s*(?:进|到|入)?知识库", u)
+              or re.search(r"关于\s*([^的，。\s]{1,20})", u))
+        if mt:
+            title = mt.group(1).strip()
+        # 正文：取"记/写…进知识库[：]"之后的内容；没有这种说法就剥掉命令词
+        mc = re.search(r"(?:记|写|存|收|加)\s*(?:进|到|入)?\s*知识库[，。:：\-—\s]*(.+)$", u, re.S)
+        if mc:
+            body = mc.group(1).strip("，。,.：: 、\n")
+        else:
+            body = u
+            for w in ("知识图谱", "知识库", "记一下", "帮我", "请", "把", "我", "你"):
+                body = body.replace(w, "")
+            body = body.strip("，。,.：: 、\n")
+        # 去掉正文里残留的「标题」：前缀
+        if title:
+            body = re.sub(r"^[「『\"]?" + re.escape(title) + r"[」』\"]?[：:，。]?\s*", "", body).strip()
+        if not body:
+            return "想记点啥进知识库？跟我说内容，我写成一篇笔记、还会自动连上相关的。"
+        r = v.capture(body, title=title, source="对话")
+        if not r.get("ok"):
+            return "这条没记成，换句话再说说？"
+        linked = r.get("linked") or []
+        tail = ("，顺手连上了 " + "、".join(f"「{x}」" for x in linked)) if linked else ""
+        verb = "新写了" if r.get("created") else "并进了"
+        return f"记下了，{verb}一篇「{r['title']}」{tail}。回头能在 Obsidian 里翻、还能看那张图谱。"
 
     def speak_like(self, text, *, particle=True) -> str:
         """给一句回复"上色"，让它更像 TA 本人说的；没配说话习惯则原样返回。"""
