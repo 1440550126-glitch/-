@@ -169,6 +169,25 @@ def set_section(md: str, heading: str, body: str) -> str:
     return text.rstrip("\n") + "\n\n" + "\n".join(new_block).rstrip() + "\n"
 
 
+def get_section(md: str, heading: str) -> str:
+    """取某个小节（如 '## 小传'）的正文内容（不含标题行）。没有返回空。"""
+    heading = heading.rstrip()
+    lines = str(md or "").split("\n")
+    start = next((i for i, ln in enumerate(lines) if ln.strip() == heading), None)
+    if start is None:
+        return ""
+    end = start + 1
+    while end < len(lines) and not _HEADING.match(lines[end]):
+        end += 1
+    return "\n".join(lines[start + 1:end]).strip()
+
+
+def first_sentence(text: str, max_len: int = 40) -> str:
+    """取第一句话（到。！？为止），截短。给摘要用。"""
+    s = re.split(r"[。！？\n]", str(text or "").strip(), 1)[0].strip()
+    return s[:max_len]
+
+
 def append_section(md: str, heading: str, lines) -> str:
     """在笔记末尾追加一段（自生长时把新内容并进已有笔记）。"""
     text = str(md or "").rstrip("\n")

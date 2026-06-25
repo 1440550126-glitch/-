@@ -101,6 +101,27 @@ def test_consolidate_and_index():
     assert "_index" not in v.titles()             # 索引不算进笔记
 
 
+def test_hubs_recent_and_people_gallery():
+    from dsoul import memory_vault as mv
+    v = _vault()
+    v.grow("川菜", "回锅肉、麻婆豆腐都是川菜。", tags=["cuisines"], now=N)
+    v.grow("回锅肉", "川菜名菜。", tags=["cuisines"], now=N)
+    v.grow("麻婆豆腐", "川菜。", tags=["cuisines"], now="2026-06-26")
+    mv.sediment_memories(v, ["我和小婷2018年认识", "小婷爱吃回锅肉"], [("小婷", "老婆")], now=N)
+    # 枢纽：川菜被两篇连着，入度≥2
+    hub_titles = [t for t, _n in v.hubs()]
+    assert "川菜" in hub_titles
+    # 最近：麻婆豆腐（更新日期最新）排在前面
+    assert v.recent()[0] == "麻婆豆腐"
+    # 人物廊：小婷有小传第一句
+    assert "人物" in v.notes_with_tag("人物") or "小婷" in v.notes_with_tag("人物")
+    assert "老婆" in v.bio_line("小婷")
+    # 首页含人物廊 + 枢纽 + 知识脉络
+    idx = v.build_index(now=N)
+    assert "## 人物" in idx and "[[小婷]]" in idx and "条记忆" in idx
+    assert "## 枢纽" in idx and "## 知识脉络" in idx
+
+
 if __name__ == "__main__":
     for _n, _f in sorted(globals().items()):
         if _n.startswith("test_") and callable(_f):

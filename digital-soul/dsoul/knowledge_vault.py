@@ -273,23 +273,93 @@ class Vault:
         return {"notes": len(g), "links": edges, "tags": len(self.tag_index()),
                 "orphans": len(self.orphans()), "stubs": len(self.stubs())}
 
+    def notes_with_tag(self, tag) -> list:
+        """带某个标签的笔记标题（如所有 #人物）。"""
+        return self.tag_index().get(str(tag), [])
+
+    def hubs(self, limit=8) -> list:
+        """枢纽：被连得最多的笔记（入度高 = 核心概念）。返回 [(标题, 入度)]。"""
+        g = self.graph()
+        indeg = {}
+        for outs in g.values():
+            for t in outs:
+                indeg[t] = indeg.get(t, 0) + 1
+        ranked = sorted(((t, n) for t, n in indeg.items() if t in g),
+                        key=lambda x: (-x[1], x[0]))
+        return [(t, n) for t, n in ranked[:limit] if n >= 2]
+
+    def recent(self, limit=8) -> list:
+        """最近更新的笔记（按 frontmatter.updated 倒序）。返回标题列表。"""
+        rows = []
+        for p in self._note_files():
+            try:
+                pn = ob.parse_note(p.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            t = pn["title"] or p.stem
+            up = str(pn["frontmatter"].get("updated") or pn["frontmatter"].get("created") or "")
+            rows.append((up, t))
+        rows.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        return [t for _u, t in rows[:limit]]
+
+    def bio_line(self, name) -> str:
+        """某人物的小传第一句（给首页人物廊做摘要）。没有返回空。"""
+        md = self.read(name)
+        if md is None:
+            return ""
+        return ob.first_sentence(ob.get_section(md, "## 小传"))
+
     def build_index(self, now=None) -> str:
-        """写一篇 _index.md 总览（MOC）：统计 + 标签索引 + 孤岛 + 桩。给知识库一个门面。"""
+        """写一篇 _index.md 首页（MOC）：概况 + 人物廊 + 枢纽 + 知识脉络 + 最近 + 待打理。
+        让这座自生长知识库有个能一眼看见"它长成什么样"的门面。"""
         st = self.stats()
-        lines = [f"# 知识库总览", "",
-                 f"> 共 {st['notes']} 篇 · {st['links']} 条链接 · {st['tags']} 个标签 · "
-                 f"{st['orphans']} 座孤岛 · {st['stubs']} 篇待充实", "",
-                 "## 按标签"]
+        people = self.notes_with_tag("人物")
+        mem_notes = set(self.notes_with_tag("记忆"))
+        lines = ["# 知识库总览", "",
+                 f"> 共 **{st['notes']}** 篇 · {st['links']} 条链接 · {st['tags']} 个标签 · "
+                 f"{len(people)} 个人物 · {st['orphans']} 座孤岛 · {st['stubs']} 篇待充实", ""]
+
+        # 人物廊：每个人 + 小传第一句 + 记忆条数
+        if people:
+            lines.append("## 人物")
+            for t in people:
+                bl = len([b for b in self.backlinks(t) if b in mem_notes])
+                bio = self.bio_line(t)
+                tail = f"（{bl} 条记忆）" if bl else ""
+                lines.append(f"- [[{t}]]{tail}" + (f"：{bio}" if bio else ""))
+            lines.append("")
+
+        # 枢纽：被连得最多的核心概念
+        hubs = self.hubs()
+        if hubs:
+            lines += ["## 枢纽（连得最多的）",
+                      "、".join(f"[[{t}]]（{n}）" for t, n in hubs), ""]
+
+        # 知识脉络：按标签（人物/记忆有自己的区，这里不重复列）
         ti = self.tag_index()
-        for tag in sorted(ti):
-            refs = "、".join(f"[[{t}]]" for t in ti[tag])
-            lines.append(f"- **#{tag}**：{refs}")
-        orph = self.orphans()
-        if orph:
-            lines += ["", "## 孤岛（还没连上的）", "、".join(f"[[{t}]]" for t in orph)]
-        stub = self.stubs()
-        if stub:
-            lines += ["", "## 待充实", "、".join(f"[[{t}]]" for t in stub)]
+        knowledge_tags = [tag for tag in sorted(ti) if tag not in ("人物", "记忆")]
+        if knowledge_tags:
+            lines.append("## 知识脉络")
+            for tag in knowledge_tags:
+                refs = "、".join(f"[[{t}]]" for t in ti[tag])
+                lines.append(f"- **#{tag}**：{refs}")
+            lines.append("")
+
+        # 最近
+        rec = self.recent()
+        if rec:
+            lines += ["## 最近", "、".join(f"[[{t}]]" for t in rec), ""]
+
+        # 待打理：孤岛 + 桩
+        orph, stub = self.orphans(), self.stubs()
+        if orph or stub:
+            lines.append("## 待打理")
+            if orph:
+                lines.append("- 孤岛（还没连上的）：" + "、".join(f"[[{t}]]" for t in orph))
+            if stub:
+                lines.append("- 待充实：" + "、".join(f"[[{t}]]" for t in stub))
+            lines.append("")
+
         md = "\n".join(lines).rstrip() + "\n"
         (self.root / _INDEX).write_text(md, encoding="utf-8")
         return md
