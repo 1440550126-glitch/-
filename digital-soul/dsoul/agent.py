@@ -282,6 +282,14 @@ class Agent:
                         else welcome_back(self._addr(who), seed=u) if is_back(u) else "")
                 if warm:
                     sret = f"{warm} {sret}"
+                # 睡眠场景顺手把当天聊到的知识沉进知识库（像睡前整理一天见闻）
+                if any(k in (utterance or "") for k in ("晚安", "睡了", "睡觉", "要睡", "准备睡")):
+                    try:
+                        sed = self.sediment_knowledge()
+                        if sed.get("touched"):
+                            sret += f"（睡前我把今天聊到的 {len(sed['touched'])} 条知识沉进了知识库。）"
+                    except Exception:
+                        pass
                 result["reply"] = sret
                 self._log_journal(who, utterance, sret, "scene")
                 return result
@@ -1802,6 +1810,21 @@ class Agent:
                     result["reply"] = txt
                     self._log_journal(who, us, txt, "goodnight")
                     return result
+
+        # --- 道晚安顺手"沉淀知识"：像睡前整理一天的见闻，把聊到的知识自动归进知识库 ---
+        if action is None and who.get("obey") and any(
+                k in (utterance or "") for k in ("晚安", "睡了", "睡觉了", "我去睡", "我先睡", "准备睡")):
+            rep = {}
+            try:
+                rep = self.sediment_knowledge()
+            except Exception:
+                rep = {}
+            base = "晚安，好好歇着，我守着你。"
+            if rep.get("touched"):
+                base += f"（趁你睡前，我把今天聊到的 {len(rep['touched'])} 条知识沉进了知识库。）"
+            result["reply"] = base
+            self._log_journal(who, utterance, base, "goodnight_sediment")
+            return result
 
         # --- 行为习惯（"你在干嘛/这会儿在做什么"）：说出 TA 此刻惯常的活动 ---
         if action is None and who.get("obey") and any(
@@ -3596,6 +3619,48 @@ class Agent:
         """这具分身所承载的人的名字（缅怀/仪式里称呼用）。"""
         return (self.identity or {}).get("name") or "TA"
 
+    def sediment_knowledge(self, now=None) -> dict:
+        """把"上次沉淀以来"对话里聊到的知识，自动沉进知识库（独立游标，幂等不重复）。"""
+        import json
+        from . import vault_sediment as vs
+        v = self.knowledge_vault()
+        entries = self.journal._all() if getattr(self, "journal", None) is not None else []
+        cur_path = v.root / ".sediment.json"
+        cursor = 0
+        if cur_path.exists():
+            try:
+                cursor = json.loads(cur_path.read_text(encoding="utf-8")).get("cursor", 0)
+            except Exception:
+                cursor = 0
+        rep = vs.sediment(v, entries[cursor:], now=now)
+        try:
+            cur_path.write_text(json.dumps({"cursor": len(entries)}), encoding="utf-8")
+        except Exception:
+            pass
+        if rep["touched"]:
+            try:
+                v.build_index(now=now)
+            except Exception:
+                pass
+        return rep
+
+    def sediment_report(self, now=None) -> str:
+        """沉淀一遍并说成人话（睡前 / 手动整理时用）。"""
+        try:
+            rep = self.sediment_knowledge(now)
+        except Exception as e:
+            return f"知识沉淀没跑成（{str(e)[:30]}）。"
+        if not rep["touched"]:
+            return "今天没什么新知识要沉淀，知识库照旧。"
+        parts = []
+        if rep["created"]:
+            cs = rep["created"]
+            more = f" 等 {len(cs)} 篇" if len(cs) > 6 else ""
+            parts.append("新写了 " + "、".join(f"「{t}」" for t in cs[:6]) + more)
+        if rep["appended"]:
+            parts.append("补充了 " + "、".join(f"「{t}」" for t in rep["appended"][:4]))
+        return "把今天聊到的知识沉进了知识库：" + "；".join(parts) + "。回头能在 Obsidian 里翻、看那张图谱。"
+
     def knowledge_vault(self):
         """惰性拿到自生长知识库（Obsidian 库，根在 data/vault；config.knowledge_vault 可改路径）。"""
         if getattr(self, "_kvault", None) is None:
@@ -3620,6 +3685,10 @@ class Agent:
             v = self.knowledge_vault()
         except Exception as e:
             return f"知识库一时打不开（{str(e)[:30]}）。"
+
+        # ⓪ 沉淀（把今天/最近聊到的知识归进库）
+        if any(k in u for k in ("沉淀", "归档", "今天聊的", "今天学", "最近聊的", "存进库", "攒进库")):
+            return self.sediment_report()
 
         # ① 整理 / 现状 / 总览
         if any(k in u for k in ("整理知识库", "知识库现状", "知识库统计", "知识库总览",

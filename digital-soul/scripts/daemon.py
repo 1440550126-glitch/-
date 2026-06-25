@@ -110,6 +110,13 @@ def sleep_loop(agent, hours: float) -> None:
             identity=agent.identity, authority=agent.authority,
         ).run()
         print(f"[睡眠] 巩固 {rep['processed']} 条 → 新增 {len(rep['learned'])} 条记忆", flush=True)
+        if hasattr(agent, "sediment_knowledge"):
+            try:
+                sed = agent.sediment_knowledge()
+                if sed.get("touched"):
+                    print(f"[沉淀] 知识 {len(sed['touched'])} 条进知识库", flush=True)
+            except Exception:
+                pass
         if hasattr(agent, "dream"):
             d = agent.dream()
             if d:

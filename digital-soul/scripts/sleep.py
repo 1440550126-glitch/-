@@ -29,6 +29,14 @@ def one_cycle(agent) -> None:
     )
     for m in report["learned"]:
         print(f"  + {m}")
+    if hasattr(agent, "sediment_knowledge"):    # 睡前把当天聊到的知识沉进知识库
+        try:
+            sed = agent.sediment_knowledge()
+            if sed.get("touched"):
+                print(f"📚 沉淀知识 {len(sed['touched'])} 条 → 知识库："
+                      + "、".join(sed["touched"][:8]) + ("…" if len(sed["touched"]) > 8 else ""))
+        except Exception as e:
+            print(f"📚 知识沉淀跳过（{str(e)[:30]}）")
     if hasattr(agent, "dream"):
         d = agent.dream()                       # 睡着了，做个梦
         if d:
