@@ -1,0 +1,30 @@
+# SoloCompany OS / Agent —— 部署到 /opt/agent，端口 3003，仅本机暴露，Caddy 反代。
+# 不触碰 80/443/3000/3001/3002，不影响 lingmirror / video / music。
+services:
+  agent:
+    build: .
+    image: solocompany-os:latest
+    container_name: agent
+    restart: unless-stopped
+    env_file: .env                 # 所有 Key 从 .env 注入，不写死进镜像
+    environment:
+      NODE_ENV: production
+      PORT: "3003"
+    ports:
+      - "127.0.0.1:3003:3003"      # 只绑本机回环；公开访问一律走 Caddy
+    volumes:
+      - ./data:/app/var            # SQLite 持久化到 /opt/agent/data
+      - ./logs:/app/logs           # 运行日志持久化到 /opt/agent/logs
+    # 同时输出到容器 stdout（docker logs）与 /opt/agent/logs/agent.log
+    command: sh -c "node --disable-warning=ExperimentalWarning server/index.js 2>&1 | tee -a /app/logs/agent.log"
+    healthcheck:
+      test: ["CMD","node","-e","fetch('http://127.0.0.1:3003/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

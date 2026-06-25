@@ -1,4 +1,5 @@
 // AI句灵 服务端入口：零依赖 Node 22+（内置 node:sqlite / fetch / http）
+import './lib/env.js';   // 最先加载 .env，确保后续模块顶层读取的 process.env 已就绪
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,10 +19,15 @@ import './routes/ai.js';
 import './routes/shop.js';
 import './routes/rooms.js';
 import './routes/admin.js';
+import './routes/agents.js';
+
+import { seedLingArray, runAgentMigrations } from './agents/seed.js';
+import { startTriggerLoop } from './agents/scheduler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(__dirname, '..', 'web');
 const ADMIN_DIR = path.join(__dirname, '..', 'admin');
+const LINGZHEN_DIR = path.join(__dirname, '..', 'lingzhen');
 const PORT = Number(process.env.PORT) || 3000;
 
 GET('/api/health', async () => ({ status: 'ok', time: Date.now(), llm: llmEnabled() ? 'enabled' : 'local-fallback' }));
@@ -44,7 +50,10 @@ recoverOnBoot();
 runSeed();
 ensureWarmupAccounts();
 seedSamplePosts();
+runAgentMigrations();
+seedLingArray();
 if (process.env.WARMUP_AUTOSTART !== '0') startWarmupLoop();
+if (process.env.TRIGGER_AUTOSTART !== '0') startTriggerLoop();
 
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://localhost');
@@ -53,6 +62,11 @@ const server = http.createServer((req, res) => {
   if (pathname === '/admin' || pathname.startsWith('/admin/')) {
     const rel = pathname.replace(/^\/admin\/?/, '') || 'index.html';
     if (serveStatic(res, ADMIN_DIR, rel)) return;
+  }
+  // 灵阵 · AI 团队（独立站，复用同一后端 API）
+  if (pathname === '/lingzhen' || pathname.startsWith('/lingzhen/')) {
+    const rel = pathname.replace(/^\/lingzhen\/?/, '') || 'index.html';
+    if (serveStatic(res, LINGZHEN_DIR, rel)) return;
   }
   if (serveStatic(res, WEB_DIR, pathname)) return;
   res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -73,7 +87,8 @@ server.listen(PORT, () => {
   console.log(`\n  ✨ AI句灵 已启动`);
   console.log(`  📱 用户端   http://localhost:${PORT}`);
   console.log(`  🛠  管理后台 http://localhost:${PORT}/admin`);
-  console.log(`  🤖 大模型   ${llmEnabled() ? '已接入 ' + process.env.LLM_PROVIDER : '未配置（本地规则引擎模式，零成本可完整体验）'}\n`);
+  console.log(`  🛰  灵阵独立站 http://localhost:${PORT}/lingzhen`);
+  console.log(`  🤖 大模型   ${llmEnabled() ? '平台兜底 Key 已接入 ' + process.env.LLM_PROVIDER : '纯 BYOK：用户在「模型设置」自带 Key；未自带则走本地引擎'}\n`);
 });
 
 process.on('SIGINT', () => { console.log('\nbye~'); process.exit(0); });

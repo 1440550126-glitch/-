@@ -1,0 +1,23 @@
+{
+  "_note": "验收清单（Default-FAIL 契约）：每项默认 passes=false。只有在『跑 live + 用 Read 打开证据截图/日志确认』后才可改 true；.claude/hooks/verify-gate.sh 会拦截无证据的修改。新功能在此加一行，evidence 填证据文件路径（screenshots/*.png 或 *-result.txt）。",
+  "smoke-all-green": {
+    "passes": true,
+    "criteria": "npm run smoke 全绿（修复定价改两档后 scripts/smoke.mjs 的两处过期断言：会员方案数 3→2、会员订单 ¥9.9→自带Key版 ¥39）",
+    "evidence": "screenshots/smoke-result.txt（168 通过 / 0 失败）"
+  },
+  "lingzhen-loads": {
+    "passes": true,
+    "criteria": "/lingzhen 与 /lingzhen/（带与不带尾斜杠）均能加载 SPA、非白屏",
+    "evidence": "screenshots/lingzhen-noslash.png + lingzhen-slash.png（各带 URL 标签、SHA256 互不相同）+ lingzhen-loads-result.txt（两形式 app.js 均 HTTP 200、SPA 均启动、hero=灵阵·AI 团队）"
+  },
+  "byok-two-tier": {
+    "passes": true,
+    "criteria": "自带Key版不填Key走本地引擎、填后用自己模型；省心版零配置用平台模型；平台模型仅省心版可用",
+    "evidence": "screenshots/byok-two-tier-result.txt（自带Key版 by_llm=false→填Key=true；省心版 by_llm=true）"
+  },
+  "lingzhen-regression": {
+    "passes": true,
+    "criteria": "灵阵站主要页面回归走查：首页/智能体/知识库/触发器/用量/定价/模型设置/团队详情/作战室/历史/个人中心 逐页加载、关键选择器在场、无破版报错",
+    "evidence": "screenshots/regression-result.txt（13/13 关键选择器在场 + 0 JS 错误）+ screenshots/reg-01..13-*.png（人工抽看首页/团队/作战室渲染正常）"
+  }
+}

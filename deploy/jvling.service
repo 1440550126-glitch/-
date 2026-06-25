@@ -1,0 +1,25 @@
+[Unit]
+Description=AI句灵 / 灵阵 (jvling) — zero-dependency Node 22 server
+Documentation=file:/opt/jvling/deploy/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jvling
+Group=jvling
+WorkingDirectory=/opt/jvling
+# 应用会从 WorkingDirectory 自动读取 .env（server/lib/env.js）。node 路径按 `which node` 调整。
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server/index.js
+Restart=always
+RestartSec=3
+# —— 安全加固（若导致 SQLite 写入失败可酌情放宽）——
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/jvling/var
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

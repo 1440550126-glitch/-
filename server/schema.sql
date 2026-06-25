@@ -236,3 +236,181 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read, id DESC);
+
+-- ============================================================
+-- 灵阵 · AI 团队 Agent（多智能体协作平台）
+-- 设计：智能体(成员) → 团队(编排策略) → 运行(任务) → 步骤(可观测 trace)；
+--      知识库做 RAG（零依赖关键词检索，可平滑升级向量）。
+-- 与全局一致：无大模型 Key 时全部走本地规则引擎，零成本可完整跑通。
+-- ============================================================
+
+-- 智能体：团队里的一个角色（人设 + 可用工具 + 模型档位）
+CREATE TABLE IF NOT EXISTS agents (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id     INTEGER NOT NULL DEFAULT 0,        -- 0 = 平台内置模板
+  name         TEXT NOT NULL,
+  avatar       TEXT NOT NULL DEFAULT '🤖',        -- emoji 头像
+  role         TEXT NOT NULL DEFAULT '',          -- 一句话职能（队长拆活时据此分派）
+  persona      TEXT NOT NULL DEFAULT '',          -- 系统提示词 / 人设
+  tier         TEXT NOT NULL DEFAULT 'default',   -- default | premium（高级模型）
+  tools        TEXT NOT NULL DEFAULT '[]',        -- 可用工具 id 数组 JSON
+  temperature  REAL NOT NULL DEFAULT 0.7,
+  is_template  INTEGER NOT NULL DEFAULT 0,
+  enabled      INTEGER NOT NULL DEFAULT 1,
+  created_at   INTEGER NOT NULL,
+  updated_at   INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_agents_owner ON agents(owner_id, updated_at DESC);
+
+-- 团队：一组智能体 + 编排策略
+CREATE TABLE IF NOT EXISTS teams (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id      INTEGER NOT NULL DEFAULT 0,
+  name          TEXT NOT NULL,
+  avatar        TEXT NOT NULL DEFAULT '🛰',
+  goal          TEXT NOT NULL DEFAULT '',         -- 团队使命（写给队长的总目标）
+  strategy      TEXT NOT NULL DEFAULT 'orchestrate', -- orchestrate | sequential | route | debate
+  manager_note  TEXT NOT NULL DEFAULT '',         -- 给队长/编排官的额外指令
+  member_ids    TEXT NOT NULL DEFAULT '[]',       -- 有序的 agent id 数组 JSON
+  knowledge_ids TEXT NOT NULL DEFAULT '[]',       -- 挂载的知识库 id 数组 JSON
+  max_rounds    INTEGER NOT NULL DEFAULT 3,       -- 每个成员 ReAct 最大工具轮数
+  is_template   INTEGER NOT NULL DEFAULT 0,
+  published     INTEGER NOT NULL DEFAULT 0,       -- 是否发布到团队广场
+  api_key       TEXT,                             -- 对外 API 调用密钥（lk_xxx），NULL=未开启
+  webhook_url   TEXT,                             -- 运行完成回调地址（出站 Webhook），NULL=未开启
+  run_count     INTEGER NOT NULL DEFAULT 0,
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_teams_owner ON teams(owner_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_teams_apikey ON teams(api_key);
+
+-- 一次任务运行
+CREATE TABLE IF NOT EXISTS agent_runs (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  team_id     INTEGER NOT NULL,
+  user_id     INTEGER NOT NULL,
+  team_name   TEXT NOT NULL DEFAULT '',
+  strategy    TEXT NOT NULL DEFAULT 'orchestrate',
+  task        TEXT NOT NULL,                      -- 用户下达的任务
+  status      TEXT NOT NULL DEFAULT 'running',    -- running | done | failed | stopped
+  plan        TEXT,                               -- 队长拆解出的计划 JSON
+  result      TEXT,                               -- 最终交付物（Markdown）
+  error       TEXT,
+  step_count  INTEGER NOT NULL DEFAULT 0,
+  token_total INTEGER NOT NULL DEFAULT 0,
+  cost_micro  INTEGER NOT NULL DEFAULT 0,
+  by_llm      INTEGER NOT NULL DEFAULT 0,         -- 本次是否真正用了大模型（否=本地引擎）
+  source      TEXT NOT NULL DEFAULT 'manual',     -- manual | trigger | api | batch
+  batch_id    TEXT,                               -- 批量运行分组 id（NULL=单次）
+  started_at  INTEGER NOT NULL,
+  ended_at    INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_runs_user ON agent_runs(user_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_runs_team ON agent_runs(team_id, started_at DESC);
+
+-- 运行步骤：谁、做了什么、产出（前端「作战室」逐条直播）
+CREATE TABLE IF NOT EXISTS run_steps (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id       INTEGER NOT NULL,
+  idx          INTEGER NOT NULL,                  -- 步骤序号
+  phase        TEXT NOT NULL,                     -- plan | act | tool | synthesize | system
+  agent_id     INTEGER NOT NULL DEFAULT 0,        -- 0 = 队长/编排官/系统
+  agent_name   TEXT NOT NULL DEFAULT '编排官',
+  agent_avatar TEXT NOT NULL DEFAULT '🛰',
+  title        TEXT NOT NULL DEFAULT '',
+  input        TEXT,                              -- 该步骤的目标/输入
+  output       TEXT,                              -- 该步骤的产出
+  tool         TEXT,                              -- 工具调用：工具 id
+  tool_args    TEXT,                              -- 工具调用：入参 JSON
+  tool_result  TEXT,                              -- 工具调用：返回
+  status       TEXT NOT NULL DEFAULT 'done',      -- running | done | failed
+  by_llm       INTEGER NOT NULL DEFAULT 0,
+  tokens       INTEGER NOT NULL DEFAULT 0,
+  cost_micro   INTEGER NOT NULL DEFAULT 0,
+  created_at   INTEGER NOT NULL,
+  ended_at     INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_steps_run ON run_steps(run_id, idx);
+
+-- 知识库（RAG）
+CREATE TABLE IF NOT EXISTS knowledge_bases (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id    INTEGER NOT NULL DEFAULT 0,
+  name        TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  doc_count   INTEGER NOT NULL DEFAULT 0,
+  chunk_count INTEGER NOT NULL DEFAULT 0,
+  is_template INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_kb_owner ON knowledge_bases(owner_id, updated_at DESC);
+
+-- 知识块：文档切片（关键词检索用倒排打分，零依赖；保留 idx 便于定位原文）
+CREATE TABLE IF NOT EXISTS knowledge_chunks (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  kb_id      INTEGER NOT NULL,
+  source     TEXT NOT NULL DEFAULT '',            -- 来源文档名
+  idx        INTEGER NOT NULL DEFAULT 0,
+  text       TEXT NOT NULL,
+  tokens     INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chunks_kb ON knowledge_chunks(kb_id, idx);
+
+-- 定时触发器：让团队按计划自动执行某个任务（对标并超越扣子的定时任务）
+CREATE TABLE IF NOT EXISTS agent_triggers (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id      INTEGER NOT NULL,
+  team_id       INTEGER NOT NULL,
+  name          TEXT NOT NULL,
+  task          TEXT NOT NULL,                      -- 每次自动执行的任务
+  schedule_kind TEXT NOT NULL DEFAULT 'interval',   -- interval（每 N 分钟）| daily（每天定点·东八区）
+  interval_min  INTEGER NOT NULL DEFAULT 60,
+  at_hour       INTEGER NOT NULL DEFAULT 9,
+  at_minute     INTEGER NOT NULL DEFAULT 0,
+  enabled       INTEGER NOT NULL DEFAULT 1,
+  last_run_at   INTEGER,
+  next_run_at   INTEGER NOT NULL,
+  last_run_id   INTEGER,
+  run_count     INTEGER NOT NULL DEFAULT 0,
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_triggers_due ON agent_triggers(enabled, next_run_at);
+CREATE INDEX IF NOT EXISTS idx_triggers_owner ON agent_triggers(owner_id, updated_at DESC);
+
+-- 智能体产出的文案草稿（站内动作 draft_post 写入；用户审核后到 App 发布）
+CREATE TABLE IF NOT EXISTS agent_post_drafts (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id   INTEGER NOT NULL,
+  run_id     INTEGER,
+  text       TEXT NOT NULL,
+  card       TEXT NOT NULL DEFAULT '{}',
+  status     TEXT NOT NULL DEFAULT 'draft',        -- draft | discarded
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_drafts_owner ON agent_post_drafts(owner_id, status, created_at DESC);
+
+-- 团队记忆（变量）：让团队跨运行持有状态；成员可用 memory 工具读写，用户可在工作台查看/编辑
+CREATE TABLE IF NOT EXISTS team_memory (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  team_id    INTEGER NOT NULL,
+  key        TEXT NOT NULL,
+  value      TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL,
+  UNIQUE(team_id, key)
+);
+CREATE INDEX IF NOT EXISTS idx_memory_team ON team_memory(team_id, key);
+
+-- 用户自带大模型 Key（BYOK）：每人一条，订阅后自填 Key 即用自己的模型不限量跑任务
+CREATE TABLE IF NOT EXISTS user_llm (
+  user_id       INTEGER PRIMARY KEY,
+  provider      TEXT NOT NULL DEFAULT 'custom',
+  base_url      TEXT NOT NULL DEFAULT '',
+  api_key       TEXT NOT NULL DEFAULT '',
+  model_default TEXT NOT NULL DEFAULT '',
+  model_premium TEXT NOT NULL DEFAULT '',
+  updated_at    INTEGER NOT NULL
+);

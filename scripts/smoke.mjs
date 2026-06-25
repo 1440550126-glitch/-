@@ -74,7 +74,7 @@ function sse(url, token) {
 }
 
 const server = spawn('node', ['--disable-warning=ExperimentalWarning', path.join(__dirname, '..', 'server', 'index.js')], {
-  env: { ...process.env, PORT: String(PORT), DB_PATH: DB, WARMUP_AUTOSTART: '0', LLM_PROVIDER: 'none' },
+  env: { ...process.env, PORT: String(PORT), DB_PATH: DB, WARMUP_AUTOSTART: '0', TRIGGER_AUTOSTART: '0', LLM_PROVIDER: 'none' },
   stdio: ['ignore', 'pipe', 'inherit']
 });
 server.stdout.on('data', () => {});
@@ -90,7 +90,7 @@ try {
   const health = await api('GET', '/api/health');
   ok('health', health.ok && health.data.status === 'ok');
   const boot = await api('GET', '/api/bootstrap');
-  ok('bootstrap 含头像与会员方案', boot.data.avatars.length === 12 && boot.data.member_plans.length === 3);
+  ok('bootstrap 含头像与会员方案', boot.data.avatars.length === 12 && boot.data.member_plans.length === 2);
 
   console.log('\n== 账号 ==');
   const reg = await api('POST', '/api/auth/register', { body: { username: 'xiaoming', password: 'pass123', nickname: '小明同学' } });
@@ -163,7 +163,7 @@ try {
 
   console.log('\n== 商业化（沙盒支付） ==');
   const ord = await api('POST', '/api/shop/orders', { token: guests[0].token, body: { kind: 'member', item_id: 'm1' } });
-  ok('创建会员订单 ¥9.9', ord.ok && ord.data.order.amount_fen === 990);
+  ok('创建会员订单 自带Key版 ¥39', ord.ok && ord.data.order.amount_fen === 3900);
   const pay = await api('POST', `/api/shop/orders/${ord.data.order.id}/pay`, { token: guests[0].token });
   ok('沙盒支付成功→成为会员', pay.ok && pay.data.me.is_member === true);
   const mMember = await api('POST', `/api/posts/${post1.id}/manifest`, { token: guests[0].token, body: { style: 'sakura' } });
@@ -301,8 +301,9 @@ try {
   const word2 = await s2.wait((e) => e.event === 'word', 8000, 'AI局发词');
   ok('收到词语', !!word2.data.word);
   // 轮到自己时发言，其他时间等待；玩到游戏结束（AI 随机投票，最多 6 轮）
+  // 预算给足：一局含 AI 的卧底可能跑 3~4 轮（~90s），budget 太紧会偶发超时
   let finished = false;
-  for (let guard = 0; guard < 120 && !finished; guard++) {
+  for (let guard = 0; guard < 240 && !finished; guard++) {
     const cur = await api('GET', `/api/rooms/${room2}`, { token: u1.token });
     const r = cur.data.room;
     if (r.status === 'ended') { finished = true; break; }
@@ -317,6 +318,7 @@ try {
   ok('AI 陪练局完整跑完', finished);
   const aiPlayers = s2.events.find((e) => e.event === 'state')?.data.players.filter((p) => p.is_bot) || [];
   ok('AI 陪练带明确标识', aiPlayers.every((p) => p.ai_label === 'AI 陪练'));
+  await api('POST', `/api/rooms/${room2}/leave`, { token: u1.token }).catch(() => {});  // 退出房间，避免影响后续开房测试
   s2.close(); lobby.close();
 
   console.log('\n== 通知中心 ==');
@@ -389,6 +391,226 @@ try {
   const wfHost = wfStream.events.filter((e) => e.event === 'msg' && e.data.kind === 'host');
   ok('AI 主持人全程主持（天黑/天亮/投票）', wfHost.length >= 4);
   wfStream.close();
+
+  console.log('\n== 灵阵 · AI 团队（多智能体协作） ==');
+  const lzTok = guests[2].token;
+  const lzMeta = await api('GET', '/api/agents/meta', { token: lzTok });
+  ok('工具与策略元信息', lzMeta.ok && lzMeta.data.tools.some((t) => t.id === 'knowledge_search') && lzMeta.data.strategies.some((s) => s.id === 'orchestrate'));
+  ok('每日运行额度可见', lzMeta.data.quota.limit > 0 && lzMeta.data.quota.used === 0);
+
+  const lzTeams = await api('GET', '/api/teams', { token: lzTok });
+  ok('内置团队模板 ≥8（含整活专区）', lzTeams.data.templates.length >= 8, `got ${lzTeams.data.templates.length}`);
+  const tpl = lzTeams.data.templates.find((t) => t.strategy === 'orchestrate');
+  ok('编排模板含多名成员', tpl && tpl.members.length >= 3);
+  ok('整活工具 fortune 在册', lzMeta.data.tools.some((t) => t.id === 'fortune'));
+  ok('整活团队已内置', ['夸夸群', '赛博算命馆', '杠精辩论赛', '废话文学创作组'].every((n) => lzTeams.data.templates.some((t) => t.name === n)));
+
+  const myAgent = await api('POST', '/api/agents', { token: lzTok, body: { name: '测试员·验', avatar: '🧪', role: '端到端验证', persona: '你负责验证产出是否达标', tools: ['text_stats', 'calculator', 'nonexistent_tool'] } });
+  ok('新建智能体（非法工具被过滤）', myAgent.ok && myAgent.data.agent.tools.includes('calculator') && !myAgent.data.agent.tools.includes('nonexistent_tool'));
+
+  const cloned = await api('POST', `/api/teams/${tpl.id}/clone`, { token: lzTok });
+  ok('复制团队模板为我的', cloned.ok && cloned.data.team.mine === true && cloned.data.team.members.length === tpl.members.length);
+  const teamId = cloned.data.team.id;
+
+  const runRes = await api('POST', `/api/teams/${teamId}/run`, { token: lzTok, body: { task: '用一句话介绍「句灵」这款产品，并算一下 12 个月会员按 39 元/月一共多少钱' } });
+  ok('发起团队运行', runRes.ok && runRes.data.run_id > 0, JSON.stringify(runRes));
+  const runId = runRes.data.run_id;
+
+  const runStream = sse(`/api/runs/${runId}/events`, lzTok);
+  const doneEv = await runStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '团队运行完成');
+  ok('运行完成（done 事件）', doneEv.event === 'done' && doneEv.data.status === 'done', JSON.stringify(doneEv.data?.status));
+  const stepEvents = runStream.events.filter((e) => e.event === 'step');
+  const phases = new Set(stepEvents.map((e) => e.data.phase));
+  ok('编排官产出计划（plan）', phases.has('plan'));
+  ok('成员实际产出（act ≥3）', stepEvents.filter((e) => e.data.phase === 'act' && e.data.status === 'done').length >= 3);
+  ok('成员真实调用工具（tool）', phases.has('tool'));
+  ok('总编整合（synthesize）', phases.has('synthesize'));
+  runStream.close();
+
+  const runFull = await api('GET', `/api/runs/${runId}`, { token: lzTok });
+  ok('运行结果已持久化', runFull.data.run.status === 'done' && runFull.data.run.result.length > 50);
+  ok('交付物为结构化报告', runFull.data.run.result.includes('团队交付') || runFull.data.run.result.includes('#'));
+  ok('拆解计划已保存', Array.isArray(runFull.data.run.plan) && runFull.data.run.plan.length >= 1);
+  ok('步骤逐条留痕（≥5）', runFull.data.steps.length >= 5);
+  const lzMeta2 = await api('GET', '/api/agents/meta', { token: lzTok });
+  ok('运行后额度递减', lzMeta2.data.quota.used === 1);
+
+  const kbList = await api('GET', '/api/kb', { token: lzTok });
+  ok('内置示例知识库存在', kbList.data.templates.length >= 1 && kbList.data.templates[0].chunk_count > 0);
+  const search = await api('POST', `/api/kb/${kbList.data.templates[0].id}/search`, { token: lzTok, body: { query: '句灵 产品 定位' } });
+  ok('知识库检索命中', search.ok && search.data.hits.length >= 1 && search.data.hits[0].text.includes('句灵'));
+  const myKb = await api('POST', '/api/kb', { token: lzTok, body: { name: '我的测试库' } });
+  const addDoc = await api('POST', `/api/kb/${myKb.data.kb.id}/docs`, { token: lzTok, body: { source: '便签', text: '露营装备清单：帐篷、防潮垫、天幕、营地灯、便携炉具。新手建议先租后买。' } });
+  ok('文档入库并切片', addDoc.ok && addDoc.data.added >= 1);
+  const mySearch = await api('POST', `/api/kb/${myKb.data.kb.id}/search`, { token: lzTok, body: { query: '露营 装备' } });
+  ok('自建知识库可检索', mySearch.data.hits.length >= 1 && mySearch.data.hits[0].text.includes('帐篷'));
+
+  const routeTeam = await api('POST', '/api/teams', { token: lzTok, body: { name: '路由小队', strategy: 'route', member_ids: [myAgent.data.agent.id, tpl.members[0].id] } });
+  ok('新建路由团队', routeTeam.ok && routeTeam.data.team.strategy === 'route');
+  const routeRun = await api('POST', `/api/teams/${routeTeam.data.team.id}/run`, { token: lzTok, body: { task: '计算 (199*12) 等于多少' } });
+  const routeStream = sse(`/api/runs/${routeRun.data.run_id}/events`, lzTok);
+  const routeDone = await routeStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '路由运行');
+  ok('路由团队单点接管完成', routeDone.event === 'done' && routeDone.data.status === 'done');
+  routeStream.close();
+
+  // 圆桌论战：多轮互评
+  const debateTeam = await api('POST', '/api/teams', { token: lzTok, body: { name: '论战小队', strategy: 'debate', max_rounds: 2, member_ids: [tpl.members[0].id, tpl.members[1].id] } });
+  ok('新建论战团队', debateTeam.ok && debateTeam.data.team.strategy === 'debate');
+  const debateRun = await api('POST', `/api/teams/${debateTeam.data.team.id}/run`, { token: lzTok, body: { task: '远程办公对早期创业团队利大于弊还是弊大于利' } });
+  const debateStream = sse(`/api/runs/${debateRun.data.run_id}/events`, lzTok);
+  const debateDone = await debateStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '论战运行');
+  ok('论战团队运行完成', debateDone.event === 'done' && debateDone.data.status === 'done');
+  debateStream.close();
+  const debateFull = await api('GET', `/api/runs/${debateRun.data.run_id}`, { token: lzTok });
+  ok('论战多轮（2 人 ×2 轮 ≥4 段产出）', debateFull.data.steps.filter((s) => s.phase === 'act' && s.status === 'done').length >= 4, `got ${debateFull.data.steps.filter((s) => s.phase === 'act').length}`);
+  ok('论战含轮次分隔', debateFull.data.steps.some((s) => s.phase === 'system'));
+
+  // 团队广场：发布 + 他人运行
+  const pub = await api('POST', `/api/teams/${teamId}/publish`, { token: lzTok, body: { published: true } });
+  ok('发布团队到广场', pub.ok && pub.data.published === true);
+  const otherTok = guests[0].token;
+  const gallery = await api('GET', '/api/teams/gallery', { token: otherTok });
+  ok('广场可见已发布团队', gallery.data.items.some((t) => t.id === teamId));
+  const otherView = await api('GET', `/api/teams/${teamId}`, { token: otherTok });
+  ok('他人可查看已发布团队', otherView.ok && otherView.data.team.mine === false);
+  const otherRun = await api('POST', `/api/teams/${teamId}/run`, { token: otherTok, body: { task: '推荐三个周末短途露营的好去处' } });
+  ok('他人可运行已发布团队', otherRun.ok && otherRun.data.run_id > 0);
+  const otherStream = sse(`/api/runs/${otherRun.data.run_id}/events`, otherTok);
+  const otherDone = await otherStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '他人运行');
+  ok('他人运行已发布团队完成', otherDone.event === 'done' && otherDone.data.status === 'done');
+  otherStream.close();
+  const unpub = await api('POST', `/api/teams/${teamId}/publish`, { token: lzTok, body: { published: false } });
+  ok('取消发布', unpub.ok && unpub.data.published === false);
+
+  // 后台监控与预算管控
+  const ov = await api('GET', '/api/admin/agents/overview', { token: admin.token });
+  ok('后台运行总览', ov.ok && ov.data.runs.total >= 3 && Array.isArray(ov.data.recent) && ov.data.recent.length >= 1);
+  ok('后台统计用户资产', ov.data.totals.teams >= 1 && ov.data.totals.agents >= 1);
+  const cfg = await api('PUT', '/api/admin/agents/config', { token: admin.token, body: { budget_micro: 8_000_000 } });
+  ok('后台设置每日预算', cfg.ok && cfg.data.budget_micro === 8_000_000);
+  ok('预算已生效', (await api('GET', '/api/admin/agents/overview', { token: admin.token })).data.budget_micro === 8_000_000);
+  const adminRunView = await api('GET', `/api/admin/agents/runs/${runId}`, { token: admin.token });
+  ok('后台可查看任意运行详情', adminRunView.ok && adminRunView.data.steps.length >= 5);
+  const nonAdmin = await api('GET', '/api/admin/agents/overview', { token: lzTok });
+  ok('非管理员无法访问监控', !nonAdmin.ok && nonAdmin.status === 403);
+
+  // 定时触发器 + 站内动作工具
+  ok('工具含站内动作 compose_card', lzMeta.data.tools.some((t) => t.id === 'compose_card'));
+  ok('空任务的触发器被拒', !(await api('POST', '/api/triggers', { token: lzTok, body: { team_id: teamId, task: '' } })).ok);
+  const trg = await api('POST', '/api/triggers', { token: lzTok, body: { team_id: teamId, name: '每日选题', task: '给句灵想 3 个今天适合发的文案选题', schedule_kind: 'interval', interval_min: 5 } });
+  ok('创建定时任务（间隔钳到 ≥30）', trg.ok && trg.data.trigger.interval_min === 30 && trg.data.trigger.enabled === true);
+  const trgDaily = await api('POST', '/api/triggers', { token: lzTok, body: { team_id: teamId, task: '每天早报', schedule_kind: 'daily', at_hour: 8, at_minute: 30 } });
+  ok('创建每日定点任务', trgDaily.ok && trgDaily.data.trigger.schedule_kind === 'daily' && trgDaily.data.trigger.next_run_at > Date.now());
+  const trgList = await api('GET', '/api/triggers', { token: lzTok });
+  ok('定时任务列表与上限', trgList.data.items.length >= 2 && trgList.data.limits.max_triggers === 5);
+  const trgRun = await api('POST', `/api/triggers/${trg.data.trigger.id}/run-now`, { token: lzTok });
+  ok('立即运行定时任务', trgRun.ok && trgRun.data.run_id > 0);
+  const trgStream = sse(`/api/runs/${trgRun.data.run_id}/events`, lzTok);
+  await trgStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '触发运行');
+  trgStream.close();
+  const trgFull = await api('GET', `/api/runs/${trgRun.data.run_id}`, { token: lzTok });
+  ok('触发运行标记来源 trigger', trgFull.data.run.source === 'trigger' && trgFull.data.run.status === 'done');
+  ok('文案成员生成了预览卡（compose_card）', trgFull.data.steps.some((s) => s.tool === 'compose_card' && s.status === 'done'));
+  const trgAfter = (await api('GET', '/api/triggers', { token: lzTok })).data.items.find((t) => t.id === trg.data.trigger.id);
+  ok('立即运行不打乱原定计划', trgAfter.run_count === 1 && trgAfter.next_run_at === trg.data.trigger.next_run_at);
+  ok('暂停定时任务', (await api('PATCH', `/api/triggers/${trg.data.trigger.id}`, { token: lzTok, body: { enabled: false } })).data.trigger.enabled === false);
+  ok('删除定时任务', (await api('DELETE', `/api/triggers/${trgDaily.data.trigger.id}`, { token: lzTok })).ok);
+  const trgSteal = await api('PATCH', `/api/triggers/${trg.data.trigger.id}`, { token: guests[0].token, body: { enabled: true } });
+  ok('他人无法操作我的触发器', !trgSteal.ok && trgSteal.status === 404);
+
+  // 站内动作工具 + 草稿箱
+  ok('工具含 draft_post / daily_topic', ['draft_post', 'daily_topic'].every((id) => lzMeta.data.tools.some((t) => t.id === id)));
+  const draftAgent = (await api('POST', '/api/agents', { token: lzTok, body: { name: '草稿员', avatar: '📥', role: '把文案存草稿', tools: ['draft_post'] } })).data.agent;
+  const draftTeam = (await api('POST', '/api/teams', { token: lzTok, body: { name: '草稿队', strategy: 'route', member_ids: [draftAgent.id] } })).data.team;
+  const draftRun = await api('POST', `/api/teams/${draftTeam.id}/run`, { token: lzTok, body: { task: '为「夏夜晚风」写一条温柔的句子' } });
+  const drStream = sse(`/api/runs/${draftRun.data.run_id}/events`, lzTok);
+  await drStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '草稿运行'); drStream.close();
+  const drFull = await api('GET', `/api/runs/${draftRun.data.run_id}`, { token: lzTok });
+  ok('draft_post 真实写入草稿', drFull.data.steps.some((s) => s.tool === 'draft_post' && s.status === 'done'));
+  const draftBox = await api('GET', '/api/agent-drafts', { token: lzTok });
+  ok('草稿箱可见且带预览卡', draftBox.data.items.length >= 1 && !!draftBox.data.items[0].card.bg);
+  ok('丢弃草稿', (await api('DELETE', `/api/agent-drafts/${draftBox.data.items[0].id}`, { token: lzTok })).ok);
+  const topicAgent = (await api('POST', '/api/agents', { token: lzTok, body: { name: '选题官', avatar: '💬', role: '出话题', tools: ['daily_topic'] } })).data.agent;
+  const topicTeam = (await api('POST', '/api/teams', { token: lzTok, body: { name: '选题队', strategy: 'route', member_ids: [topicAgent.id] } })).data.team;
+  const topicRun = await api('POST', `/api/teams/${topicTeam.id}/run`, { token: lzTok, body: { task: '露营主题的今日话题' } });
+  const tpStream = sse(`/api/runs/${topicRun.data.run_id}/events`, lzTok);
+  await tpStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '话题运行'); tpStream.close();
+  ok('daily_topic 工具被调用', (await api('GET', `/api/runs/${topicRun.data.run_id}`, { token: lzTok })).data.steps.some((s) => s.tool === 'daily_topic'));
+
+  // 整活：赛博算命馆掐指一算
+  const fortuneTeam = lzTeams.data.templates.find((t) => t.name === '赛博算命馆');
+  const funR = await api('POST', `/api/teams/${fortuneTeam.id}/run`, { token: lzTok, body: { task: '帮我算算今天的摸鱼运势' } });
+  const funStream = sse(`/api/runs/${funR.data.run_id}/events`, lzTok);
+  await funStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '整活运行'); funStream.close();
+  const funFull = await api('GET', `/api/runs/${funR.data.run_id}`, { token: lzTok });
+  ok('赛博算命馆掐指一算（fortune）', funFull.data.run.status === 'done' && funFull.data.steps.some((s) => s.tool === 'fortune' && s.status === 'done'));
+
+  // ===== 实用工具：摘要 / 抽取 / JSON / 团队记忆（用独立新游客，避免占用 lzTok 配额） =====
+  const utilTok = (await api('POST', '/api/auth/guest', { body: {} })).data.token;
+  const umeta = await api('GET', '/api/agents/meta', { token: utilTok });
+  ok('实用工具齐备', ['summarize', 'extract', 'json_tool', 'memory'].every((id) => umeta.data.tools.some((t) => t.id === id)));
+  const mkTeam = async (name, tools) => {
+    const ag = (await api('POST', '/api/agents', { token: utilTok, body: { name, tools } })).data.agent;
+    return (await api('POST', '/api/teams', { token: utilTok, body: { name: name + '队', strategy: 'route', member_ids: [ag.id] } })).data.team;
+  };
+  const runTeam = async (teamId, task) => {
+    const rr = await api('POST', `/api/teams/${teamId}/run`, { token: utilTok, body: { task } });
+    const st = sse(`/api/runs/${rr.data.run_id}/events`, utilTok);
+    await st.wait((e) => e.event === 'done' || e.event === 'error', 20000, 'util-run'); st.close();
+    return (await api('GET', `/api/runs/${rr.data.run_id}`, { token: utilTok })).data;
+  };
+  const exRun = await runTeam((await mkTeam('抽取员', ['extract'])).id, '整理一下：邮箱 hi@jvling.app 网址 https://jvling.app 电话 13800138000');
+  const exStep = exRun.steps.find((s) => s.tool === 'extract');
+  ok('抽取工具命中邮箱/链接', !!exStep && /hi@jvling\.app/.test(exStep.tool_result) && /https:\/\/jvling\.app/.test(exStep.tool_result));
+  const sumRun = await runTeam((await mkTeam('摘要员', ['summarize'])).id, '句灵是文案社交圈。用户发一句话生成预览卡。长按让文字活过来。它面向年轻人。配实时合成音效。');
+  ok('摘要工具产出', sumRun.steps.some((s) => s.tool === 'summarize' && s.status === 'done'));
+
+  // 团队记忆（变量）：跨运行持久状态
+  const memTeam = await mkTeam('记忆员', ['memory']);
+  ok('写入团队记忆', (await api('PUT', `/api/teams/${memTeam.id}/memory`, { token: utilTok, body: { key: '品牌调性', value: '真诚有梗不油腻' } })).ok);
+  const memGet = await api('GET', `/api/teams/${memTeam.id}/memory`, { token: utilTok });
+  ok('读取团队记忆', memGet.data.items.length === 1 && memGet.data.items[0].value === '真诚有梗不油腻' && memGet.data.editable === true);
+  const memRun = await runTeam(memTeam.id, '看看我们记住了什么');
+  ok('成员运行中读到团队记忆', memRun.steps.some((s) => s.tool === 'memory' && /品牌调性/.test(s.tool_result || '')));
+  ok('删除团队记忆', (await api('DELETE', `/api/teams/${memTeam.id}/memory/${encodeURIComponent('品牌调性')}`, { token: utilTok })).ok);
+  ok('他人不能写我的团队记忆', (await api('PUT', `/api/teams/${memTeam.id}/memory`, { token: guests[0].token, body: { key: 'x', value: 'y' } })).status === 403);
+
+  // ===== 运行变量 / 批量 / 出站 Webhook / 用量看板（独立新游客控配额） =====
+  const featTok = (await api('POST', '/api/auth/guest', { body: {} })).data.token;
+  const featTeam = (await api('POST', `/api/teams/${lzTeams.data.templates.find((t) => t.name === '夸夸群').id}/clone`, { token: featTok })).data.team;
+  await api('PUT', `/api/teams/${featTeam.id}/memory`, { token: featTok, body: { key: '昵称', value: '小明' } });
+  const varRun = await api('POST', `/api/teams/${featTeam.id}/run`, { token: featTok, body: { task: '夸夸 {{昵称}}，他正在 {{活动}}', vars: { 活动: '考研' } } });
+  const vStream = sse(`/api/runs/${varRun.data.run_id}/events`, featTok);
+  await vStream.wait((e) => e.event === 'done' || e.event === 'error', 20000, '变量运行'); vStream.close();
+  ok('运行变量替换（入参 + 团队记忆）', (await api('GET', `/api/runs/${varRun.data.run_id}`, { token: featTok })).data.run.task === '夸夸 小明，他正在 考研');
+
+  const batch = await api('POST', `/api/teams/${featTeam.id}/batch`, { token: featTok, body: { task: '夸夸正在 {{input}} 的我', items: ['加班', '健身', '带娃'] } });
+  ok('批量发起 3 条', batch.ok && batch.data.count === 3 && String(batch.data.batch_id).startsWith('b_'));
+  let bdone = null;
+  for (let i = 0; i < 50; i++) { const bv = await api('GET', `/api/runs/batch/${batch.data.batch_id}`, { token: featTok }); if (bv.data.done) { bdone = bv.data; break; } await new Promise((r) => setTimeout(r, 300)); }
+  ok('批量全部完成', bdone && bdone.items.length === 3 && bdone.items.every((x) => x.status === 'done'));
+  ok('批量套用了任务模板', !!bdone && bdone.items.some((x) => x.task.includes('加班') && x.task.includes('夸夸')));
+
+  ok('Webhook 拒绝元数据地址', (await api('PUT', `/api/teams/${featTeam.id}/webhook`, { token: featTok, body: { url: 'http://169.254.169.254/cb' } })).status === 400);
+  ok('Webhook 拒绝本机地址', (await api('PUT', `/api/teams/${featTeam.id}/webhook`, { token: featTok, body: { url: 'http://localhost:9000/cb' } })).status === 400);
+  ok('他人不能配置我的 Webhook', (await api('PUT', `/api/teams/${featTeam.id}/webhook`, { token: guests[0].token, body: { url: 'https://example.com/cb' } })).status === 403);
+
+  const myUsage = await api('GET', '/api/agents/usage', { token: featTok });
+  ok('用量看板数据完整', myUsage.ok && myUsage.data.runs.total >= 4 && myUsage.data.quota.run.limit > 0 && myUsage.data.cost.today_micro >= 0 && myUsage.data.assets.teams >= 1);
+
+  // 对外 API（可被外部系统 / Webhook 调用）
+  const keyRes = await api('POST', `/api/teams/${teamId}/api-key`, { token: lzTok });
+  ok('生成对外 API 密钥', keyRes.ok && keyRes.data.api_key.startsWith('lk_'));
+  const apiKey = keyRes.data.api_key;
+  ok('团队标记 has_api', (await api('GET', `/api/teams/${teamId}`, { token: lzTok })).data.team.has_api === true);
+  const pubRun = await api('POST', '/api/public/run', { body: { key: apiKey, task: '给「秋天的第一杯奶茶」写一句文案' } });
+  ok('对外 API 同步返回结果', pubRun.ok && pubRun.data.status === 'done' && pubRun.data.result.length > 50);
+  ok('无效 API key 被拒', (await api('POST', '/api/public/run', { body: { key: 'lk_bad', task: 'x' } })).status === 403);
+  ok('吊销 API 密钥', (await api('DELETE', `/api/teams/${teamId}/api-key`, { token: lzTok })).ok);
+  ok('吊销后对外调用失败', !(await api('POST', '/api/public/run', { body: { key: apiKey, task: 'x' } })).ok);
+
+  const editTpl = await api('PATCH', `/api/teams/${tpl.id}`, { token: lzTok, body: { name: '改不动' } });
+  ok('内置模板不可编辑', !editTpl.ok && editTpl.status === 403);
 
   console.log('\n== 后台系统开关 ==');
   const togOn = await api('PUT', '/api/admin/settings', { token: admin.token, body: { ai_moderation: true } });
