@@ -6,8 +6,8 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from dsoul.obsidian import (  # noqa: E402
-    add_link, append_section, hashtags, parse_note, render_note, slug,
-    wikilinks,
+    add_link, append_section, hashtags, parse_note, render_note, set_section,
+    slug, wikilinks,
 )
 
 
@@ -65,6 +65,17 @@ def test_append_section():
     md = render_note("X", "正文")
     md2 = append_section(md, "## 补记 2026-06-25", ["又想起一件事"])
     assert "## 补记" in md2 and "又想起一件事" in md2
+
+
+def test_set_section_idempotent_and_anchored():
+    md = render_note("小婷", "人物。", tags=["人物"], links=["回锅肉"])
+    m1 = set_section(md, "## 小传", "她是我老婆。")
+    # 插在关联区之前、标签还在
+    assert m1.index("## 小传") < m1.index("## 关联")
+    assert "#人物" in m1 and "[[回锅肉]]" in m1
+    # 再设一次：替换不追加，仍只有一个小传
+    m2 = set_section(m1, "## 小传", "她是我老婆，2018 年结的婚。")
+    assert m2.count("## 小传") == 1 and "结的婚" in m2 and "[[回锅肉]]" in m2
 
 
 if __name__ == "__main__":

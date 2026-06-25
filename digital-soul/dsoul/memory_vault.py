@@ -55,6 +55,41 @@ def ensure_person(vault, name, relation="", *, now=None) -> bool:
     return True
 
 
+def _memory_prose(note_body: str) -> str:
+    """从一篇记忆笔记的正文里，抠出那句记忆本身（去掉标题/关联/标签行，留补记内容）。"""
+    out = []
+    for ln in str(note_body or "").split("\n"):
+        s = ln.strip()
+        if not s or s.startswith("#") or s.startswith("- [["):
+            continue
+        out.append(s)
+    return " ".join(out)
+
+
+def update_bio(vault, name, relation="", *, now=None) -> bool:
+    """给一个人物笔记重写"## 小传"：把连到 ta 的记忆归纳成一段。无记忆/无此篇则跳过。"""
+    md = vault.read(name)
+    if md is None:
+        return False
+    from . import obsidian as ob
+    from . import person_bio
+    mems = []
+    for t in vault.backlinks(name):
+        n = vault.note(t)
+        if not n:
+            continue
+        if "记忆" not in (n["tags"] or []):      # 只用 #记忆 笔记，别把别的链接也当经历
+            continue
+        pr = _memory_prose(n["body"])
+        if pr:
+            mems.append(pr)
+    bio = person_bio.compose_bio(name, relation, mems)
+    if not bio:
+        return False
+    vault._write(name, ob.set_section(md, "## 小传", bio))
+    return True
+
+
 def sediment_memories(vault, memories, people=None, *, now=None, daily=True) -> dict:
     """把一批已巩固的记忆写进知识库：每条建一篇 #记忆 笔记，连上提到的[[人物]]。
     people：[(名, 关系)] 或 [名]；用来认出记忆里的人、建/连人物笔记。"""
@@ -89,8 +124,14 @@ def sediment_memories(vault, memories, people=None, *, now=None, daily=True) -> 
             mem_notes.append(title)
             touched.append(title)
 
+    # 给牵涉到的人物刷新"小传"（把连到 ta 的记忆归纳成一段人物志）
+    people_linked = sorted(set(p for m in (memories or []) for p in people_in(str(m), names)))
+    bios = []
+    for p in people_linked:
+        if update_bio(vault, p, rel.get(p, ""), now=now):
+            bios.append(p)
+
     if daily and touched:
         vault.daily_note("巩固了这些记忆：" + "、".join(touched), links=touched, now=now)
     return {"memory_notes": mem_notes, "person_notes": person_notes,
-            "touched": touched, "people_linked": sorted(set(
-                p for m in (memories or []) for p in people_in(str(m), names)))}
+            "touched": touched, "people_linked": people_linked, "bios": bios}

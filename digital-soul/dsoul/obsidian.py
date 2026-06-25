@@ -142,6 +142,33 @@ def add_link(md: str, target: str) -> str:
     return text + f"\n\n{_LINKS_HEADING}\n{line}\n"
 
 
+_HEADING = re.compile(r"^#{1,6}\s")
+
+
+def set_section(md: str, heading: str, body: str) -> str:
+    """把某个小节（如 '## 小传'）的内容整体设成 body（替换，不追加）。没有就插在关联区/标签前。幂等。"""
+    heading = heading.rstrip()
+    text = str(md or "")
+    lines = text.split("\n")
+    new_block = [heading, str(body).rstrip(), ""]
+    # 找到该小节的起止
+    start = next((i for i, ln in enumerate(lines) if ln.strip() == heading), None)
+    if start is not None:
+        end = start + 1
+        while end < len(lines) and not _HEADING.match(lines[end]):
+            end += 1
+        out = lines[:start] + new_block + lines[end:]
+        return "\n".join(out).rstrip() + "\n"
+    # 没有这一节：插在"关联区"之前，否则插在行内 #标签 之前，否则末尾
+    anchor = next((i for i, ln in enumerate(lines)
+                   if ln.strip() == _LINKS_HEADING
+                   or (ln.strip().startswith("#") and not _HEADING.match(ln))), None)
+    if anchor is not None:
+        out = lines[:anchor] + new_block + lines[anchor:]
+        return "\n".join(out).rstrip() + "\n"
+    return text.rstrip("\n") + "\n\n" + "\n".join(new_block).rstrip() + "\n"
+
+
 def append_section(md: str, heading: str, lines) -> str:
     """在笔记末尾追加一段（自生长时把新内容并进已有笔记）。"""
     text = str(md or "").rstrip("\n")

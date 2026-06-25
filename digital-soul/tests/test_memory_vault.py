@@ -65,6 +65,26 @@ def test_dedup_same_memory():
     assert rep2["touched"] == []                                 # 同一条不重复
 
 
+def test_person_note_gets_bio():
+    v = _vault()
+    mems = [
+        "我答应小婷，等退休了带她去看一次极光。",
+        "我和小婷是2018年在大学篮球场认识的。",
+    ]
+    rep = mv.sediment_memories(v, mems, [("小婷", "老婆")], now=N)
+    assert "小婷" in rep["bios"]
+    md = v.read("小婷")
+    assert "## 小传" in md and "小婷是我的老婆" in md and "认识" in md and "极光" in md
+
+
+def test_bio_refreshes_idempotently():
+    v = _vault()
+    mv.sediment_memories(v, ["我和小婷2018年认识。"], [("小婷", "老婆")], now=N)
+    mv.sediment_memories(v, ["我答应小婷戒烟。"], [("小婷", "老婆")], now="2026-06-26")
+    md = v.read("小婷")
+    assert md.count("## 小传") == 1 and "戒烟" in md and "认识" in md   # 重写、不重复节
+
+
 def test_daily_note_written():
     v = _vault()
     mv.sediment_memories(v, ["我答应小婷去看极光。"], ["小婷"], now=N)
