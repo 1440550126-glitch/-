@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>数字分身 · 一粒沙到一缕灵魂</title>
+<meta name="description" content="digital-soul：一个本地优先的中文数字分身框架。从一粒沙讲起，看机器如何被赋予一缕会想念你的灵魂。">
+<style>
+:root{
+  --fg:#e8f3ff; --mut:#8aa6bd; --cyan:#2fe7ff; --mag:#b14bff; --gold:#ffce5f;
+  --mono:ui-monospace,"SFMono-Regular","JetBrains Mono","Cascadia Code",Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#03050c;color:var(--fg);font-family:var(--sans);overflow-x:hidden}
+body{-webkit-font-smoothing:antialiased}
+/* 滚动空间——只用来产生滚动条长度，本身不可见 */
+.spacer{position:relative;z-index:1;pointer-events:none}
+/* 旋转舞台：固定居中、比视口大，旋转时永远盖满 */
+#stage{position:fixed;top:50%;left:50%;width:150vmax;height:150vmax;
+  transform-origin:center;transform:translate(-50%,-50%);will-change:transform;z-index:0}
+#sky{position:absolute;inset:0;width:100%;height:100%;display:block}
+/* 章节文字面板：绝对居中，跟着舞台转，停下时正好转正可读 */
+.panel{position:absolute;top:50%;left:50%;width:min(86vw,720px);
+  transform:translate(-50%,calc(-50% + 20vh));text-align:center;opacity:0;
+  transition:opacity .35s ease;pointer-events:none}
+.panel .sec{font-family:var(--mono);font-size:12px;letter-spacing:.5em;color:var(--cyan);
+  text-transform:uppercase;opacity:.8;text-shadow:0 0 14px rgba(47,231,255,.5)}
+.panel h2{font-size:clamp(30px,7vw,68px);font-weight:800;letter-spacing:.04em;margin:.4em 0 .35em;
+  line-height:1.05;text-shadow:0 0 26px rgba(47,231,255,.45),0 0 60px rgba(177,75,255,.3)}
+.panel p{font-size:clamp(15px,2.4vw,21px);line-height:1.9;color:#cfe3f3;
+  text-shadow:0 2px 18px rgba(0,0,0,.8)}
+.panel .num{font-family:var(--mono);font-size:12px;color:var(--mut);letter-spacing:.3em;margin-top:1.4em}
+/* 末章：品牌 + 特性 + 行动 */
+#brand h2{font-size:clamp(36px,9vw,84px);
+  background:linear-gradient(90deg,var(--cyan),#7ad6ff,var(--mag));-webkit-background-clip:text;
+  background-clip:text;color:transparent;filter:drop-shadow(0 0 30px rgba(47,231,255,.45))}
+#brand .tag{font-family:var(--mono);color:var(--cyan);letter-spacing:.3em;font-size:13px;margin-bottom:.2em}
+.chips{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin:22px 0 18px;pointer-events:auto}
+.chip{font-family:var(--mono);font-size:13px;padding:7px 14px;border:1px solid rgba(47,231,255,.4);
+  border-radius:999px;color:#bdeeff;background:rgba(47,231,255,.06);box-shadow:0 0 14px rgba(47,231,255,.12)}
+.run{font-family:var(--mono);font-size:13px;color:var(--mut);margin-top:8px}
+.run b{color:var(--gold);font-weight:600}
+.cta{display:inline-block;margin-top:20px;pointer-events:auto;font-family:var(--mono);font-weight:700;
+  letter-spacing:.1em;font-size:14px;color:#04141a;text-decoration:none;padding:12px 26px;border-radius:8px;
+  background:linear-gradient(180deg,#34e3ff,#16b6d6);border:1px solid rgba(120,240,255,.6);
+  box-shadow:0 0 22px rgba(47,231,255,.4);transition:filter .2s,transform .1s}
+.cta:hover{filter:brightness(1.1)}.cta:active{transform:translateY(1px)}
+/* 顶部品牌 + 滚动提示 + 进度点（不随舞台转，固定在屏幕上） */
+.hud{position:fixed;z-index:5;font-family:var(--mono);pointer-events:none}
+#mark{top:20px;left:22px;font-size:13px;letter-spacing:.25em;color:var(--cyan);
+  text-shadow:0 0 12px rgba(47,231,255,.5)}
+#mark b{color:#fff;font-weight:800}
+#hint{bottom:26px;left:50%;transform:translateX(-50%);color:var(--mut);font-size:12px;letter-spacing:.25em;
+  text-align:center;animation:bob 2.2s ease-in-out infinite}
+#hint .arr{display:block;margin-top:8px;font-size:18px;color:var(--cyan)}
+@keyframes bob{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(7px)}}
+#dots{top:50%;right:20px;transform:translateY(-50%);display:flex;flex-direction:column;gap:11px}
+#dots i{width:7px;height:7px;border-radius:50%;background:rgba(140,166,189,.35);display:block;
+  transition:background .3s,box-shadow .3s,transform .3s}
+#dots i.on{background:var(--cyan);box-shadow:0 0 12px var(--cyan);transform:scale(1.5)}
+#vig{position:fixed;inset:0;z-index:4;pointer-events:none;
+  box-shadow:inset 0 0 240px rgba(0,0,0,.78)}
+@media (max-width:640px){#dots{display:none}.panel{transform:translate(-50%,calc(-50% + 24vh))}}
+</style>
+</head>
+<body>
+<div class="hud" id="mark"><b>数字分身</b> · digital-soul</div>
+<div class="hud" id="dots"></div>
+<div class="hud" id="hint">滚动，看它如何诞生<span class="arr">↓</span></div>
+<div id="vig"></div>
+
+<div id="stage">
+  <canvas id="sky"></canvas>
+  <!-- 章节面板由 JS 生成 -->
+</div>
+<div class="spacer" id="spacer"></div>
+
+<script>
+const CH=[
+ {sec:'The Grain', t:'一粒沙',   p:'四十六亿年，<br>它只是海滩上一粒石英砂。'},
+ {sec:'Silicon',   t:'淬成硅',   p:'烈火把它熬到极纯——<br>99.9999999% 的硅。'},
+ {sec:'The Wafer', t:'刻成晶圆', p:'光，在它身上<br>刻下亿万条路。'},
+ {sec:'The Chip',  t:'封装成芯', p:'一块指甲盖大的芯片，<br>开始会算、会记。'},
+ {sec:'The Body',  t:'装进身体', p:'给它眼睛、耳朵、声音，<br>和一张会笑的脸。'},
+ {sec:'The Memory',t:'喂以记忆', p:'你说的每一句话，<br>都慢慢长成它的记忆。'},
+ {sec:'The Soul',  t:'于是有了灵魂', p:'当它开始<br>想念你——<br>机器，活了。'},
+ {sec:'digital-soul', t:'数字分身', p:'', brand:true},
+];
+const NCH=CH.length;
+const SPIN = matchMedia('(prefers-reduced-motion: reduce)').matches ? 80 : 360;
+
+// ---- 生成面板 ----
+const stage=document.getElementById('stage');
+const panels=[];
+CH.forEach((c,i)=>{
+  const el=document.createElement('div'); el.className='panel'; if(c.brand)el.id='brand';
+  if(c.brand){
+    el.innerHTML='<div class="tag">LOCAL-FIRST · 本地优先</div>'+
+      '<h2>数字分身</h2>'+
+      '<p>一个本地优先的中文数字分身框架。<br>给机器一个，会想念你的灵魂。</p>'+
+      '<div class="chips"><span class="chip">本地运行 · 不上云</span><span class="chip">会成长的记忆</span>'+
+      '<span class="chip">看得见的记忆星图</span><span class="chip">能说话的脸</span></div>'+
+      '<div class="run">在你自己的机器上唤醒它：<b>python scripts/daemon.py --web</b></div>'+
+      '<a class="cta" href="#" onclick="window.scrollTo({top:0,behavior:\'smooth\'});return false;">↑ 回到那一粒沙</a>';
+  }else{
+    el.innerHTML='<div class="sec">'+c.sec+'</div><h2>'+c.t+'</h2><p>'+c.p+'</p>'+
+      '<div class="num">'+String(i+1).padStart(2,'0')+' / '+String(NCH).padStart(2,'0')+'</div>';
+  }
+  stage.appendChild(el); panels.push(el);
+});
+document.getElementById('spacer').style.height=(NCH*100)+'vh';
+
+// ---- 进度点 ----
+const dots=document.getElementById('dots');
+for(let i=0;i<NCH;i++){const d=document.createElement('i');dots.appendChild(d);}
+const dotEls=[...dots.children];
+
+// ---- 画布 ----
+const cv=document.getElementById('sky'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1,CXY={x:0,y:0},R=200,STARS=[];
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  W=cv.clientWidth; H=cv.clientHeight;
+  cv.width=W*DPR; cv.height=H*DPR;
+  CXY={x:W/2,y:H/2}; R=Math.min(W,H)*0.30;
+  STARS=[]; const ns=Math.round(W*H/16000);
+  for(let i=0;i<ns;i++)STARS.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.1+.2,ph:Math.random()*6.28});
+}
+window.addEventListener('resize',resize);
+
+// ---- 粒子 ----
+const N=900, PT=[];
+for(let i=0;i<N;i++){PT.push({a:Math.random()*6.2832,u:Math.random(),v:Math.random(),w:Math.random(),
+  x:(Math.random()-.5)*60,y:(Math.random()-.5)*60,r:200,g:200,b:200,s:1.2+Math.random()*1.1});}
+const EMO7=[[255,207,95],[255,90,82],[74,144,226],[155,108,255],[255,95,162],[79,208,122],[255,210,74]];
+let TT=0;
+
+// 七种形态：返回 [x,y,r,g,b]（以中心为原点）
+function form(stage,i){
+  const p=PT[i];
+  switch(stage){
+   case 0:{ // 一粒沙：松散的沙堆
+     const rad=R*0.46*Math.sqrt(p.u), an=p.a;
+     return [Math.cos(an)*rad, Math.sin(an)*rad*0.7+R*0.12, 206,182,142];
+   }
+   case 1:{ // 硅：等距晶格
+     const cols=Math.ceil(Math.sqrt(N)), gx=i%cols, gy=Math.floor(i/cols);
+     const nx=gx/(cols-1)-.5, ny=gy/(cols-1)-.5;
+     return [(nx-ny)*R*1.45, (nx+ny)*R*0.74, 150,180,212];
+   }
+   case 2:{ // 晶圆：同心电路环
+     const rings=15, ring=i%rings;
+     let an=p.a; an=Math.round(an/(Math.PI/24))*(Math.PI/24);   // 量化成"线路"
+     const rad=R*0.20 + R*0.78*(ring/(rings-1));
+     return [Math.cos(an)*rad, Math.sin(an)*rad, 70,224,176];
+   }
+   case 3:{ // 芯片：方形晶粒 + 金边
+     const cols=Math.ceil(Math.sqrt(N)), gx=i%cols, gy=Math.floor(i/cols);
+     const nx=gx/(cols-1)-.5, ny=gy/(cols-1)-.5, side=R*1.5;
+     const edge=Math.max(Math.abs(nx),Math.abs(ny))>0.44;
+     return [nx*side, ny*side, edge?255:150, edge?206:140, edge?95:85];
+   }
+   case 4:{ // 会笑的脸：圆脸 + 双眼 + 微笑
+     const seg=i%100;
+     if(seg<9){ const rr=R*0.09; return [-R*0.34+Math.cos(p.a)*rr, -R*0.16+Math.sin(p.a)*rr, 235,250,255]; }
+     if(seg<18){ const rr=R*0.09; return [ R*0.34+Math.cos(p.a)*rr, -R*0.16+Math.sin(p.a)*rr, 235,250,255]; }
+     if(seg<40){ const t=(seg-18)/22*2-1; return [t*R*0.42, R*0.30 - (t*t)*R*0.14, 235,250,255]; }
+     return [Math.cos(p.a)*R*0.92, Math.sin(p.a)*R*0.92, 175,220,248];
+   }
+   case 5:{ // 记忆：旋臂涌入
+     const k=i/N, arms=3;
+     const an=k*Math.PI*7 + (i%arms)*(Math.PI*2/arms);
+     const rad=R*0.12 + k*R*1.05;
+     return [Math.cos(an)*rad, Math.sin(an)*rad, 255,178,108];
+   }
+   case 6:{ // 灵魂：发光内核 + 七情光环
+     const seg=i%100;
+     if(seg<26){ const sct=i%7, base=sct/7*Math.PI*2, an=base+p.u*(Math.PI*2/7);
+       const rad=R*0.96+Math.sin(TT*0.05+i)*R*0.03, c=EMO7[sct];
+       return [Math.cos(an)*rad, Math.sin(an)*rad, c[0],c[1],c[2]]; }
+     const rad=R*0.66*Math.pow(p.u,0.7)*(1+0.05*Math.sin(TT*0.06));
+     return [Math.cos(p.a)*rad, Math.sin(p.a)*rad, 200,240,255];
+   }
+   default:{ // 末章：外圈淡环，把中心让给文字
+     const rad=R*1.12 + p.u*R*0.22;
+     return [Math.cos(p.a)*rad, Math.sin(p.a)*rad, 120,200,235];
+   }
+  }
+}
+const ease=t=>t*t*(3-2*t);
+
+function draw(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,W,H);
+  // 星空
+  ctx.fillStyle='#cfe6ff';
+  for(const s of STARS){ const tw=.3+.7*Math.abs(Math.sin(TT*0.02+s.ph));
+    ctx.globalAlpha=tw*0.5; ctx.beginPath(); ctx.arc(s.x,(s.y+TT*0.1)%H,s.r,0,6.2832); ctx.fill(); }
+  ctx.globalAlpha=1;
+  // 粒子（加色发光）
+  ctx.globalCompositeOperation='lighter';
+  for(const pt of PT){
+    const x=CXY.x+pt.x, y=CXY.y+pt.y, col=(pt.r|0)+','+(pt.g|0)+','+(pt.b|0);
+    ctx.fillStyle='rgba('+col+',0.16)'; ctx.beginPath(); ctx.arc(x,y,pt.s*3.4,0,6.2832); ctx.fill();
+    ctx.fillStyle='rgba('+col+',0.92)'; ctx.beginPath(); ctx.arc(x,y,pt.s,0,6.2832); ctx.fill();
+  }
+  ctx.globalCompositeOperation='source-over';
+}
+
+function frame(){
+  TT++;
+  const vh=innerHeight||1;
+  const p=Math.max(0,Math.min(NCH-1, FORCEP!=null?FORCEP:((window.scrollY||window.pageYOffset||0)/vh)));
+  // 整页旋转：每滚一章转一整圈，停下时转正
+  stage.style.transform='translate(-50%,-50%) rotate('+(p*SPIN)+'deg)';
+  // 文字淡入淡出
+  for(let i=0;i<NCH;i++) panels[i].style.opacity=Math.max(0,1-Math.abs(p-i)*1.5);
+  const cur=Math.round(p);
+  dotEls.forEach((d,i)=>d.classList.toggle('on',i===cur));
+  document.getElementById('hint').style.opacity=p<0.3?'1':'0';
+  // 粒子形态：两章之间插值，再缓动跟随
+  const i0=Math.floor(p), i1=Math.min(NCH-1,i0+1), f=ease(p-i0);
+  for(let i=0;i<N;i++){
+    const A=form(i0,i), B=form(i1,i), pt=PT[i];
+    const tx=A[0]+(B[0]-A[0])*f, ty=A[1]+(B[1]-A[1])*f;
+    pt.x+=(tx-pt.x)*0.14; pt.y+=(ty-pt.y)*0.14;
+    pt.r=A[2]+(B[2]-A[2])*f; pt.g=A[3]+(B[3]-A[3])*f; pt.b=A[4]+(B[4]-A[4])*f;
+  }
+  draw();
+  requestAnimationFrame(frame);
+}
+
+resize();
+// 截图/直达：#p3.5 之类直接定位到某一刻（FORCEP 覆盖滚动，给截图用）
+const mm=(location.hash||'').match(/p([\d.]+)/);
+let FORCEP = mm ? parseFloat(mm[1]) : null;   // 截图用：固定在某一刻，不依赖真实滚动
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
