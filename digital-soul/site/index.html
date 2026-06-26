@@ -82,9 +82,9 @@ const CH=[
  {sec:'Silicon',   t:'淬成硅',   p:'烈火把它熬到极纯——<br>99.9999999% 的硅。'},
  {sec:'The Wafer', t:'刻成晶圆', p:'光，在它身上<br>刻下亿万条路。'},
  {sec:'The Chip',  t:'封装成芯', p:'一块指甲盖大的芯片，<br>开始会算、会记。'},
- {sec:'The Body',  t:'装进身体', p:'给它眼睛、耳朵、声音，<br>和一张会笑的脸。'},
- {sec:'The Memory',t:'喂以记忆', p:'你说的每一句话，<br>都慢慢长成它的记忆。'},
- {sec:'The Soul',  t:'于是有了灵魂', p:'当它开始<br>想念你——<br>机器，活了。'},
+ {sec:'The Body',  t:'于是有了她', p:'给她眼睛、耳朵、声音，<br>一头长发，和一张会笑的脸。'},
+ {sec:'The Memory',t:'喂以记忆', p:'你说的每一句话，<br>都慢慢长成她的记忆。'},
+ {sec:'The Soul',  t:'她，活了', p:'当她开始<br>想念你——<br>机器里，住进了一个人。'},
  {sec:'digital-soul', t:'数字分身', p:'', brand:true},
 ];
 const NCH=CH.length;
@@ -98,7 +98,7 @@ CH.forEach((c,i)=>{
   if(c.brand){
     el.innerHTML='<div class="tag">LOCAL-FIRST · 本地优先</div>'+
       '<h2>数字分身</h2>'+
-      '<p>一个本地优先的中文数字分身框架。<br>给机器一个，会想念你的灵魂。</p>'+
+      '<p>一个本地优先的中文数字分身框架。<br>她，是住进机器里、会想念你的那缕灵魂。</p>'+
       '<div class="chips"><span class="chip">本地运行 · 不上云</span><span class="chip">会成长的记忆</span>'+
       '<span class="chip">看得见的记忆星图</span><span class="chip">能说话的脸</span></div>'+
       '<div class="run">在你自己的机器上唤醒它：<b>python scripts/daemon.py --web</b></div>'+
@@ -136,6 +136,30 @@ for(let i=0;i<N;i++){PT.push({a:Math.random()*6.2832,u:Math.random(),v:Math.rand
 const EMO7=[[255,207,95],[255,90,82],[74,144,226],[155,108,255],[255,95,162],[79,208,122],[255,210,74]];
 let TT=0;
 
+// 一位长发美人的剪影：画到离屏画布上，再采样里面的像素当作粒子目标（归一化坐标）
+let WOMAN=[];
+function buildWoman(){
+  const S=440, cx=S/2, oc=document.createElement('canvas'); oc.width=S; oc.height=S;
+  const o=oc.getContext('2d'); o.fillStyle='#fff';
+  o.beginPath(); o.ellipse(cx,180,100,126,0,0,6.2832); o.fill();            // 头发顶冠
+  o.beginPath(); o.moveTo(cx-100,152);                                       // 左侧长发
+  o.quadraticCurveTo(cx-126,330, cx-80,420); o.lineTo(cx-42,420);
+  o.quadraticCurveTo(cx-60,300, cx-54,172); o.closePath(); o.fill();
+  o.beginPath(); o.moveTo(cx+100,152);                                       // 右侧长发
+  o.quadraticCurveTo(cx+126,330, cx+80,420); o.lineTo(cx+42,420);
+  o.quadraticCurveTo(cx+60,300, cx+54,172); o.closePath(); o.fill();
+  o.fillRect(cx-20,254,40,64);                                              // 脖子
+  o.beginPath(); o.moveTo(cx-176,442);                                       // 肩 / 胸像
+  o.quadraticCurveTo(cx-120,326, cx,316); o.quadraticCurveTo(cx+120,326, cx+176,442);
+  o.closePath(); o.fill();
+  o.beginPath(); o.ellipse(cx,172,62,76,0,0,6.2832); o.fill();              // 脸
+  const d=o.getImageData(0,0,S,S).data, pts=[];
+  for(let y=0;y<S;y+=2)for(let x=0;x<S;x+=2){ if(d[(y*S+x)*4+3]>128) pts.push([x,y]); }
+  WOMAN=[];
+  for(let i=0;i<N;i++){ const q=pts.length?pts[(Math.random()*pts.length)|0]:[cx,cx];
+    WOMAN.push([(q[0]-cx)/(S*0.5), (q[1]-S*0.58)/(S*0.5)]); }   // 归一化，竖向以人物中点为 0
+}
+
 // 七种形态：返回 [x,y,r,g,b]（以中心为原点）
 function form(stage,i){
   const p=PT[i];
@@ -161,26 +185,17 @@ function form(stage,i){
      const edge=Math.max(Math.abs(nx),Math.abs(ny))>0.44;
      return [nx*side, ny*side, edge?255:150, edge?206:140, edge?95:85];
    }
-   case 4:{ // 会笑的脸：圆脸 + 双眼 + 微笑
-     const seg=i%100;
-     if(seg<9){ const rr=R*0.09; return [-R*0.34+Math.cos(p.a)*rr, -R*0.16+Math.sin(p.a)*rr, 235,250,255]; }
-     if(seg<18){ const rr=R*0.09; return [ R*0.34+Math.cos(p.a)*rr, -R*0.16+Math.sin(p.a)*rr, 235,250,255]; }
-     if(seg<40){ const t=(seg-18)/22*2-1; return [t*R*0.42, R*0.30 - (t*t)*R*0.14, 235,250,255]; }
-     return [Math.cos(p.a)*R*0.92, Math.sin(p.a)*R*0.92, 175,220,248];
+   case 4:{ // 装进身体：聚成一位长发美人的剪影
+     const w=WOMAN[i]||[0,0]; return [w[0]*R*1.05, w[1]*R*1.25, 190,224,250];
    }
-   case 5:{ // 记忆：旋臂涌入
-     const k=i/N, arms=3;
-     const an=k*Math.PI*7 + (i%arms)*(Math.PI*2/arms);
-     const rad=R*0.12 + k*R*1.05;
-     return [Math.cos(an)*rad, Math.sin(an)*rad, 255,178,108];
+   case 5:{ // 喂以记忆：还是她，染上记忆的暖色
+     const w=WOMAN[i]||[0,0]; return [w[0]*R*1.05, w[1]*R*1.25, 255,184,152];
    }
-   case 6:{ // 灵魂：发光内核 + 七情光环
-     const seg=i%100;
-     if(seg<26){ const sct=i%7, base=sct/7*Math.PI*2, an=base+p.u*(Math.PI*2/7);
-       const rad=R*0.96+Math.sin(TT*0.05+i)*R*0.03, c=EMO7[sct];
-       return [Math.cos(an)*rad, Math.sin(an)*rad, c[0],c[1],c[2]]; }
-     const rad=R*0.66*Math.pow(p.u,0.7)*(1+0.05*Math.sin(TT*0.06));
-     return [Math.cos(p.a)*rad, Math.sin(p.a)*rad, 200,240,255];
+   case 6:{ // 灵魂：她周身绕起七情光环
+     if(i%6===0){ const sct=i%7, base=sct/7*Math.PI*2, an=base+p.u*(Math.PI*2/7);
+       const rad=R*1.12+Math.sin(TT*0.05+i)*R*0.04, c=EMO7[sct];
+       return [Math.cos(an)*rad*0.92, Math.sin(an)*rad*1.18 - R*0.05, c[0],c[1],c[2]]; }
+     const w=WOMAN[i]||[0,0]; return [w[0]*R*1.05, w[1]*R*1.25, 222,244,255];
    }
    default:{ // 末章：外圈淡环，把中心让给文字
      const rad=R*1.12 + p.u*R*0.22;
@@ -232,6 +247,7 @@ function frame(){
 }
 
 resize();
+buildWoman();
 // 截图/直达：#p3.5 之类直接定位到某一刻（FORCEP 覆盖滚动，给截图用）
 const mm=(location.hash||'').match(/p([\d.]+)/);
 let FORCEP = mm ? parseFloat(mm[1]) : null;   // 截图用：固定在某一刻，不依赖真实滚动
