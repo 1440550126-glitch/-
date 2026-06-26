@@ -3,6 +3,7 @@
 - 默认对接本地 Ollama（https://ollama.com）：在 16G 内存机器上
       ollama pull qwen2.5:7b-instruct
 - 也支持任何 OpenAI 兼容端点（llama.cpp / LM Studio / vLLM / 云 API），provider="openai"。
+- 也可对接 MiniMax 云端大模型，provider="minimax"（中文强、可配声音克隆；私密记忆建议仍走本地）。
 - LLMRouter：按"任务/场景"选不同模型；panel 让群体小会的不同思路各用一个模型（认知多样性）。
 没有可用大模型时自动降级（available=False），由 Agent 用记忆拼朴素回复——任何机器都能先跑起来。
 配置见 config/models.yaml；也可用环境变量 DSOUL_LLM_MODEL / DSOUL_LLM_HOST / DSOUL_LLM_KEY 覆盖。
@@ -17,6 +18,12 @@ import urllib.request
 
 DEFAULT_MODEL = os.environ.get("DSOUL_LLM_MODEL", "qwen2.5:7b-instruct")
 DEFAULT_HOST = os.environ.get("DSOUL_LLM_HOST", "http://localhost:11434")
+
+# MiniMax（付费云、中文与声音质量很顶）：对话用 OpenAI 兼容的 /text/chatcompletion_v2 端点，
+# 但没有 /models 列表接口——单列为一个 provider。密钥只从环境变量读（DSOUL_LLM_KEY 或 MINIMAX_API_KEY），绝不入库。
+MINIMAX_HOST = "https://api.minimax.io/v1"        # 国际站；国内：https://api.minimaxi.com/v1
+MINIMAX_MODEL = "MiniMax-Text-01"                 # 也可 abab6.5s-chat / MiniMax-M1 等
+MINIMAX_CHAT_PATH = "/text/chatcompletion_v2"
 
 # 推理模型（Qwen3 / Gemma 等）会先输出一段 <think>…</think> 思考，再给答案。
 # 这块思考不该展示给家人，要剥掉，只留最终回答。
@@ -39,9 +46,14 @@ class LLM:
                  provider: str = "ollama", api_key: str | None = None,
                  temperature: float = 0.8) -> None:
         self.provider = provider
-        self.model = model or DEFAULT_MODEL
-        self.host = (host or DEFAULT_HOST).rstrip("/")
-        self.api_key = api_key or os.environ.get("DSOUL_LLM_KEY")
+        if provider == "minimax":                       # MiniMax 云端：自带合理默认，密钥可与 TTS 共用
+            self.model = model or os.environ.get("DSOUL_LLM_MODEL") or MINIMAX_MODEL
+            self.host = (host or os.environ.get("DSOUL_LLM_HOST") or MINIMAX_HOST).rstrip("/")
+            self.api_key = api_key or os.environ.get("DSOUL_LLM_KEY") or os.environ.get("MINIMAX_API_KEY")
+        else:
+            self.model = model or DEFAULT_MODEL
+            self.host = (host or DEFAULT_HOST).rstrip("/")
+            self.api_key = api_key or os.environ.get("DSOUL_LLM_KEY")
         self.temperature = temperature
         self.available = self._ping()
 
@@ -52,6 +64,8 @@ class LLM:
         return h
 
     def _ping(self) -> bool:
+        if self.provider == "minimax":
+            return bool(self.api_key)     # 云端付费、无 /models 列表：有密钥即视为可用；真出错时 chat() 抛异常、上层兜底降级
         try:
             path = "/api/tags" if self.provider == "ollama" else "/models"
             urllib.request.urlopen(
@@ -72,10 +86,15 @@ class LLM:
             data = self._post("/api/chat", {"model": self.model, "messages": msgs,
                                             "stream": False, "options": {"temperature": self.temperature}})
             return strip_think(data["message"]["content"].strip())
-        # OpenAI 兼容（host 应含 /v1，如 http://localhost:1234/v1）
-        data = self._post("/chat/completions", {"model": self.model, "messages": msgs,
-                                                "temperature": self.temperature})
-        return strip_think(data["choices"][0]["message"]["content"].strip())
+        # OpenAI 兼容（host 应含 /v1）；MiniMax 用自家路径 /text/chatcompletion_v2
+        path = MINIMAX_CHAT_PATH if self.provider == "minimax" else "/chat/completions"
+        data = self._post(path, {"model": self.model, "messages": msgs, "temperature": self.temperature})
+        choices = data.get("choices") or []
+        if not choices:                          # MiniMax 出错时 choices 为空、错误码在 base_resp 里
+            br = data.get("base_resp") or {}
+            raise RuntimeError(f"模型无回复 base_resp={br.get('status_code')}：{br.get('status_msg')}"
+                               if br else "模型无回复")
+        return strip_think((choices[0].get("message", {}).get("content") or "").strip())
 
 
 def _llm_from(spec) -> LLM:

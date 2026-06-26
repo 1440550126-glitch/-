@@ -53,15 +53,21 @@ def main() -> None:
     try:
         from dsoul.llm import LLM
 
-        m = LLM()
+        m = agent.llm if agent is not None and getattr(agent, "llm", None) is not None else LLM()
+        label = {"ollama": "大模型(本地 Ollama)", "openai": "大模型(OpenAI 兼容)",
+                 "minimax": "大模型(MiniMax 云端)"}.get(m.provider, f"大模型({m.provider})")
+        hint = {
+            "minimax": "设 export DSOUL_LLM_KEY=sk-...（没设会回退 MINIMAX_API_KEY）；密钥别写进配置/仓库",
+            "openai": "确认 host 指向你的 OpenAI 兼容端点、DSOUL_LLM_KEY 已设",
+        }.get(m.provider, "装 Ollama 或设 DSOUL_LLM_HOST 指向局域网；不接也能降级运行")
         line(
             OK if m.available else WARN,
-            "本地大模型(Ollama)",
+            label,
             f"{m.host} · {m.model} · {'连通' if m.available else '未连通'}",
-            "装 Ollama 或设 DSOUL_LLM_HOST 指向局域网；不接也能降级运行",
+            hint,
         )
     except Exception as e:
-        line(WARN, "本地大模型", str(e)[:40])
+        line(WARN, "大模型", str(e)[:40])
 
     stt = "faster-whisper" if _imp("faster_whisper") else ("openai-whisper" if _imp("whisper") else "")
     line(OK if stt else WARN, "语音转文字", stt or "未安装", "pip install faster-whisper")
