@@ -127,23 +127,30 @@ def _companion_guardian(agent) -> dict:
 
 def _galaxy(agent) -> dict:
     """记忆图谱 + 自生长知识库摊成力导向"星图"：人物(蓝)/话题(绿)/记忆(白)/心愿(红)/知识(金)。
-    每个节点附 detail（点开看详情）。只读、容错，任一块失败各自降级。"""
+    每点附 detail（点开看详情）与 year（按时间生长）。只读、容错。"""
     nodes, edges, seen = [], [], set()
 
     def clip(s, n=140):
         s = " ".join(str(s or "").split())
         return s[:n] + ("\u2026" if len(s) > n else "")
 
-    def add(nid, label, kind, size=1, detail=""):
+    def add(nid, label, kind, size=1, detail="", year=None):
         if nid in seen:
             return
         seen.add(nid)
-        nodes.append({"id": nid, "label": label, "kind": kind, "size": size, "detail": detail})
+        nodes.append({"id": nid, "label": label, "kind": kind, "size": size,
+                      "detail": detail, "year": year})
 
     try:
-        all_mem = [it.get("text", "") for it in agent.memory.items]
+        items = list(agent.memory.items)
     except Exception:
-        all_mem = []
+        items = []
+    all_mem = [it.get("text", "") for it in items]
+    when_of = {}
+    for it in items:
+        w = str(it.get("when") or "")
+        if w.isdigit():
+            when_of[it.get("text", "")] = int(w)
 
     try:
         g = agent.memory_graph()
@@ -152,6 +159,8 @@ def _galaxy(agent) -> dict:
     if g is not None:
         deg = {n: sum(w.values()) for n, w in g.adj.items()}
         for n in g.adj:
+            yrs = [when_of[mt] for mt in g.mem.get(n, []) if mt in when_of]
+            yr = min(yrs) if yrs else None
             if g.meta.get(n, {}).get("kind") == "person":
                 rel = ""
                 try:
@@ -160,9 +169,9 @@ def _galaxy(agent) -> dict:
                     rel = ""
                 snip = [m for m in all_mem if n in m][:2]
                 detail = (("我的" + rel + "。") if rel and rel not in ("陌生人", "未知") else "") + " ".join(snip)
-                add(n, n, "person", 1 + deg.get(n, 0), clip(detail))
+                add(n, n, "person", 1 + deg.get(n, 0), clip(detail), yr)
             else:
-                add(n, n, "topic", 1 + deg.get(n, 0), clip(" ".join(g.mem.get(n, [])[:2])))
+                add(n, n, "topic", 1 + deg.get(n, 0), clip(" ".join(g.mem.get(n, [])[:2])), yr)
         eseen = set()
         for x, nb in g.adj.items():
             for y, w in nb.items():
@@ -180,10 +189,9 @@ def _galaxy(agent) -> dict:
                 if mid is None:
                     mid = "mem:%d" % len(mem_id)
                     mem_id[mtext] = mid
-                    add(mid, clip(mtext, 14), "memory", 1, clip(mtext))
+                    add(mid, clip(mtext, 14), "memory", 1, clip(mtext), when_of.get(mtext))
                 edges.append({"a": n, "b": mid, "w": 1})
 
-    # 自生长 Obsidian 知识库并进同一张星图（人物/记忆按标签着色，其余算"知识"）
     try:
         vault = agent.knowledge_vault()
     except Exception:
@@ -195,7 +203,6 @@ def _galaxy(agent) -> dict:
             vg = vault.graph()
             for title in list(vault.titles())[:400]:
                 kind = "person" if title in people else ("memory" if title in mems else "knowledge")
-                detail = ""
                 try:
                     detail = clip((vault.note(title) or {}).get("body", ""))
                 except Exception:
@@ -573,6 +580,15 @@ details.card[open]>summary{margin-bottom:10px}
    <div id=galaxyexit onclick="galaxyFull()">✕ 退出沉浸</div>
    <div id=galaxydetail></div>
   </div>
+  <div class=row style="gap:6px;margin-top:8px">
+    <input id=galaxyq placeholder="搜索星点…" autocomplete=off style="flex:1;min-width:80px;font-size:13px;padding:7px 10px">
+    <span id=galaxycluster class=devbtn>按簇上色</span>
+    <span id=galaxyplay class=devbtn>▶ 生长</span>
+  </div>
+  <div class=row style="gap:8px;margin:2px 0 0;align-items:center">
+    <input id=galaxyyear type=range min=0 max=0 value=0 style="flex:1">
+    <span id=galaxyyearlab class=dim style="font-size:11px;min-width:46px;text-align:right">全部</span>
+  </div>
   <div class=row style="justify-content:space-between;margin-top:8px">
     <span id=galaxylegend class=dim style="font-size:12px"></span>
     <span class=dim style="font-size:11px">拖拽/缩放 · 点开节点看详情 · 双击全屏</span>
@@ -662,20 +678,25 @@ details.card[open]>summary{margin-bottom:10px}
 
 <script>
 const $=s=>document.querySelector(s);
-/* —— 记忆星图：零依赖力导向星系（星空/闪烁/全屏/详情）—— */
+/* —— 记忆星图 v3：力导向 + 星空 + 脉冲 + 生长 + 聚类 + 搜索 —— */
 const GCOL={person:'#3b9bff',topic:'#2ee6a0',memory:'#d7e9ff',want:'#ff5470',knowledge:'#ffb454'};
-let GX={nodes:[],edges:[],map:{},pan:{x:0,y:0},scale:1,drag:null,hot:null,sel:null,nbr:new Set(),alpha:1,t:0,stars:[],_ids:'',_raf:0};
+let GX={nodes:[],edges:[],map:{},pan:{x:0,y:0},scale:1,drag:null,hot:null,sel:null,nbr:new Set(),alpha:1,t:0,stars:[],q:'',maxYear:null,yrMin:0,yrMax:0,clusterMode:false,community:null,_comm:false,_play:null,_ids:'',_raf:0};
 function galaxyCenter(){const cv=$('#galaxy');return{cx:Math.max(2,cv.clientWidth)/2,cy:Math.max(2,cv.clientHeight)/2};}
 function galaxyResize(){const cv=$('#galaxy');if(!cv)return;const dpr=window.devicePixelRatio||1;cv._dpr=dpr;cv.width=Math.max(2,cv.clientWidth)*dpr;cv.height=Math.max(2,cv.clientHeight)*dpr;cv._ctx=cv.getContext('2d');const W=cv.clientWidth,H=cv.clientHeight;GX.stars=[];for(let i=0;i<120;i++)GX.stars.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.2+.2,ph:Math.random()*6.28});}
-function galaxyInit(data){const cv=$('#galaxy');if(!cv||!data)return;const ids=(data.nodes||[]).map(n=>n.id).join('|');if(ids===GX._ids&&GX.nodes.length)return;GX._ids=ids;galaxyResize();const c=galaxyCenter();GX.map={};GX.nodes=(data.nodes||[]).map(n=>{const o=Object.assign({},n,{x:c.cx+(Math.random()-0.5)*240,y:c.cy+(Math.random()-0.5)*200,vx:0,vy:0,tw:Math.random()*6.28});GX.map[n.id]=o;return o;});GX.edges=(data.edges||[]).filter(e=>GX.map[e.a]&&GX.map[e.b]);GX.alpha=1;GX.hot=null;GX.sel=null;GX.nbr=new Set();galaxyLegend();if(!GX._raf)galaxyLoop();}
+function galaxyInit(data){const cv=$('#galaxy');if(!cv||!data)return;const ids=(data.nodes||[]).map(n=>n.id).join('|');if(ids===GX._ids&&GX.nodes.length)return;GX._ids=ids;galaxyResize();const c=galaxyCenter();GX.map={};GX.nodes=(data.nodes||[]).map(n=>{const o=Object.assign({},n,{x:c.cx+(Math.random()-0.5)*240,y:c.cy+(Math.random()-0.5)*200,vx:0,vy:0,tw:Math.random()*6.28});GX.map[n.id]=o;return o;});GX.edges=(data.edges||[]).filter(e=>GX.map[e.a]&&GX.map[e.b]);GX.edges.forEach(e=>e._ph=Math.random());GX.alpha=1;GX.hot=null;GX.sel=null;GX.nbr=new Set();GX._comm=false;GX.community=null;const ys=GX.nodes.map(n=>n.year).filter(Boolean);GX.yrMin=ys.length?Math.min.apply(0,ys):0;GX.yrMax=ys.length?Math.max.apply(0,ys):0;GX.maxYear=null;const yr=$('#galaxyyear');if(yr){yr.min=GX.yrMin;yr.max=GX.yrMax;yr.value=GX.yrMax;}const yl=$('#galaxyyearlab');if(yl)yl.textContent='全部';galaxyLegend();if(!GX._raf)galaxyLoop();}
 function galaxyLegend(){const nm={person:'人物',topic:'话题',memory:'记忆',want:'心愿',knowledge:'知识'},c={};GX.nodes.forEach(n=>c[n.kind]=(c[n.kind]||0)+1);const el=$('#galaxylegend');if(el)el.innerHTML=Object.keys(nm).filter(k=>c[k]).map(k=>'<span style="color:'+GCOL[k]+';text-shadow:0 0 6px '+GCOL[k]+'">●</span> '+nm[k]+' '+c[k]).join('　');}
-function galaxyStep(){const ns=GX.nodes,N=ns.length;if(!N)return;const c=galaxyCenter(),k=GX.alpha;for(let i=0;i<N;i++){const a=ns[i];for(let j=i+1;j<N;j++){const b=ns[j];let dx=a.x-b.x,dy=a.y-b.y,d2=dx*dx+dy*dy+.01,d=Math.sqrt(d2),f=Math.min(42,860/d2),fx=f*dx/d,fy=f*dy/d;a.vx+=fx*k;a.vy+=fy*k;b.vx-=fx*k;b.vy-=fy*k;}a.vx+=(c.cx-a.x)*.0016*k;a.vy+=(c.cy-a.y)*.0042*k;}for(const e of GX.edges){const a=GX.map[e.a],b=GX.map[e.b];if(!a||!b)continue;let dx=b.x-a.x,dy=b.y-a.y,d=Math.sqrt(dx*dx+dy*dy)+.01,f=(d-48)*.02*k,fx=f*dx/d,fy=f*dy/d;a.vx+=fx;a.vy+=fy;b.vx-=fx;b.vy-=fy;}for(const a of ns){if(a===GX.drag)continue;a.vx*=.85;a.vy*=.85;a.x+=a.vx;a.y+=a.vy;}GX.alpha=Math.max(.03,GX.alpha*.996);GX.t++;}
-function galaxyDraw(){const cv=$('#galaxy'),ctx=cv&&cv._ctx;if(!ctx)return;const dpr=cv._dpr||1;ctx.setTransform(dpr,0,0,dpr,0,0);const W=cv.clientWidth,H=cv.clientHeight;ctx.clearRect(0,0,W,H);for(const s of GX.stars){const tw=.35+.65*Math.abs(Math.sin(GX.t*.02+s.ph));ctx.globalAlpha=tw*.5;ctx.fillStyle='#bfe6ff';ctx.beginPath();ctx.arc(s.x,(s.y+GX.t*.12)%H,s.r,0,7);ctx.fill();}ctx.globalAlpha=1;ctx.save();ctx.translate(GX.pan.x,GX.pan.y);ctx.scale(GX.scale,GX.scale);ctx.lineWidth=.6;for(const e of GX.edges){const a=GX.map[e.a],b=GX.map[e.b];const on=GX.hot&&(e.a===GX.hot||e.b===GX.hot);ctx.strokeStyle=on?'rgba(39,231,255,.7)':'rgba(120,170,210,.10)';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}for(const n of GX.nodes){const col=GCOL[n.kind]||'#9fb';const tw=.78+.22*Math.sin(GX.t*.05+n.tw);const r=2.4+Math.min(7,(n.size||1)*1.1);const dim=GX.hot&&n.id!==GX.hot&&!GX.nbr.has(n.id);ctx.globalAlpha=dim?.22:1;ctx.shadowColor=col;ctx.shadowBlur=(dim?2:11)*tw;ctx.fillStyle=col;ctx.beginPath();ctx.arc(n.x,n.y,r,0,7);ctx.fill();ctx.shadowBlur=0;if(n.id===GX.sel){ctx.strokeStyle='#fff';ctx.lineWidth=1.4;ctx.beginPath();ctx.arc(n.x,n.y,r+3,0,7);ctx.stroke();ctx.lineWidth=.6;}if(GX.scale>0.62&&((n.size||1)>1.6||n.kind==='person'||n.id===GX.hot)){ctx.globalAlpha=dim?.3:.92;ctx.fillStyle='#dff3ff';ctx.font='9px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText(n.label,n.x,n.y-r-3);}}ctx.restore();ctx.globalAlpha=1;}
+function gVis(n){return !(GX.maxYear&&n.year&&n.year>GX.maxYear);}
+function galaxyCommunities(){const lab={},adj={};GX.nodes.forEach(n=>{lab[n.id]=n.id;adj[n.id]=[];});GX.edges.forEach(e=>{if(adj[e.a]&&adj[e.b]){adj[e.a].push(e.b);adj[e.b].push(e.a);}});for(let it=0;it<14;it++){let ch=false;for(const n of GX.nodes){const cnt={};for(const m of adj[n.id])cnt[lab[m]]=(cnt[lab[m]]||0)+1;let best=lab[n.id],bv=0;for(const kk in cnt)if(cnt[kk]>bv){bv=cnt[kk];best=kk;}if(best!==lab[n.id]){lab[n.id]=best;ch=true;}}if(!ch)break;}const seen={},order=[];GX.nodes.forEach(n=>{if(!(lab[n.id] in seen)){seen[lab[n.id]]=order.length;order.push(lab[n.id]);}});GX.community={};GX.nodes.forEach(n=>{GX.community[n.id]='hsl('+Math.round((seen[lab[n.id]]*137.5)%360)+',72%,62%)';});GX._comm=true;}
+function galaxySetYear(y){GX.maxYear=(!GX.yrMax||y>=GX.yrMax)?null:y;const lab=$('#galaxyyearlab');if(lab)lab.textContent=GX.maxYear?('截至 '+GX.maxYear):'全部';}
+function galaxyPlayGrow(){if(!GX.yrMax)return;if(GX._play){clearInterval(GX._play);GX._play=null;return;}let y=GX.yrMin;const yr=$('#galaxyyear');GX._play=setInterval(function(){galaxySetYear(y);if(yr)yr.value=y;if(y>=GX.yrMax){clearInterval(GX._play);GX._play=null;}y++;},720);}
+function galaxyStep(){const ns=GX.nodes,N=ns.length;if(!N)return;const c=galaxyCenter(),k=GX.alpha;for(let i=0;i<N;i++){const a=ns[i];for(let j=i+1;j<N;j++){const b=ns[j];let dx=a.x-b.x,dy=a.y-b.y,d2=dx*dx+dy*dy+.01,d=Math.sqrt(d2),f=Math.min(42,860/d2),fx=f*dx/d,fy=f*dy/d;a.vx+=fx*k;a.vy+=fy*k;b.vx-=fx*k;b.vy-=fy*k;if(GX.clusterMode&&GX.community&&GX.community[a.id]===GX.community[b.id]){var fa=.0013*d*k;a.vx-=fa*dx/d;a.vy-=fa*dy/d;b.vx+=fa*dx/d;b.vy+=fa*dy/d;}}a.vx+=(c.cx-a.x)*.0016*k;a.vy+=(c.cy-a.y)*.0042*k;}for(const e of GX.edges){const a=GX.map[e.a],b=GX.map[e.b];if(!a||!b)continue;let dx=b.x-a.x,dy=b.y-a.y,d=Math.sqrt(dx*dx+dy*dy)+.01,f=(d-48)*.02*k,fx=f*dx/d,fy=f*dy/d;a.vx+=fx;a.vy+=fy;b.vx-=fx;b.vy-=fy;}for(const a of ns){if(a===GX.drag)continue;a.vx*=.85;a.vy*=.85;a.x+=a.vx;a.y+=a.vy;}GX.alpha=Math.max(.03,GX.alpha*.996);GX.t++;}
+function galaxyDraw(){const cv=$('#galaxy'),ctx=cv&&cv._ctx;if(!ctx)return;const dpr=cv._dpr||1;ctx.setTransform(dpr,0,0,dpr,0,0);const W=cv.clientWidth,H=cv.clientHeight;ctx.clearRect(0,0,W,H);for(const s of GX.stars){const tw=.35+.65*Math.abs(Math.sin(GX.t*.02+s.ph));ctx.globalAlpha=tw*.5;ctx.fillStyle='#bfe6ff';ctx.beginPath();ctx.arc(s.x,(s.y+GX.t*.12)%H,s.r,0,7);ctx.fill();}ctx.globalAlpha=1;ctx.save();ctx.translate(GX.pan.x,GX.pan.y);ctx.scale(GX.scale,GX.scale);ctx.lineWidth=.6;const q=GX.q;for(const e of GX.edges){const a=GX.map[e.a],b=GX.map[e.b];if(!gVis(a)||!gVis(b))continue;const on=GX.hot&&(e.a===GX.hot||e.b===GX.hot);ctx.strokeStyle=on?'rgba(39,231,255,.7)':'rgba(120,170,210,.10)';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();const fr=((GX.t*.01)+(e._ph||0))%1;const px=a.x+(b.x-a.x)*fr,py=a.y+(b.y-a.y)*fr;ctx.globalAlpha=on?.9:.3;ctx.fillStyle=on?'#9ff0ff':'#9fd0ef';ctx.beginPath();ctx.arc(px,py,on?2.2:1.2,0,7);ctx.fill();ctx.globalAlpha=1;}for(const n of GX.nodes){if(!gVis(n))continue;const col=(GX.clusterMode&&GX.community&&GX.community[n.id])||GCOL[n.kind]||'#9fb';const tw=.78+.22*Math.sin(GX.t*.05+n.tw);const r=2.4+Math.min(7,(n.size||1)*1.1);let dim=false;if(q)dim=n.label.indexOf(q)<0;else if(GX.hot)dim=n.id!==GX.hot&&!GX.nbr.has(n.id);ctx.globalAlpha=dim?.16:1;ctx.shadowColor=col;ctx.shadowBlur=(dim?2:11)*tw;ctx.fillStyle=col;ctx.beginPath();ctx.arc(n.x,n.y,r,0,7);ctx.fill();ctx.shadowBlur=0;if(n.id===GX.sel){ctx.strokeStyle='#fff';ctx.lineWidth=1.4;ctx.beginPath();ctx.arc(n.x,n.y,r+3,0,7);ctx.stroke();ctx.lineWidth=.6;}const showLab=(q&&!dim)||n.id===GX.hot||(n.size||1)>1.6||n.kind==='person';if(GX.scale>0.62&&showLab){ctx.globalAlpha=dim?.25:.92;ctx.fillStyle='#dff3ff';ctx.font='9px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText(n.label,n.x,n.y-r-3);}}ctx.restore();ctx.globalAlpha=1;}
 function galaxyLoop(){galaxyStep();galaxyDraw();GX._raf=requestAnimationFrame(galaxyLoop);}
 function galaxyNbr(){GX.nbr=new Set();if(!GX.hot)return;for(const e of GX.edges){if(e.a===GX.hot)GX.nbr.add(e.b);if(e.b===GX.hot)GX.nbr.add(e.a);}}
-function galaxyShow(n){const d=$('#galaxydetail');if(!d)return;if(!n){d.style.display='none';GX.sel=null;GX.hot=null;galaxyNbr();return;}const nm={person:'人物',topic:'话题',memory:'记忆',want:'心愿',knowledge:'知识'};d.innerHTML='<div class=gd-t><span>'+esc(n.label)+'</span><span class=gd-x onclick="galaxyShow(null)">✕</span></div><div class=gd-k>● '+(nm[n.kind]||n.kind)+'</div><div class=gd-b>'+esc(n.detail||'（暂无更多）')+'</div>';d.style.display='block';}
-function galaxyFull(){const w=$('#galaxywrap');if(!w)return;const on=!w.classList.contains('galaxy-full');if(on){w._ph=document.createComment('gx');w.parentNode.insertBefore(w._ph,w);document.body.appendChild(w);w.classList.add('galaxy-full');document.body.style.overflow='hidden';}else{w.classList.remove('galaxy-full');if(w._ph&&w._ph.parentNode){w._ph.parentNode.insertBefore(w,w._ph);w._ph.remove();}document.body.style.overflow='';}const b=$('#galaxyfs');if(b)b.textContent=on?'✕ 退出':'⛶ 沉浸';setTimeout(()=>{galaxyResize();GX.alpha=Math.max(GX.alpha,.5);},40);}
-(function(){const cv=$('#galaxy');if(!cv)return;function pos(ev){const r=cv.getBoundingClientRect();return{x:(ev.clientX-r.left-GX.pan.x)/GX.scale,y:(ev.clientY-r.top-GX.pan.y)/GX.scale};}function pick(p){let best=null,bd=15;for(const n of GX.nodes){const d=Math.hypot(n.x-p.x,n.y-p.y);if(d<bd){bd=d;best=n;}}return best;}let down=null;cv.addEventListener('mousedown',ev=>{const n=pick(pos(ev));down={x:ev.clientX,y:ev.clientY,moved:false,pan:{x:GX.pan.x,y:GX.pan.y}};GX.drag=n;});window.addEventListener('mousemove',ev=>{if(!down)return;const dx=ev.clientX-down.x,dy=ev.clientY-down.y;if(Math.abs(dx)+Math.abs(dy)>3)down.moved=true;if(GX.drag){const p=pos(ev);GX.drag.x=p.x;GX.drag.y=p.y;GX.drag.vx=0;GX.drag.vy=0;GX.alpha=Math.max(GX.alpha,.25);}else{GX.pan.x=down.pan.x+dx;GX.pan.y=down.pan.y+dy;}});window.addEventListener('mouseup',ev=>{if(down&&!down.moved){const n=pick(pos(ev));if(n){GX.hot=n.id;GX.sel=n.id;galaxyNbr();galaxyShow(n);if(n.kind==='person'||n.kind==='topic')setTL(n.label);}else{galaxyShow(null);}}GX.drag=null;down=null;});cv.addEventListener('dblclick',ev=>{ev.preventDefault();galaxyFull();});cv.addEventListener('wheel',ev=>{ev.preventDefault();GX.scale=Math.max(.4,Math.min(3,GX.scale*(ev.deltaY<0?1.1:.9)));},{passive:false});window.addEventListener('resize',galaxyResize);const fb=$('#galaxyfs');if(fb)fb.addEventListener('click',galaxyFull);})();
+function galaxyShow(n){const d=$('#galaxydetail');if(!d)return;if(!n){d.style.display='none';GX.sel=null;GX.hot=null;galaxyNbr();return;}const nm={person:'人物',topic:'话题',memory:'记忆',want:'心愿',knowledge:'知识'};d.innerHTML='<div class=gd-t><span>'+esc(n.label)+'</span><span class=gd-x onclick="galaxyShow(null)">✕</span></div><div class=gd-k>● '+(nm[n.kind]||n.kind)+(n.year?(' · '+n.year):'')+'</div><div class=gd-b>'+esc(n.detail||'（暂无更多）')+'</div>';d.style.display='block';}
+function galaxyFull(){const w=$('#galaxywrap');if(!w)return;const on=!w.classList.contains('galaxy-full');if(on){w._ph2=document.createComment('gx');w.parentNode.insertBefore(w._ph2,w);document.body.appendChild(w);w.classList.add('galaxy-full');document.body.style.overflow='hidden';}else{w.classList.remove('galaxy-full');if(w._ph2&&w._ph2.parentNode){w._ph2.parentNode.insertBefore(w,w._ph2);w._ph2.remove();}document.body.style.overflow='';}const b=$('#galaxyfs');if(b)b.textContent=on?'✕ 退出':'⛶ 沉浸';setTimeout(function(){galaxyResize();GX.alpha=Math.max(GX.alpha,.5);},40);}
+(function(){const cv=$('#galaxy');if(!cv)return;function pos(ev){const r=cv.getBoundingClientRect();return{x:(ev.clientX-r.left-GX.pan.x)/GX.scale,y:(ev.clientY-r.top-GX.pan.y)/GX.scale};}function pick(p){let best=null,bd=15;for(const n of GX.nodes){if(!gVis(n))continue;const d=Math.hypot(n.x-p.x,n.y-p.y);if(d<bd){bd=d;best=n;}}return best;}let down=null;cv.addEventListener('mousedown',ev=>{const n=pick(pos(ev));down={x:ev.clientX,y:ev.clientY,moved:false,pan:{x:GX.pan.x,y:GX.pan.y}};GX.drag=n;});window.addEventListener('mousemove',ev=>{if(!down)return;const dx=ev.clientX-down.x,dy=ev.clientY-down.y;if(Math.abs(dx)+Math.abs(dy)>3)down.moved=true;if(GX.drag){const p=pos(ev);GX.drag.x=p.x;GX.drag.y=p.y;GX.drag.vx=0;GX.drag.vy=0;GX.alpha=Math.max(GX.alpha,.25);}else{GX.pan.x=down.pan.x+dx;GX.pan.y=down.pan.y+dy;}});window.addEventListener('mouseup',ev=>{if(down&&!down.moved){const n=pick(pos(ev));if(n){GX.hot=n.id;GX.sel=n.id;galaxyNbr();galaxyShow(n);if(n.kind==='person'||n.kind==='topic')setTL(n.label);}else{galaxyShow(null);}}GX.drag=null;down=null;});cv.addEventListener('dblclick',ev=>{ev.preventDefault();galaxyFull();});cv.addEventListener('wheel',ev=>{ev.preventDefault();GX.scale=Math.max(.4,Math.min(3,GX.scale*(ev.deltaY<0?1.1:.9)));},{passive:false});window.addEventListener('resize',galaxyResize);const fb=$('#galaxyfs');if(fb)fb.addEventListener('click',galaxyFull);const qi=$('#galaxyq');if(qi)qi.addEventListener('input',e=>{GX.q=(e.target.value||'').trim();});const cb=$('#galaxycluster');if(cb)cb.addEventListener('click',()=>{GX.clusterMode=!GX.clusterMode;if(GX.clusterMode&&!GX._comm)galaxyCommunities();cb.textContent=GX.clusterMode?'按类上色':'按簇上色';});const yr=$('#galaxyyear');if(yr)yr.addEventListener('input',e=>galaxySetYear(+e.target.value));const pb=$('#galaxyplay');if(pb)pb.addEventListener('click',galaxyPlayGrow);})();
+
 
 const MOODS={"喜":"😄 愉悦","怒":"😠 生气","哀":"😢 低落","惧":"😨 不安","爱":"❤️ 满心欢喜","恶":"😒 有点反感","欲":"🥺 渴望陪伴"};
 const EMO={"喜":"😄","怒":"😠","哀":"😢","惧":"😨","爱":"❤️","恶":"😒","欲":"🥺"};
