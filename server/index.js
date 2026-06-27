@@ -9,6 +9,7 @@ import { startWarmupLoop, ensureWarmupAccounts } from './warmup/bot.js';
 import { recoverOnBoot } from './game/core.js';
 import { AVATARS, MEMBER_PLANS, REPORT_REASONS } from './lib/catalog.js';
 import { llmEnabled } from './lib/llm.js';
+import { remoteEnabled, remoteTokenWeak } from './lib/remote.js';
 
 // 路由注册（导入即注册）
 import './routes/auth.js';
@@ -18,6 +19,9 @@ import './routes/ai.js';
 import './routes/shop.js';
 import './routes/rooms.js';
 import './routes/admin.js';
+import './routes/remote.js';
+import { attachRemoteWs } from './routes/remote-ws.js';
+import { handleRemoteFile } from './routes/remote-files.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(__dirname, '..', 'web');
@@ -49,7 +53,10 @@ if (process.env.WARMUP_AUTOSTART !== '0') startWarmupLoop();
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://localhost');
   const pathname = u.pathname;
-  if (pathname.startsWith('/api/')) return handleApi(req, res, pathname, u.searchParams);
+  if (pathname.startsWith('/api/')) {
+    if (pathname.includes('/remote/') && handleRemoteFile(req, res, pathname, u.searchParams)) return;
+    return handleApi(req, res, pathname, u.searchParams);
+  }
   if (pathname === '/admin' || pathname.startsWith('/admin/')) {
     const rel = pathname.replace(/^\/admin\/?/, '') || 'index.html';
     if (serveStatic(res, ADMIN_DIR, rel)) return;
@@ -59,6 +66,8 @@ const server = http.createServer((req, res) => {
   res.end('404');
 });
 
+attachRemoteWs(server);   // 远程控制 Mac 的流式通道（WebSocket）
+
 // 生产环境安全自检
 if (process.env.NODE_ENV === 'production') {
   if (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD === 'jvling-admin-2026') {
@@ -67,13 +76,17 @@ if (process.env.NODE_ENV === 'production') {
   if (!process.env.APP_SECRET) {
     console.warn('  ⚠️  建议在 .env 中显式设置 APP_SECRET（当前使用首次启动时自动生成并持久化的密钥）');
   }
+  if (remoteTokenWeak()) {
+    console.warn('  ⚠️  REMOTE_TOKEN 太短（建议 ≥ 32 位随机串）：远程控制 Mac 的口令越长越安全！');
+  }
 }
 
 server.listen(PORT, () => {
   console.log(`\n  ✨ AI句灵 已启动`);
   console.log(`  📱 用户端   http://localhost:${PORT}`);
   console.log(`  🛠  管理后台 http://localhost:${PORT}/admin`);
-  console.log(`  🤖 大模型   ${llmEnabled() ? '已接入 ' + process.env.LLM_PROVIDER : '未配置（本地规则引擎模式，零成本可完整体验）'}\n`);
+  console.log(`  🤖 大模型   ${llmEnabled() ? '已接入 ' + process.env.LLM_PROVIDER : '未配置（本地规则引擎模式，零成本可完整体验）'}`);
+  console.log(`  🖥  远程控制 ${remoteEnabled() ? `已启用 → http://localhost:${PORT}/remote.html（手机/电脑打开，输 REMOTE_TOKEN 即可控 Mac）` : '未启用（在 .env 设置 REMOTE_TOKEN 开启）'}\n`);
 });
 
 process.on('SIGINT', () => { console.log('\nbye~'); process.exit(0); });

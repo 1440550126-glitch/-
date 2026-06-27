@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#14121c" />
+  <title>远程控制 Mac</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect x='14' y='18' width='72' height='50' rx='6' fill='%23b9a6ff'/><rect x='40' y='68' width='20' height='8' fill='%238a7bd8'/><rect x='30' y='80' width='40' height='6' rx='3' fill='%238a7bd8'/></svg>" />
+  <style>
+    :root { --bg:#14121c; --card:#1f1c2b; --card2:#272338; --line:#332e47; --txt:#ece9f6; --mut:#9b94b5; --pri:#b9a6ff; --danger:#ff7a90; --ok:#5fd6a0; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin:0; font:16px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--txt); padding:max(12px,env(safe-area-inset-top)) 12px calc(24px + env(safe-area-inset-bottom)); }
+    h1 { font-size:18px; margin:4px 0 2px; }
+    .wrap { max-width:560px; margin:0 auto; }
+    .bar { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+    .dot { width:10px; height:10px; border-radius:50%; background:#666; flex:none; }
+    .dot.on { background:var(--ok); box-shadow:0 0 8px var(--ok); }
+    .dot.off { background:var(--danger); }
+    .sub { color:var(--mut); font-size:13px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; }
+    .card h2 { font-size:13px; color:var(--mut); margin:0 0 10px; font-weight:600; letter-spacing:.5px; }
+    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    button { font:inherit; color:var(--txt); background:var(--card2); border:1px solid var(--line); border-radius:14px; padding:14px 8px; cursor:pointer; transition:.12s; -webkit-user-select:none; user-select:none; }
+    button:active { transform:scale(.95); background:var(--line); }
+    button.pri { background:linear-gradient(135deg,#b9a6ff,#ff9ec6); color:#221c33; border:none; font-weight:600; }
+    button.danger { color:var(--danger); border-color:#4a2f3a; }
+    button:disabled { opacity:.4; cursor:not-allowed; }
+    .row { display:flex; gap:8px; align-items:center; }
+    input[type=text],input[type=password],textarea { flex:1; min-width:0; font:inherit; color:var(--txt); background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+    textarea { width:100%; resize:vertical; min-height:46px; }
+    input[type=range] { flex:1; accent-color:var(--pri); }
+    .icon { font-size:22px; display:block; margin-bottom:4px; }
+    .lbl { font-size:12px; }
+    #shot { width:100%; border-radius:12px; margin-top:10px; display:none; border:1px solid var(--line); }
+    #log { font-size:12px; color:var(--mut); white-space:pre-wrap; word-break:break-all; max-height:120px; overflow:auto; margin-top:8px; }
+    .gate { text-align:center; padding-top:14vh; }
+    .hidden { display:none !important; }
+    .hint { color:var(--mut); font-size:12px; margin-top:8px; }
+    a { color:var(--pri); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- 登录门：输入 REMOTE_TOKEN -->
+    <div id="gate" class="gate">
+      <h1>🖥 远程控制 Mac</h1>
+      <p class="sub">输入服务端配置的 REMOTE_TOKEN 即可连接</p>
+      <div class="card" style="text-align:left">
+        <div class="row">
+          <input id="token" type="password" placeholder="REMOTE_TOKEN" autocomplete="off" />
+        </div>
+        <div class="row" style="margin-top:10px">
+          <label class="sub" style="flex:1"><input id="remember" type="checkbox" checked /> 记住此设备</label>
+          <button class="pri" id="connect" style="flex:none;padding:10px 20px">连接</button>
+        </div>
+        <p id="gateMsg" class="hint"></p>
+      </div>
+    </div>
+
+    <!-- 控制台 -->
+    <div id="panel" class="hidden">
+      <div class="bar">
+        <span class="dot" id="dot"></span>
+        <div style="flex:1;min-width:0">
+          <h1 style="display:inline">控制台</h1>
+          <span class="sub" id="host"></span>
+        </div>
+        <select id="devSel" class="hidden" style="flex:none;max-width:42vw;font:inherit;color:var(--txt);background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:6px 8px"></select>
+        <button id="logout" style="flex:none;padding:6px 12px;font-size:13px">退出</button>
+      </div>
+
+      <div class="card">
+        <h2>电源</h2>
+        <div class="grid">
+          <button data-act="lock"><span class="icon">🔒</span><span class="lbl">锁屏</span></button>
+          <button data-act="unlock" data-needs="unlock"><span class="icon">🔓</span><span class="lbl">解锁</span></button>
+          <button data-act="sleep"><span class="icon">🌙</span><span class="lbl">睡眠</span></button>
+          <button class="danger" data-act="restart" data-confirm="确定要重启 Mac 吗？"><span class="icon">🔄</span><span class="lbl">重启</span></button>
+          <button class="danger" data-act="shutdown" data-confirm="确定要关机吗？"><span class="icon">⏻</span><span class="lbl">关机</span></button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>音量与媒体</h2>
+        <div class="row" style="margin-bottom:10px">
+          <button id="mute" style="flex:none;padding:10px 14px">🔇</button>
+          <input id="vol" type="range" min="0" max="100" value="50" />
+          <span class="sub" id="volval" style="flex:none;width:36px;text-align:right">50</span>
+        </div>
+        <div class="row" style="margin-bottom:10px">
+          <span class="sub" style="flex:none;width:36px">亮度</span>
+          <button data-act="brightness" data-cmd="down" style="flex:1">🔅 调暗</button>
+          <button data-act="brightness" data-cmd="up" style="flex:1">🔆 调亮</button>
+        </div>
+        <div class="grid">
+          <button data-act="media" data-cmd="prev"><span class="icon">⏮</span><span class="lbl">上一首</span></button>
+          <button data-act="media" data-cmd="playpause"><span class="icon">⏯</span><span class="lbl">播放/暂停</span></button>
+          <button data-act="media" data-cmd="next"><span class="icon">⏭</span><span class="lbl">下一首</span></button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>屏幕 / 摄像头</h2>
+        <div class="row">
+          <button class="pri" id="snap" style="flex:1"><span class="icon">📸</span>截屏</button>
+          <button id="cam" data-act="camera" data-needs="camera" style="flex:1"><span class="icon">📷</span>摄像头</button>
+        </div>
+        <img id="shot" alt="画面" />
+      </div>
+
+      <div class="card">
+        <h2>鼠标 · 触控板<span id="padBadge" class="sub" style="margin-left:8px"></span></h2>
+        <div id="pad" style="height:160px;background:var(--card2);border:1px dashed var(--line);border-radius:14px;display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:13px;touch-action:none;user-select:none;-webkit-user-select:none;margin-bottom:6px">在此滑动移动光标 · 轻点=左键 · 双指上下=滚动</div>
+        <p class="hint" style="margin-top:0;margin-bottom:12px">触控板需 Mac 端 Node ≥21 开启流式；不可用时请用下方方向键。</p>
+        <div class="row" style="margin-bottom:10px">
+          <span class="sub" style="flex:none">步长</span>
+          <input id="mouseStep" type="range" min="10" max="200" value="60" style="flex:1" />
+        </div>
+        <div class="grid" style="grid-template-columns:repeat(3,1fr)">
+          <span></span>
+          <button data-act="mouse" data-mouse="up"><span class="icon">⬆️</span></button>
+          <span></span>
+          <button data-act="mouse" data-mouse="left"><span class="icon">⬅️</span></button>
+          <button class="pri" data-act="mouse" data-mouse="left"><span class="icon">🖱</span></button>
+          <button data-act="mouse" data-mouse="right"><span class="icon">➡️</span></button>
+          <span></span>
+          <button data-act="mouse" data-mouse="down"><span class="icon">⬇️</span></button>
+          <span></span>
+        </div>
+        <div class="grid" style="margin-top:10px">
+          <button class="pri" data-act="mouse" data-mouse="left">左键</button>
+          <button data-act="mouse" data-mouse="right">右键</button>
+          <button data-act="mouse" data-mouse="double">双击</button>
+        </div>
+        <p class="hint">需在「隐私与安全性 → 辅助功能」给 node 授权</p>
+      </div>
+
+      <div class="card" data-needs="files">
+        <h2>文件传输</h2>
+        <div class="row" style="margin-bottom:8px">
+          <input id="upFile" type="file" style="flex:1;font-size:13px" />
+          <button id="upBtn" class="pri" style="flex:none">传到 Mac</button>
+        </div>
+        <p class="hint" style="margin-top:0">上传后保存到 Mac 的「下载」文件夹。</p>
+        <div class="row" style="margin-top:6px">
+          <input id="dlPath" type="text" placeholder="Mac 文件路径，如 ~/Desktop/a.png" />
+          <button id="dlBtn" style="flex:none">取回</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>快捷指令（Shortcuts）</h2>
+        <div class="row">
+          <input id="scName" type="text" list="scNames" placeholder="快捷指令名称" />
+          <datalist id="scNames"></datalist>
+          <button id="scList" data-act="shortcut" style="flex:none">列表</button>
+          <button id="scRun" data-act="shortcut" class="pri" style="flex:none">运行</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>打开 / 朗读 / 通知</h2>
+        <div class="row" style="margin-bottom:8px">
+          <input id="openTarget" type="text" placeholder="网址 https://… 或 应用名 如 Safari" />
+          <button data-input="openTarget" data-act="open" data-arg="target" style="flex:none">打开</button>
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <input id="sayText" type="text" placeholder="让 Mac 朗读的文字" />
+          <button data-input="sayText" data-act="say" data-arg="text" style="flex:none">朗读</button>
+        </div>
+        <div class="row">
+          <input id="notifyText" type="text" placeholder="推送到 Mac 的通知" />
+          <button data-input="notifyText" data-act="notify" data-arg="text" style="flex:none">通知</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>输入 / 剪贴板</h2>
+        <div class="row" style="margin-bottom:8px">
+          <input id="typeText" type="text" placeholder="把文字敲到 Mac 当前焦点处" />
+          <button data-input="typeText" data-act="type" data-arg="text" style="flex:none">输入</button>
+        </div>
+        <div class="row">
+          <input id="clipText" type="text" placeholder="设置 Mac 剪贴板内容" />
+          <button id="clipSet" style="flex:none">写入</button>
+          <button id="clipGet" style="flex:none">读取</button>
+        </div>
+      </div>
+
+      <div class="card" id="shellCard">
+        <h2>执行命令（需 agent 开启 REMOTE_ALLOW_SHELL）</h2>
+        <div class="row">
+          <textarea id="shellCmd" placeholder="例如：ls ~/Desktop"></textarea>
+          <button class="danger" id="shellRun" style="flex:none">运行</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>日志</h2>
+        <div id="log"></div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/js/remote.js"></script>
+</body>
+</html>

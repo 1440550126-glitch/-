@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 开机自启模板：install.sh 会把 __PLACEHOLDER__ 替换成真实值后装到 ~/Library/LaunchAgents -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.jvling.macagent</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__NODE__</string>
+    <string>__AGENT__</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>REMOTE_SERVER</key>
+    <string>__SERVER__</string>
+    <key>REMOTE_TOKEN</key>
+    <string>__TOKEN__</string>
+    <key>REMOTE_ALLOW_POWER</key>
+    <string>__ALLOW_POWER__</string>
+    <key>REMOTE_ALLOW_SHELL</key>
+    <string>__ALLOW_SHELL__</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>__LOG__</string>
+  <key>StandardErrorPath</key>
+  <string>__LOG__</string>
+</dict>
+</plist>

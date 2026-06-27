@@ -15,6 +15,25 @@ npm run studio          # http://localhost:4399   （文档见 lingjing/README.m
 npm run studio:smoke    # 108 项冒烟测试（API + Agent + MCP stdio/HTTP）
 ```
 
+## 🖥 新功能：手机/电脑远程控制 Mac
+
+仓库里还带一个**远程控制 Mac**的小工具（与社交 App 解耦、单独鉴权）：在 Mac 上跑一个零依赖
+Agent（主动连出服务器，**NAT 后也能控**），用手机或另一台电脑的浏览器打开 `/remote.html`
+就能锁屏 / **解锁** / 睡眠 / 调音量 / 调亮度 / 控制播放 / 截屏 / **鼠标触控板（WebSocket 实时）** /
+打开应用 / 运行快捷指令 / 朗读 / 通知 / 输入文字 / 读写剪贴板 / **文件上传下载** / 摄像头拍照。
+支持**多台 Mac**（控制台下拉切换）。摄像头需 imagesnap；解锁/关机/重启/执行命令需显式开启。
+
+```bash
+# 1) 服务端开启：.env 设置强口令后重启
+echo "REMOTE_TOKEN=$(openssl rand -hex 24)" >> .env && npm start
+# 2) 在 Mac 上跑 Agent（开机自启见 mac-agent/README.md）
+REMOTE_SERVER=https://你的服务器 REMOTE_TOKEN=同一口令 npm run agent
+# 3) 手机/电脑浏览器打开  http://<服务器>:3000/remote.html  输入口令即可
+npm run remote:smoke   # 14 项中继冒烟测试
+```
+
+详见 [mac-agent/README.md](mac-agent/README.md)。
+
 ## 一键运行（零依赖）
 
 只需要 **Node.js ≥ 22.5**（内置 SQLite / fetch），不需要 `npm install`，不需要数据库服务：

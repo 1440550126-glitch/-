@@ -98,9 +98,11 @@ export async function handleApi(req, res, pathname, query) {
     // 对局内动作（发言/投票/夜间行动/聊天）天然高频，独立计桶
     const isWrite = req.method !== 'GET';
     const isGameOp = isWrite && pathname.startsWith('/api/rooms/');
+    // 远程控制 Mac：点击/方向键/音量等天然高频（口令鉴权·单用户），独立计桶放宽
+    const isRemoteOp = isWrite && pathname.startsWith('/api/remote/');
     const rateKey = ctx.user ? `u:${ctx.user.id}` : `ip:${ip}`;
-    const bucket = isGameOp ? 'g' : isWrite ? 'w' : 'r';
-    const limit = isGameOp ? 150 : isWrite ? (ctx.user ? 80 : 30) : 300;
+    const bucket = isRemoteOp ? 'rc' : isGameOp ? 'g' : isWrite ? 'w' : 'r';
+    const limit = isRemoteOp ? 300 : isGameOp ? 150 : isWrite ? (ctx.user ? 80 : 30) : 300;
     if (!rateLimit(`${rateKey}:${bucket}`, limit, 60_000)) {
       return sendJSON(res, 429, { ok: false, error: '操作太频繁了，休息一下吧' });
     }
@@ -111,7 +113,7 @@ export async function handleApi(req, res, pathname, query) {
     }
     if (r.opts.admin && (!ctx.user || ctx.user.role !== 'admin')) throw denied('需要管理员权限');
 
-    if (isWrite && req.headers['content-type']?.includes('json')) ctx.body = await readBody(req);
+    if (isWrite && req.headers['content-type']?.includes('json')) ctx.body = await readBody(req, r.opts.maxBody || 128 * 1024);
 
     const result = await r.handler(ctx);
     if (result === undefined) return;          // SSE 等自管理响应
