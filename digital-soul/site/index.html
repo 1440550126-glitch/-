@@ -130,34 +130,68 @@ function resize(){
 window.addEventListener('resize',resize);
 
 // ---- 粒子 ----
-const N=900, PT=[];
+const N=1500, PT=[];
 for(let i=0;i<N;i++){PT.push({a:Math.random()*6.2832,u:Math.random(),v:Math.random(),w:Math.random(),
   x:(Math.random()-.5)*60,y:(Math.random()-.5)*60,r:200,g:200,b:200,s:1.2+Math.random()*1.1});}
 const EMO7=[[255,207,95],[255,90,82],[74,144,226],[155,108,255],[255,95,162],[79,208,122],[255,210,74]];
 let TT=0;
 
-// 一位长发美人的剪影：画到离屏画布上，再采样里面的像素当作粒子目标（归一化坐标）
+// 一位长发美人的「线描肖像」：在离屏画布上勾出五官+长发的线条，
+// 采样这些描边像素当作粒子目标（脸部加权，确保眼鼻唇够密）。归一化坐标、与分辨率无关。
 let WOMAN=[];
 function buildWoman(){
-  const S=440, cx=S/2, oc=document.createElement('canvas'); oc.width=S; oc.height=S;
-  const o=oc.getContext('2d'); o.fillStyle='#fff';
-  o.beginPath(); o.ellipse(cx,180,100,126,0,0,6.2832); o.fill();            // 头发顶冠
-  o.beginPath(); o.moveTo(cx-100,152);                                       // 左侧长发
-  o.quadraticCurveTo(cx-126,330, cx-80,420); o.lineTo(cx-42,420);
-  o.quadraticCurveTo(cx-60,300, cx-54,172); o.closePath(); o.fill();
-  o.beginPath(); o.moveTo(cx+100,152);                                       // 右侧长发
-  o.quadraticCurveTo(cx+126,330, cx+80,420); o.lineTo(cx+42,420);
-  o.quadraticCurveTo(cx+60,300, cx+54,172); o.closePath(); o.fill();
-  o.fillRect(cx-20,254,40,64);                                              // 脖子
-  o.beginPath(); o.moveTo(cx-176,442);                                       // 肩 / 胸像
-  o.quadraticCurveTo(cx-120,326, cx,316); o.quadraticCurveTo(cx+120,326, cx+176,442);
-  o.closePath(); o.fill();
-  o.beginPath(); o.ellipse(cx,172,62,76,0,0,6.2832); o.fill();              // 脸
+  const S=460, cx=S/2, oc=document.createElement('canvas'); oc.width=S; oc.height=S;
+  const o=oc.getContext('2d'); o.strokeStyle='#fff'; o.fillStyle='#fff';
+  o.lineJoin='round'; o.lineCap='round';
+  // 头发：顶冠 + 两侧各三缕长发
+  o.lineWidth=2.0;
+  o.beginPath(); o.moveTo(cx-88,150); o.bezierCurveTo(cx-96,52, cx+96,52, cx+88,150); o.stroke();
+  for(let k=0;k<3;k++){ const off=k*22;
+    o.beginPath(); o.moveTo(cx-72-off*0.25,118+off*0.2);
+    o.bezierCurveTo(cx-122-off,250, cx-96-off,372, cx-58-off*0.5,424); o.stroke();
+    o.beginPath(); o.moveTo(cx+72+off*0.25,118+off*0.2);
+    o.bezierCurveTo(cx+122+off,250, cx+96+off,372, cx+58+off*0.5,424); o.stroke(); }
+  // 脸部轮廓（鹅蛋脸）
+  o.lineWidth=2.4; o.beginPath();
+  o.moveTo(cx-80,172);
+  o.bezierCurveTo(cx-82,252, cx-46,304, cx,318);
+  o.bezierCurveTo(cx+46,304, cx+82,252, cx+80,172);
+  o.bezierCurveTo(cx+76,118, cx+40,96, cx,96);
+  o.bezierCurveTo(cx-40,96, cx-76,118, cx-80,172);
+  o.stroke();
+  // 眉
+  o.lineWidth=2.2;
+  o.beginPath(); o.moveTo(cx-64,168); o.quadraticCurveTo(cx-40,156, cx-16,166); o.stroke();
+  o.beginPath(); o.moveTo(cx+64,168); o.quadraticCurveTo(cx+40,156, cx+16,166); o.stroke();
+  // 眼睛（杏眼）+ 眼珠 + 高光
+  function eye(ex){
+    o.lineWidth=2.2;
+    o.beginPath(); o.moveTo(ex-24,194); o.quadraticCurveTo(ex,180, ex+24,194); o.stroke();
+    o.beginPath(); o.moveTo(ex-24,194); o.quadraticCurveTo(ex,206, ex+24,194); o.stroke();
+    o.beginPath(); o.arc(ex,194,6,0,6.2832); o.fill();
+  }
+  eye(cx-42); eye(cx+42);
+  // 鼻
+  o.lineWidth=2.0; o.beginPath(); o.moveTo(cx-3,202); o.lineTo(cx-8,242);
+  o.quadraticCurveTo(cx,250, cx+8,242); o.stroke();
+  // 唇
+  o.lineWidth=2.3;
+  o.beginPath(); o.moveTo(cx-28,272); o.quadraticCurveTo(cx-13,262, cx,269);
+  o.quadraticCurveTo(cx+13,262, cx+28,272); o.stroke();
+  o.beginPath(); o.moveTo(cx-28,272); o.quadraticCurveTo(cx,290, cx+28,272); o.stroke();
+  // 脖子 + 肩
+  o.lineWidth=2.2;
+  o.beginPath(); o.moveTo(cx-22,318); o.lineTo(cx-28,360); o.stroke();
+  o.beginPath(); o.moveTo(cx+22,318); o.lineTo(cx+28,360); o.stroke();
+  o.beginPath(); o.moveTo(cx-158,420); o.quadraticCurveTo(cx-72,366, cx-28,360); o.stroke();
+  o.beginPath(); o.moveTo(cx+158,420); o.quadraticCurveTo(cx+72,366, cx+28,360); o.stroke();
+  // 采样描边像素，脸部区域加权（五官更密）
   const d=o.getImageData(0,0,S,S).data, pts=[];
-  for(let y=0;y<S;y+=2)for(let x=0;x<S;x+=2){ if(d[(y*S+x)*4+3]>128) pts.push([x,y]); }
+  for(let y=0;y<S;y++)for(let x=0;x<S;x++){ if(d[(y*S+x)*4+3]>80){
+    pts.push([x,y]); if(x>cx-90&&x<cx+90&&y>100&&y<300) pts.push([x,y]); } }
   WOMAN=[];
   for(let i=0;i<N;i++){ const q=pts.length?pts[(Math.random()*pts.length)|0]:[cx,cx];
-    WOMAN.push([(q[0]-cx)/(S*0.5), (q[1]-S*0.58)/(S*0.5)]); }   // 归一化，竖向以人物中点为 0
+    WOMAN.push([(q[0]-cx)/(S*0.5), (q[1]-S*0.52)/(S*0.5)]); }
 }
 
 // 七种形态：返回 [x,y,r,g,b]（以中心为原点）
@@ -185,17 +219,17 @@ function form(stage,i){
      const edge=Math.max(Math.abs(nx),Math.abs(ny))>0.44;
      return [nx*side, ny*side, edge?255:150, edge?206:140, edge?95:85];
    }
-   case 4:{ // 装进身体：聚成一位长发美人的剪影
-     const w=WOMAN[i]||[0,0]; return [w[0]*R*1.05, w[1]*R*1.25, 190,224,250];
+   case 4:{ // 装进身体：聚成一位长发美人的脸（上移，让标题不挡脸）
+     const w=WOMAN[i]||[0,0]; return [w[0]*R*1.05, w[1]*R*1.2 - R*0.26, 190,224,250];
    }
    case 5:{ // 喂以记忆：还是她，染上记忆的暖色
-     const w=WOMAN[i]||[0,0]; return [w[0]*R*1.05, w[1]*R*1.25, 255,184,152];
+     const w=WOMAN[i]||[0,0]; return [w[0]*R*1.05, w[1]*R*1.2 - R*0.26, 255,184,152];
    }
-   case 6:{ // 灵魂：她周身绕起七情光环
+   case 6:{ // 灵魂：她头部周围绕起七情光环
      if(i%6===0){ const sct=i%7, base=sct/7*Math.PI*2, an=base+p.u*(Math.PI*2/7);
-       const rad=R*1.12+Math.sin(TT*0.05+i)*R*0.04, c=EMO7[sct];
-       return [Math.cos(an)*rad*0.92, Math.sin(an)*rad*1.18 - R*0.05, c[0],c[1],c[2]]; }
-     const w=WOMAN[i]||[0,0]; return [w[0]*R*1.05, w[1]*R*1.25, 222,244,255];
+       const rad=R*0.82+Math.sin(TT*0.05+i)*R*0.04, c=EMO7[sct];
+       return [Math.cos(an)*rad, Math.sin(an)*rad*1.12 - R*0.48, c[0],c[1],c[2]]; }
+     const w=WOMAN[i]||[0,0]; return [w[0]*R*1.05, w[1]*R*1.2 - R*0.26, 222,244,255];
    }
    default:{ // 末章：外圈淡环，把中心让给文字
      const rad=R*1.12 + p.u*R*0.22;
