@@ -111,7 +111,7 @@ export async function handleApi(req, res, pathname, query) {
     }
     if (r.opts.admin && (!ctx.user || ctx.user.role !== 'admin')) throw denied('需要管理员权限');
 
-    if (isWrite && req.headers['content-type']?.includes('json')) ctx.body = await readBody(req);
+    if (isWrite && req.headers['content-type']?.includes('json')) ctx.body = await readBody(req, r.opts.maxBody || 128 * 1024);
 
     const result = await r.handler(ctx);
     if (result === undefined) return;          // SSE 等自管理响应

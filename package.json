@@ -11,6 +11,8 @@
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
     "smoke": "node --disable-warning=ExperimentalWarning scripts/smoke.mjs",
+    "remote:smoke": "node --disable-warning=ExperimentalWarning scripts/remote-smoke.mjs",
+    "agent": "node mac-agent/agent.mjs",
     "check": "node scripts/check-syntax.mjs",
     "studio": "node --disable-warning=ExperimentalWarning lingjing/server/index.js",
     "studio:dev": "node --disable-warning=ExperimentalWarning --watch lingjing/server/index.js",

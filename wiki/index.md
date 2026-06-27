@@ -18,6 +18,7 @@
 | [consistency](consistency.md) | 一致性手法：身份板/视觉签名/锁脸不锁衣/微表情/光影/全能参考/故事板 |
 | [deploy](deploy.md) | 部署包（Docker+Caddy）、CI/CD、video.lingmirror.com.cn |
 | [llm-wiki](llm-wiki.md) | 运行时知识库（wiki_pages + MCP 共享给音乐站/Agent） |
+| [remote-control](remote-control.md) | 远程控制 Mac：中继架构、mac-agent、动作白名单、鉴权与坑 |
 
 ## 速记
 - 测试：`node lingjing/scripts/smoke.mjs`（当前 218/218）。零依赖，Node ≥22.5。
