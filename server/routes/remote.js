@@ -17,6 +17,7 @@ import * as remote from '../lib/remote.js';
 // 控制台可下发的动作白名单（也用于驱动 UI）。是否真正可执行取决于 agent 端能力开关。
 export const REMOTE_ACTIONS = [
   { action: 'lock', label: '锁屏', group: 'power' },
+  { action: 'unlock', label: '解锁', group: 'power', needs: 'unlock' },  // 密码只存 Mac 端，不上网
   { action: 'sleep', label: '睡眠', group: 'power' },
   { action: 'restart', label: '重启', group: 'power', danger: true, needs: 'power' },
   { action: 'shutdown', label: '关机', group: 'power', danger: true, needs: 'power' },
@@ -32,6 +33,8 @@ export const REMOTE_ACTIONS = [
   { action: 'notify', label: '通知', group: 'app' },      // args: { text, title? }
   { action: 'type', label: '输入文字', group: 'input' },  // args: { text }
   { action: 'clipboard', label: '剪贴板', group: 'input' },// args: { set?:string }（不传=读取）
+  { action: 'send_file', label: '从 Mac 下载', group: 'files', needs: 'files' }, // args: { path } → 回传 { transfer }
+  { action: 'recv_file', label: '上传到 Mac', group: 'files', needs: 'files' }, // 由 /transfer/up 触发，args: { tid, name }
   { action: 'shell', label: '执行命令', group: 'shell', danger: true, needs: 'shell' } // args: { cmd }
 ];
 const ACTION_SET = new Set(REMOTE_ACTIONS.map((a) => a.action));
@@ -54,8 +57,9 @@ POST('/api/remote/agent/hello', async (ctx) => {
 
 GET('/api/remote/agent/poll', async (ctx) => {
   auth(ctx);
+  const device = ctx.query.get('device') || 'default';
   const wait = Math.min(Number(ctx.query.get('wait')) || 25000, 50000);
-  const cmd = await remote.agentPoll(wait);
+  const cmd = await remote.agentPoll(device, wait);
   return cmd ? { command: cmd } : { command: null };
 });
 
@@ -69,7 +73,7 @@ POST('/api/remote/agent/result', async (ctx) => {
 // ===== Controller 侧 =====
 GET('/api/remote/status', async (ctx) => {
   auth(ctx);
-  return { ...remote.agentStatus(), actions: REMOTE_ACTIONS };
+  return { devices: remote.listDevices(), actions: REMOTE_ACTIONS };
 });
 
 POST('/api/remote/command', async (ctx) => {
@@ -77,7 +81,7 @@ POST('/api/remote/command', async (ctx) => {
   const action = String(ctx.body?.action || '');
   if (!ACTION_SET.has(action)) throw new ApiError(400, '未知动作');
   let id;
-  try { id = remote.enqueueCommand(action, ctx.body?.args || {}); }
+  try { id = remote.enqueueCommand(ctx.body?.device || '', action, ctx.body?.args || {}); }
   catch (e) { throw new ApiError(409, e.message); }
   // 顺手等一小会儿，能在同一请求里返回结果就直接给（截图/剪贴板等读取型很方便）
   const wait = Math.min(Number(ctx.body?.wait) || 0, 60000);

@@ -63,9 +63,26 @@ REMOTE_SERVER=https://你的服务器 REMOTE_TOKEN=口令 ./install.sh
 | 朗读 / 通知 | `say` 朗读、`display notification` 推送 | ✅ |
 | 输入文字 | 把文字敲到当前焦点处 | ✅ |
 | 剪贴板 | 读取 / 写入 Mac 剪贴板 | ✅ |
+| 文件传输 | 浏览器传文件到 Mac「下载」夹 / 取回 Mac 上任意路径文件 | ✅ |
 | 摄像头 | 拍一张回传显示 | 需 `brew install imagesnap` |
+| 解锁 | 唤醒并输入锁屏密码登录 | 需 `REMOTE_UNLOCK_PASSWORD=`（密码只存 Mac 本机） |
 | 重启 / 关机 | — | 需 `REMOTE_ALLOW_POWER=1` |
 | 执行命令 | 任意 shell 命令 | 需 `REMOTE_ALLOW_SHELL=1` |
+
+### 多台 Mac
+
+每台 Mac 跑一个 agent，连到同一个中继即可；控制台顶部会出现**设备下拉框**切换控制对象。
+设备标识默认按主机名自动生成并存到 `~/.jvling-macagent-id`，也可用 `REMOTE_DEVICE_ID` 固定。
+
+### 远程解锁（开机/锁屏密码）
+
+```bash
+REMOTE_UNLOCK_PASSWORD='你的登录密码' node mac-agent/agent.mjs
+```
+
+密码**只存在 Mac 本机的环境变量里，永不经过网络/中继**——控制台点「解锁」只发一个
+`unlock` 信号，由 agent 在本地唤醒屏幕并输入密码。注意：对 FileVault **开机前**的
+预引导密码无效（那时系统还没起来），仅适用于已登录后的锁屏 / 睡眠唤醒。
 
 危险动作（关机/重启/执行命令）默认**关闭**，要在 agent 端显式打开：
 

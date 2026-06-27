@@ -7,11 +7,12 @@ import * as remote from '../lib/remote.js';
 
 export function attachRemoteWs(server) {
   server.on('upgrade', (req, socket) => {
-    let pathname, token;
+    let pathname, token, device;
     try {
       const u = new URL(req.url, 'http://localhost');
       pathname = u.pathname;
       token = u.searchParams.get('token') || '';
+      device = u.searchParams.get('device') || '';
     } catch { socket.destroy(); return; }
 
     if (pathname !== '/api/remote/agent/ws' && pathname !== '/api/remote/stream') { socket.destroy(); return; }
@@ -19,7 +20,7 @@ export function attachRemoteWs(server) {
     if (!handshake(req, socket)) return;
 
     const conn = wsConnection(socket);
-    if (pathname === '/api/remote/agent/ws') remote.attachAgentStream(conn);
-    else remote.attachControllerStream(conn);
+    if (pathname === '/api/remote/agent/ws') remote.attachAgentStream(device || 'default', conn);
+    else remote.attachControllerStream(conn, device);
   });
 }

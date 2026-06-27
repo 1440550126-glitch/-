@@ -2,6 +2,7 @@
 // token 存在 localStorage（个人自托管工具，权衡可接受；公网部署请配 HTTPS）。
 const $ = (id) => document.getElementById(id);
 const TOKEN_KEY = 'remote_token';
+const DEVICE_KEY = 'remote_device';
 
 let token = '';
 let es = null;
@@ -9,6 +10,9 @@ let sws = null;          // 流式触控板 WebSocket
 let volTimer = null;
 let gated = new Set();   // 需要特定能力才可用的动作（agent 未提供则置灰），由 /status 下发
 let streamOK = false;    // agent 流式通道是否在线
+let devices = [];        // 当前所有 Mac 设备
+let selected = localStorage.getItem(DEVICE_KEY) || null;  // 当前控制的设备 ID
+let streamDevice = null; // 流式通道当前指向的设备
 
 // ---- 基础请求 ----
 async function api(path, { method = 'GET', body } = {}) {
@@ -24,7 +28,7 @@ async function api(path, { method = 'GET', body } = {}) {
 
 // 下发一条指令；wait>0 时同一请求里等结果回来
 function cmd(action, args = {}, wait = 0) {
-  return api('/api/remote/command', { method: 'POST', body: { action, args, wait } });
+  return api('/api/remote/command', { method: 'POST', body: { device: selected, action, args, wait } });
 }
 
 function log(msg, kind = '') {
@@ -45,6 +49,44 @@ async function send(action, args = {}, opts = {}) {
     if (e.message.includes('令牌')) gate();
     return null;
   }
+}
+
+// ---- 多设备 ----
+function applyDevices(list) {
+  devices = list || [];
+  // 保持已选；失效则自动挑一个在线的（单 Mac 场景零操作）
+  if (!selected || !devices.find((d) => d.device === selected)) {
+    const onl = devices.find((d) => d.online);
+    selected = onl ? onl.device : (devices[0]?.device || null);
+  }
+  renderDevicePicker();
+  applySelected();
+}
+function renderDevicePicker() {
+  const sel = $('devSel');
+  sel.innerHTML = '';
+  if (!devices.length) { sel.classList.add('hidden'); return; }
+  sel.classList.toggle('hidden', devices.length < 1);
+  for (const d of devices) {
+    const o = document.createElement('option');
+    o.value = d.device;
+    o.textContent = `${d.online ? '🟢' : '⚪️'} ${d.host || d.device}`;
+    if (d.device === selected) o.selected = true;
+    sel.appendChild(o);
+  }
+  sel.classList.toggle('hidden', devices.length <= 1);   // 只有一台就不显示选择器
+}
+function applySelected() {
+  const d = devices.find((x) => x.device === selected);
+  setStatus(d || { online: false, caps: [] });
+  if (selected && streamDevice !== selected) connectStreamWS();   // 首次或切换设备时接流式通道
+}
+function switchDevice(id) {
+  if (id === selected) return;
+  selected = id;
+  localStorage.setItem(DEVICE_KEY, id);
+  $('shot').style.display = 'none';
+  applySelected();
 }
 
 // ---- 状态 / SSE ----
@@ -70,11 +112,14 @@ function setStatus(s) {
 
 // ---- 流式触控板 ----
 function connectStreamWS() {
-  if (sws) { try { sws.close(); } catch { /* ignore */ } }
+  if (sws) { try { sws.onclose = null; sws.close(); } catch { /* ignore */ } sws = null; }
+  if (!selected) { streamDevice = null; return; }
+  streamDevice = selected;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  sws = new WebSocket(`${proto}://${location.host}/api/remote/stream?token=${encodeURIComponent(token)}`);
-  sws.onclose = () => { if (token) setTimeout(connectStreamWS, 3000); };
-  sws.onerror = () => {};
+  const ws = new WebSocket(`${proto}://${location.host}/api/remote/stream?token=${encodeURIComponent(token)}&device=${encodeURIComponent(selected)}`);
+  ws.onclose = () => { if (token && sws === ws) setTimeout(connectStreamWS, 3000); };
+  ws.onerror = () => {};
+  sws = ws;
 }
 function streamSend(o) { if (sws && sws.readyState === 1) sws.send(JSON.stringify(o)); }
 
@@ -108,9 +153,10 @@ function setupTrackpad() {
 function connectSSE() {
   if (es) es.close();
   es = new EventSource(`/api/remote/events?token=${encodeURIComponent(token)}`);
-  es.addEventListener('agent', (e) => setStatus(JSON.parse(e.data)));
+  es.addEventListener('devices', (e) => applyDevices(JSON.parse(e.data).devices));
   es.addEventListener('result', (e) => {
     const r = JSON.parse(e.data);
+    if (r.device && selected && r.device !== selected) return;   // 只看当前设备的结果
     // 截图结果直接显示
     if (r.ok && r.data && r.data.image) {
       $('shot').src = r.data.image;
@@ -128,7 +174,7 @@ async function refreshStatus() {
   try {
     const s = await api('/api/remote/status');
     gated = new Set((s.actions || []).filter((a) => a.needs).map((a) => a.action));
-    setStatus(s);
+    applyDevices(s.devices);
   } catch (e) { if (e.message.includes('令牌') || e.message.includes('401')) gate(); }
 }
 
@@ -138,14 +184,14 @@ function gate(msg) {
   $('gate').classList.remove('hidden');
   if (msg) $('gateMsg').textContent = msg;
   if (es) { es.close(); es = null; }
-  if (sws) { try { sws.close(); } catch { /* ignore */ } sws = null; }
+  if (sws) { try { sws.onclose = null; sws.close(); } catch { /* ignore */ } sws = null; }
+  streamDevice = null;
 }
 function enterPanel() {
   $('gate').classList.add('hidden');
   $('panel').classList.remove('hidden');
   connectSSE();
-  connectStreamWS();
-  refreshStatus();
+  refreshStatus();   // 内部 applyDevices → applySelected 会接好流式通道
 }
 
 // ---- 事件绑定 ----
@@ -165,6 +211,8 @@ function bind() {
   $('token').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('connect').click(); });
 
   $('logout').onclick = () => { localStorage.removeItem(TOKEN_KEY); token = ''; gate(); };
+
+  $('devSel').onchange = (e) => switchDevice(e.target.value);
 
   // 通用动作按钮（电源 / 媒体 / 带输入框的打开/朗读/通知/输入）
   document.querySelectorAll('button[data-act]').forEach((b) => {
@@ -221,7 +269,46 @@ function bind() {
   // 摄像头
   $('cam').onclick = () => send('camera', {}, { wait: 20000 });
 
+  // 文件传输
+  $('upBtn').onclick = uploadToMac;
+  $('dlBtn').onclick = downloadFromMac;
+
   setupTrackpad();
+}
+
+async function uploadToMac() {
+  const f = $('upFile').files[0];
+  if (!f) { log('请先选择文件', 'err'); return; }
+  if (!selected) { log('请先选择设备', 'err'); return; }
+  try {
+    log(`上传 ${f.name}（${(f.size / 1024 / 1024).toFixed(1)}MB）…`);
+    const r = await fetch(`/api/remote/transfer/up?device=${encodeURIComponent(selected)}&name=${encodeURIComponent(f.name)}`, {
+      method: 'POST', headers: { 'X-Remote-Token': token, 'Content-Type': 'application/octet-stream' }, body: f
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    const res = await api(`/api/remote/result/${j.data.id}?wait=120000`);
+    const rr = res.result;
+    if (rr && rr.ok) log(`已保存到 Mac：${rr.data?.saved || f.name}`, 'ok');
+    else log(`Mac 接收失败：${rr?.error || '超时'}`, 'err');
+  } catch (e) { log(`上传失败：${e.message}`, 'err'); }
+}
+
+async function downloadFromMac() {
+  const p = $('dlPath').value.trim();
+  if (!p) { log('请输入 Mac 上的文件路径', 'err'); return; }
+  const res = await send('send_file', { path: p }, { wait: 120000 });
+  if (!res || !res.data?.transfer) return;
+  try {
+    const r = await fetch(`/api/remote/file/${res.data.transfer}`, { headers: { 'X-Remote-Token': token } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = res.data.name || 'file'; a.click();
+    URL.revokeObjectURL(url);
+    log(`已取回 ${res.data.name}`, 'ok');
+  } catch (e) { log(`取回失败：${e.message}`, 'err'); }
 }
 
 function renderShortcuts(names) {

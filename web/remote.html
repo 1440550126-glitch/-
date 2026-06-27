@@ -61,10 +61,11 @@
     <div id="panel" class="hidden">
       <div class="bar">
         <span class="dot" id="dot"></span>
-        <div style="flex:1">
+        <div style="flex:1;min-width:0">
           <h1 style="display:inline">控制台</h1>
           <span class="sub" id="host"></span>
         </div>
+        <select id="devSel" class="hidden" style="flex:none;max-width:42vw;font:inherit;color:var(--txt);background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:6px 8px"></select>
         <button id="logout" style="flex:none;padding:6px 12px;font-size:13px">退出</button>
       </div>
 
@@ -72,6 +73,7 @@
         <h2>电源</h2>
         <div class="grid">
           <button data-act="lock"><span class="icon">🔒</span><span class="lbl">锁屏</span></button>
+          <button data-act="unlock" data-needs="unlock"><span class="icon">🔓</span><span class="lbl">解锁</span></button>
           <button data-act="sleep"><span class="icon">🌙</span><span class="lbl">睡眠</span></button>
           <button class="danger" data-act="restart" data-confirm="确定要重启 Mac 吗？"><span class="icon">🔄</span><span class="lbl">重启</span></button>
           <button class="danger" data-act="shutdown" data-confirm="确定要关机吗？"><span class="icon">⏻</span><span class="lbl">关机</span></button>
@@ -131,6 +133,19 @@
           <button data-act="mouse" data-mouse="double">双击</button>
         </div>
         <p class="hint">需在「隐私与安全性 → 辅助功能」给 node 授权</p>
+      </div>
+
+      <div class="card" data-needs="files">
+        <h2>文件传输</h2>
+        <div class="row" style="margin-bottom:8px">
+          <input id="upFile" type="file" style="flex:1;font-size:13px" />
+          <button id="upBtn" class="pri" style="flex:none">传到 Mac</button>
+        </div>
+        <p class="hint" style="margin-top:0">上传后保存到 Mac 的「下载」文件夹。</p>
+        <div class="row" style="margin-top:6px">
+          <input id="dlPath" type="text" placeholder="Mac 文件路径，如 ~/Desktop/a.png" />
+          <button id="dlBtn" style="flex:none">取回</button>
+        </div>
       </div>
 
       <div class="card">

@@ -17,6 +17,7 @@ import { promisify } from 'node:util';
 import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 
 const pexec = promisify(execFile);
 
@@ -36,6 +37,17 @@ if (process.platform !== 'darwin') {
 
 const HEADERS = { 'Content-Type': 'application/json', 'X-Remote-Token': TOKEN };
 
+// 稳定的设备 ID（多台 Mac 用同一中继时区分），优先 env，否则持久化一个
+const ID_FILE = path.join(os.homedir(), '.jvling-macagent-id');
+function resolveDeviceId() {
+  if (process.env.REMOTE_DEVICE_ID) return process.env.REMOTE_DEVICE_ID.slice(0, 64);
+  try { const s = fs.readFileSync(ID_FILE, 'utf8').trim(); if (s) return s; } catch { /* 首次 */ }
+  const id = (os.hostname().split('.')[0] || 'mac') + '-' + crypto.randomBytes(3).toString('hex');
+  try { fs.writeFileSync(ID_FILE, id); } catch { /* 只读 home 也无妨，下次再生成 */ }
+  return id;
+}
+const DEVICE = resolveDeviceId();
+
 // 启动时探测可选的命令行工具是否可用（影响能力上报，让控制台置灰不可用动作）
 let CAP_IMAGESNAP = false;
 async function probeCaps() {
@@ -45,9 +57,11 @@ async function has(bin) {
   try { await pexec('which', [bin], { timeout: 3000 }); return true; } catch { return false; }
 }
 
+const UNLOCK_PW = process.env.REMOTE_UNLOCK_PASSWORD || '';
 function caps() {
-  const c = ['lock', 'sleep', 'volume', 'brightness', 'media', 'screenshot', 'mouse', 'open', 'shortcut', 'say', 'notify', 'type', 'clipboard'];
+  const c = ['lock', 'sleep', 'volume', 'brightness', 'media', 'screenshot', 'mouse', 'open', 'shortcut', 'say', 'notify', 'type', 'clipboard', 'files'];
   if (CAP_IMAGESNAP) c.push('camera');
+  if (UNLOCK_PW) c.push('unlock');
   if (ALLOW_POWER) c.push('restart', 'shutdown');
   if (ALLOW_SHELL) c.push('shell');
   return c;
@@ -70,6 +84,17 @@ const actions = {
   async sleep() {
     await pexec('pmset', ['sleepnow'], { timeout: 8000 });
     return '已进入睡眠';
+  },
+  async unlock() {
+    // 密码只存在 Mac 端环境变量里，永不经过网络/中继
+    if (!UNLOCK_PW) throw new Error('未配置解锁密码（agent 端设 REMOTE_UNLOCK_PASSWORD=）');
+    await pexec('caffeinate', ['-u', '-t', '2'], { timeout: 5000 }).catch(() => {});  // 唤醒屏幕
+    await new Promise((r) => setTimeout(r, 700));
+    await osa('tell application "System Events" to key code 123').catch(() => {});     // 抖一下唤起登录框
+    await new Promise((r) => setTimeout(r, 300));
+    await osa(`tell application "System Events" to keystroke "${osaStr(UNLOCK_PW)}"`);
+    await osa('tell application "System Events" to key code 36');                       // 回车
+    return '已尝试解锁';
   },
   async restart() {
     if (!ALLOW_POWER) throw new Error('重启被禁用（agent 需 REMOTE_ALLOW_POWER=1）');
@@ -227,6 +252,33 @@ const actions = {
     const { stdout } = await pexec('pbpaste', [], { timeout: 5000, maxBuffer: 1024 * 1024 });
     return { text: stdout };
   },
+  async recv_file(args = {}) {
+    const tid = String(args.tid || '');
+    if (!tid) throw new Error('缺少传输 id');
+    const name = String(args.name || 'file').replace(/[/\\]/g, '_');
+    const dest = path.join(os.homedir(), 'Downloads', name);
+    const r = await fetch(`${SERVER}/api/remote/agent/transfer/${tid}`, { headers: { 'X-Remote-Token': TOKEN } });
+    if (!r.ok) throw new Error(`下载失败 ${r.status}`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    fs.writeFileSync(dest, buf);
+    return { saved: dest, size: buf.length };
+  },
+  async send_file(args = {}) {
+    let p = String(args.path || '').trim();
+    if (!p) throw new Error('缺少文件路径');
+    if (p === '~' || p.startsWith('~/')) p = path.join(os.homedir(), p.slice(1));
+    if (!fs.existsSync(p) || fs.statSync(p).isDirectory()) throw new Error('文件不存在');
+    const name = path.basename(p);
+    const buf = fs.readFileSync(p);
+    const r = await fetch(`${SERVER}/api/remote/agent/upload?device=${encodeURIComponent(DEVICE)}&name=${encodeURIComponent(name)}`, {
+      method: 'POST',
+      headers: { 'X-Remote-Token': TOKEN, 'Content-Type': 'application/octet-stream' },
+      body: buf
+    });
+    if (!r.ok) throw new Error(`上传失败 ${r.status}`);
+    const j = await r.json();
+    return { transfer: j.data.id, name, size: buf.length };
+  },
   async shell(args = {}) {
     if (!ALLOW_SHELL) throw new Error('执行命令被禁用（agent 需 REMOTE_ALLOW_SHELL=1）');
     const cmd = String(args.cmd || '');
@@ -255,7 +307,8 @@ async function post(p, body) {
 
 async function hello() {
   return post('/api/remote/agent/hello', {
-    host: os.hostname(),
+    device: DEVICE,
+    host: os.hostname().split('.')[0],
     user: os.userInfo().username,
     os: `macOS ${os.release()}`,
     caps: caps()
@@ -308,7 +361,7 @@ function handleStream(raw) {
 
 function connectStream() {
   if (typeof WebSocket === 'undefined') { console.log('   流式: 当前 Node 无内置 WebSocket（需 ≥21），仅离散鼠标可用'); return; }
-  const url = SERVER.replace(/^http/, 'ws') + '/api/remote/agent/ws?token=' + encodeURIComponent(TOKEN);
+  const url = SERVER.replace(/^http/, 'ws') + '/api/remote/agent/ws?token=' + encodeURIComponent(TOKEN) + '&device=' + encodeURIComponent(DEVICE);
   let ws;
   try { ws = new WebSocket(url); } catch { setTimeout(connectStream, 3000); return; }
   let ka = null;
@@ -332,7 +385,7 @@ async function loop() {
 
   while (!stop) {
     try {
-      const r = await fetch(`${SERVER}/api/remote/agent/poll?wait=25000`, { headers: HEADERS });
+      const r = await fetch(`${SERVER}/api/remote/agent/poll?wait=25000&device=${encodeURIComponent(DEVICE)}`, { headers: HEADERS });
       if (!r.ok) throw new Error(`poll ${r.status}`);
       const { data } = await r.json();
       backoff = 1000;
@@ -340,7 +393,7 @@ async function loop() {
       if (!cmd) continue;
       console.log(`▶ ${cmd.action}`, cmd.args && Object.keys(cmd.args).length ? cmd.args : '');
       const result = await runCommand(cmd);
-      await post('/api/remote/agent/result', { id: cmd.id, ...result });
+      await post('/api/remote/agent/result', { id: cmd.id, device: DEVICE, ...result });
       console.log(result.ok ? `  ✓ ${cmd.action}` : `  ✗ ${cmd.action}: ${result.error}`);
     } catch (e) {
       console.error('· 连接中断，重试中…', e.message);
@@ -358,6 +411,7 @@ process.on('SIGINT', () => { stop = true; console.log('\nbye~'); process.exit(0)
 process.on('SIGTERM', () => { stop = true; process.exit(0); });
 
 console.log(`🖥  mac-agent 启动`);
+console.log(`   设备:   ${DEVICE}`);
 console.log(`   服务器: ${SERVER}`);
 console.log(`   关机重启: ${ALLOW_POWER ? '开' : '关'}  ·  执行命令: ${ALLOW_SHELL ? '开' : '关'}`);
 loop();

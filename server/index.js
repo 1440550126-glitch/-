@@ -21,6 +21,7 @@ import './routes/rooms.js';
 import './routes/admin.js';
 import './routes/remote.js';
 import { attachRemoteWs } from './routes/remote-ws.js';
+import { handleRemoteFile } from './routes/remote-files.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(__dirname, '..', 'web');
@@ -52,7 +53,10 @@ if (process.env.WARMUP_AUTOSTART !== '0') startWarmupLoop();
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://localhost');
   const pathname = u.pathname;
-  if (pathname.startsWith('/api/')) return handleApi(req, res, pathname, u.searchParams);
+  if (pathname.startsWith('/api/')) {
+    if (pathname.includes('/remote/') && handleRemoteFile(req, res, pathname, u.searchParams)) return;
+    return handleApi(req, res, pathname, u.searchParams);
+  }
   if (pathname === '/admin' || pathname.startsWith('/admin/')) {
     const rel = pathname.replace(/^\/admin\/?/, '') || 'index.html';
     if (serveStatic(res, ADMIN_DIR, rel)) return;
