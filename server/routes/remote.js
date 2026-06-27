@@ -21,9 +21,13 @@ export const REMOTE_ACTIONS = [
   { action: 'restart', label: '重启', group: 'power', danger: true, needs: 'power' },
   { action: 'shutdown', label: '关机', group: 'power', danger: true, needs: 'power' },
   { action: 'volume', label: '音量', group: 'media' },   // args: { level?:0-100, mute?:bool, delta?:±N }
+  { action: 'brightness', label: '亮度', group: 'media' }, // args: { cmd:'up'|'down', steps?:1-10 }
   { action: 'media', label: '播放控制', group: 'media' }, // args: { cmd:'playpause'|'next'|'prev' }
   { action: 'screenshot', label: '截屏', group: 'view' },
+  { action: 'camera', label: '摄像头', group: 'view', needs: 'camera' }, // 需 imagesnap
+  { action: 'mouse', label: '鼠标', group: 'input' },     // args: { dx?,dy?, click?:'left'|'right'|'double' }
   { action: 'open', label: '打开', group: 'app' },        // args: { target:'https://..'|'AppName' }
+  { action: 'shortcut', label: '快捷指令', group: 'app' },// args: { name } 或 { list:true }
   { action: 'say', label: '朗读', group: 'app' },         // args: { text }
   { action: 'notify', label: '通知', group: 'app' },      // args: { text, title? }
   { action: 'type', label: '输入文字', group: 'input' },  // args: { text }

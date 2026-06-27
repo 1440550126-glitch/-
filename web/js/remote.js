@@ -6,6 +6,7 @@ const TOKEN_KEY = 'remote_token';
 let token = '';
 let es = null;
 let volTimer = null;
+let gated = new Set();   // 需要特定能力才可用的动作（agent 未提供则置灰），由 /status 下发
 
 // ---- 基础请求 ----
 async function api(path, { method = 'GET', body } = {}) {
@@ -49,14 +50,12 @@ function setStatus(s) {
   const dot = $('dot');
   dot.className = 'dot ' + (s.online ? 'on' : 'off');
   $('host').textContent = s.online ? ` · ${s.host || 'Mac'}（${s.user || ''} · ${s.os || ''}）` : ' · Mac 未连接';
-  // agent 不支持的危险动作置灰
+  // 离线全灰；在线时按 agent 能力对受限动作（关机/重启/执行命令/摄像头等）置灰
   const caps = new Set(s.caps || []);
-  document.querySelectorAll('button[data-act]').forEach((b) => {
-    const a = b.dataset.act;
-    if (['restart', 'shutdown', 'shell'].includes(a)) b.disabled = !s.online || (s.caps && !caps.has(a));
-    else b.disabled = !s.online;
-  });
-  $('shellRun').disabled = !s.online || (s.caps && !caps.has('shell'));
+  const off = (act) => !s.online || (gated.has(act) && s.caps && !caps.has(act));
+  document.querySelectorAll('button[data-act]').forEach((b) => { b.disabled = off(b.dataset.act); });
+  $('shellRun').disabled = off('shell');
+  document.querySelectorAll('[data-needs]').forEach((el) => { el.classList.toggle('hidden', s.caps && !caps.has(el.dataset.needs)); });
 }
 
 function connectSSE() {
@@ -73,13 +72,17 @@ function connectSSE() {
     if (r.ok && r.data && typeof r.data.text === 'string') log(`剪贴板：${r.data.text.slice(0, 200)}`);
     if (r.ok && r.data && r.data.stdout !== undefined) log(`输出：${(r.data.stdout || r.data.stderr || '(空)').slice(0, 500)}`);
     if (r.ok && r.data && r.data.level !== undefined) { $('vol').value = r.data.level; $('volval').textContent = r.data.level; }
+    if (r.ok && r.data && Array.isArray(r.data.shortcuts)) renderShortcuts(r.data.shortcuts);
   });
   es.onerror = () => { /* EventSource 会自动重连 */ };
 }
 
 async function refreshStatus() {
-  try { setStatus(await api('/api/remote/status')); }
-  catch (e) { if (e.message.includes('令牌') || e.message.includes('401')) gate(); }
+  try {
+    const s = await api('/api/remote/status');
+    gated = new Set((s.actions || []).filter((a) => a.needs).map((a) => a.action));
+    setStatus(s);
+  } catch (e) { if (e.message.includes('令牌') || e.message.includes('401')) gate(); }
 }
 
 // ---- 界面切换 ----
@@ -148,6 +151,33 @@ function bind() {
 
   // 执行命令
   $('shellRun').onclick = () => { const v = $('shellCmd').value.trim(); if (v) send('shell', { cmd: v }, { wait: 60000 }); };
+
+  // 鼠标方向键：步长可调
+  const step = () => Number($('mouseStep').value) || 50;
+  document.querySelectorAll('button[data-mouse]').forEach((b) => {
+    b.onclick = () => {
+      const d = b.dataset.mouse;
+      if (d === 'up') send('mouse', { dy: -step() });
+      else if (d === 'down') send('mouse', { dy: step() });
+      else if (d === 'left') send('mouse', { dx: -step() });
+      else if (d === 'right') send('mouse', { dx: step() });
+      else send('mouse', { click: d });   // left / right / double
+    };
+  });
+
+  // 快捷指令：拉列表 + 运行
+  $('scList').onclick = () => send('shortcut', { list: true }, { wait: 8000 });
+  $('scRun').onclick = () => { const v = $('scName').value.trim(); if (v) send('shortcut', { name: v }); };
+
+  // 摄像头
+  $('cam').onclick = () => send('camera', {}, { wait: 20000 });
+}
+
+function renderShortcuts(names) {
+  const dl = $('scNames');
+  dl.innerHTML = '';
+  for (const n of names) { const o = document.createElement('option'); o.value = n; dl.appendChild(o); }
+  log(`快捷指令 ${names.length} 个`);
 }
 
 bind();

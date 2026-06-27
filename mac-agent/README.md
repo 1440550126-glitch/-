@@ -49,12 +49,16 @@ REMOTE_SERVER=https://你的服务器 REMOTE_TOKEN=口令 ./install.sh
 |---|---|---|
 | 锁屏 / 睡眠 | Ctrl+Cmd+Q / 立即睡眠 | ✅ |
 | 音量 | 滑块设音量、静音 | ✅ |
+| 亮度 | 调亮 / 调暗（屏幕亮度媒体键） | ✅ |
 | 播放控制 | 上一首 / 播放暂停 / 下一首（Spotify 优先，否则 Music） | ✅ |
 | 截屏 | 截当前屏幕，压缩成 JPEG 回传显示 | ✅ |
+| 鼠标 | 方向键移动（步长可调）+ 左键 / 右键 / 双击（走 CoreGraphics） | ✅ |
 | 打开 | 打开网址或应用（如 Safari） | ✅ |
+| 快捷指令 | 列出并运行「快捷指令」App 里的 Shortcuts | ✅ |
 | 朗读 / 通知 | `say` 朗读、`display notification` 推送 | ✅ |
 | 输入文字 | 把文字敲到当前焦点处 | ✅ |
 | 剪贴板 | 读取 / 写入 Mac 剪贴板 | ✅ |
+| 摄像头 | 拍一张回传显示 | 需 `brew install imagesnap` |
 | 重启 / 关机 | — | 需 `REMOTE_ALLOW_POWER=1` |
 | 执行命令 | 任意 shell 命令 | 需 `REMOTE_ALLOW_SHELL=1` |
 

@@ -85,6 +85,11 @@
           <input id="vol" type="range" min="0" max="100" value="50" />
           <span class="sub" id="volval" style="flex:none;width:36px;text-align:right">50</span>
         </div>
+        <div class="row" style="margin-bottom:10px">
+          <span class="sub" style="flex:none;width:36px">亮度</span>
+          <button data-act="brightness" data-cmd="down" style="flex:1">🔅 调暗</button>
+          <button data-act="brightness" data-cmd="up" style="flex:1">🔆 调亮</button>
+        </div>
         <div class="grid">
           <button data-act="media" data-cmd="prev"><span class="icon">⏮</span><span class="lbl">上一首</span></button>
           <button data-act="media" data-cmd="playpause"><span class="icon">⏯</span><span class="lbl">播放/暂停</span></button>
@@ -93,9 +98,47 @@
       </div>
 
       <div class="card">
-        <h2>屏幕</h2>
-        <button class="pri" id="snap" style="width:100%"><span class="icon">📸</span>截屏看一眼</button>
-        <img id="shot" alt="截屏" />
+        <h2>屏幕 / 摄像头</h2>
+        <div class="row">
+          <button class="pri" id="snap" style="flex:1"><span class="icon">📸</span>截屏</button>
+          <button id="cam" data-act="camera" data-needs="camera" style="flex:1"><span class="icon">📷</span>摄像头</button>
+        </div>
+        <img id="shot" alt="画面" />
+      </div>
+
+      <div class="card">
+        <h2>鼠标</h2>
+        <div class="row" style="margin-bottom:10px">
+          <span class="sub" style="flex:none">步长</span>
+          <input id="mouseStep" type="range" min="10" max="200" value="60" style="flex:1" />
+        </div>
+        <div class="grid" style="grid-template-columns:repeat(3,1fr)">
+          <span></span>
+          <button data-act="mouse" data-mouse="up"><span class="icon">⬆️</span></button>
+          <span></span>
+          <button data-act="mouse" data-mouse="left"><span class="icon">⬅️</span></button>
+          <button class="pri" data-act="mouse" data-mouse="left"><span class="icon">🖱</span></button>
+          <button data-act="mouse" data-mouse="right"><span class="icon">➡️</span></button>
+          <span></span>
+          <button data-act="mouse" data-mouse="down"><span class="icon">⬇️</span></button>
+          <span></span>
+        </div>
+        <div class="grid" style="margin-top:10px">
+          <button class="pri" data-act="mouse" data-mouse="left">左键</button>
+          <button data-act="mouse" data-mouse="right">右键</button>
+          <button data-act="mouse" data-mouse="double">双击</button>
+        </div>
+        <p class="hint">需在「隐私与安全性 → 辅助功能」给 node 授权</p>
+      </div>
+
+      <div class="card">
+        <h2>快捷指令（Shortcuts）</h2>
+        <div class="row">
+          <input id="scName" type="text" list="scNames" placeholder="快捷指令名称" />
+          <datalist id="scNames"></datalist>
+          <button id="scList" data-act="shortcut" style="flex:none">列表</button>
+          <button id="scRun" data-act="shortcut" class="pri" style="flex:none">运行</button>
+        </div>
       </div>
 
       <div class="card">

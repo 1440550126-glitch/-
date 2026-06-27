@@ -37,7 +37,7 @@ server.stdout.on('data', () => {});
 function fakeAgent() {
   let stop = false;
   const H = { 'Content-Type': 'application/json', 'X-Remote-Token': TOKEN };
-  const hello = () => fetch(`${BASE}/api/remote/agent/hello`, { method: 'POST', headers: H, body: JSON.stringify({ host: 'FakeMac', user: 'tester', os: 'macOS test', caps: ['lock', 'volume', 'screenshot', 'shell'] }) });
+  const hello = () => fetch(`${BASE}/api/remote/agent/hello`, { method: 'POST', headers: H, body: JSON.stringify({ host: 'FakeMac', user: 'tester', os: 'macOS test', caps: ['lock', 'volume', 'brightness', 'screenshot', 'mouse', 'shortcut', 'camera', 'shell'] }) });
   (async () => {
     await hello();
     while (!stop) {
@@ -47,8 +47,10 @@ function fakeAgent() {
         const cmd = data?.command;
         if (!cmd) continue;
         let result = { id: cmd.id, ok: true, data: `did:${cmd.action}` };
-        if (cmd.action === 'screenshot') result.data = { image: 'data:image/jpeg;base64,AAAA' };
+        if (cmd.action === 'screenshot' || cmd.action === 'camera') result.data = { image: 'data:image/jpeg;base64,AAAA' };
         if (cmd.action === 'volume') result.data = { level: cmd.args.level ?? 50, muted: false };
+        if (cmd.action === 'mouse') result.data = cmd.args.click ? `点击:${cmd.args.click}` : `移动 ${cmd.args.dx || 0},${cmd.args.dy || 0}`;
+        if (cmd.action === 'shortcut' && cmd.args.list) result.data = { shortcuts: ['打开灯', '回家模式'] };
         await fetch(`${BASE}/api/remote/agent/result`, { method: 'POST', headers: H, body: JSON.stringify(result) });
       } catch { await new Promise((r) => setTimeout(r, 200)); }
     }
@@ -95,6 +97,20 @@ try {
   ok('音量返回 level', vol.data.result?.data?.level === 33);
   const unknown = await api('POST', '/api/remote/command', { token: TOKEN, body: { action: '__nope__' } });
   ok('未知动作被拒(400)', unknown.status === 400);
+
+  console.log('\n== 新增动作 ==');
+  const bright = await api('POST', '/api/remote/command', { token: TOKEN, body: { action: 'brightness', args: { cmd: 'up' }, wait: 5000 } });
+  ok('亮度', bright.data.result?.data === 'did:brightness');
+  const move = await api('POST', '/api/remote/command', { token: TOKEN, body: { action: 'mouse', args: { dx: 50 }, wait: 5000 } });
+  ok('鼠标移动', move.data.result?.data === '移动 50,0', JSON.stringify(move));
+  const clk = await api('POST', '/api/remote/command', { token: TOKEN, body: { action: 'mouse', args: { click: 'left' }, wait: 5000 } });
+  ok('鼠标点击', clk.data.result?.data === '点击:left');
+  const scl = await api('POST', '/api/remote/command', { token: TOKEN, body: { action: 'shortcut', args: { list: true }, wait: 5000 } });
+  ok('快捷指令列表', Array.isArray(scl.data.result?.data?.shortcuts) && scl.data.result.data.shortcuts.length === 2);
+  const cam = await api('POST', '/api/remote/command', { token: TOKEN, body: { action: 'camera', wait: 5000 } });
+  ok('摄像头返回图片', cam.data.result?.data?.image?.startsWith('data:image/'));
+  const statusCaps = await api('GET', '/api/remote/status', { token: TOKEN });
+  ok('状态含 brightness/mouse/shortcut/camera 动作', ['brightness', 'mouse', 'shortcut', 'camera'].every((a) => statusCaps.data.actions.some((x) => x.action === a)));
 
   console.log('\n== 结果轮询兜底 ==');
   const queued = await api('POST', '/api/remote/command', { token: TOKEN, body: { action: 'lock' } });

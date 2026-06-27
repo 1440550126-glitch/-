@@ -36,8 +36,18 @@ if (process.platform !== 'darwin') {
 
 const HEADERS = { 'Content-Type': 'application/json', 'X-Remote-Token': TOKEN };
 
+// 启动时探测可选的命令行工具是否可用（影响能力上报，让控制台置灰不可用动作）
+let CAP_IMAGESNAP = false;
+async function probeCaps() {
+  CAP_IMAGESNAP = await has('imagesnap');
+}
+async function has(bin) {
+  try { await pexec('which', [bin], { timeout: 3000 }); return true; } catch { return false; }
+}
+
 function caps() {
-  const c = ['lock', 'sleep', 'volume', 'media', 'screenshot', 'open', 'say', 'notify', 'type', 'clipboard'];
+  const c = ['lock', 'sleep', 'volume', 'brightness', 'media', 'screenshot', 'mouse', 'open', 'shortcut', 'say', 'notify', 'type', 'clipboard'];
+  if (CAP_IMAGESNAP) c.push('camera');
   if (ALLOW_POWER) c.push('restart', 'shutdown');
   if (ALLOW_SHELL) c.push('shell');
   return c;
@@ -47,6 +57,8 @@ function caps() {
 const osaStr = (s) => String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ');
 // 跑一段 AppleScript
 const osa = (script) => pexec('osascript', ['-e', script], { timeout: 15000 });
+// 跑一段 JXA（JavaScript for Automation），用于走 CoreGraphics 控制鼠标
+const jxa = (script) => pexec('osascript', ['-l', 'JavaScript', '-e', script], { timeout: 8000 });
 
 // ---- 动作实现 ----
 const actions = {
@@ -105,6 +117,62 @@ const actions = {
       if (stdout.trim() === 'true') return 'Spotify';
     } catch { /* ignore */ }
     return 'Music';
+  },
+  async brightness(args = {}) {
+    // 用屏幕亮度媒体键（key code 144=调亮 / 145=调暗），无需第三方工具
+    const dir = String(args.cmd || 'up') === 'down' ? 145 : 144;
+    const steps = Math.max(1, Math.min(10, Number(args.steps) || 1));
+    for (let i = 0; i < steps; i++) await osa(`tell application "System Events" to key code ${dir}`);
+    return `亮度 ${dir === 145 ? '-' : '+'}${steps}`;
+  },
+  async mouse(args = {}) {
+    const dx = Number(args.dx) || 0;
+    const dy = Number(args.dy) || 0;
+    const click = ['left', 'right', 'double'].includes(args.click) ? args.click : null;
+    if (!dx && !dy && !click) throw new Error('鼠标动作为空');
+    const btn = click === 'right' ? 1 : 0;          // kCGMouseButtonLeft=0 / Right=1
+    const down = btn ? 3 : 1, up = btn ? 4 : 2;     // right/left MouseDown/Up
+    const lines = [
+      "ObjC.import('CoreGraphics');",
+      'var src = $.CGEventCreate(null);',
+      'var loc = $.CGEventGetLocation(src);',
+      `var pt = { x: loc.x + (${dx}), y: loc.y + (${dy}) };`
+    ];
+    if (dx || dy) lines.push('$.CGEventPost(0, $.CGEventCreateMouseEvent(null, 5, pt, 0));'); // 5=mouseMoved
+    if (click) {
+      lines.push(`$.CGEventPost(0, $.CGEventCreateMouseEvent(null, ${down}, pt, ${btn}));`);
+      lines.push(`$.CGEventPost(0, $.CGEventCreateMouseEvent(null, ${up}, pt, ${btn}));`);
+      if (click === 'double') {
+        lines.push(`$.CGEventPost(0, $.CGEventCreateMouseEvent(null, ${down}, pt, ${btn}));`);
+        lines.push(`$.CGEventPost(0, $.CGEventCreateMouseEvent(null, ${up}, pt, ${btn}));`);
+      }
+    }
+    lines.push("'ok';");
+    await jxa(lines.join('\n'));
+    return click ? `点击:${click}` : `移动 ${dx},${dy}`;
+  },
+  async shortcut(args = {}) {
+    if (args.list) {
+      const { stdout } = await pexec('shortcuts', ['list'], { timeout: 8000, maxBuffer: 1024 * 1024 });
+      return { shortcuts: stdout.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 300) };
+    }
+    const name = String(args.name || '').trim();
+    if (!name) throw new Error('缺少快捷指令名称');
+    await pexec('shortcuts', ['run', name], { timeout: 60000 });
+    return `已运行快捷指令：${name}`;
+  },
+  async camera(args = {}) {
+    if (!CAP_IMAGESNAP) throw new Error('需要 imagesnap：brew install imagesnap');
+    const cap = path.join(os.tmpdir(), 'jvling-cam.jpg');
+    const small = path.join(os.tmpdir(), 'jvling-cam-s.jpg');
+    const warm = Math.max(0, Math.min(3, Number(args.warmup) || 1));
+    await pexec('imagesnap', ['-w', String(warm), cap], { timeout: 15000 });
+    let out = cap;
+    try { await pexec('sips', ['-Z', '1000', '-s', 'format', 'jpeg', '-s', 'formatOptions', '70', cap, '--out', small]); out = small; }
+    catch { /* 用原图 */ }
+    const b64 = fs.readFileSync(out).toString('base64');
+    try { fs.unlinkSync(cap); fs.unlinkSync(small); } catch { /* ignore */ }
+    return { image: `data:image/jpeg;base64,${b64}` };
   },
   async screenshot() {
     const raw = path.join(os.tmpdir(), 'jvling-shot.png');
@@ -197,6 +265,8 @@ async function hello() {
 let stop = false;
 async function loop() {
   let backoff = 1000;
+  await probeCaps();
+  console.log(`   能力:   ${caps().join(' / ')}`);
   await heartbeatSafe();
   setInterval(heartbeatSafe, 20_000);   // 周期心跳，掉线也能自动恢复在线状态
 
@@ -229,6 +299,5 @@ process.on('SIGTERM', () => { stop = true; process.exit(0); });
 
 console.log(`🖥  mac-agent 启动`);
 console.log(`   服务器: ${SERVER}`);
-console.log(`   能力:   ${caps().join(' / ')}`);
 console.log(`   关机重启: ${ALLOW_POWER ? '开' : '关'}  ·  执行命令: ${ALLOW_SHELL ? '开' : '关'}`);
 loop();
