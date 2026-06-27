@@ -142,6 +142,45 @@ try {
   })();
   ok('SSE 收到 result 事件', await sseDone);
 
+  console.log('\n== 流式触控板（WebSocket）==');
+  const wsBase = BASE.replace(/^http/, 'ws');
+  const agentWS = new WebSocket(`${wsBase}/api/remote/agent/ws?token=${TOKEN}`);
+  const gotMsg = new Promise((resolve) => {
+    const t = setTimeout(() => resolve(null), 5000);
+    agentWS.addEventListener('message', (ev) => { clearTimeout(t); resolve(typeof ev.data === 'string' ? ev.data : String(ev.data)); });
+  });
+  await new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('agent WS 连接超时')), 5000);
+    agentWS.addEventListener('open', () => { clearTimeout(t); resolve(); });
+    agentWS.addEventListener('error', () => {});
+  });
+  // agent WS 连上后，status.stream 应为 true
+  let streamOn = false;
+  for (let i = 0; i < 20; i++) {
+    const s = await api('GET', '/api/remote/status', { token: TOKEN });
+    if (s.data.stream) { streamOn = true; break; }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  ok('status.stream = true（agent 流式在线）', streamOn);
+
+  // 错误令牌的 WS 应被拒（握手失败 → 直接 close）
+  const badWS = new WebSocket(`${wsBase}/api/remote/stream?token=wrong`);
+  const badRejected = await new Promise((resolve) => {
+    badWS.addEventListener('open', () => resolve(false));
+    badWS.addEventListener('error', () => resolve(true));
+    badWS.addEventListener('close', () => resolve(true));
+    setTimeout(() => resolve(false), 3000);
+  });
+  ok('错误令牌的 WS 被拒', badRejected);
+
+  // 控制台 WS 发鼠标移动 → agent WS 应原样收到
+  const ctrlWS = new WebSocket(`${wsBase}/api/remote/stream?token=${TOKEN}`);
+  await new Promise((resolve) => { ctrlWS.addEventListener('open', resolve); ctrlWS.addEventListener('error', resolve); });
+  ctrlWS.send(JSON.stringify({ t: 'm', dx: 5, dy: 3 }));
+  const relayed = await gotMsg;
+  ok('鼠标移动经中继送达 agent', !!relayed && JSON.parse(relayed).t === 'm' && JSON.parse(relayed).dx === 5, String(relayed));
+  agentWS.close(); ctrlWS.close();
+
 } catch (e) {
   console.error(e);
   failed++;

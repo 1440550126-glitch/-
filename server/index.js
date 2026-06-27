@@ -20,6 +20,7 @@ import './routes/shop.js';
 import './routes/rooms.js';
 import './routes/admin.js';
 import './routes/remote.js';
+import { attachRemoteWs } from './routes/remote-ws.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(__dirname, '..', 'web');
@@ -60,6 +61,8 @@ const server = http.createServer((req, res) => {
   res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
   res.end('404');
 });
+
+attachRemoteWs(server);   // 远程控制 Mac 的流式通道（WebSocket）
 
 // 生产环境安全自检
 if (process.env.NODE_ENV === 'production') {

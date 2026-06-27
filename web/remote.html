@@ -107,7 +107,9 @@
       </div>
 
       <div class="card">
-        <h2>鼠标</h2>
+        <h2>鼠标 · 触控板<span id="padBadge" class="sub" style="margin-left:8px"></span></h2>
+        <div id="pad" style="height:160px;background:var(--card2);border:1px dashed var(--line);border-radius:14px;display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:13px;touch-action:none;user-select:none;-webkit-user-select:none;margin-bottom:6px">在此滑动移动光标 · 轻点=左键 · 双指上下=滚动</div>
+        <p class="hint" style="margin-top:0;margin-bottom:12px">触控板需 Mac 端 Node ≥21 开启流式；不可用时请用下方方向键。</p>
         <div class="row" style="margin-bottom:10px">
           <span class="sub" style="flex:none">步长</span>
           <input id="mouseStep" type="range" min="10" max="200" value="60" style="flex:1" />

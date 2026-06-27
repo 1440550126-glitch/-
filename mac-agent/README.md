@@ -6,7 +6,12 @@
 ```
 手机/电脑浏览器  ──①下发指令──▶  中继服务器(/api/remote)  ◀──②长轮询拉取──  Mac Agent
    /remote.html  ◀──④结果/截图──        (你部署的服务端)      ──③回传结果──▶
+   触控板(鼠标)  ══WebSocket 流式══▶   /api/remote/stream → agent/ws  ══▶（低延迟实时）
 ```
+
+> 触控板走单独的 WebSocket 流式通道（绕开"一指令一往返"），Mac 端用一个常驻的
+> JXA 进程接收移动，所以丝滑。需要运行 agent 的 Node ≥ 21（自带 WebSocket）；
+> 老版本会自动降级，只保留方向键 + 点击。
 
 ## 1. 服务端开启远程控制
 
@@ -52,7 +57,7 @@ REMOTE_SERVER=https://你的服务器 REMOTE_TOKEN=口令 ./install.sh
 | 亮度 | 调亮 / 调暗（屏幕亮度媒体键） | ✅ |
 | 播放控制 | 上一首 / 播放暂停 / 下一首（Spotify 优先，否则 Music） | ✅ |
 | 截屏 | 截当前屏幕，压缩成 JPEG 回传显示 | ✅ |
-| 鼠标 | 方向键移动（步长可调）+ 左键 / 右键 / 双击（走 CoreGraphics） | ✅ |
+| 鼠标 | **触控板**（滑动移动 / 轻点左键 / 双指滚动，WebSocket 实时）+ 方向键 + 左/右/双击 | ✅（触控板需 Node ≥21） |
 | 打开 | 打开网址或应用（如 Safari） | ✅ |
 | 快捷指令 | 列出并运行「快捷指令」App 里的 Shortcuts | ✅ |
 | 朗读 / 通知 | `say` 朗读、`display notification` 推送 | ✅ |

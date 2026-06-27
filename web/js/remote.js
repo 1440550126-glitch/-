@@ -5,8 +5,10 @@ const TOKEN_KEY = 'remote_token';
 
 let token = '';
 let es = null;
+let sws = null;          // 流式触控板 WebSocket
 let volTimer = null;
 let gated = new Set();   // 需要特定能力才可用的动作（agent 未提供则置灰），由 /status 下发
+let streamOK = false;    // agent 流式通道是否在线
 
 // ---- 基础请求 ----
 async function api(path, { method = 'GET', body } = {}) {
@@ -56,6 +58,51 @@ function setStatus(s) {
   document.querySelectorAll('button[data-act]').forEach((b) => { b.disabled = off(b.dataset.act); });
   $('shellRun').disabled = off('shell');
   document.querySelectorAll('[data-needs]').forEach((el) => { el.classList.toggle('hidden', s.caps && !caps.has(el.dataset.needs)); });
+
+  // 触控板可用性
+  streamOK = !!s.stream;
+  const pad = $('pad');
+  pad.style.opacity = streamOK ? '1' : '.5';
+  pad.style.pointerEvents = streamOK ? 'auto' : 'none';
+  $('padBadge').textContent = !s.online ? '' : streamOK ? '● 实时' : '○ 不可用';
+  $('padBadge').style.color = streamOK ? 'var(--ok)' : 'var(--mut)';
+}
+
+// ---- 流式触控板 ----
+function connectStreamWS() {
+  if (sws) { try { sws.close(); } catch { /* ignore */ } }
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  sws = new WebSocket(`${proto}://${location.host}/api/remote/stream?token=${encodeURIComponent(token)}`);
+  sws.onclose = () => { if (token) setTimeout(connectStreamWS, 3000); };
+  sws.onerror = () => {};
+}
+function streamSend(o) { if (sws && sws.readyState === 1) sws.send(JSON.stringify(o)); }
+
+function setupTrackpad() {
+  const pad = $('pad');
+  const pts = new Map();
+  let dist = 0, downAt = 0;
+  const SENS = 1.7;
+  pad.addEventListener('pointerdown', (e) => {
+    pad.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    dist = 0; downAt = Date.now();
+  });
+  pad.addEventListener('pointermove', (e) => {
+    const p = pts.get(e.pointerId); if (!p) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    dist += Math.abs(dx) + Math.abs(dy);
+    if (pts.size >= 2) streamSend({ t: 's', dy: Math.round(dy * 0.6) });   // 双指=滚动
+    else streamSend({ t: 'm', dx: dx * SENS, dy: dy * SENS });             // 单指=移动
+  });
+  const up = (e) => {
+    const had = pts.has(e.pointerId);
+    pts.delete(e.pointerId);
+    if (had && pts.size === 0 && dist < 6 && Date.now() - downAt < 300) streamSend({ t: 'c', b: 0 }); // 轻点=左键
+  };
+  pad.addEventListener('pointerup', up);
+  pad.addEventListener('pointercancel', up);
 }
 
 function connectSSE() {
@@ -91,11 +138,13 @@ function gate(msg) {
   $('gate').classList.remove('hidden');
   if (msg) $('gateMsg').textContent = msg;
   if (es) { es.close(); es = null; }
+  if (sws) { try { sws.close(); } catch { /* ignore */ } sws = null; }
 }
 function enterPanel() {
   $('gate').classList.add('hidden');
   $('panel').classList.remove('hidden');
   connectSSE();
+  connectStreamWS();
   refreshStatus();
 }
 
@@ -171,6 +220,8 @@ function bind() {
 
   // 摄像头
   $('cam').onclick = () => send('camera', {}, { wait: 20000 });
+
+  setupTrackpad();
 }
 
 function renderShortcuts(names) {

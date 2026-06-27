@@ -46,7 +46,9 @@ const state = {
   pollWaiters: [],             // agent 长轮询挂起的 resolve [{ resolve, timer }]
   results: new Map(),          // id -> { id, ok, data, error, at }
   resultWaiters: new Map(),    // id -> [{ resolve, timer }]
-  controllers: new Set()       // SSE 客户端
+  controllers: new Set(),      // SSE 客户端
+  agentWS: null,               // agent 的流式 WebSocket（鼠标实时控制走这条）
+  streamers: new Set()         // 控制台的流式 WebSocket
 };
 
 export function agentOnline() {
@@ -62,7 +64,8 @@ export function agentStatus() {
     os: state.agent?.os || null,
     caps: state.agent?.caps || [],
     last_seen: state.agent?.lastSeen || null,
-    queued: state.queue.length
+    queued: state.queue.length,
+    stream: online && !!state.agentWS    // 流式触控板是否可用（agent 已连 WS）
   };
 }
 
@@ -156,6 +159,23 @@ export function addController(client) {
 }
 function broadcast(event, data) {
   for (const c of state.controllers) c.send(event, data);
+}
+
+// ---- 流式通道（WebSocket）：鼠标实时控制 ----
+// agent 连上来这一条，控制台发来的流式消息直接转发给它，纯 fire-and-forget，不进队列。
+export function attachAgentStream(conn) {
+  if (state.agentWS && state.agentWS !== conn) state.agentWS.close();
+  state.agentWS = conn;
+  if (state.agent) state.agent.lastSeen = now();
+  conn.onmessage = () => { if (state.agent) state.agent.lastSeen = now(); };  // agent 心跳/回执
+  conn.onclose = () => { if (state.agentWS === conn) { state.agentWS = null; broadcast('agent', agentStatus()); } };
+  broadcast('agent', agentStatus());
+}
+
+export function attachControllerStream(conn) {
+  state.streamers.add(conn);
+  conn.onmessage = (raw) => { if (state.agentWS) state.agentWS.send(raw); };  // 透传给 agent
+  conn.onclose = () => state.streamers.delete(conn);
 }
 
 function sweepResults() {

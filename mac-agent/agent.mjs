@@ -12,7 +12,7 @@
 //   - 关机/重启需要  REMOTE_ALLOW_POWER=1
 //   - 执行任意命令需要 REMOTE_ALLOW_SHELL=1
 //   两者默认关闭。其余动作（锁屏/音量/播放/截屏/打开/朗读/通知/输入/剪贴板）默认开。
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -262,6 +262,65 @@ async function hello() {
   });
 }
 
+// ===== 流式鼠标控制（WebSocket）=====
+// 关键：开一个常驻的 osascript JXA 进程接收移动指令，避免每次 spawn 的 ~50ms 开销，
+// 这样触控板才丝滑。进程挂了会自动重建；环境无 WebSocket（Node<21）则整段跳过。
+let streamProc = null;
+function ensureStreamProc() {
+  if (streamProc && !streamProc.killed) return streamProc;
+  const p = spawn('osascript', ['-i', '-l', 'JavaScript'], { stdio: ['pipe', 'ignore', 'ignore'] });
+  // 预定义辅助函数：L()取光标位置 / MV相对移动 / CK点击 / SC滚动（CoreGraphics CGEvent）
+  const pre = [
+    "ObjC.import('CoreGraphics')",
+    'function L(){var e=$.CGEventCreate(null);return $.CGEventGetLocation(e)}',
+    'function MV(x,y){var p=L();$.CGEventPost(0,$.CGEventCreateMouseEvent(null,5,{x:p.x+x,y:p.y+y},0))}',
+    'function CK(b){var p=L();$.CGEventPost(0,$.CGEventCreateMouseEvent(null,b?3:1,p,b));$.CGEventPost(0,$.CGEventCreateMouseEvent(null,b?4:2,p,b))}',
+    'function SC(y){$.CGEventPost(0,$.CGEventCreateScrollWheelEvent(null,0,1,y))}'
+  ];
+  try { p.stdin.write(pre.join('\n') + '\n'); } catch { /* ignore */ }
+  p.on('exit', () => { if (streamProc === p) streamProc = null; });
+  p.on('error', () => { if (streamProc === p) streamProc = null; });
+  streamProc = p;
+  return p;
+}
+function feedJXA(line) {
+  try { ensureStreamProc().stdin.write(line + '\n'); } catch { streamProc = null; }
+}
+
+let accDX = 0, accDY = 0, flushTimer = null;
+function flushMove() {
+  flushTimer = null;
+  if (!accDX && !accDY) return;
+  const x = Math.round(accDX), y = Math.round(accDY);
+  accDX = 0; accDY = 0;
+  feedJXA(`MV(${x},${y})`);
+}
+function handleStream(raw) {
+  let m; try { m = JSON.parse(raw); } catch { return; }
+  switch (m.t) {
+    case 'm': accDX += Number(m.dx) || 0; accDY += Number(m.dy) || 0; if (!flushTimer) flushTimer = setTimeout(flushMove, 16); break;
+    case 'c': feedJXA(`CK(${m.b ? 1 : 0})`); break;
+    case 'd': feedJXA('CK(0);CK(0)'); break;
+    case 's': feedJXA(`SC(${Math.round(Number(m.dy) || 0)})`); break;
+    // 'k' 心跳：忽略
+  }
+}
+
+function connectStream() {
+  if (typeof WebSocket === 'undefined') { console.log('   流式: 当前 Node 无内置 WebSocket（需 ≥21），仅离散鼠标可用'); return; }
+  const url = SERVER.replace(/^http/, 'ws') + '/api/remote/agent/ws?token=' + encodeURIComponent(TOKEN);
+  let ws;
+  try { ws = new WebSocket(url); } catch { setTimeout(connectStream, 3000); return; }
+  let ka = null;
+  ws.addEventListener('open', () => {
+    console.log('   流式通道已连接（触控板可用）');
+    ka = setInterval(() => { try { if (ws.readyState === 1) ws.send('{"t":"k"}'); } catch { /* ignore */ } }, 20000);
+  });
+  ws.addEventListener('message', (ev) => handleStream(typeof ev.data === 'string' ? ev.data : ''));
+  ws.addEventListener('error', () => {});
+  ws.addEventListener('close', () => { if (ka) clearInterval(ka); if (!stop) setTimeout(connectStream, 3000); });
+}
+
 let stop = false;
 async function loop() {
   let backoff = 1000;
@@ -269,6 +328,7 @@ async function loop() {
   console.log(`   能力:   ${caps().join(' / ')}`);
   await heartbeatSafe();
   setInterval(heartbeatSafe, 20_000);   // 周期心跳，掉线也能自动恢复在线状态
+  connectStream();                      // 开流式触控板通道
 
   while (!stop) {
     try {
