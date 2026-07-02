@@ -1,0 +1,219 @@
+# digital-soul · 总览手册
+
+一页看懂这套**完全本地运行**的数字分身：它用你的性格、记忆与关系来对话和行动，
+认得你的人、记得你的事、知道听谁的，并且像贾维斯一样能控家居、办多步任务、自主反思与主动跟进。
+
+> 配套：根目录 `README.md`（特性清单）、`docs/deploy.md`（部署）、`docs/finetune.md`（微调）。
+> 想一眼跑通全链路：`python scripts/jarvis_demo.py`。
+
+---
+
+## 1. 架构总览
+
+```mermaid
+flowchart TB
+  subgraph IN[输入]
+    CAM[📷 摄像头]:::io
+    MIC[🎙️ 麦克风]:::io
+    UI[📱 网页 / CLI / 桌面]:::io
+  end
+  CAM --> PERC[perception 认人]
+  MIC --> VOICE[voice 听]
+  PERC --> AG
+  VOICE --> AG
+  UI --> AG
+
+  AG[🧠 Agent.handle 编排]:::core
+  AG --> AUTH{authority 授权闸门}:::gate
+  AUTH -->|不听命/无权限| NO[拒绝或沉默]
+  AUTH -->|放行| CAP
+
+  subgraph CAP[能力路由 · 按顺序匹配]
+    BUT[butler 简报/自检]
+    TRG[triggers 设定自动化]
+    SCN[scenes 场景]
+    ORC[orchestrator 多步编排]
+    DEV[devices 家居 / HA]
+    SKL[skills 做饭家务]
+    HUB[remote_agents 外部智能体]
+    CHAT[memory+persona+llm 对话]
+  end
+  CAP --> OUT
+
+  subgraph STATE[内在状态 / 记忆]
+    MEM[memory 记忆库]
+    JRN[journal 对话日记]
+    EMO[emotions 七情六欲]
+    KNW[knowledge 多学科]
+  end
+  AG <--> STATE
+
+  subgraph OUT[输出]
+    ROB[actions / ros2 机器人]
+    TTS[voice 说]
+    WST[webstatus 手机网页]
+  end
+
+  subgraph AUTO[🫀 自主心跳 tick + presence 事件]
+    REF[reflect 反思→领悟]
+    PLN[planner 排今天的计划]
+    TSK[tasks 待办：成记功/败记账]
+    AUT2[triggers 定时/温度/进门触发]
+  end
+  AG -. 定时 .-> AUTO
+  AUTO -. 写回 .-> STATE
+  AUTO -. 执行 .-> OUT
+
+  classDef io fill:#1b3a4b,color:#fff;
+  classDef core fill:#3a2e5a,color:#fff;
+  classDef gate fill:#5a3a13,color:#fff;
+```
+
+**一句话**：感知（认人/听）→ **授权闸门** → 能力路由（管家/家居/场景/编排/技能/派活/对话）→ 输出（机器人/语音/网页），
+背后有记忆与七情等内在状态，并由**自主心跳**定期反思、规划、跟进、触发自动化。
+
+---
+
+## 2. `handle()` 的路由顺序
+
+一条话进来，依次尝试匹配（命中即返回；全程受授权约束，多数能力只对"听命于你的人"开放）：
+
+| # | 路由 | 触发例子 | 模块 |
+|---|---|---|---|
+| 0 | 动作授权 | 带 `action=shutdown` | `authority` |
+| 1 | 派活二段确认 | 上一轮提议后你说"好" | `agent.nl/_run_pending` |
+| 2 | 重试待办 | "再试一次" | `agent.retry_open` |
+| 3 | 管家：点名/简报/自检 | "贾维斯，简报" | `butler` |
+| 4 | 设定自动化 | "每天22点提醒锁门" | `triggers` |
+| 5 | 场景 | "我回来了" | `scenes` |
+| 6 | 多步编排 | "开灯，再放音乐" | `orchestrator` |
+| 7 | 设备控制 | "把灯关了" | `devices` |
+| 8 | 自然语言派活 | "让 openclaw 打包" | `remote_agents` |
+| 9 | 主动提议派活 | "周报还没弄" → 提议 | `agent.propose_dispatch` |
+| 10 | 普通对话 | 其它任何话 | `memory`+`persona`+`llm` |
+
+**自主心跳 `tick()`**（daemon 定时调用）：① 攒够新经历→`reflect` 提炼领悟写回记忆；
+② 每天→`planner` 排计划；③ 逐条推进计划（办成销账/到点提醒）。
+并行还有 `trigger_loop`（定时+温度条件）与 presence 进门事件触发。
+
+---
+
+## 3. 模块地图（`dsoul/`，纯本地、零重型依赖、各自可单测）
+
+| 模块 | 职责 |
+|---|---|
+| `agent.py` | 核心编排：`handle()` 路由 + `tick()` 自主心跳 + 各能力入口 |
+| `loader.py` · `cli.py` | 按配置装配整个 Agent；命令行入口 |
+| `authority.py` | 授权闸门：听谁的、谁有权让我做什么、爱谁守护谁 |
+| `persona.py` · `personas.py` | 人格提示词；16 套人设的热切换 |
+| `memory.py` | 个人记忆库（RAG，语义/词法双模） |
+| `journal.py` · `consolidate.py` | 对话日记 + 睡眠巩固成长期记忆 |
+| `annotate.py` | 给记忆打情感标签、抽取时间 |
+| `reflect.py` · `planner.py` | 自主反思→领悟；自主规划→今天的计划 |
+| `graph.py` | 记忆图谱：人—事—主题关系网（中心度/实体检索/连接） |
+| `forgetting.py` | 记忆遗忘曲线：强度随时间衰减、被回忆/情感/重要性强化 |
+| `entangle.py` | 量子纠缠式记忆：相关记忆扩散激活，测量其一牵动其二 |
+| `dream.py` | 梦境生成：睡眠时重组记忆碎片+情绪+纠缠联想成超现实叙事 |
+| `selfnarrative.py` | 自我意识叙事：把身份/关系/情绪/领悟/梦织成第一人称自我认知（含成长史 SelfLog） |
+| `values.py` | 价值观与抉择：据守护/家人/健康…权衡两难；价值随经历自演化 |
+| `monologue.py` | 内心独白：每次互动冒出一句私密心声（随七情变味、会入梦） |
+| `curiosity.py` | 好奇心 / 自学：遇陌生事物发问、攒疑问、问回来，或交给外部智能体查回来学到 |
+| `worldmodel.py` | 世界模型：带置信度的信念，随证据增减、遇相反信号自我修正（会改主意） |
+| `anticipate.py` | 情景预测：把日记按时段聚合，预感"这个点你常想做什么"，提前一步 |
+| `predict.py` | 可校准预测：多信号带置信度，从"猜对/没猜对"反馈自我校准 |
+| `swarm.py` | 群体模拟预测：6 种认知思维模式表态聚合，"一致/分歧"作信号（参考 MiroFish · ruv-swarm 认知多样性） |
+| `tasks.py` | 派活待办本：成记功、败记账、可跟进重试 |
+| `emotions.py` · `knowledge.py` | 七情六欲随互动起伏；多学科视角调度 |
+| `perception.py` · `perception_opencv.py` · `presence.py` | 人脸认人；树莓派轻量后端；持续感知/进门事件 |
+| `voice.py` | 本地听（Whisper）+ 说（离线 TTS，语气随七情变化） |
+| `actions.py` · `ros2_robot.py` | 机器人动作接口（模拟 / ROS2） |
+| `butler.py` | 贾维斯管家层：态势简报 + 系统自检 |
+| `devices.py` | 家居控制：内存模拟 + Home Assistant 后端 |
+| `scenes.py` · `triggers.py` | 场景/例程；定时·日落·温度·进门自动化 |
+| `orchestrator.py` | 多步任务拆解与路由汇总 |
+| `remote_agents.py` | 隔空指挥外部智能体（爱马仕/openclaw…） |
+| `photo.py` | 多模态·照片：照片要素→带日期记忆，汇入时间线/图谱；照片里的家人自动归到 TA 名下 |
+| `legacy.py` | 编年生平 + 嘱托：一生编年成故事，保管临终留言/家训 |
+| `guardian.py` | 守护提醒：惦记家人吃药/复查/重要日子，到点本地生成叮嘱（不碰外部账号设备） |
+| `family.py` | 多人合一：一宅多位家人，可"叫出来"由 TA 本人口吻说话+优先想起 TA 的专属记忆，彼此知道对方存在 |
+| `converse.py` | 家人多人对谈："让外公和外婆聊聊做饭"，各用各的性格/口头禅/记忆，模型在则更自然 |
+| `briefing.py` | 晨间关怀简报：今天什么日子 + 谁该吃药复查 + 今天打算 + 一句暖场白，揉成一段早安话 |
+| `letters.py` | 代笔家书：以 TA 口吻给某位家人写一封信，按场合(生日/想念/道歉…)带上共同回忆 |
+| `calendar_book.py` | 本地日程本：生日/复诊/约定持久化，支持每年循环日期，喂给晨间关怀 |
+| `reminisce.py` | 触景生情/睹物思人：给一个由头，顺相关记忆与当时情绪说一段回想 |
+| `gratitude.py` | 感恩与遗憾：按记忆情绪挑出最感念的与放不下的，说成第一人称回望 |
+| `timecapsule.py` | 时光胶囊：封存一句话给未来，到某日(含错过补送)由分身交给某位家人，只送一次 |
+| `wishes.py` | 临别期许：TA 对每位家人的一句盼望(legacy.wishes / 成员 wish)，问起时道来 |
+| `notes.py` | 速记便签：随手记/翻/搜/清的最轻备忘，本地持久化 |
+| `recipes.py` | 家传菜谱：记下拿手菜与做法，"外婆的红烧肉怎么做"照着来（config + 成员 recipes） |
+| `sayings.py` | 口头语录：TA 常念叨的老话，问起能背几句，也能挑应景的撒进回复 |
+| `qa_interview.py` | 生平采访：按人生阶段的引导问题，把回答存进记忆养出更像 TA 的分身 |
+| `social.py` | 社交记忆：对每个人记着亲疏冷暖/上次见面/近期话题，随互动情绪微调（Generative Agents 社会记忆） |
+| `goals.py` | 心愿与目标：长期想达成的事，能添/记进展/销账/盘点 |
+| `kinship.py` | 亲戚称呼计算器："我爸的弟弟"→叔叔、"妈妈的爸爸"→外公，覆盖常用父系/母系/内外 |
+| `festival.py` | 传统节日：今天是什么节+祝福+老讲究，清明/重阳牵出思念，喂给晨间关怀 |
+| `shopping.py` | 采买清单："买瓶酱油""鸡蛋买好了"，能加/划掉/清，本地持久化 |
+| `comfort_stages.py` | 哀伤阶段陪伴：按"离开多久"分初痛/浓念/渐和/长念，给一句贴合此刻的话 |
+| `keepsake.py` | 数字纪念册：把一生/影像/嘱托/家训/全家/时间线导出成一页自包含、可打印的 HTML（照片 base64 内嵌） |
+| `book.py` | 家族册：每位家人各一页(生平/性格/口头禅/TA 的记忆)+一段对谈，编成可打印传家的一本 HTML |
+| `llm.py` | 大模型：多模型/多服务商(Ollama+OpenAI兼容)，按任务路由 + 小会异质模型 |
+| `webstatus.py` | 手机网页：状态/对话/设备/场景/自动化 + 关系图谱·一生时间线·TA的一生/嘱托家训·全家·守护惦记 |
+
+## 4. 脚本地图（`scripts/`）
+
+| 脚本 | 用途 |
+|---|---|
+| `demo.py` | 30 秒看懂：认人→对话→巩固→次日记得 |
+| `jarvis_demo.py` | 贾维斯语音闭环：唤醒→简报→控家居→编排→场景→自动化→晨报 |
+| `demo_agents.py` | 一条命令跑通"隔空指挥外部智能体" |
+| `graph.py` | 记忆图谱探索器：核心实体 / 关联 / 两人连接 |
+| `forgetting.py` | 遗忘曲线演示：随时间淡忘、回忆唤醒 |
+| `daemon.py` | 一键常驻：感知+巩固+自主心跳+自动化（`--voice --wake --web`） |
+| `chat.py` · `desktop.py` · `voice_chat.py` | 终端 / 桌面 GUI / 语音 对话 |
+| `watch.py` | 摄像头持续感知、进画面主动打招呼 |
+| `sleep.py` · `timeline.py` · `ingest.py` | 睡眠巩固 / 一生时间线 / 文档灌记忆 |
+| `keepsake.py` | 导出数字纪念册：一生编成一页自包含、可打印的 HTML |
+| `family_book.py` | 导出家族册：每位家人一页 + 对谈，编成可传家的一本 HTML |
+| `interview.py` | 生平采访：一问一答把人生问出来，存进记忆库 |
+| `finetune_prepare.py` · `finetune_train.py` | QLoRA 本地微调贴近本人文风 |
+| `agent_worker.py` | 外部智能体参考实现（监听 `POST /task`） |
+| `doctor.py` | 环境自检 |
+
+---
+
+## 5. 数据与隐私
+
+- **全本地**：16G 内存即可，认人/记忆/对话/家居都不出本机。
+- **不入库**：个人记忆索引、人脸照片、对话日记、待办、计划、自动化、微调产物均已 `.gitignore`
+  （`data/memories/index.json`、`data/faces/*`、`data/journal/*`、`data/tasks.json`、`data/plan.json`、`data/triggers.json`、`data/finetune/*`）。
+- **授权优先**：陌生人指挥不动家居、问不出近况；守护对象可被特别保护。
+
+## 6. 测试
+
+60 套单测、约 360+ 用例，纯标准库、零网络即可跑：
+
+```bash
+cd digital-soul
+for t in authority memory annotate presence consolidate emotions skills dispatch tasks reflect plan butler devices orchestrate scenes \
+         triggers ha graph voice forgetting entangle dream selfnarrative values monologue curiosity worldmodel anticipate predict swarm \
+         style memorial lifelog habits photo llm legacy guardian family webstatus keepsake converse \
+         briefing book letters calendar reminisce gratitude timecapsule wishes notes \
+         recipes sayings qa_interview social goals kinship festival shopping comfort_stages; do
+  python tests/test_$t.py || break
+done
+```
+
+CI 见 `.github/workflows/digital-soul-tests.yml`。
+
+## 7. 快速开始
+
+```bash
+pip install -r requirements.txt            # 基础依赖（大模型/语音/视觉为可选增强）
+python scripts/demo.py                     # 看懂"一天"
+python scripts/jarvis_demo.py              # 看懂"贾维斯"
+python scripts/chat.py                     # 直接聊
+python scripts/daemon.py --web --voice --wake 贾维斯   # 常驻：看+听+说+网页+自动化
+```
+
+接本地大模型发挥全部性格：装 [Ollama](https://ollama.com) 后 `ollama pull qwen2.5:7b-instruct`。
+对接真实家居：填好 `config/devices.yaml` 的 `home_assistant`。

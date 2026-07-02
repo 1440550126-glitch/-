@@ -1,0 +1,16 @@
+# 设备后端配置。默认用内存模拟（无需任何配置即可玩）。
+#
+# 要对接真实家居（Home Assistant），取消下面注释并填写你的地址与长期访问令牌：
+#
+# home_assistant:
+#   base_url: http://homeassistant.local:8123
+#   token: "在 HA 个人资料页生成的长期访问令牌"
+#   entities:            # 逻辑设备 -> HA 实体 id
+#     light:   light.living_room
+#     ac:      climate.bedroom
+#     music:   media_player.living_room
+#     door:    lock.front_door
+#     curtain: cover.living_room
+#     tv:      media_player.tv
+#   sensors:             # 逻辑读数 -> HA 传感器实体（温度等条件触发用）
+#     temperature: sensor.living_room_temperature

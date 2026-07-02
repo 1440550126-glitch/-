@@ -1,0 +1,78 @@
+# 生成的记忆索引（含个人数据，不入库）
+data/memories/index.json
+
+# 人脸照片（隐私，不入库）
+data/faces/*.jpg
+data/faces/*.jpeg
+data/faces/*.png
+
+# 微调产物（含个人数据 / 体积大，不入库）
+data/finetune/dataset.jsonl
+data/finetune/lora-adapter/
+
+# 对话日记（隐私，不入库）
+data/journal/*.jsonl
+data/journal/*.state.json
+
+# 导出的数字纪念册 / 家族册 + 纪念册照片（含个人生平/隐私，不入库）
+data/keepsake.html
+data/family_book.html
+data/photos/
+
+# 派活待办本 / 当天计划 / 自动化 / 梦境 / 自我成长史 / 价值演化（含个人事项，不入库）
+data/tasks.json
+data/plan.json
+data/triggers.json
+data/calendar.json
+data/capsules.json
+data/notes.json
+data/social.json
+data/goals.json
+data/shopping.json
+data/dreams.json
+data/self.json
+data/values_state.json
+data/questions.json
+data/beliefs.json
+data/calibration.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 打包产物
+*.egg-info/
+build/
+dist/
+data/favors.json
+data/heritage.html
+data/medications.json
+data/appointments.json
+data/joys.json
+data/habit_goals.json
+data/contacts.json
+data/ledger.json
+data/plants.json
+data/keep_in_touch.json
+data/understanding.json
+data/messages.json
+data/vitals.json
+data/family_board.json
+data/growth.json
+data/pets.json
+data/reminders.json
+data/countdown.json
+data/todo.json
+data/belongings.json
+
+# 密钥 / 凭据：绝不入库（MiniMax/云端 API key 等）。放到这些文件或环境变量里。
+.env
+.env.*
+config/secrets.local.sh
+config/*.local.yaml
+secrets.local*
+
+# 自生长知识库（个人知识，不入库；可单独用 Obsidian 打开）
+data/vault/

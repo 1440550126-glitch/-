@@ -1,0 +1,3 @@
+# 微调产物目录：
+#   dataset.jsonl    由 scripts/finetune_prepare.py 生成（含个人数据，已 gitignore）
+#   lora-adapter/    由 scripts/finetune_train.py 生成（已 gitignore）

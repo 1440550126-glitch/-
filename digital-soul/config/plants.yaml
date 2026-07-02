@@ -1,0 +1,11 @@
+# 养花：屋里那几盆花草，记着几天浇一次水，到点提醒。浇过了说一声"花浇了"就记账。
+# 首次启动灌进 data/plants.json。
+#
+# plants:
+#   - name: 君子兰
+#     water_every_days: 5
+#     note: 喜阴，别暴晒
+#   - name: 绿萝
+#     water_every_days: 3
+#   - name: 茉莉
+#     water_every_days: 2

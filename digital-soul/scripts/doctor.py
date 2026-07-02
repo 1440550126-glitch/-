@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""开机自检：一次性检查 大模型 / 记忆 / 语音 / 摄像头 / 人脸 / 界面 是否就绪。
+
+用法：python scripts/doctor.py
+⚠️ 的项目都是可选能力，不装也能跑（自动降级）；❌ 才是必须修。
+"""
+
+import importlib
+import pathlib
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+
+OK, WARN, BAD = "✅", "⚠️", "❌"
+
+
+def line(status: str, name: str, detail: str = "", hint: str = "") -> None:
+    print(f"{status} {name}" + (f" — {detail}" if detail else ""))
+    if status != OK and hint:
+        print(f"     ↳ {hint}")
+
+
+def _imp(name: str):
+    try:
+        importlib.import_module(name)
+        return True
+    except Exception:
+        return False
+
+
+def main() -> None:
+    print("🩺 数字分身自检")
+    print("=" * 52)
+
+    v = sys.version_info
+    line(OK if v >= (3, 9) else WARN, "Python", f"{v.major}.{v.minor}.{v.micro}", "建议 3.9+")
+
+    if _imp("yaml"):
+        line(OK, "PyYAML", "已安装")
+    else:
+        line(BAD, "PyYAML", "缺失（必需）", "pip install pyyaml")
+
+    agent = None
+    try:
+        from dsoul.loader import build_agent
+
+        agent = build_agent()
+        line(OK, "身份/关系配置", f"{len(agent.authority.people)} 个人物")
+        line(OK, "记忆库", f"{len(agent.memory.items)} 条 · 检索={agent.memory.embedder.mode}")
+    except Exception as e:
+        line(BAD, "框架装配", str(e)[:50], "检查 config/identity.yaml、relationships.yaml")
+
+    try:
+        from dsoul.llm import LLM
+
+        m = agent.llm if agent is not None and getattr(agent, "llm", None) is not None else LLM()
+        label = {"ollama": "大模型(本地 Ollama)", "openai": "大模型(OpenAI 兼容)",
+                 "minimax": "大模型(MiniMax 云端)"}.get(m.provider, f"大模型({m.provider})")
+        hint = {
+            "minimax": "设 export DSOUL_LLM_KEY=sk-...（没设会回退 MINIMAX_API_KEY）；密钥别写进配置/仓库",
+            "openai": "确认 host 指向你的 OpenAI 兼容端点、DSOUL_LLM_KEY 已设",
+        }.get(m.provider, "装 Ollama 或设 DSOUL_LLM_HOST 指向局域网；不接也能降级运行")
+        line(
+            OK if m.available else WARN,
+            label,
+            f"{m.host} · {m.model} · {'连通' if m.available else '未连通'}",
+            hint,
+        )
+    except Exception as e:
+        line(WARN, "大模型", str(e)[:40])
+
+    stt = "faster-whisper" if _imp("faster_whisper") else ("openai-whisper" if _imp("whisper") else "")
+    line(OK if stt else WARN, "语音转文字", stt or "未安装", "pip install faster-whisper")
+
+    line(OK if _imp("pyttsx3") else WARN, "文字转语音", "pyttsx3" if _imp("pyttsx3") else "未安装",
+         "pip install pyttsx3（Linux 还需 espeak-ng）")
+
+    line(OK if _imp("sounddevice") else WARN, "麦克风(sounddevice)",
+         "可用" if _imp("sounddevice") else "未安装",
+         "pip install sounddevice + apt install portaudio19-dev")
+
+    if not _imp("cv2"):
+        line(WARN, "摄像头(opencv)", "未安装", "pip install opencv-python")
+    else:
+        import cv2
+
+        cap = cv2.VideoCapture(0)
+        opened = cap.isOpened()
+        cap.release()
+        line(OK if opened else WARN, "摄像头", "已打开" if opened else "未检测到设备")
+
+    nfaces = len(getattr(agent.perception, "known", {})) if agent is not None else 0
+    fr = _imp("face_recognition")
+    cvface = False
+    try:
+        import cv2
+
+        cvface = hasattr(cv2, "face")
+    except Exception:
+        cvface = False
+    if not fr and not cvface:
+        line(WARN, "人脸识别", "未安装",
+             "face_recognition（精度高）或 opencv-contrib-python（树莓派友好）")
+    else:
+        backend = "face_recognition" if fr else "opencv-LBPH"
+        line(OK if nfaces else WARN, "人脸识别", f"{backend} · {nfaces} 张已登记人脸",
+             "用 scripts/ingest.py face <id> <图片> 登记")
+
+    if agent is not None and getattr(agent, "hub", None) is not None and agent.hub.names():
+        av = agent.hub.available()
+        on = [n for n, v in av.items() if v]
+        line(OK if on else WARN, "外部智能体", f"在线 {len(on)}/{len(av)}：{', '.join(av)}",
+             "在对应机器上 `digital-soul worker --name <名> --port <口>` 启动")
+
+    line(OK if _imp("tkinter") else WARN, "桌面界面(tkinter)",
+         "可用" if _imp("tkinter") else "未安装", "sudo apt install python3-tk")
+
+    print("=" * 52)
+    print("说明：⚠️ 的是可选能力，不装也能跑（自动降级）；❌ 才需修复。")
+
+
+if __name__ == "__main__":
+    main()

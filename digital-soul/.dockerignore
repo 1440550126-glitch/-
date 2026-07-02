@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+data/memories/index.json
+data/journal/*.jsonl
+data/journal/*.state.json
+data/faces/*.jpg
+data/faces/*.jpeg
+data/faces/*.png
+data/finetune/dataset.jsonl
+data/finetune/lora-adapter/
+.git/

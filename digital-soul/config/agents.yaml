@@ -1,0 +1,10 @@
+# 外部智能体端点（隔空控制：把任务发过去、拿结果回来）。
+#
+# 这些智能体跑在你的笔记本 / 苹果主机上，各监听一个 HTTP 端口；
+# 参考实现见 scripts/agent_worker.py（POST /task 收任务、/ping 健康检查）。
+#
+# 可用环境变量覆盖某个端点：DSOUL_AGENT_<名字大写>，例如
+#   DSOUL_AGENT_OPENCLAW=http://192.168.1.20:9302
+agents:
+  爱马仕: "http://127.0.0.1:9301"
+  openclaw: "http://127.0.0.1:9302"

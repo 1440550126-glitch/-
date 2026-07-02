@@ -1,0 +1,42 @@
+# 大模型配置（多模型 / 多服务商 / 按任务路由）。不填则用内置默认（本地 Ollama qwen2.5:7b-instruct）。
+#
+# default:                       # 主模型
+#   provider: ollama            # ollama | openai（任何 OpenAI 兼容端点：llama.cpp/LM Studio/vLLM/云）
+#   model: qwen2.5:7b-instruct
+#   host: http://localhost:11434
+#
+# tasks:                         # 按场景换更强/更快的模型（可选）
+#   reflect: { provider: ollama, model: qwen3:14b }
+#   swarm:   { provider: ollama, model: qwen3:14b }
+#
+# panel:                         # 群体小会：让不同模型各出一票（异质认知多样性）
+#   - { provider: ollama, model: qwen3:14b }
+#   - { provider: ollama, model: gemma3:12b }
+#
+# ---- 24GB 统一内存（Apple Silicon）跑得很舒服的本地模型 ----
+# 推荐主模型（二选一）：
+#   - qwen3:14b      约 9GB，中文好、会推理（带 <think> 思考块，框架已自动剥离、不外露）
+#   - gemma3:12b     约 8GB，中文流畅、口吻自然
+# 想更快更省：qwen3:8b（约 5GB）/ qwen2.5:7b-instruct（稳，不带思考块）
+# 用法：先 `ollama pull qwen3:14b`，再把上面 default.model 改成它（记得去掉行首 #）。
+#
+# 注：Qwen3 / Gemma 这类"推理模型"会先输出 <think>…</think> 再给答案；
+#     本框架在 dsoul/llm.py 里已自动剥掉思考块，只把最终回答说给家人听。
+#
+# ---- 接入 MiniMax 云端大模型（中文强、声音可克隆；付费）----
+# 只想让"灵魂"用 MiniMax 当大脑，把下面三行的 # 去掉即可（密钥另走环境变量，别写这）：
+# default:
+#   provider: minimax            # 对话走 OpenAI 兼容的 /text/chatcompletion_v2，框架已处理
+#   model: MiniMax-Text-01       # 也可 abab6.5s-chat（更快更省）/ MiniMax-M1（更强）
+#   host: https://api.minimax.io/v1     # 国内站改成 https://api.minimaxi.com/v1
+#
+# 密钥绝不写进本文件（会随仓库泄露）！只 export 进环境变量，与语音合成共用一把：
+#   export DSOUL_LLM_KEY=sk-...        # 对话用；没设时也会回退读 MINIMAX_API_KEY
+#   export MINIMAX_API_KEY=sk-...      # 语音合成用（见 docs/voice_clone.md）
+# 若密钥曾在聊天/截图里露过脸，先去 MiniMax 平台吊销重置，再用新的。
+#
+# 想"日常闲聊上云、私密回忆留本地"，可以主模型用 ollama，把 MiniMax 只挂到某个任务上：
+# tasks:
+#   chat: { provider: minimax, model: abab6.5s-chat }
+#
+# 隐私提醒：逝者/亲人的私密记忆建议只用本地模型（provider: ollama / 本地 OpenAI 端点），别发往云端。
