@@ -1,0 +1,17 @@
+{
+  "name": "Mnemo 示例市场",
+  "skills": [
+    {
+      "name": "weekly-review",
+      "description": "每周复盘：回顾本周对话与待办，产出复盘与下周计划",
+      "url": "https://raw.githubusercontent.com/example/mnemo-skills/main/weekly-review.md"
+    }
+  ],
+  "plugins": [
+    {
+      "name": "hello",
+      "description": "示例插件：新增 coin_flip 工具",
+      "source": "./examples/plugins/hello"
+    }
+  ]
+}
