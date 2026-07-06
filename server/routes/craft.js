@@ -179,11 +179,9 @@ function sendSandboxedHtml(ctx, html) {
   ctx.res.end(html);
 }
 
-GET('/api/craft/:id/preview', async (ctx) => {   // iframe 用 ?token= 鉴权
-  const a = row(ctx.params.id);
-  if (!a || a.owner_id !== ctx.user.id) throw notFound();
-  sendSandboxedHtml(ctx, a.html);
-}, { auth: true });
+// 注：作品预览已改为前端 iframe srcdoc（HTML 经 GET /api/craft/:id 用 Authorization 头取回，
+// 凭据绝不进 URL）。原 GET /api/craft/:id/preview 因需把 token 放进 iframe src 而移除——
+// 沙箱内的生成物可读自身 URL，一旦带 token 即可被恶意/被注入代码外泄，造成账号接管。
 
 GET('/api/public/craft/:shareId', async (ctx) => {  // 公开分享：免登录直接可玩
   const a = q.get('SELECT * FROM craft_artifacts WHERE share_id = ?', String(ctx.params.shareId));

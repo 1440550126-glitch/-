@@ -1,6 +1,17 @@
 // LingCraft · 一句话生成：输入需求 → 大模型产出单文件 HTML → 沙箱 iframe 即时预览 → 改 / 下载 / 分享。
-// 生成物永远只进 sandbox iframe（独立 opaque origin + 服务端 CSP sandbox），拿不到主站 token。
-import { GET, POST, DEL, getToken } from './api.js';
+// 安全：生成物只经 iframe srcdoc 渲染（无 same-origin 的 sandbox = opaque origin）+ 注入严格 CSP
+// （default-src none / connect-src none）。绝不把任何凭据放进 URL——否则沙箱代码可读自身 URL 后外泄。
+import { GET, POST, DEL } from './api.js';
+
+// 注入到 srcdoc 的 CSP：断网(connect-src none)、禁一切外联，脚本/样式内联可跑。sandbox 属性另管来源隔离。
+const PREVIEW_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'";
+function sandboxed(html) {
+  const meta = `<meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}">`;
+  const s = String(html || '');
+  if (/<head[^>]*>/i.test(s)) return s.replace(/<head[^>]*>/i, (m) => m + meta);      // 作为 <head> 首个节点，先于任何脚本
+  if (/<html[^>]*>/i.test(s)) return s.replace(/<html[^>]*>/i, (m) => m + '<head>' + meta + '</head>');
+  return meta + s;
+}
 
 // ---------------- DOM 小工具 ----------------
 function h(tag, attrs, ...kids) {
@@ -104,9 +115,11 @@ async function renderArtifact(id) {
   const codeWrap = h('div', { class: 'lc-code', hidden: true });
   function loadFrame() {
     frameWrap.innerHTML = '';
+    // 用 srcdoc 直接喂已鉴权取回的 HTML（凭据只走 Authorization 头，绝不进 URL）；
+    // sandbox 无 allow-same-origin = opaque origin，srcdoc 内代码读不到主站 token，也过不了注入的 CSP。
     frameWrap.append(h('iframe', {
       class: 'lc-frame', sandbox: 'allow-scripts allow-pointer-lock',
-      src: `/api/craft/${id}/preview?token=${encodeURIComponent(getToken())}&t=${Date.now()}`
+      srcdoc: sandboxed(a.html)
     }));
   }
   function loadCode() {

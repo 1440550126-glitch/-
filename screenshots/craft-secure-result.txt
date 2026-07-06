@@ -1,0 +1,42 @@
+== LingCraft 安全修复验收（凭据不进 URL）2026-07-06T14:52:45Z ==
+
+[后端 e2e] node /tmp/craft-e2e.mjs
+✓ 生成成功 by_llm=true（走 mock 大模型）
+✓ HTML 从 ```围栏中正确抠出（<!DOCTYPE 开头，含标题）
+✓ 旧 /preview?token= 端点已移除（返回 404，不再把 token 放进任何 URL）
+✓ 作品 HTML 经鉴权 GET /api/craft/:id 取回（前端 srcdoc 用它渲染）
+✓ 修改后 HTML 更新（标题=已修改版）
+✓ 公开链接免登录直接返回可玩 HTML
+✓ 公开链接也带沙箱 CSP
+✓ 我的作品列出 1 条 + 配额已计 2 次(生成+修改)
+✓ 自带Key版无Key → by_llm=false 本地模板兜底
+✓ 兜底命中贪吃蛇模板（可玩 canvas 版）
+✓ 删除后 404
+
+✅ LingCraft 后端全链路通过：生成/抠码/沙箱预览/修改/分享/兜底/配额/删除
+
+[前端 Playwright] node /tmp/craft-pw.mjs（截图 screenshots/craft-secure.png）
+✓ iframe 使用 srcdoc（不是带 token 的 src）
+✓ iframe sandbox 无 allow-same-origin（opaque origin）
+✓ srcdoc 已注入 CSP meta（connect-src none 断网）
+✓ iframe 内点击器游戏渲染（含标题「霓虹点击器」+「点我 +1」）
+✓ 全程无任何 URL 含 token=（凭据只走 Authorization 头）
+✓ 无真正的 JS 脚本错误（401 为游客自动登录的预期引导，已排除）
+   （注：预期内的游客引导 401 共 1 次 → 随后 /api/auth/guest 自动登录并重试成功）
+
+截图：/home/user/-/screenshots/craft-secure.png
+请求样本（前12条）：
+  http://localhost:3000/craft
+  http://localhost:3000/craft/css/style.css
+  http://localhost:3000/craft/js/app.js
+  http://localhost:3000/craft/js/api.js
+  http://localhost:3000/api/craft/mine
+  http://localhost:3000/craft/logo.svg
+  http://localhost:3000/api/auth/guest
+  http://localhost:3000/api/craft/mine
+  http://localhost:3000/craft/logo.svg
+  http://localhost:3000/craft/logo.svg
+  http://localhost:3000/api/craft/generate
+  http://localhost:3000/api/craft/10
+
+✅ 前端安全预览全部通过

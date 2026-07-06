@@ -17,8 +17,8 @@
   },
   "craft-site": {
     "passes": true,
-    "criteria": "LingCraft 独立站（/craft）：一句话生成单文件 HTML → 沙箱 iframe 预览（CSP sandbox + connect-src none）→ 继续修改 → 下载/分享（免登录可玩）→ 本地模板兜底 → 配额（免费8/日、BYOK ∞）",
-    "evidence": "craft-e2e 11/11（生成/抠码/沙箱头/修改/分享/兜底/配额/删除）+ screenshots/craft-home.png + craft-artifact.png（iframe 内游戏真实渲染:『霓虹点击器 点我+1』）+ craft-code.png；smoke 回归 168/0"
+    "criteria": "LingCraft 独立站（/craft）：一句话生成单文件 HTML → 沙箱 iframe 预览 → 继续修改 → 下载/分享（免登录可玩）→ 本地模板兜底 → 配额（免费8/日、BYOK ∞）。安全：预览用 iframe srcdoc（sandbox 无 allow-same-origin + 注入 CSP connect-src none），凭据只走 Authorization 头、绝不进任何 URL；旧 /preview?token= 端点已移除（消除沙箱内代码读自身 URL 外泄 token 的账号接管风险）；公开分享响应带 CSP sandbox",
+    "evidence": "screenshots/craft-secure-result.txt（后端 e2e 11/11 含『旧 /preview?token= 端点已移除→404』；前端 Playwright：iframe 用 srcdoc、sandbox 无 same-origin、CSP 已注入、游戏真实渲染、全程无 URL 含 token=）+ screenshots/craft-secure.png（srcdoc 沙箱内『霓虹点击器 点我+1』渲染）；smoke 回归 168/0"
   },
   "lingzhen-regression": {
     "passes": true,
