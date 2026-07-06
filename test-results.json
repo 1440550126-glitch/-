@@ -15,6 +15,11 @@
     "criteria": "自带Key版不填Key走本地引擎、填后用自己模型；省心版零配置用平台模型；平台模型仅省心版可用",
     "evidence": "screenshots/byok-two-tier-result.txt（自带Key版 by_llm=false→填Key=true；省心版 by_llm=true）"
   },
+  "craft-site": {
+    "passes": true,
+    "criteria": "LingCraft 独立站（/craft）：一句话生成单文件 HTML → 沙箱 iframe 预览（CSP sandbox + connect-src none）→ 继续修改 → 下载/分享（免登录可玩）→ 本地模板兜底 → 配额（免费8/日、BYOK ∞）",
+    "evidence": "craft-e2e 11/11（生成/抠码/沙箱头/修改/分享/兜底/配额/删除）+ screenshots/craft-home.png + craft-artifact.png（iframe 内游戏真实渲染:『霓虹点击器 点我+1』）+ craft-code.png；smoke 回归 168/0"
+  },
   "lingzhen-regression": {
     "passes": true,
     "criteria": "灵阵站主要页面回归走查：首页/智能体/知识库/触发器/用量/定价/模型设置/团队详情/作战室/历史/个人中心 逐页加载、关键选择器在场、无破版报错",

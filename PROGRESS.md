@@ -21,6 +21,8 @@
 - 换 Logo：去掉 🛰 表情包，改为 lingzhen/logo.svg（渐变圆角 + 白色中枢-成员节点网络），用于 favicon/顶栏/登录/欢迎横幅。截图确认 img 加载渲染正常。团队/智能体头像仍用 emoji 头像系统（非品牌 logo，未动）。
 - 新建团队默认头像 🛰 → 🤖（前端建队页/卡片/详情兜底 + 后端 POST /api/teams 默认）。smoke 168/0、建队页截图确认。
 
+- LingCraft 独立新站（/craft，B 方案·共用零依赖后端）：一句话 → 大模型生成单文件 HTML（游戏/页面/效果）→ 沙箱 iframe 即时预览 → 「改一版」迭代 → 下载 / 免登录分享链接。安全：预览与分享响应带 `CSP sandbox allow-scripts + connect-src 'none'`（opaque origin，拿不到主站 token、无法外联）；本地模板兜底（贪吃蛇/落地页）；配额 免费8/日、会员80、BYOK ∞；游客自动登录零门槛。e2e 11/11 + Playwright 截图 + smoke 168/0。子域配置 deploy/caddy-craft.conf。
+
 ## In progress
 - （空）
 

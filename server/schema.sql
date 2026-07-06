@@ -414,3 +414,18 @@ CREATE TABLE IF NOT EXISTS user_llm (
   model_premium TEXT NOT NULL DEFAULT '',
   updated_at    INTEGER NOT NULL
 );
+
+-- LingCraft（一句话生成站）：生成的单文件 HTML 作品
+CREATE TABLE IF NOT EXISTS craft_artifacts (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id   INTEGER NOT NULL,
+  title      TEXT NOT NULL DEFAULT '',
+  prompt     TEXT NOT NULL,                    -- 最近一次生效的需求/修改指令
+  html       TEXT NOT NULL,                    -- 完整单文件 HTML（内联 CSS/JS，无外部资源）
+  by_llm     INTEGER NOT NULL DEFAULT 0,       -- 1=大模型生成 0=本地模板兜底
+  share_id   TEXT,                             -- 公开分享 ID，NULL=未分享
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_craft_owner ON craft_artifacts(owner_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_craft_share ON craft_artifacts(share_id);

@@ -20,6 +20,7 @@ import './routes/shop.js';
 import './routes/rooms.js';
 import './routes/admin.js';
 import './routes/agents.js';
+import './routes/craft.js';
 
 import { seedLingArray, runAgentMigrations } from './agents/seed.js';
 import { startTriggerLoop } from './agents/scheduler.js';
@@ -28,6 +29,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(__dirname, '..', 'web');
 const ADMIN_DIR = path.join(__dirname, '..', 'admin');
 const LINGZHEN_DIR = path.join(__dirname, '..', 'lingzhen');
+const CRAFT_DIR = path.join(__dirname, '..', 'craft');
 const PORT = Number(process.env.PORT) || 3000;
 
 GET('/api/health', async () => ({ status: 'ok', time: Date.now(), llm: llmEnabled() ? 'enabled' : 'local-fallback' }));
@@ -68,6 +70,10 @@ const server = http.createServer((req, res) => {
     const rel = pathname.replace(/^\/lingzhen\/?/, '') || 'index.html';
     if (serveStatic(res, LINGZHEN_DIR, rel)) return;
   }
+  if (pathname === '/craft' || pathname.startsWith('/craft/')) {
+    const rel = pathname.replace(/^\/craft\/?/, '') || 'index.html';
+    if (serveStatic(res, CRAFT_DIR, rel)) return;
+  }
   if (serveStatic(res, WEB_DIR, pathname)) return;
   res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
   res.end('404');
@@ -88,6 +94,7 @@ server.listen(PORT, () => {
   console.log(`  📱 用户端   http://localhost:${PORT}`);
   console.log(`  🛠  管理后台 http://localhost:${PORT}/admin`);
   console.log(`  🛰  灵阵独立站 http://localhost:${PORT}/lingzhen`);
+  console.log(`  ⚡ LingCraft   http://localhost:${PORT}/craft`);
   console.log(`  🤖 大模型   ${llmEnabled() ? '平台兜底 Key 已接入 ' + process.env.LLM_PROVIDER : '纯 BYOK：用户在「模型设置」自带 Key；未自带则走本地引擎'}\n`);
 });
 
