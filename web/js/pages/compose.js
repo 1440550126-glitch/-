@@ -6,11 +6,13 @@ import { nav } from '../router.js';
 
 export function renderCompose(page) {
   const topic = store.topic && location.hash.includes('topic=') ? store.topic : null;
+  const draftText = new URLSearchParams(location.hash.split('?')[1] || '').get('draft');
 
   const ta = h('textarea', {
     class: 'input', rows: 5, maxlength: 300,
     placeholder: topic ? `今日话题「${topic.title}」：${topic.description}` : '写下此刻想说的话…\n比如：「我在等风，也在等你。」'
   });
+  if (draftText) ta.value = draftText.slice(0, 300);
   const counter = h('div', { style: { textAlign: 'right', fontSize: '11px', color: 'var(--ink-3)', marginTop: '6px' } }, '0 / 300');
   const previewSlot = h('div', { style: { marginTop: '14px' } },
     h('div', { style: { fontSize: '12px', color: 'var(--ink-2)', fontWeight: 600, marginBottom: '8px' } }, '✨ AI 预览卡（发布后大家看到的样子）'),
@@ -68,4 +70,6 @@ export function renderCompose(page) {
     h('div', { class: 'notice-bar', style: { marginTop: '14px' } },
       '发布即表示同意《社区规范》。内容将经过审核，AI 生成的预览卡与动画均会标识「AI 辅助生成」。')
   );
+
+  if (draftText) { counter.textContent = `${ta.value.length} / 300`; ta.dispatchEvent(new Event('input')); }
 }

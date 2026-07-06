@@ -22,6 +22,7 @@ export async function api(method, url, body) {
 }
 export const GET = (u) => api('GET', u);
 export const POST = (u, b) => api('POST', u, b ?? {});
+export const PUT = (u, b) => api('PUT', u, b ?? {});
 export const PATCH = (u, b) => api('PATCH', u, b);
 export const DEL = (u) => api('DELETE', u);
 

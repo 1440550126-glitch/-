@@ -1,0 +1,15 @@
+✅ reg-01-home        #/               选择器在场=true JS错误=无
+✅ reg-02-agents      #/agents         选择器在场=true JS错误=无
+✅ reg-03-kb          #/kb             选择器在场=true JS错误=无
+✅ reg-04-kb-detail   #/kb/6           选择器在场=true JS错误=无
+✅ reg-05-triggers    #/triggers       选择器在场=true JS错误=无
+✅ reg-06-usage       #/usage          选择器在场=true JS错误=无
+✅ reg-07-pricing     #/pricing        选择器在场=true JS错误=无
+✅ reg-08-llm         #/llm            选择器在场=true JS错误=无
+✅ reg-09-builder     #/new            选择器在场=true JS错误=无
+✅ reg-10-team        #/team/23        选择器在场=true JS错误=无
+✅ reg-11-warroom     #/run/53         选择器在场=true JS错误=无
+✅ reg-12-history     #/history        选择器在场=true JS错误=无
+✅ reg-13-me          #/me             选择器在场=true JS错误=无
+
+✅ 13 个页面全部加载渲染正常、无 JS 错误

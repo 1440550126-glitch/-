@@ -150,6 +150,12 @@ export async function renderFeed(page) {
         store.me?.unread_notifications ? h('span', { id: 'bell-badge', class: 'bell-badge' }, store.me.unread_notifications) : null),
       h('button', { class: 'icon-btn', onclick: () => nav('/member') }, '👑')
     ),
+    h('button', { class: 'glass lingzhen-entry', onclick: () => nav('/agents') },
+      h('span', { class: 'lz-icon' }, '🛰'),
+      h('span', { class: 'lz-text' },
+        h('span', { class: 'lz-title' }, '灵阵 · AI 团队'),
+        h('span', { class: 'lz-sub' }, '一句话，调动一支专业 AI 团队替你干活')),
+      h('span', { class: 'lz-go' }, '召集 ›')),
     topicSlot, chipRow, list
   );
 

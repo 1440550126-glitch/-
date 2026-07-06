@@ -1,0 +1,210 @@
+# 灵阵 · AI 团队 — 设计文档
+
+> 一句话，调动一支会分工的专业 AI 团队替你干活。
+> 这是「AI句灵」内置的多智能体协作平台，定位对标并超越扣子（Coze）。
+
+## 1. 为什么做「团队」，以及凭什么比扣子强
+
+扣子等平台的"多 Agent"，核心是**路由 / 单点接管**：判断用户意图，把对话交给某一个子 Bot。它本质仍是"一个 Agent 在回答"。
+
+灵阵把重心放在**真正的团队协作**上——像一个项目组那样工作：
+
+| 维度 | 扣子（典型） | 灵阵 |
+| --- | --- | --- |
+| 协作模型 | 路由 / 接管（一次一个 Agent） | **拆解 → 并行分派 → 整合**（一支队伍共同交付） |
+| 共享上下文 | 会话级、靠 prompt 传递 | **黑板（blackboard）共享记忆**，成员相互看得见产出 |
+| 编排者 | 隐式路由 | 显式**编排官**（拆活、排依赖）+ **总编**（整合交付） |
+| 策略 | 主要是路由 | **编排协作 / 流水线 / 智能路由 / 圆桌论战** 四选一 |
+| 工具执行 | 依赖云端插件 | 内置确定性工具，**ReAct 循环**真实调用 |
+| 可观测性 | 结果为主 | **作战室逐步直播**：谁、用什么工具、产出了什么 |
+| 零成本可用 | 需模型额度 | **无 Key 时本地引擎全程跑通**，真实调工具、产结构化成果 |
+
+一句话：扣子让"一个聪明的 Bot"帮你，灵阵让"一支会分工的团队"帮你，并且**全程透明、零门槛可体验**。
+
+## 2. 概念模型
+
+```
+智能体 Agent  ── 团队 Team ── 运行 Run ── 步骤 Step（作战室直播）
+  人设/工具       成员+策略     一次任务      plan/act/tool/synthesize
+                    │
+                    └── 知识库 Knowledge Base（RAG，可挂载多个）
+```
+
+- **智能体（Agent）**：一个角色 = 名字 + 头像 + 职能(role) + 人设(persona) + 可用工具 + 模型档位。
+- **团队（Team）**：一组有序成员 + 编排策略 + 团队使命 + 编排官指令 + 挂载的知识库 + 每成员最大工具轮数。
+- **运行（Run）**：把一个任务交给一支团队执行一次，产生最终交付物与完整步骤 trace。
+- **步骤（Step）**：运行中的一个可观测事件，含阶段、执行者、输入/输出、工具调用、token/成本。
+
+数据表见 `server/schema.sql`：`agents / teams / agent_runs / run_steps / knowledge_bases / knowledge_chunks`。
+
+## 3. 编排引擎（`server/agents/engine.js`）
+
+一次 `orchestrate` 运行分三段，全部异步执行并通过 SSE 频道 `run:<id>` 实时推送：
+
+### ① 计划 plan —— 编排官
+编排官（队长）拿到任务 + 成员花名册 + 是否有知识库，产出 JSON 计划：
+```json
+{ "plan": [
+    { "step": "调研产品卖点", "assignee": 12, "objective": "...", "depends_on": [] },
+    { "step": "撰写文案",     "assignee": 14, "objective": "...", "depends_on": [1] }
+  ], "summary": "先调研再写作" }
+```
+- 校验 `assignee` 必须映射到真实成员，非法则回退到规则编排。
+- `sequential` 策略不调模型，直接确定性串成流水线（省 token）。
+
+### ② 执行 act —— 成员 ReAct 循环
+按 `depends_on` 做**拓扑排序**后依次执行；每个成员看得到**黑板**（已完成成员的产出）：
+```
+loop (≤ max_rounds):
+  成员根据 目标 + 黑板 + 已有工具观察，输出单个 JSON 动作
+  ├─ {"action":"tool","tool":"calculator","args":{...}}  → 执行工具，结果写回观察，继续
+  └─ {"action":"final","output":"..."}                   → 产出本子任务结论，结束
+```
+产出写回黑板，供后续成员衔接。工具调用本身也是一条 `tool` 步骤，逐条直播。
+
+### ③ 整合 synthesize —— 总编
+总编读取任务 + 所有成员产出，整合成结构清晰、可直接使用的 Markdown 交付物（一句话结论 → 要点 → 下一步建议），写入 `agent_runs.result`，并发 `done` 事件。
+
+### 四种策略
+| 策略 | 行为 |
+| --- | --- |
+| `orchestrate` 编排协作 | 拆解→按专长分派（可依赖）→整合。最强默认模式 |
+| `sequential` 流水线 | 成员按固定顺序逐棒加工，前序产出喂给后序 |
+| `route` 智能路由 | 编排官只挑一名最合适的成员独立承接（类扣子接管） |
+| `debate` 圆桌论战 | **真·多轮**：成员逐轮看到他人观点后回应/反驳/修正，总编综合共识与分歧 |
+
+## 4. 工具 / 插件（`server/agents/tools.js`）
+
+工具是**确定性**的，因此**无需大模型也能真实执行**——这正是本地引擎模式仍然有用的关键。
+
+| 工具 | 说明 | 安全 |
+| --- | --- | --- |
+| `calculator` | 递归下降解析器精确计算（**绝不用 eval**），支持 `+ - * / % ^ ()` | ✅ |
+| `datetime` | 北京时间 / 距某日还有多少天 | ✅ |
+| `text_stats` | 字数 / 中文字数 / 句数 / 阅读时长 | ✅ |
+| `knowledge_search` | 在团队挂载的知识库做 RAG 检索 | ✅ |
+| `random_pick` | 从候选随机抽取 / 范围随机整数（头脑风暴） | ✅ |
+| `web_fetch` | 抓取公开网页正文；**SSRF 防护**禁止内网/本机/元数据地址；受部署网络策略限制 | ⚠ |
+| `compose_card` | **站内动作**：把一句文案生成「句灵」预览卡（情绪/场景/版式/配色），可直接发布 | ✅ |
+| `draft_post` | **站内动作**：把文案存入用户草稿箱（自动配预览卡），审核后可发布 | ✅ |
+| `daily_topic` | **站内动作**：生成「今日话题」选题（标题 + 引导语） | ✅ |
+| `fortune` | **整活**：生成今日运势（纯娱乐向）——运势指数 / 宜忌 / 幸运色与数字，按日期确定性 | ✅ |
+| `summarize` | **数据**：从长文本抽取最具代表性的几句生成摘要（抽取式，词频打分 + 长度归一） | ✅ |
+| `extract` | **数据**：正则抽取邮箱 / 链接 / 电话 / 数字 / 日期 | ✅ |
+| `json_tool` | **数据**：JSON 校验 / 美化 / 按点路径（如 `a.b.0`）取值 | ✅ |
+| `memory` | **状态**：读写团队长期记忆（`get/set/list/delete`，跨运行持久） | ✅ |
+
+扩展：在 `TOOLS` 注册 `{ id, name, icon, desc, params, run(args, ctx) }` 即可，`ctx` 提供 `{ kbIds, userId }`。
+
+## 5. 知识库 / RAG（`server/agents/knowledge.js`）
+
+零依赖关键词检索，足够好且可解释，数据量上来后可平滑替换为向量库：
+- **切片**：按句子/段落边界聚合到 ~320 字一块。
+- **分词**：拉丁词（≥2）+ 中文 **bigram** + 中文单字。
+- **打分**：查询词在块内的加权词频（bigram 权重更高）× 命中词种类加成，再做轻度长度归一。
+- 接口：`addDoc(kbId, source, text)` / `searchKnowledge(kbIds, query, topK)`。
+
+## 6. 本地兜底（铁律：无 Key 也能完整体验）
+
+每一个大模型调用都包了 `llmStep()`：启用且未超预算时走 `chatLLM`，否则走确定性兜底，并精确记账（token / 成本 / 是否走本地）。
+
+- **计划兜底**：每位成员一个子任务（`sequential` 串成链；`route` 按关键词匹配挑最佳成员）。
+- **成员兜底**：按启发式**真实触发一个工具**（含数字→计算器、有知识库→检索、提到时间→日期…），再以"角色视角"组织结构化结论，并把真实工具结果作为佐证附上。
+- **整合兜底**：把各成员产出汇编成带"一句话结论 / 各部分产出 / 下一步建议"的 Markdown 报告。
+
+因此**冒烟测试在无大模型环境下也能跑通完整团队协作**（见 `npm run smoke` 的「灵阵」段）。
+
+## 7. 成本与配额
+
+- 每次模型调用 `logUsage` 记账，feature 前缀 `agent_`（`agent_plan / agent_act / agent_synth`），自动并入后台 AI 成本日报。
+- **每日预算封顶**：`settings.agent_budget_micro`（默认 5 元，0=不限）；超预算后强制走本地引擎，绝不超支。
+- **每日运行配额**：免费 8 次 / 会员 80 次（`server/agents/catalog.js` 的 `AGENT_QUOTA`）。
+- **后台管控**：管理后台「🛰 灵阵团队」面板实时监控运行状态/步数/成本，可**强制停止**进行中的运行，并**在线调整每日预算**。
+
+### 定时触发器（`server/agents/scheduler.js`）
+让团队按计划自动执行某个任务（对标并超越扣子的定时任务）。
+- **调度**：`interval`（每 N 分钟，≥30）/ `daily`（每天定点·东八区）。`setInterval` 轮询到期触发器并逐个发起运行（与 AI 暖场调度同构）。
+- **防滥用**：最小间隔 30 分钟、单用户最多 5 个启用、每轮限发数量；团队被删/空则自动停用。
+- **成本**：触发产生的运行同样受引擎每日预算闸门约束（超额走本地引擎）；手动「立即运行」计入当日运行配额，后台自动调度不计 UI 配额。
+- `agent_runs.source` 标记 `manual` / `trigger` / `api`，后台监控与运行历史可区分来源。
+
+### 对外 API 与站内动作
+- **对外 API**：团队所有者一键生成密钥（`lk_…`，仅返回一次），外部系统 / Webhook 用 `POST /api/public/run`（**无需登录**）同步调用并拿到最终结果。按团队所有者计每日 50 次、受预算闸门约束、密钥可随时吊销/轮换。
+- **站内动作工具**：`compose_card`（生成预览卡）、`draft_post`（写入用户草稿箱，App 内审核后发布）、`daily_topic`（出选题）——让团队的产出能直接落到主站，且保持"先草稿、人工审核再发布"的安全边界（不自动发帖、不自动建房）。
+
+```bash
+# 对外调用示例
+curl -X POST https://你的域名/api/public/run \
+  -H "Content-Type: application/json" \
+  -d '{"key":"lk_xxx","task":"给「秋天的第一杯奶茶」写一句文案"}'
+```
+
+### 团队记忆（变量）
+让团队**跨运行有状态**（对标扣子的变量/数据库，但更轻）：
+- 存储：`team_memory(team_id, key, value)`，按 `(team_id, key)` 唯一，单团队上限 50 条、值 ≤500 字。
+- 成员侧：`memory` 工具 `get/set/list/delete`，运行中按 `ctx.teamId` 作用域读写——团队可"记住"用户偏好、上次结论、风格约定等，下次运行直接复用。
+- 用户侧：团队工作台「🧠 团队记忆」卡片可查看 / 增改 / 删除；`GET/PUT /teams/:id/memory`（仅团队所有者可写）。
+
+### 运行变量 / 批量 / 出站 Webhook / 用量看板
+- **运行变量**：任务里写 `{{key}}`，`resolveTask` 按「入参 vars → 团队记忆 → 原样保留」依次填充。前端派活区自动识别占位符并生成输入框。
+- **批量运行**：`startBatch` 把一个任务模板套用多条输入（字符串项填 `{{input}}`，对象项按键填充），逐条建运行并**顺序执行**（避免一次性打满大模型），按 `batch_id` 分组；前端 `/batch/:id` 轮询展示并可一键导出全部结果。每条计 1 次运行配额。
+- **出站 Webhook**：团队配 `webhook_url`，运行结束（done/failed/stopped）后把结果 JSON `POST` 过去；**复用 `safefetch.js` 的 SSRF 防护**（设置时与发送时都校验，禁止内网/本机/元数据），失败不影响主流程。
+- **个人用量看板**：`GET /agents/usage` 汇总用户的运行数 / 成功失败 / 运行与 API 配额 / 今日与累计成本 / 资产数量；前端首页配额条「📊 用量」打开。
+
+> SSRF 防护集中在 `server/agents/safefetch.js`（`isBlockedIp` / `isBlockedHost` / `assertSafeHop` / `safeFetch`），`web_fetch` 工具与出站 Webhook 共用。
+
+## 8. API 一览（均需登录；前缀 `/api`）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/agents/meta` | 工具清单 / 策略 / 我的额度 / 限制 |
+| GET/POST | `/agents` | 我的成员 + 模板 / 新建成员 |
+| GET/PATCH/DELETE | `/agents/:id` | 成员详情 / 编辑 / 删除 |
+| POST | `/agents/:id/clone` | 复制成员（模板→我的） |
+| GET/POST | `/teams` | 我的团队 + 模板 / 新建团队 |
+| GET | `/teams/gallery` | **团队广场**：他人发布的团队 |
+| GET/PATCH/DELETE | `/teams/:id` | 团队详情 / 编辑 / 删除 |
+| POST | `/teams/:id/clone` | 复制团队（模板→我的） |
+| POST | `/teams/:id/publish` | 发布 / 取消发布到团队广场 |
+| POST | `/teams/:id/run` | **派活**：发起一次运行（body 可带 `vars` 填充 `{{变量}}`），返回 `run_id` |
+| POST | `/teams/:id/batch` | **批量运行**：一个任务模板套用多条 `items`（≤10），返回 `batch_id` |
+| PUT/DELETE | `/teams/:id/webhook` | 配置 / 移除**出站 Webhook**（设置时即做 SSRF 校验） |
+| GET | `/runs` · `/runs/:id` | 我的运行列表 / 单次详情（含步骤） |
+| GET | `/runs/batch/:batchId` | 批量运行结果（轮询用） |
+| GET | `/agents/usage` | 个人用量看板（运行 / 额度 / 成本 / 资产） |
+| GET(SSE) | `/runs/:id/events` | **作战室实时事件流**（回放已有步骤 + 直播后续 + 终态） |
+| POST | `/runs/:id/stop` | 请求停止运行 |
+| GET/POST | `/triggers` | 我的定时任务 / 新建 |
+| PATCH/DELETE | `/triggers/:id` | 编辑（含启停）/ 删除 |
+| POST | `/triggers/:id/run-now` | 立即运行一次（不打乱原定计划） |
+| GET/POST | `/kb` | 知识库列表 / 新建 |
+| GET/DELETE | `/kb/:id` | 详情（含来源与样片）/ 删除 |
+| POST | `/kb/:id/docs` | 添加文档（自动切片） |
+| POST | `/kb/:id/search` | 检索测试（RAG） |
+| POST | `/public/run` | **对外 API（无需登录）**：用团队密钥同步调用，返回最终结果 |
+| POST/DELETE | `/teams/:id/api-key` | 生成（仅返回一次）/ 吊销团队 API 密钥 |
+| GET/PUT | `/teams/:id/memory` | 团队记忆（变量）查看 / 设置（`DELETE /teams/:id/memory/:key` 删除） |
+| GET/DELETE | `/agent-drafts` · `/agent-drafts/:id` | 草稿箱列表 / 丢弃 |
+| GET | `/admin/agents/overview` | 🛠 后台：运行总览 + 最近运行（管理员） |
+| GET | `/admin/agents/runs/:id` | 🛠 后台：任意运行详情 |
+| POST | `/admin/agents/runs/:id/stop` | 🛠 后台：强制停止运行 |
+| PUT | `/admin/agents/config` | 🛠 后台：设置每日成本预算封顶 |
+
+> ⚠ 路由注册顺序：`/teams/gallery` 必须在 `/teams/:id` 之前注册，否则 `gallery` 会被当作 `:id`。
+
+SSE 事件：`step`（步骤新增/更新，按 `id` 去重、`idx` 排序）、`done`（运行结束，载最终 run）、`error`。
+
+## 9. 前端（`web/js/pages/agents.js`）
+
+- `/agents` 灵阵首页：额度条 / 我的团队 / 团队模板 / **团队广场** / 智能体 / 知识库 / 最近运行。
+- `/team/:id` 团队工作台：派活入口 + **发布到广场** + 成员/知识库/编排设置（自有团队可编辑，模板/他人发布团队可一键复制）。
+- `/run/:id` **作战室**：SSE 直播时间线（编排官计划、成员工作中动画、工具调用、总编整合）+ 最终交付（极简 Markdown 渲染 + 一键复制）。
+- 🎰 **随机整活**（首页）：一键抽「夸夸群 / 赛博算命馆 / 杠精辩论赛 / 废话文学创作组」之一 + 随机任务直接开跑（纯娱乐专区，开箱即玩）。
+- 管理后台「🛰 灵阵团队」：运行监控 + 强制停止 + 每日预算管控。
+
+## 10. 扩展点（路线）
+
+- 工具：站内动作已落地（`compose_card` / `draft_post` / `daily_topic`）；下一步做 HTTP 自定义插件、代码沙箱、图像生成。
+- 检索：接入 Embedding 后将关键词打分替换为向量召回（接口已隔离在 `knowledge.js`）。
+- 编排：DAG 真并行执行、失败重试与人审插点（成员间质询回合已在 `debate` 多轮中实现）。
+- 发布与自动化：团队广场、定时触发器、对外 API / Webhook 调用均已上线；下一步做调用回执 Webhook（结果主动回推）。

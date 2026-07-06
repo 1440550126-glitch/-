@@ -159,10 +159,14 @@ export async function warmupPost(personaKey = null) {
   const key = personaKey || pick(Object.keys(PERSONAS));
   const accountId = accountIds[key];
   if (!accountId) return null;
-  const content = await generatePostText(key);
-  // 同一账号 24h 内不发重复内容
-  const dup = q.get('SELECT id FROM posts WHERE user_id = ? AND content = ? AND created_at > ?', accountId, content, now() - 86400_000);
-  if (dup) return null;
+  // 同一账号 24h 内不发重复内容；本地词库较小，撞重复时重试几次再放弃
+  let content = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const candidate = await generatePostText(key);
+    const dup = q.get('SELECT id FROM posts WHERE user_id = ? AND content = ? AND created_at > ?', accountId, candidate, now() - 86400_000);
+    if (!dup) { content = candidate; break; }
+  }
+  if (!content) return null;
   const card = buildCard(content);
   const r = q.run(
     `INSERT INTO posts (user_id, content, card, status, is_ai, ai_label, created_at)

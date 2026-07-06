@@ -1,0 +1,15 @@
+== 两站对称互链验收 2026-07-06T15:01:55Z ==
+SoloCompany OS(/lingzhen) 头部新增『⚡ LingCraft』姊妹站入口（右侧固定区，共用账号）；
+LingCraft(/craft) 头部原有『AI 团队 ↗』→ /lingzhen。两站同一 jl_token 账号，登录一次互通。
+
+✓ SoloCompany OS 头部出现 ⚡ LingCraft 姊妹站入口
+✓ 该入口 href=/craft、新标签打开
+   link: {"href":"/craft","target":"_blank","text":"⚡LingCraft"}
+✓ LingCraft 头部反向入口 → /lingzhen（对称互链）
+   back: {"href":"/lingzhen","text":"AI 团队 ↗"}
+
+✅ 两站头部对称互链
+
+[多宽度] node /tmp/crosslink-widths.mjs
+[wide 1280px] 建队={"text":"＋ 建队","w":67,"vis":true}  craft文本="⚡ LingCraft"
+[mobile 400px] 建队={"text":"＋ 建队","w":61,"vis":false}  craft文本="⚡"

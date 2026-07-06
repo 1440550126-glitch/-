@@ -68,7 +68,7 @@ POST('/api/shop/orders/:id/pay', async (ctx) => {
     if (order.kind === 'member') {
       const plan = MEMBER_PLANS.find((p) => p.id === order.item_id);
       const base = Math.max(ctx.user.member_until, now());
-      q.run('UPDATE users SET member_until = ? WHERE id = ?', base + plan.months * 30 * 86400_000, ctx.user.id);
+      q.run('UPDATE users SET member_until = ?, llm_tier = ? WHERE id = ?', base + plan.months * 30 * 86400_000, plan.llm_tier || 'easy', ctx.user.id);
     } else if (order.kind === 'skin') {
       q.run('INSERT OR IGNORE INTO user_skins (user_id, skin_id, created_at) VALUES (?,?,?)', ctx.user.id, order.item_id, now());
     } else if (order.kind === 'credits') {
