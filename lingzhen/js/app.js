@@ -154,6 +154,9 @@ function header() {
     h('nav', { class: 'lz-nav' }, NAV.map((it) =>
       h('a', { class: it.primary ? 'primary' : (it.match.includes(sec) ? 'on' : ''), onclick: () => nav(it.hash) }, it.label))),
     h('div', { class: 'lz-user' },
+      // 姊妹站 LingCraft：一句话生成小游戏/页面/效果，与本站共用账号（同一登录直接可用）——放右侧固定区，始终完整可见
+      h('a', { class: 'lz-craft', href: '/craft', target: '_blank', rel: 'noopener', title: '姊妹站 · 一句话生成小游戏/页面/效果（共用你的账号）' },
+        '⚡', h('span', { class: 'lz-craft-t' }, 'LingCraft')),
       state.meta ? (state.meta.byok
         ? h('a', { class: 'lz-quota vip', title: '自带模型 Key · 不限量', onclick: () => nav('#/llm') }, '🔑 ∞')
         : h('a', { class: 'lz-quota' + (isMemberNow() ? ' vip' : ''), title: isMemberNow() ? '会员 · 查看权益' : '今日剩余运行次数 · 点击升级', onclick: () => nav('#/pricing') },

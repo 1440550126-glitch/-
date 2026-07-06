@@ -22,6 +22,7 @@
 - 新建团队默认头像 🛰 → 🤖（前端建队页/卡片/详情兜底 + 后端 POST /api/teams 默认）。smoke 168/0、建队页截图确认。
 
 - LingCraft 独立新站（/craft，B 方案·共用零依赖后端）：一句话 → 大模型生成单文件 HTML（游戏/页面/效果）→ 沙箱 iframe 即时预览 → 「改一版」迭代 → 下载 / 免登录分享链接。本地模板兜底（贪吃蛇/落地页）；配额 免费8/日、会员80、BYOK ∞；游客自动登录零门槛。e2e 11/11 + Playwright 截图 + smoke 168/0。子域配置 deploy/caddy-craft.conf。
+- 两站对称互链 · 共用账号：SoloCompany OS(/lingzhen) 头部右侧固定区新增「⚡ LingCraft」姊妹站入口（宽屏全字、窄屏仅 ⚡ 图标，不裁切主导航与建队 CTA），LingCraft(/craft) 头部原有「AI 团队 ↗」→ /lingzhen——两站同一 jl_token，登录一次互通、来回一键跳。回答用户「可否和原名灵阵的 AI 团队放一起」：二者本就共用零依赖后端 + 账号 + 库，现补上反向入口即成一套产品家族。证据 screenshots/crosslink-result.txt + crosslink-lingzhen/wide/mobile.png；smoke 168/0。（更深的「嵌为一个站的标签页」是另一档改造，待用户拍板再做。）
 - LingCraft 安全加固（evaluator 逮到账号接管漏洞后修复）：原预览把 `jl_token` 放进 iframe `src=?token=`——沙箱内被注入/恶意的生成物可 `location.search` 读走该共享 token，再 `location.href=evil` 自跳外泄（CSP connect-src 管不住整帧导航）＝账号接管。改为 **iframe `srcdoc`**：HTML 经鉴权 `GET /api/craft/:id`（Authorization 头）取回后灌入 srcdoc，凭据绝不进任何 URL；srcdoc 注入严格 CSP（default-src none / connect-src none）；sandbox 仍无 allow-same-origin（opaque origin）。后端 `GET /api/craft/:id/preview` 端点整个移除（唯一的凭据-进-URL 出口）。证据 screenshots/craft-secure-result.txt（e2e 含端点已 404 + Playwright 断言「全程无 URL 含 token=」）+ craft-secure.png；smoke 168/0。注：全局 `?token=` 兜底（httpx.js:94）保留——SSE/EventSource 无法带 header 必须靠它，且其响应非可执行 HTML 文档，无同类风险。
 
 ## In progress

@@ -34,6 +34,9 @@ a{cursor:pointer;color:inherit}
 .lz-nav a.on{color:var(--acc);background:var(--card)}
 .lz-nav a.primary{color:#fff;background:var(--grad);font-weight:600}
 .lz-user{display:flex;align-items:center;gap:10px;font-size:13px}
+.lz-craft{display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border-radius:20px;font-size:12px;font-weight:600;
+  color:#3ddc97;background:rgba(61,220,151,.10);border:1px solid rgba(61,220,151,.35);white-space:nowrap;flex:none}
+.lz-craft:hover{background:rgba(61,220,151,.18);border-color:rgba(61,220,151,.6)}
 .lz-quota{background:var(--card);border:1px solid var(--line);padding:4px 9px;border-radius:20px;color:var(--acc);font-weight:600;font-size:12px}
 .lz-me{color:var(--mut)}
 .lz-out{color:var(--dim);font-size:12px}
@@ -41,6 +44,7 @@ a{cursor:pointer;color:inherit}
 .lz-main{padding-top:4px}
 @media(max-width:560px){
   .lz-brand small{display:none}.lz-me{display:none}.lz-nav a{padding:7px 9px}
+  .lz-craft{padding:4px 8px}.lz-craft .lz-craft-t{display:none}   /* 窄屏只留 ⚡ 图标 */
 }
 
 /* ---- 通用 ---- */
