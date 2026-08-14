@@ -55,4 +55,11 @@ export const config = {
     at: process.env.DAILY_AT || '03:00',           // 每日定时挂机时间 HH:MM（本地时区）
     limit: num(process.env.DAILY_LIMIT, 0),        // 每天最多生成几首（0=不限，跑完待处理为止）
   },
+  // 多账号轮换：ACCOUNTS=逗号分隔的登录态目录名（每个目录=一个 SUNO 账号）；留空则单账号
+  accounts: (process.env.ACCOUNTS || '').split(',').map(s => s.trim()).filter(Boolean),
+  // 生成质量回捞
+  quality: {
+    minSec: num(process.env.QUALITY_MIN_SEC, 30),  // 时长低于此判为跑坏，重排生成
+    maxSec: num(process.env.QUALITY_MAX_SEC, 600),
+  },
 };

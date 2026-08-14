@@ -86,7 +86,29 @@ npm start -- --playlist                   # 终端挂机 + 站内歌单归类
 
 **自动下载音频（best-effort）**：加 `--download` 后，脚本监听 SUNO 前端接口捞出生成好的音频，用你的登录态下到 `var/downloads/`（清单 `var/downloads.jsonl`）。因为依赖 SUNO 内部接口形态，改版后可能失效——失效时**不影响生成**，只是下不到，可退回手动在 SUNO 资料库下载。
 
-## 六、SUNO 改版了 / 找不到输入框怎么办
+## 六、多账号轮换（额度不够用时）
+
+多个 SUNO 账号轮流用，一个号额度耗尽自动切下一个，全部耗尽才暂停：
+
+```bash
+# .env 里配好账号目录（每个目录一个号）
+# ACCOUNTS=.suno-profile-a,.suno-profile-b,.suno-profile-c
+npm run login:all          # 逐个弹出浏览器，把每个号都登录一次
+npm start -- --rotate      # 挂机；配了多个 ACCOUNTS 时默认就开轮换
+```
+下载与去重跨账号贯通（同一首不会重复下）。单账号时这套完全不影响。
+
+## 七、生成质量回捞（自动筛掉跑坏的重生成）
+
+加 `--quality`：每轮生成后，用 SUNO 返回的时长/状态给每首打分——**时长过短、状态异常、没出音频**的判为「跑坏」，自动标记重排，下次 `npm run retry` 或每日定时会重新生成它。
+
+```bash
+npm start -- --download --quality        # 下载 + 质检回捞
+npm run panel -- --download --quality --playlist --rotate   # 全家桶
+```
+阈值在 `.env` 的 `QUALITY_MIN_SEC`（默认 30 秒）。这是基于元数据的可靠信号（跑坏的生成通常时长极短或状态异常）；「听内容判跑题」需要音频模型，属后续增强。
+
+## 八、SUNO 改版了 / 找不到输入框怎么办
 
 SUNO 页面 DOM 会不定期变，脚本靠 `config.json` 里的**候选选择器**定位（每个字段一组，逐个尝试，命中即用，所以单个失效也不至于全崩）。若报“找不到 xxx 输入框”：
 
@@ -99,7 +121,7 @@ npm run inspect   # 打开浏览器停在创作页
 - 曲风框：`textarea[placeholder*="style" i]`
 - 歌名框：`input[placeholder*="title" i]`
 
-## 七、节奏与安全建议
+## 九、节奏与安全建议
 
 - `.env` 里 `BETWEEN_SONGS_MS` 控制每首间隔，默认 45s + 随机抖动，别调太小。
 - `HEADLESS=false`（默认）能看到窗口便于盯梢；确认稳定后可设 `true` 省资源。
@@ -119,11 +141,13 @@ suno-batch/
     ├── panel.js         网页控制面板（HTTP + SSE）
     ├── panel-page.js    面板前端页面（内联）
     ├── scheduler.js     每日定时挂机（--now 立即先跑一轮）
-    ├── engine.js        批量核心循环（终端/网页/定时共用，含失败重试）
+    ├── engine.js        批量核心循环（各端共用，含失败重试 + 账号轮换）
+    ├── session.js       浏览器会话/多账号轮换/登录（单账号也走这里）
     ├── suno.js          Playwright 页面操作（登录/填表/生成/额度检测）
     ├── llm.js           大模型生成 歌名/曲风/歌词（对齐 SUNO 标准 + 校验）
     ├── tagger.js        自动打标签/归类（规则可自改）
     ├── playlist.js      SUNO 站内歌单归类（best-effort UI）
+    ├── quality.js       生成质量回捞（时长/状态质检，跑坏的重排）
     ├── harvest.js       自动下载生成的音频（网络捕获，按歌单分文件夹）
     ├── tasks.js         CSV 解析 + 断点续跑 + 重试队列 + 歌单索引
     ├── control.js       终端控制台与热键

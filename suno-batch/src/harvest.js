@@ -16,7 +16,8 @@ export function collectClips(node, out) {
   const id = node.id || node.clip_id;
   const url = node.audio_url || node.audioUrl;
   if (id && typeof url === 'string' && /^https?:\/\//.test(url)) {
-    out.push({ id: String(id), audio_url: url, title: node.title || node.display_name || '', status: node.status || '' });
+    const dur = Number(node.duration ?? node.metadata?.duration ?? node.duration_seconds ?? 0) || 0;
+    out.push({ id: String(id), audio_url: url, title: node.title || node.display_name || '', status: node.status || '', duration: dur });
   }
   for (const k of Object.keys(node)) {
     const v = node[k];
@@ -24,13 +25,14 @@ export function collectClips(node, out) {
   }
 }
 
-export function attachHarvest(context, page) {
+// shared：跨账号轮换时共享 clips/downloaded/titlePlaylist，使质检与去重贯通所有账号。
+export function attachHarvest(context, page, shared = {}) {
   const dir = join(config.root, 'var', 'downloads');
   const manifest = join(config.root, 'var', 'downloads.jsonl');
   mkdirSync(dir, { recursive: true });
-  const clips = new Map();       // id -> { audio_url, title, status }
-  const downloaded = new Set();
-  const titlePlaylist = new Map(); // title -> playlist（歌名归类，用于分文件夹）
+  const clips = shared.clips || (shared.clips = new Map());       // id -> { audio_url, title, status, duration }
+  const downloaded = shared.downloaded || (shared.downloaded = new Set());
+  const titlePlaylist = shared.titlePlaylist || (shared.titlePlaylist = new Map()); // title -> playlist
 
   page.on('response', async (res) => {
     try {
@@ -44,7 +46,7 @@ export function attachHarvest(context, page) {
       collectClips(body, found);
       for (const c of found) {
         const prev = clips.get(c.id) || {};
-        clips.set(c.id, { ...prev, ...c });
+        clips.set(c.id, { ...prev, ...c, duration: c.duration || prev.duration || 0 });
       }
     } catch { /* 忽略：不是所有响应都可解析 */ }
   });
@@ -89,5 +91,6 @@ export function attachHarvest(context, page) {
       report?.('harvest-done', { total: downloaded.size });
     },
     stats: () => ({ seen: clips.size, downloaded: downloaded.size }),
+    getClips: () => [...clips.values()],   // 供质检使用
   };
 }

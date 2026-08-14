@@ -6,10 +6,10 @@ import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { config } from './config.js';
 import { readTasks, loadDone, writePlaylistIndex } from './tasks.js';
-import * as suno from './suno.js';
 import { runBatch } from './engine.js';
-import { attachHarvest } from './harvest.js';
+import { openSession } from './session.js';
 import { assignPlaylists } from './playlist.js';
+import { reviewQuality } from './quality.js';
 import { log } from './control.js';
 
 const args = process.argv.slice(2);
@@ -47,36 +47,35 @@ async function runOnce() {
   const limit = config.daily.limit;
   log(`▶ 本轮开始：待处理 ${pending.length} 首${limit ? `，本轮上限 ${limit} 首` : ''}。`);
 
-  const { context, page } = await suno.launch();
+  const download = has('--download') || String(process.env.DOWNLOAD).toLowerCase() === 'true';
+  const rotate = has('--rotate') || config.accounts.length > 1;
+  const sess = await openSession({ download, rotate, onLog: m => log(m) });
   try {
-    await suno.gotoCreate(page);
-    if (await suno.isLoginWall(page)) {
-      log('⚠️ 未登录：请在浏览器窗口登录（首次需要；登录态会记住）…');
-      if (!await suno.waitForLogin(page, () => log('仍在等待登录…'))) { log('❌ 超时未登录，跳过本轮。'); return; }
-    }
-    const harvest = (has('--download') || String(process.env.DOWNLOAD).toLowerCase() === 'true') ? attachHarvest(context, page) : null;
     const submitted = [];
     const report = (ev, d) => {
       if (ev === 'song') {
         if (d.phase === 'filling') log(`[${d.i}/${d.total}] 🎵 ${d.title} | ${d.style} | 歌单：${d.playlist}`);
-        else if (d.phase === 'submitted') { log(`[${d.i}/${d.total}] ✅ 已提交${d.credits ? ' · ' + d.credits : ''}`); submitted.push({ title: d.title, playlist: d.playlist }); }
+        else if (d.phase === 'submitted') { log(`[${d.i}/${d.total}] ✅ 已提交${d.credits ? ' · ' + d.credits : ''}`); submitted.push({ id: d.id, title: d.title, playlist: d.playlist }); }
         else if (d.phase === 'retry') log(`[${d.i}/${d.total}] ↻ 第 ${d.attempt}/${d.max} 次重试：${d.message}`);
+        else if (d.phase === 'rotate') log(`[${d.i}/${d.total}] 🔁 切换账号续跑`);
         else if (d.phase === 'credits') log(`[${d.i}/${d.total}] 🛑 额度不足：${d.message}`);
         else if (d.phase === 'error') log(`[${d.i}/${d.total}] ❌ ${d.message}`);
       } else if (ev === 'download') log(`📥 ${d.title || d.id}`);
+      else if (ev === 'quality') log(d.ok ? `🔎 质检通过：${d.title}` : `🔎 重排：${d.title}（${d.reasons}）`);
       else if (ev === 'done') log(`本轮完成：成功 ${d.ok} · 失败 ${d.fail}`);
     };
 
-    await runBatch({ page, ctl, report, pending, resultsPath: RESULTS, harvest, limit });
+    await runBatch({ session: sess.session, rotate: sess.rotate, ctl, report, pending, resultsPath: RESULTS, limit });
 
+    if (has('--quality') && submitted.length) { log('质量回捞…'); reviewQuality(submitted, sess.getClips(), RESULTS, report); }
     if (has('--playlist') && submitted.length) {
       log('归类到 SUNO 歌单（best-effort）…');
-      await assignPlaylists(page, submitted, report);
+      await assignPlaylists(sess.session.page, submitted, report);
     }
     const idx = writePlaylistIndex(RESULTS, INDEX);
     if (idx) log(`🗂 歌单索引已更新：${idx}`);
   } finally {
-    await context.close();
+    await sess.close();
   }
 }
 

@@ -13,6 +13,7 @@
     "inspect": "node src/run.js --inspect",
     "gen": "node src/run.js --generate-only",
     "login": "node src/run.js --login-only",
+    "login:all": "node src/run.js --login-all",
     "download": "node src/run.js --download",
     "retry": "node src/run.js --retry-only",
     "check": "for f in src/*.js; do node --check \"$f\" || exit 1; done && echo OK"

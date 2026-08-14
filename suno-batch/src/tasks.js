@@ -55,14 +55,10 @@ export function taskId(t) {
   return createHash('sha1').update(`${t.theme}|${t.title}`).digest('hex').slice(0, 10);
 }
 
-// 已完成记录（results.jsonl，每行一条），用于续跑时跳过。
+// 已完成记录（用「最后一次状态」判断，这样质量回捞把 ok 覆盖为 error 后能重新排上）。
 export function loadDone(resultsPath) {
   const done = new Set();
-  if (!existsSync(resultsPath)) return done;
-  for (const line of readFileSync(resultsPath, 'utf8').split('\n')) {
-    if (!line.trim()) continue;
-    try { const r = JSON.parse(line); if (r.status === 'ok') done.add(r.id); } catch {}
-  }
+  for (const [id, status] of loadStatuses(resultsPath)) if (status === 'ok') done.add(id);
   return done;
 }
 

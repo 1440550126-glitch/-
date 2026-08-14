@@ -6,10 +6,10 @@ import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { config } from './config.js';
 import { readTasks, loadDone, loadFailed, writePlaylistIndex } from './tasks.js';
-import * as suno from './suno.js';
 import { runBatch } from './engine.js';
-import { attachHarvest } from './harvest.js';
+import { openSession } from './session.js';
 import { assignPlaylists } from './playlist.js';
+import { reviewQuality } from './quality.js';
 import { PAGE } from './panel-page.js';
 
 const args = process.argv.slice(2);
@@ -94,32 +94,30 @@ async function main() {
 
   if (!pending.length) { broadcast('log', { message: '没有待处理任务。删除 var/results.jsonl 可重跑。' }); return; }
 
-  const { context, page } = await suno.launch();
-  await suno.gotoCreate(page);
-  if (await suno.isLoginWall(page)) {
-    broadcast('log', { message: '⚠️ 未登录：请在弹出的浏览器窗口完成登录，面板会自动继续…' });
-    const ok = await suno.waitForLogin(page, () => broadcast('log', { message: '仍在等待登录…' }));
-    if (!ok) { broadcast('log', { message: '❌ 超时未登录。' }); return; }
-  }
-
-  const harvest = (has('--download') || String(process.env.DOWNLOAD).toLowerCase() === 'true')
-    ? attachHarvest(context, page) : null;
-  if (harvest) broadcast('log', { message: '📥 已开启自动下载（生成完成的音频将存入 var/downloads/）' });
+  const download = has('--download') || String(process.env.DOWNLOAD).toLowerCase() === 'true';
+  const rotate = has('--rotate') || config.accounts.length > 1;
+  const sess = await openSession({ download, rotate, onLog: m => broadcast('log', { message: m }) });
+  if (rotate) broadcast('log', { message: `🔁 多账号轮换：${sess.accounts.map(a => a.name).join(' → ')}` });
+  if (download) broadcast('log', { message: '📥 已开启自动下载（按歌单存入 var/downloads/）' });
 
   broadcast('log', { message: `开始挂机，共 ${pending.length} 首。${has('--dry-run') ? '【dry-run：只填不生成】' : ''}` });
   const submitted = [];
-  const report = (ev, d) => { if (ev === 'song' && d.phase === 'submitted') submitted.push({ title: d.title, playlist: d.playlist }); broadcast(ev, d); };
-  await runBatch({ page, ctl, report, pending, dryRun: has('--dry-run'), resultsPath: RESULTS, harvest });
+  const report = (ev, d) => { if (ev === 'song' && d.phase === 'submitted') submitted.push({ id: d.id, title: d.title, playlist: d.playlist }); broadcast(ev, d); };
+  await runBatch({ session: sess.session, rotate: sess.rotate, ctl, report, pending, dryRun: has('--dry-run'), resultsPath: RESULTS });
 
+  if (has('--quality') && submitted.length && !has('--dry-run')) {
+    broadcast('log', { message: '质量回捞：跑坏的自动重排…' });
+    reviewQuality(submitted, sess.getClips(), RESULTS, report);
+  }
   if (has('--playlist') && submitted.length && !has('--dry-run')) {
     broadcast('log', { message: '归类到 SUNO 歌单（best-effort）…' });
-    await assignPlaylists(page, submitted, report);
+    await assignPlaylists(sess.session.page, submitted, report);
   }
   const idx = writePlaylistIndex(RESULTS, join(config.root, 'var', 'playlists.md'));
   if (idx) broadcast('log', { message: `🗂 歌单索引已更新：${idx}` });
 
   broadcast('log', { message: '✅ 全部结束，可关闭此页与浏览器。' });
-  await context.close();
+  await sess.close();
 }
 
 main().catch(e => { console.error('致命错误：', e); broadcast('log', { message: '致命错误：' + e.message }); });
