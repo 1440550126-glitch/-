@@ -1,0 +1,19 @@
+{
+  "name": "suno-batch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SUNO 批量挂机：读 CSV → 大模型生成歌名/曲风/歌词 → Playwright 自动填表并生成",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/run.js",
+    "dry": "node src/run.js --dry-run",
+    "inspect": "node src/run.js --inspect",
+    "gen": "node src/run.js --generate-only",
+    "login": "node src/run.js --login-only",
+    "check": "node --check src/run.js && node --check src/suno.js && node --check src/llm.js && node --check src/tasks.js && node --check src/control.js && node --check src/config.js && echo OK"
+  },
+  "dependencies": {
+    "playwright": "^1.48.0"
+  }
+}

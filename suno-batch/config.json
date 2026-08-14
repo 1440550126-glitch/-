@@ -1,0 +1,64 @@
+{
+  "_说明": "SUNO 页面选择器与节奏。SUNO 会不定期改版，一旦脚本找不到输入框，先跑 `npm run inspect`，照着页面把下面的 selector 改对即可。每个字段是一组候选，脚本从上到下逐个尝试，命中即用——这样单个失效也不会全盘崩。",
+  "createUrl": "https://suno.com/create",
+  "selectors": {
+    "customTab": [
+      "role=tab[name=/custom/i]",
+      "button:has-text(\"Custom\")",
+      "text=/^Custom$/"
+    ],
+    "lyrics": [
+      "textarea[placeholder*=\"lyrics\" i]",
+      "textarea[data-testid*=\"lyric\" i]",
+      "textarea[aria-label*=\"lyric\" i]",
+      "textarea[placeholder*=\"歌词\"]"
+    ],
+    "style": [
+      "textarea[placeholder*=\"style\" i]",
+      "input[placeholder*=\"style\" i]",
+      "textarea[placeholder*=\"genre\" i]",
+      "textarea[aria-label*=\"style\" i]",
+      "textarea[placeholder*=\"风格\"]"
+    ],
+    "title": [
+      "input[placeholder*=\"title\" i]",
+      "input[aria-label*=\"title\" i]",
+      "input[placeholder*=\"标题\"]",
+      "input[placeholder*=\"歌名\"]"
+    ],
+    "instrumentalToggle": [
+      "role=switch[name=/instrumental/i]",
+      "text=/instrumental/i"
+    ],
+    "createButton": [
+      "button:has-text(\"Create\")",
+      "button:has-text(\"创作\")",
+      "button:has-text(\"Generate\")",
+      "button[type=submit]:has-text(\"Create\")"
+    ],
+    "loginWall": [
+      "text=/sign in/i",
+      "text=/log in/i",
+      "text=/登录/",
+      "a[href*=\"sign-in\"]"
+    ],
+    "errorToast": [
+      "text=/not enough credits/i",
+      "text=/out of credits/i",
+      "text=/insufficient/i",
+      "text=/credits remaining/i",
+      "text=/额度不足/",
+      "text=/too many/i",
+      "text=/limit/i"
+    ],
+    "creditsBadge": [
+      "text=/credits/i",
+      "[data-testid*=\"credit\" i]"
+    ]
+  },
+  "timing": {
+    "betweenSongsMs": 45000,
+    "acceptWaitMs": 20000,
+    "actionTimeoutMs": 30000
+  }
+}
