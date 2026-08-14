@@ -30,6 +30,7 @@ export function attachHarvest(context, page) {
   mkdirSync(dir, { recursive: true });
   const clips = new Map();       // id -> { audio_url, title, status }
   const downloaded = new Set();
+  const titlePlaylist = new Map(); // title -> playlist（歌名归类，用于分文件夹）
 
   page.on('response', async (res) => {
     try {
@@ -54,7 +55,11 @@ export function attachHarvest(context, page) {
       const resp = await context.request.get(c.audio_url, { timeout: 60_000 });
       if (!resp.ok()) return false;
       const buf = await resp.body();
-      const file = join(dir, `${safe(c.title)}-${c.id.slice(0, 8)}.mp3`);
+      // 按歌单分子文件夹（歌名匹配得到 playlist），匹配不到落根目录
+      const pl = titlePlaylist.get((c.title || '').trim());
+      const outDir = pl ? join(dir, safe(pl)) : dir;
+      mkdirSync(outDir, { recursive: true });
+      const file = join(outDir, `${safe(c.title)}-${c.id.slice(0, 8)}.mp3`);
       const { writeFileSync } = await import('node:fs');
       writeFileSync(file, buf);
       downloaded.add(c.id);
@@ -65,6 +70,8 @@ export function attachHarvest(context, page) {
   }
 
   return {
+    // 登记 歌名→歌单，供下载分文件夹用（engine 生成后调用）
+    registerTitle(title, playlist) { if (title && playlist) titlePlaylist.set(title.trim(), playlist); },
     // 下载当前已就绪、尚未下载的 clip
     async flush(report) {
       for (const [, c] of clips) await downloadOne(report, c);

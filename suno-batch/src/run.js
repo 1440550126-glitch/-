@@ -10,12 +10,13 @@
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { config } from './config.js';
-import { readTasks, loadDone, recordResult } from './tasks.js';
+import { readTasks, loadDone, loadFailed, recordResult, writePlaylistIndex } from './tasks.js';
 import { generate } from './llm.js';
 import * as suno from './suno.js';
 import { createControl, log } from './control.js';
 import { runBatch } from './engine.js';
 import { attachHarvest } from './harvest.js';
+import { assignPlaylists } from './playlist.js';
 
 const args = process.argv.slice(2);
 const has = f => args.includes(f);
@@ -29,10 +30,14 @@ function consoleReport(event, d) {
   if (event === 'done') { log(`收尾：成功 ${d.ok} · 失败/未确认 ${d.fail}。进度存 ${RESULTS}（续跑自动跳过成功项）。`); return; }
   if (event === 'download') { log(`📥 已下载：${d.title || d.id}`); return; }
   if (event === 'harvest-done') { log(`📥 下载收尾，共 ${d.total} 个音频`); return; }
+  if (event === 'playlist') { log(d.ok ? `🗂 已加入歌单「${d.playlist}」：${d.title}` : `🗂 未能归类：${d.title}`); return; }
+  if (event === 'playlist-done') { log(`🗂 歌单归类：成功 ${d.ok} · 未成 ${d.miss}`); return; }
+  if (event === 'log') { log(d.message); return; }
   if (event !== 'song') return;
   const tag = `[${d.i}/${d.total}]`;
   if (d.phase === 'generating') log(`${tag} ✍️  生成内容：${d.theme || ''}`);
-  else if (d.phase === 'filling') { log(`${tag} 🎵 ${d.title || '(无题)'} | 曲风：${d.style}${d.instrumental ? ' | 器乐' : ''}`); if (d.warnings?.length) log(`${tag} ⚠  ${d.warnings.join('；')}`); }
+  else if (d.phase === 'filling') { log(`${tag} 🎵 ${d.title || '(无题)'} | 曲风：${d.style} | 歌单：${d.playlist}${d.instrumental ? ' | 器乐' : ''}`); if (d.warnings?.length) log(`${tag} ⚠  ${d.warnings.join('；')}`); }
+  else if (d.phase === 'retry') log(`${tag} ↻ 第 ${d.attempt}/${d.max} 次重试：${d.message}`);
   else if (d.phase === 'submitted') log(`${tag} ✅ 已提交生成${d.credits ? ` · ${d.credits}` : ''}`);
   else if (d.phase === 'dry') log(`${tag} ✓ 已填表（dry-run，未生成）`);
   else if (d.phase === 'credits') log(`${tag} 🛑 额度不足：${d.message}。已暂停——充值后按 p 继续，或 q 退出。`);
@@ -60,8 +65,15 @@ async function main() {
 
   const all = readTasks(CSV);
   const done = loadDone(RESULTS);
-  const pending = all.filter(t => !done.has(t.id));
-  log(`任务表 ${all.length} 首，已完成 ${done.size} 首，本次待处理 ${pending.length} 首。`);
+  let pending;
+  if (has('--retry-only')) {
+    const failed = loadFailed(RESULTS);
+    pending = all.filter(t => failed.has(t.id) && !done.has(t.id));
+    log(`重试模式：只跑之前失败的 ${pending.length} 首。`);
+  } else {
+    pending = all.filter(t => !done.has(t.id));
+    log(`任务表 ${all.length} 首，已完成 ${done.size} 首，本次待处理 ${pending.length} 首。`);
+  }
   if (!pending.length) { log('没有待处理任务。要重跑请删除 var/results.jsonl。'); return; }
 
   if (has('--generate-only')) {
@@ -97,7 +109,17 @@ async function main() {
   if (harvest) log('📥 已开启自动下载：生成好的音频将存入 var/downloads/');
 
   const ctl = createControl();
-  await runBatch({ page, ctl, report: consoleReport, pending, dryRun, resultsPath: RESULTS, harvest });
+  const submitted = [];
+  const report = (ev, d) => { if (ev === 'song' && d.phase === 'submitted') submitted.push({ title: d.title, playlist: d.playlist }); consoleReport(ev, d); };
+  await runBatch({ page, ctl, report, pending, dryRun, resultsPath: RESULTS, harvest });
+
+  if (has('--playlist') && submitted.length && !dryRun) {
+    log('归类到 SUNO 歌单（best-effort，失效不影响其它）…');
+    await assignPlaylists(page, submitted, report);
+  }
+  const idx = writePlaylistIndex(RESULTS, join(config.root, 'var', 'playlists.md'));
+  if (idx) log(`🗂 歌单索引已更新：${idx}`);
+
   ctl.stop();
   await context.close();
 }

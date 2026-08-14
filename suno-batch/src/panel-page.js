@@ -68,15 +68,18 @@ es.onmessage=e=>{const{event,data}=JSON.parse(e.data);
  if(event==='song'){
    const tag='['+data.i+'/'+data.total+'] ';
    if(data.phase==='generating')line('l-mut',tag+'✍️ 生成内容：'+(data.theme||''));
-   else if(data.phase==='filling'){$('cur').textContent='🎵 '+(data.title||'(无题)');$('cur').className='';$('style').textContent=(data.style||'')+(data.instrumental?' · 器乐':'');
+   else if(data.phase==='filling'){$('cur').textContent='🎵 '+(data.title||'(无题)');$('cur').className='';$('style').textContent=(data.style||'')+(data.playlist?(' · 🗂 '+data.playlist):'')+(data.instrumental?' · 器乐':'');
      if(data.warnings&&data.warnings.length)line('l-warn',tag+'⚠ '+data.warnings.join('；'));}
-   else if(data.phase==='submitted'){done++;prog(done,total);line('l-ok',tag+'✅ 已提交：'+(data.title||'')+(data.credits?(' · '+data.credits):''));}
+   else if(data.phase==='retry')line('l-warn',tag+'↻ 第 '+data.attempt+'/'+data.max+' 次重试：'+(data.message||''));
+   else if(data.phase==='submitted'){done++;prog(done,total);line('l-ok',tag+'✅ 已提交：'+(data.title||'')+(data.playlist?(' → '+data.playlist):'')+(data.credits?(' · '+data.credits):''));}
    else if(data.phase==='dry'){done++;prog(done,total);line('l-mut',tag+'✓ 已填表（dry-run）');}
    else if(data.phase==='credits'){line('l-err',tag+'🛑 额度不足，已暂停：'+(data.message||'')+'（充值后点“继续”）');setPhase('paused');}
    else if(data.phase==='error')line('l-err',tag+'❌ '+(data.message||'失败'));
    return;}
  if(event==='download')line('l-dl','📥 已下载：'+(data.title||data.id));
  if(event==='harvest-done')line('l-dl','📥 下载收尾，共 '+data.total+' 个音频');
+ if(event==='playlist')line(data.ok?'l-ok':'l-warn','🗂 '+(data.ok?('已加入「'+data.playlist+'」：'):'未能归类：')+(data.title||''));
+ if(event==='playlist-done')line('l-mut','🗂 歌单归类：成功 '+data.ok+' · 未成 '+data.miss);
  if(event==='log')line('l-mut',data.message);
  if(event==='done'){setPhase('done');line('l-ok','全部结束：成功 '+data.ok+' · 失败/未确认 '+data.fail);$('wait').textContent='';}
 };

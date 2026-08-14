@@ -47,4 +47,12 @@ export const config = {
     language: process.env.DEFAULT_LANGUAGE || '中文',
     mood: process.env.DEFAULT_MOOD || '',
   },
+  retry: {
+    max: num(process.env.RETRY_MAX, 2),            // 单首失败自动重试次数
+    backoffMs: num(process.env.RETRY_BACKOFF_MS, 8000),
+  },
+  daily: {
+    at: process.env.DAILY_AT || '03:00',           // 每日定时挂机时间 HH:MM（本地时区）
+    limit: num(process.env.DAILY_LIMIT, 0),        // 每天最多生成几首（0=不限，跑完待处理为止）
+  },
 };

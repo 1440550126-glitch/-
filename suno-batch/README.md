@@ -33,6 +33,7 @@ cp tasks.example.csv tasks.csv   # 按需改任务
 | `style` | 曲风标签（喂给 SUNO 的 Style） | **留空则大模型生成** |
 | `lyrics` | 歌词（多段用 `\n` 或表格内换行） | **留空则大模型生成；给片段会按结构补全** |
 | `instrumental` | `true`=纯器乐（不填词） | 默认 false |
+| `playlist` | 歌单/标签 | **留空则按曲风/情绪自动归类** |
 
 > 三项（title/style/lyrics）都填满且歌词已带 `[Verse]` 之类结构标签的行，不会调用大模型，直接用你写的。
 >
@@ -58,11 +59,34 @@ npm run download # 正式挂机 + 自动下载音频
 
 额度不足会**自动暂停**并提示，充值后点“继续”/按 `p` 继续（会重试当前这首）。
 
+**失败自动重试**：单首生成失败会自动重试 `RETRY_MAX` 次（默认 2 次，额度不足不算——那会自动暂停）。跑完后想只补之前失败的：`npm run retry`。
+
 **断点续跑**：进度写在 `var/results.jsonl`，中断后重跑自动跳过已成功的。想全部重来就删掉这个文件。
+
+## 四、每日定时挂机
+
+长期挂着，每天到点自动跑一轮（适合每天匀速产出、别一次性刷爆额度）：
+```bash
+npm run daily              # 每天 DAILY_AT（默认 03:00）自动跑，Ctrl+C 退出
+node src/scheduler.js --now --download --playlist   # 立即先跑一轮，之后每天定时；顺带下载+归类歌单
+```
+`.env` 里 `DAILY_AT=03:00` 设时间、`DAILY_LIMIT=20` 设每天最多几首（0=不限）。登录态持久化，通常无需每天重登。
+
+## 五、自动打标签 / 归类歌单
+
+每首歌会归到一个歌单/标签：CSV 填了 `playlist` 就用你的；留空则按曲风/情绪**自动归类**（规则见 `src/tagger.js`，可自改）。
+
+- **本地归档（可靠）**：开 `--download` 时，音频按歌单分文件夹存到 `var/downloads/<歌单>/`；每轮结束生成歌单索引 `var/playlists.md`。
+- **SUNO 站内歌单（best-effort）**：加 `--playlist`，生成完自动去 SUNO 资料库把歌加进对应歌单。依赖页面结构，改版可能失效（失效不影响生成/下载，可退回手动加）；选择器在 `config.json` 的 `selectors.playlist.*`，用 `npm run inspect` 核对更新。
+
+```bash
+npm run panel -- --download --playlist   # 面板挂机 + 下载 + 站内歌单归类
+npm start -- --playlist                   # 终端挂机 + 站内歌单归类
+```
 
 **自动下载音频（best-effort）**：加 `--download` 后，脚本监听 SUNO 前端接口捞出生成好的音频，用你的登录态下到 `var/downloads/`（清单 `var/downloads.jsonl`）。因为依赖 SUNO 内部接口形态，改版后可能失效——失效时**不影响生成**，只是下不到，可退回手动在 SUNO 资料库下载。
 
-## 四、SUNO 改版了 / 找不到输入框怎么办
+## 六、SUNO 改版了 / 找不到输入框怎么办
 
 SUNO 页面 DOM 会不定期变，脚本靠 `config.json` 里的**候选选择器**定位（每个字段一组，逐个尝试，命中即用，所以单个失效也不至于全崩）。若报“找不到 xxx 输入框”：
 
@@ -75,7 +99,7 @@ npm run inspect   # 打开浏览器停在创作页
 - 曲风框：`textarea[placeholder*="style" i]`
 - 歌名框：`input[placeholder*="title" i]`
 
-## 五、节奏与安全建议
+## 七、节奏与安全建议
 
 - `.env` 里 `BETWEEN_SONGS_MS` 控制每首间隔，默认 45s + 随机抖动，别调太小。
 - `HEADLESS=false`（默认）能看到窗口便于盯梢；确认稳定后可设 `true` 省资源。
@@ -91,14 +115,17 @@ suno-batch/
 ├── references/
 │   └── suno-lyric-standard.md   SUNO 歌词与曲风标准（生成对齐 + 你自己写词参考）
 └── src/
-    ├── run.js           终端入口 + CLI
+    ├── run.js           终端入口 + CLI（含 --retry-only / --playlist / --download）
     ├── panel.js         网页控制面板（HTTP + SSE）
     ├── panel-page.js    面板前端页面（内联）
-    ├── engine.js        批量核心循环（终端/网页共用）
+    ├── scheduler.js     每日定时挂机（--now 立即先跑一轮）
+    ├── engine.js        批量核心循环（终端/网页/定时共用，含失败重试）
     ├── suno.js          Playwright 页面操作（登录/填表/生成/额度检测）
     ├── llm.js           大模型生成 歌名/曲风/歌词（对齐 SUNO 标准 + 校验）
-    ├── harvest.js       自动下载生成的音频（网络捕获，best-effort）
-    ├── tasks.js         CSV 解析 + 断点续跑
+    ├── tagger.js        自动打标签/归类（规则可自改）
+    ├── playlist.js      SUNO 站内歌单归类（best-effort UI）
+    ├── harvest.js       自动下载生成的音频（网络捕获，按歌单分文件夹）
+    ├── tasks.js         CSV 解析 + 断点续跑 + 重试队列 + 歌单索引
     ├── control.js       终端控制台与热键
     └── config.js        配置加载
 ```

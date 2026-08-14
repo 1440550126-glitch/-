@@ -5,10 +5,11 @@ import http from 'node:http';
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { config } from './config.js';
-import { readTasks, loadDone } from './tasks.js';
+import { readTasks, loadDone, loadFailed, writePlaylistIndex } from './tasks.js';
 import * as suno from './suno.js';
 import { runBatch } from './engine.js';
 import { attachHarvest } from './harvest.js';
+import { assignPlaylists } from './playlist.js';
 import { PAGE } from './panel-page.js';
 
 const args = process.argv.slice(2);
@@ -82,7 +83,9 @@ async function main() {
   if (!existsSync(CSV)) { console.error(`❌ 找不到任务表：${CSV}（先 cp tasks.example.csv tasks.csv）`); process.exit(1); }
   const all = readTasks(CSV);
   const done = loadDone(RESULTS);
-  const pending = all.filter(t => !done.has(t.id));
+  const pending = has('--retry-only')
+    ? all.filter(t => loadFailed(RESULTS).has(t.id) && !done.has(t.id))
+    : all.filter(t => !done.has(t.id));
 
   server.listen(PORT, () => {
     console.log(`\n🎛  控制面板已启动： http://localhost:${PORT}`);
@@ -104,7 +107,17 @@ async function main() {
   if (harvest) broadcast('log', { message: '📥 已开启自动下载（生成完成的音频将存入 var/downloads/）' });
 
   broadcast('log', { message: `开始挂机，共 ${pending.length} 首。${has('--dry-run') ? '【dry-run：只填不生成】' : ''}` });
-  await runBatch({ page, ctl, report: broadcast, pending, dryRun: has('--dry-run'), resultsPath: RESULTS, harvest });
+  const submitted = [];
+  const report = (ev, d) => { if (ev === 'song' && d.phase === 'submitted') submitted.push({ title: d.title, playlist: d.playlist }); broadcast(ev, d); };
+  await runBatch({ page, ctl, report, pending, dryRun: has('--dry-run'), resultsPath: RESULTS, harvest });
+
+  if (has('--playlist') && submitted.length && !has('--dry-run')) {
+    broadcast('log', { message: '归类到 SUNO 歌单（best-effort）…' });
+    await assignPlaylists(page, submitted, report);
+  }
+  const idx = writePlaylistIndex(RESULTS, join(config.root, 'var', 'playlists.md'));
+  if (idx) broadcast('log', { message: `🗂 歌单索引已更新：${idx}` });
+
   broadcast('log', { message: '✅ 全部结束，可关闭此页与浏览器。' });
   await context.close();
 }

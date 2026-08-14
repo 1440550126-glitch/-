@@ -54,7 +54,18 @@
     "creditsBadge": [
       "text=/credits/i",
       "[data-testid*=\"credit\" i]"
-    ]
+    ],
+    "playlist": {
+      "_说明": "SUNO 歌单归类（best-effort UI）。{title}/{name} 会被替换成实际歌名/歌单名。改版后按 npm run inspect 在资料库页核对更新。",
+      "libraryUrl": "https://suno.com/me",
+      "search": ["input[placeholder*=\"search\" i]", "input[type=\"search\"]", "input[placeholder*=\"搜索\"]"],
+      "rowByTitle": ["[role=\"row\"]:has-text(\"{title}\")", "div:has-text(\"{title}\")>>nth=0", "a:has-text(\"{title}\")"],
+      "rowMenu": ["button[aria-label*=\"more\" i]", "button[aria-haspopup=\"menu\"]", "button:has-text(\"⋯\")", "[data-testid*=\"menu\" i]"],
+      "addToPlaylist": ["text=/add to playlist/i", "text=/加入歌单/", "[role=\"menuitem\"]:has-text(\"Playlist\")"],
+      "playlistSearch": ["input[placeholder*=\"playlist\" i]", "input[placeholder*=\"歌单\"]", "input[type=\"search\"]"],
+      "playlistOption": ["text=/^{name}$/", "[role=\"option\"]:has-text(\"{name}\")", "button:has-text(\"{name}\")"],
+      "createPlaylist": ["text=/create.*playlist/i", "text=/新建歌单/", "button:has-text(\"Create\")"]
+    }
   },
   "timing": {
     "betweenSongsMs": 45000,
