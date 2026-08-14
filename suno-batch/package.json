@@ -7,11 +7,13 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node src/run.js",
+    "panel": "node src/panel.js",
     "dry": "node src/run.js --dry-run",
     "inspect": "node src/run.js --inspect",
     "gen": "node src/run.js --generate-only",
     "login": "node src/run.js --login-only",
-    "check": "node --check src/run.js && node --check src/suno.js && node --check src/llm.js && node --check src/tasks.js && node --check src/control.js && node --check src/config.js && echo OK"
+    "download": "node src/run.js --download",
+    "check": "for f in src/*.js; do node --check \"$f\" || exit 1; done && echo OK"
   },
   "dependencies": {
     "playwright": "^1.48.0"

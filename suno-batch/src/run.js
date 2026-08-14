@@ -1,17 +1,21 @@
-// 主入口：读 CSV → (大模型补全) → Playwright 填表并生成 → 挂机循环。
+// 终端入口：读 CSV → (大模型补全) → Playwright 填表并生成 → 挂机循环。
 // 用法：
-//   node src/run.js [tasks.csv]         正式挂机
+//   node src/run.js [tasks.csv]         正式挂机（终端热键 p/s/q）
 //   --dry-run       只填表不点生成（验证选择器/内容，安全）
-//   --inspect       打开浏览器停住，让你手动核对页面/选择器
+//   --inspect       打开浏览器停住，手动核对页面/选择器
 //   --generate-only 只跑大模型生成内容并落盘，不开浏览器
-//   --login-only    只打开浏览器让你登录一次（持久化登录态）
+//   --login-only    只打开浏览器登录一次（持久化登录态）
+//   --download      挂机同时自动下载生成好的音频到 var/downloads/
+// 想要网页控制台见 src/panel.js（node src/panel.js）。
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { config } from './config.js';
-import { readTasks, loadDone, recordResult, taskId } from './tasks.js';
+import { readTasks, loadDone, recordResult } from './tasks.js';
 import { generate } from './llm.js';
 import * as suno from './suno.js';
 import { createControl, log } from './control.js';
+import { runBatch } from './engine.js';
+import { attachHarvest } from './harvest.js';
 
 const args = process.argv.slice(2);
 const has = f => args.includes(f);
@@ -19,10 +23,23 @@ const csvArg = args.find(a => !a.startsWith('--'));
 const CSV = resolve(config.root, csvArg || 'tasks.csv');
 const RESULTS = join(config.root, 'var', 'results.jsonl');
 
-const jitter = ms => Math.round(ms * (0.85 + Math.random() * 0.3)); // ±~15% 抖动
+// 把 engine 事件映射成终端日志（保持原有观感）
+function consoleReport(event, d) {
+  if (event === 'start') { log(`开始挂机（共 ${d.total} 首）。热键：p 暂停/继续 · s 跳过等待 · q 退出。${d.dryRun ? '【dry-run】' : ''}`); return; }
+  if (event === 'done') { log(`收尾：成功 ${d.ok} · 失败/未确认 ${d.fail}。进度存 ${RESULTS}（续跑自动跳过成功项）。`); return; }
+  if (event === 'download') { log(`📥 已下载：${d.title || d.id}`); return; }
+  if (event === 'harvest-done') { log(`📥 下载收尾，共 ${d.total} 个音频`); return; }
+  if (event !== 'song') return;
+  const tag = `[${d.i}/${d.total}]`;
+  if (d.phase === 'generating') log(`${tag} ✍️  生成内容：${d.theme || ''}`);
+  else if (d.phase === 'filling') { log(`${tag} 🎵 ${d.title || '(无题)'} | 曲风：${d.style}${d.instrumental ? ' | 器乐' : ''}`); if (d.warnings?.length) log(`${tag} ⚠  ${d.warnings.join('；')}`); }
+  else if (d.phase === 'submitted') log(`${tag} ✅ 已提交生成${d.credits ? ` · ${d.credits}` : ''}`);
+  else if (d.phase === 'dry') log(`${tag} ✓ 已填表（dry-run，未生成）`);
+  else if (d.phase === 'credits') log(`${tag} 🛑 额度不足：${d.message}。已暂停——充值后按 p 继续，或 q 退出。`);
+  else if (d.phase === 'error') log(`${tag} ❌ ${d.message}`);
+}
 
 async function main() {
-  // --login-only：单纯登录一次
   if (has('--login-only')) {
     const { context, page } = await suno.launch();
     await suno.gotoCreate(page);
@@ -47,23 +64,20 @@ async function main() {
   log(`任务表 ${all.length} 首，已完成 ${done.size} 首，本次待处理 ${pending.length} 首。`);
   if (!pending.length) { log('没有待处理任务。要重跑请删除 var/results.jsonl。'); return; }
 
-  // --generate-only：只生成内容并落盘，方便先审歌词再挂机
   if (has('--generate-only')) {
     for (const t of pending) {
       try {
         const s = await generate(t);
         recordResult(RESULTS, { id: t.id, status: 'generated', ...s });
-        log(`📝 ${s.title || '(无题)'} | ${s.style}`);
+        log(`📝 ${s.title || '(无题)'} | ${s.style}${s.warnings?.length ? ` | ⚠ ${s.warnings.join('；')}` : ''}`);
       } catch (e) { log(`⚠️  生成失败 [${t.theme}]：${e.message}`); }
     }
-    log(`✅ 生成完成，内容已写入 ${RESULTS}（status=generated）。审阅后正式挂机会重新生成缺字段，如需沿用请填回 CSV。`);
+    log(`✅ 生成完成，内容已写入 ${RESULTS}（status=generated）。审阅后正式挂机会重新生成缺字段。`);
     return;
   }
 
   const dryRun = has('--dry-run');
-  const inspect = has('--inspect');
   const { context, page } = await suno.launch();
-
   await suno.gotoCreate(page);
   if (await suno.isLoginWall(page)) {
     log('检测到未登录，请在浏览器窗口完成登录…');
@@ -71,68 +85,20 @@ async function main() {
     if (!ok) { log('❌ 超时未登录，退出。'); await context.close(); return; }
   }
 
-  if (inspect) {
+  if (has('--inspect')) {
     log('🔍 inspect 模式：浏览器已停在创作页。核对输入框后按 Ctrl+C 退出。');
     await page.waitForTimeout(10 * 60_000);
     await context.close();
     return;
   }
 
+  const harvest = (has('--download') || String(process.env.DOWNLOAD).toLowerCase() === 'true')
+    ? attachHarvest(context, page) : null;
+  if (harvest) log('📥 已开启自动下载：生成好的音频将存入 var/downloads/');
+
   const ctl = createControl();
-  log(`开始挂机（共 ${pending.length} 首）。热键：p 暂停/继续 · s 跳过等待 · q 退出。${dryRun ? '【dry-run：只填不生成】' : ''}`);
-
-  let ok = 0, fail = 0;
-  for (let i = 0; i < pending.length; i++) {
-    if (ctl.state.quit) break;
-    await ctl.waitIfPaused();
-    if (ctl.state.quit) break;
-
-    const t = pending[i];
-    const tag = `[${i + 1}/${pending.length}]`;
-    try {
-      const song = await generate(t);
-      log(`${tag} 🎵 ${song.title || '(无题)'} | 曲风：${song.style}${song.instrumental ? ' | 器乐' : ''}`);
-      song.instrumental = t.instrumental;
-
-      await suno.gotoCreate(page);
-      const { clicked } = await suno.fillSong(page, song, { dryRun });
-
-      if (!clicked) {
-        log(`${tag} ✓ 已填表（dry-run，未生成）`);
-        recordResult(RESULTS, { id: t.id, status: 'dry', ...song });
-      } else {
-        const r = await suno.waitAccepted(page);
-        if (r.accepted) {
-          ok++;
-          const credits = await suno.readCredits(page);
-          log(`${tag} ✅ 已提交生成${credits ? ` · ${credits}` : ''}`);
-          recordResult(RESULTS, { id: t.id, status: 'ok', ...song });
-        } else if (r.outOfCredits) {
-          log(`${tag} 🛑 额度不足：${r.message}。暂停挂机——充值/等待后按 p 继续，或 q 退出。`);
-          recordResult(RESULTS, { id: t.id, status: 'skipped_credits', ...song });
-          ctl.state.paused = true;
-          await ctl.waitIfPaused();
-          i--; // 恢复后重试这一首
-          continue;
-        } else {
-          fail++;
-          log(`${tag} ⚠️  未确认提交：${r.message}`);
-          recordResult(RESULTS, { id: t.id, status: 'error', message: r.message, ...song });
-        }
-      }
-    } catch (e) {
-      fail++;
-      log(`${tag} ❌ 失败：${e.message}`);
-      recordResult(RESULTS, { id: t.id, status: 'error', message: e.message });
-    }
-
-    if (i < pending.length - 1 && !ctl.state.quit) {
-      await ctl.sleep(jitter(config.timing.betweenSongsMs));
-    }
-  }
-
+  await runBatch({ page, ctl, report: consoleReport, pending, dryRun, resultsPath: RESULTS, harvest });
   ctl.stop();
-  log(`收尾：成功 ${ok} · 失败/未确认 ${fail}。进度已存 ${RESULTS}（续跑会自动跳过成功项）。`);
   await context.close();
 }
 
