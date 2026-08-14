@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" font-family="'PingFang SC','Microsoft YaHei',sans-serif">
   <rect x="0" y="0" width="960" height="620" fill="#ffffff"/>
-  <text x="480" y="36" text-anchor="middle" font-size="22" font-weight="bold" fill="#1f2937">喵语通 MeowTalk · 硬件系统框图 / 接线图</text>
+  <text x="480" y="36" text-anchor="middle" font-size="22" font-weight="bold" fill="#1f2937">喵语通 MeowTalk Pro · 硬件系统框图（实时语音版）</text>
 
   <defs>
     <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
@@ -9,63 +9,71 @@
   </defs>
 
   <!-- ============ 主控 ============ -->
-  <rect x="370" y="200" width="220" height="180" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2.5"/>
-  <text x="480" y="232" text-anchor="middle" font-size="16" font-weight="bold" fill="#1e40af">ESP32-S3 主控模组</text>
-  <text x="480" y="254" text-anchor="middle" font-size="11" fill="#3b82f6">ESP32-S3-WROOM-1 (N8R8)</text>
-  <text x="480" y="276" text-anchor="middle" font-size="11" fill="#4b5563">双核 240 MHz · 8MB PSRAM</text>
-  <text x="480" y="294" text-anchor="middle" font-size="11" fill="#4b5563">向量指令加速 TinyML 推理</text>
-  <text x="480" y="312" text-anchor="middle" font-size="11" fill="#4b5563">板载 BLE 5.0 + Wi-Fi 天线</text>
-  <text x="480" y="338" text-anchor="middle" font-size="11" fill="#6b7280">任务：VAD 声音检测 → MFCC 特征</text>
-  <text x="480" y="356" text-anchor="middle" font-size="11" fill="#6b7280">→ 叫声分类模型 → BLE 上报</text>
+  <rect x="370" y="190" width="220" height="196" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2.5"/>
+  <text x="480" y="222" text-anchor="middle" font-size="16" font-weight="bold" fill="#1e40af">ESP32-S3 主控模组</text>
+  <text x="480" y="244" text-anchor="middle" font-size="11" fill="#3b82f6">ESP32-S3-WROOM-1 (N16R8)</text>
+  <text x="480" y="266" text-anchor="middle" font-size="11" fill="#4b5563">双核 240 MHz · 8MB PSRAM</text>
+  <text x="480" y="284" text-anchor="middle" font-size="11" fill="#4b5563">16MB Flash：模型 + 离线语音库</text>
+  <text x="480" y="302" text-anchor="middle" font-size="11" fill="#4b5563">（300+ 条预录播报语音）</text>
+  <text x="480" y="326" text-anchor="middle" font-size="11" fill="#6b7280">流式 VAD → MFCC → 叫声分类</text>
+  <text x="480" y="344" text-anchor="middle" font-size="11" fill="#6b7280">→ 选句 → 扬声器播报（全程离线）</text>
+  <text x="480" y="368" text-anchor="middle" font-size="11" fill="#6b7280">端到端延迟 ≤ 0.5 s（叫声结束起算）</text>
 
   <!-- ============ 左侧：传感器 ============ -->
-  <rect x="60" y="160" width="200" height="76" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
-  <text x="160" y="188" text-anchor="middle" font-size="14" font-weight="bold" fill="#166534">MEMS 麦克风</text>
-  <text x="160" y="208" text-anchor="middle" font-size="11" fill="#4b5563">INMP441（数字 I2S 输出）</text>
-  <text x="160" y="224" text-anchor="middle" font-size="11" fill="#4b5563">采样 16 kHz / 24 bit</text>
-  <line x1="260" y1="198" x2="370" y2="230" stroke="#374151" stroke-width="1.8" marker-end="url(#arrow)"/>
-  <text x="308" y="200" font-size="10.5" fill="#16a34a">I2S：SCK/WS/SD</text>
+  <rect x="60" y="150" width="200" height="76" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+  <text x="160" y="178" text-anchor="middle" font-size="14" font-weight="bold" fill="#166534">MEMS 麦克风</text>
+  <text x="160" y="198" text-anchor="middle" font-size="11" fill="#4b5563">INMP441（数字 I2S 输入）</text>
+  <text x="160" y="214" text-anchor="middle" font-size="11" fill="#4b5563">采样 16 kHz / 24 bit</text>
+  <line x1="260" y1="188" x2="370" y2="222" stroke="#374151" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="300" y="192" font-size="10.5" fill="#16a34a">I2S₀ 输入：SCK/WS/SD</text>
 
-  <rect x="60" y="272" width="200" height="76" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
-  <text x="160" y="300" text-anchor="middle" font-size="14" font-weight="bold" fill="#166534">六轴运动传感器</text>
-  <text x="160" y="320" text-anchor="middle" font-size="11" fill="#4b5563">MPU6050（加速度+陀螺仪）</text>
-  <text x="160" y="336" text-anchor="middle" font-size="11" fill="#4b5563">识别跑/跳/舔毛/抓挠/睡眠</text>
-  <line x1="260" y1="310" x2="370" y2="300" stroke="#374151" stroke-width="1.8" marker-end="url(#arrow)"/>
-  <text x="300" y="294" font-size="10.5" fill="#16a34a">I2C：SDA/SCL</text>
+  <rect x="60" y="262" width="200" height="76" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+  <text x="160" y="290" text-anchor="middle" font-size="14" font-weight="bold" fill="#166534">六轴运动传感器</text>
+  <text x="160" y="310" text-anchor="middle" font-size="11" fill="#4b5563">MPU6050（加速度+陀螺仪）</text>
+  <text x="160" y="326" text-anchor="middle" font-size="11" fill="#4b5563">识别跑/跳/舔毛/抓挠/睡眠</text>
+  <line x1="260" y1="300" x2="370" y2="292" stroke="#374151" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="300" y="286" font-size="10.5" fill="#16a34a">I2C：SDA/SCL</text>
 
-  <rect x="60" y="384" width="200" height="60" rx="10" fill="#f9fafb" stroke="#6b7280" stroke-width="2"/>
-  <text x="160" y="410" text-anchor="middle" font-size="14" font-weight="bold" fill="#374151">轻触按键</text>
-  <text x="160" y="430" text-anchor="middle" font-size="11" fill="#4b5563">开机 / BLE 配对 / 复位</text>
-  <line x1="260" y1="410" x2="370" y2="360" stroke="#374151" stroke-width="1.8" marker-end="url(#arrow)"/>
-  <text x="308" y="398" font-size="10.5" fill="#6b7280">GPIO0</text>
+  <rect x="60" y="374" width="200" height="76" rx="10" fill="#f9fafb" stroke="#6b7280" stroke-width="2"/>
+  <text x="160" y="400" text-anchor="middle" font-size="14" font-weight="bold" fill="#374151">按键 + 音量拨键</text>
+  <text x="160" y="420" text-anchor="middle" font-size="11" fill="#4b5563">电源/配对键（GPIO0）</text>
+  <text x="160" y="436" text-anchor="middle" font-size="11" fill="#4b5563">三档拨键：大/小/静音（GPIO2）</text>
+  <line x1="260" y1="404" x2="370" y2="356" stroke="#374151" stroke-width="1.8" marker-end="url(#arrow)"/>
 
   <!-- ============ 右侧：输出 ============ -->
-  <rect x="700" y="160" width="200" height="76" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="2"/>
-  <text x="800" y="188" text-anchor="middle" font-size="14" font-weight="bold" fill="#92400e">RGB 状态灯</text>
-  <text x="800" y="208" text-anchor="middle" font-size="11" fill="#4b5563">WS2812B × 1</text>
-  <text x="800" y="224" text-anchor="middle" font-size="11" fill="#4b5563">蓝=已连接 绿=识别中 红=低电</text>
-  <line x1="590" y1="230" x2="700" y2="198" stroke="#374151" stroke-width="1.8" marker-end="url(#arrow)"/>
-  <text x="622" y="200" font-size="10.5" fill="#d97706">GPIO48</text>
+  <rect x="700" y="140" width="200" height="96" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="2.5"/>
+  <text x="800" y="168" text-anchor="middle" font-size="14" font-weight="bold" fill="#9a3412">实时语音播报（核心）</text>
+  <text x="800" y="188" text-anchor="middle" font-size="11" fill="#4b5563">MAX98357A I2S 数字功放</text>
+  <text x="800" y="204" text-anchor="middle" font-size="11" fill="#4b5563">+ Φ15 mm 8Ω 1W 微型扬声器</text>
+  <text x="800" y="222" text-anchor="middle" font-size="11" fill="#4b5563">音量上限 ≤75 dB@10cm（护猫耳）</text>
+  <line x1="590" y1="222" x2="700" y2="192" stroke="#374151" stroke-width="2.2" marker-end="url(#arrow)"/>
+  <text x="614" y="196" font-size="10.5" fill="#ea580c">I2S₁ 输出：BCLK/LRC/DIN</text>
 
-  <rect x="700" y="272" width="200" height="76" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="2" stroke-dasharray="6 4"/>
-  <text x="800" y="300" text-anchor="middle" font-size="14" font-weight="bold" fill="#92400e">扬声器（选配）</text>
-  <text x="800" y="320" text-anchor="middle" font-size="11" fill="#4b5563">MAX98357A I2S 功放</text>
-  <text x="800" y="336" text-anchor="middle" font-size="11" fill="#4b5563">+ 15mm 微型喇叭（播放提示音）</text>
-  <line x1="590" y1="300" x2="700" y2="310" stroke="#374151" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
-  <text x="618" y="294" font-size="10.5" fill="#d97706">I2S 输出</text>
+  <rect x="700" y="278" width="200" height="70" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="2"/>
+  <text x="800" y="304" text-anchor="middle" font-size="14" font-weight="bold" fill="#92400e">RGB 状态灯</text>
+  <text x="800" y="322" text-anchor="middle" font-size="11" fill="#4b5563">WS2812B × 1（GPIO48）</text>
+  <text x="800" y="338" text-anchor="middle" font-size="11" fill="#4b5563">蓝=连接 绿=识别 紫=播报 红=低电</text>
+  <line x1="590" y1="300" x2="700" y2="310" stroke="#374151" stroke-width="1.8" marker-end="url(#arrow)"/>
 
-  <!-- ============ 上方：无线 ============ -->
-  <rect x="380" y="70" width="200" height="66" rx="10" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
-  <text x="480" y="96" text-anchor="middle" font-size="14" font-weight="bold" fill="#3730a3">手机 App（iOS/安卓）</text>
-  <text x="480" y="116" text-anchor="middle" font-size="11" fill="#4b5563">显示“翻译”结果 · 历史记录 · TTS 配音</text>
-  <line x1="480" y1="200" x2="480" y2="136" stroke="#6366f1" stroke-width="1.8" marker-end="url(#arrow)"/>
-  <text x="492" y="172" font-size="10.5" fill="#6366f1">BLE GATT（识别结果 JSON）</text>
+  <!-- 防自触发说明 -->
+  <rect x="640" y="380" width="280" height="58" rx="10" fill="#fef2f2" stroke="#f87171" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="780" y="402" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#b91c1c">防自触发闭环</text>
+  <text x="780" y="420" text-anchor="middle" font-size="10.5" fill="#6b7280">播报期间麦克风识别静默 + 播完 0.5s 冷却，</text>
+  <text x="780" y="433" text-anchor="middle" font-size="10.5" fill="#6b7280">避免"自己的声音触发自己"死循环</text>
+
+  <!-- ============ 上方：无线（选配） ============ -->
+  <rect x="380" y="66" width="200" height="70" rx="10" fill="#f9fafb" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="480" y="92" text-anchor="middle" font-size="14" font-weight="bold" fill="#4b5563">手机 App（选配）</text>
+  <text x="480" y="110" text-anchor="middle" font-size="11" fill="#6b7280">历史记录 · 纠错反馈 · 语音包下载</text>
+  <text x="480" y="126" text-anchor="middle" font-size="11" fill="#6b7280">静音时段设置 · OTA 升级</text>
+  <line x1="480" y1="190" x2="480" y2="136" stroke="#9ca3af" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
+  <text x="492" y="166" font-size="10.5" fill="#6b7280">BLE GATT（不连手机也完整可用）</text>
 
   <!-- ============ 下方：电源链路 ============ -->
   <rect x="80" y="490" width="180" height="76" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
   <text x="170" y="518" text-anchor="middle" font-size="14" font-weight="bold" fill="#991b1b">锂聚合物电池</text>
-  <text x="170" y="538" text-anchor="middle" font-size="11" fill="#4b5563">3.7V 250mAh（502030）</text>
-  <text x="170" y="554" text-anchor="middle" font-size="11" fill="#4b5563">约 5g · 续航 2~3 天</text>
+  <text x="170" y="538" text-anchor="middle" font-size="11" fill="#4b5563">3.7V 300mAh（502530）</text>
+  <text x="170" y="554" text-anchor="middle" font-size="11" fill="#4b5563">约 6g · 续航约 2 天</text>
 
   <rect x="330" y="490" width="190" height="76" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
   <text x="425" y="518" text-anchor="middle" font-size="14" font-weight="bold" fill="#991b1b">充电管理</text>
@@ -74,15 +82,17 @@
 
   <rect x="590" y="490" width="190" height="76" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
   <text x="685" y="518" text-anchor="middle" font-size="14" font-weight="bold" fill="#991b1b">3.3V 稳压 LDO</text>
-  <text x="685" y="538" text-anchor="middle" font-size="11" fill="#4b5563">ME6211 / AMS1117-3.3</text>
-  <text x="685" y="554" text-anchor="middle" font-size="11" fill="#4b5563">给主控和传感器供电</text>
+  <text x="685" y="538" text-anchor="middle" font-size="11" fill="#4b5563">ME6211（主控/传感器）</text>
+  <text x="685" y="554" text-anchor="middle" font-size="11" fill="#4b5563">功放直挂电池轨（大电流）</text>
 
   <line x1="260" y1="528" x2="330" y2="528" stroke="#dc2626" stroke-width="1.8" marker-end="url(#arrow)"/>
   <line x1="520" y1="528" x2="590" y2="528" stroke="#dc2626" stroke-width="1.8" marker-end="url(#arrow)"/>
-  <line x1="685" y1="490" x2="592" y2="382" stroke="#dc2626" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <line x1="685" y1="490" x2="592" y2="380" stroke="#dc2626" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <line x1="780" y1="490" x2="795" y2="240" stroke="#dc2626" stroke-width="1.8" marker-end="url(#arrow)"/>
   <text x="296" y="520" font-size="10.5" fill="#dc2626">BAT+</text>
   <text x="556" y="520" font-size="10.5" fill="#dc2626">4.2V</text>
-  <text x="650" y="440" font-size="10.5" fill="#dc2626">3.3V</text>
+  <text x="648" y="438" font-size="10.5" fill="#dc2626">3.3V</text>
+  <text x="800" y="470" font-size="10.5" fill="#dc2626">VBAT（播报瞬时 ~250mA）</text>
 
-  <text x="480" y="602" text-anchor="middle" font-size="11" fill="#9ca3af">虚线 = 选配模块 · 整机工作电流约 40mA（推理时 90mA），深睡 &lt; 1mA</text>
+  <text x="480" y="602" text-anchor="middle" font-size="11" fill="#9ca3af">虚线 = 选配/逻辑说明 · 待机监听约 40mA，推理 90mA，播报瞬时 250mA，深睡 &lt; 1mA</text>
 </svg>
