@@ -1,0 +1,652 @@
+<title>PLC 梯形图入门</title>
+<meta charset="utf-8">
+
+<style>
+  :root{
+    --paper:#E9EDF1; --card:#FFFFFF; --tint:#F1F4F7;
+    --ink:#0E1F2B; --ink-2:#3E5567; --ink-3:#6B8296;
+    --line:#C6D0D9; --brass:#8F6317; --brass-bg:#F3E9D6;
+    --live:#C8322A; --neutral:#1F62C0; --earth:#4C8F2A;
+    --on:#1E8E48; --on-bg:#E3F3E8; --dead:#AEBAC4;
+    --lamp:#E8A400;
+    --warn:#A33417; --warn-bg:#FBEAE4;
+    --display:Charter,"Bitstream Charter",Georgia,"Songti SC","STSong","Noto Serif CJK SC",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Noto Sans Mono",monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#0C1720; --card:#132430; --tint:#1A2E3C;
+      --ink:#DEE8EF; --ink-2:#95AABA; --ink-3:#71889A;
+      --line:#27404F; --brass:#D9A552; --brass-bg:#2A2113;
+      --live:#FF7B6D; --neutral:#74ABFF; --earth:#93CE5E;
+      --on:#5FD08A; --on-bg:#13301F; --dead:#3A5162;
+      --lamp:#FFC93C;
+      --warn:#FF9070; --warn-bg:#31170F;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0C1720; --card:#132430; --tint:#1A2E3C;
+    --ink:#DEE8EF; --ink-2:#95AABA; --ink-3:#71889A;
+    --line:#27404F; --brass:#D9A552; --brass-bg:#2A2113;
+    --live:#FF7B6D; --neutral:#74ABFF; --earth:#93CE5E;
+    --on:#5FD08A; --on-bg:#13301F; --dead:#3A5162;
+    --lamp:#FFC93C;
+    --warn:#FF9070; --warn-bg:#31170F;
+  }
+
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    font-size:17px;line-height:1.85;margin:0;padding:0 20px 90px;-webkit-text-size-adjust:100%;}
+  .wrap{max-width:960px;margin:0 auto;}
+  .col{max-width:40em;}
+
+  .masthead{padding:60px 0 36px;border-bottom:1px solid var(--line);margin-bottom:44px;}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.22em;color:var(--brass);
+    text-transform:uppercase;margin:0 0 16px;}
+  h1{font-family:var(--display);font-size:clamp(32px,6vw,50px);line-height:1.2;
+    font-weight:700;margin:0 0 16px;text-wrap:balance;}
+  .lede{font-size:18px;color:var(--ink-2);margin:0;max-width:34em;}
+
+  section{margin:0 0 68px;}
+  .snum{font-family:var(--mono);font-size:12px;letter-spacing:.18em;color:var(--brass);
+    display:block;margin-bottom:8px;}
+  h2{font-family:var(--display);font-size:clamp(23px,3.4vw,30px);line-height:1.35;
+    font-weight:700;margin:0 0 16px;text-wrap:balance;}
+  h3{font-size:17px;font-weight:700;margin:30px 0 10px;}
+  p{margin:0 0 16px;}
+  code,.mono{font-family:var(--mono);font-size:.88em;}
+  .col ul,.col ol{margin:0 0 16px;padding-left:1.3em;}
+  .col li{margin-bottom:8px;}
+  em{font-style:normal;color:var(--brass);font-weight:700;}
+
+  figure{margin:30px 0;background:var(--card);border:1px solid var(--line);
+    border-radius:5px;padding:22px 20px 16px;overflow-x:auto;}
+  figure svg{display:block;margin:0 auto;max-width:100%;height:auto;color:var(--ink);}
+  figcaption{margin-top:16px;padding-top:13px;border-top:1px solid var(--line);
+    font-size:14.5px;line-height:1.7;color:var(--ink-2);}
+  figcaption b{color:var(--ink);}
+
+  svg .dw{fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
+  svg .box{fill:var(--tint);stroke:currentColor;stroke-width:2.2;}
+  svg text{fill:var(--ink);font-family:var(--sans);font-size:13.5px;font-weight:500;}
+  svg text.sm{font-size:11.5px;fill:var(--ink-2);font-weight:400;}
+  svg text.mo{font-family:var(--mono);font-size:12.5px;}
+  svg .arw{fill:currentColor;stroke:none;}
+
+  /* ── 仿真器 ── */
+  .sim{background:var(--card);border:1px solid var(--line);border-radius:6px;
+    margin:30px 0;overflow:hidden;}
+  .sim-h{padding:16px 20px 0;}
+  .sim-h b{font-size:16px;}
+  .sim-h p{margin:4px 0 0;font-size:14.5px;color:var(--ink-2);}
+  .ladder{padding:8px 14px 0;overflow-x:auto;}
+  .ladder svg{display:block;margin:0 auto;max-width:100%;height:auto;}
+
+  svg .el{color:var(--dead);}
+  svg .el.hot{color:var(--on);}
+  svg .el line,svg .el path,svg .el circle{stroke:currentColor;fill:none;
+    stroke-width:2.6;stroke-linecap:round;}
+  svg .el circle.j{fill:currentColor;stroke:none;}
+  svg .rail{stroke:var(--on);stroke-width:3;fill:none;stroke-linecap:round;}
+  svg .lbl{fill:var(--ink);font-family:var(--mono);font-size:12.5px;font-weight:600;}
+  svg .lbl2{fill:var(--ink-3);font-family:var(--sans);font-size:11.5px;font-weight:400;}
+  svg .tbox{fill:var(--tint);stroke:var(--ink-2);stroke-width:2;}
+
+  .pad{display:flex;gap:12px;flex-wrap:wrap;align-items:center;
+    padding:16px 20px;border-top:1px solid var(--line);margin-top:12px;}
+  .pb{font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;
+    border:2px solid var(--line);background:var(--tint);color:var(--ink);
+    border-radius:6px;padding:12px 20px;user-select:none;-webkit-user-select:none;
+    touch-action:manipulation;line-height:1.3;}
+  .pb small{display:block;font-family:var(--mono);font-size:11px;font-weight:400;color:var(--ink-3);}
+  .pb.go{border-color:var(--on);} .pb.go.down{background:var(--on);color:#fff;}
+  .pb.go.down small{color:rgba(255,255,255,.8);}
+  .pb.stop{border-color:var(--live);} .pb.stop.down{background:var(--live);color:#fff;}
+  .pb.stop.down small{color:rgba(255,255,255,.8);}
+  .hint{font-size:13px;color:var(--ink-3);margin-left:auto;font-family:var(--mono);
+    font-variant-numeric:tabular-nums;}
+
+  .io{display:flex;gap:8px;flex-wrap:wrap;padding:0 20px 18px;}
+  .led{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12.5px;
+    border:1px solid var(--line);border-radius:4px;padding:5px 10px;color:var(--ink-2);}
+  .led i{width:10px;height:10px;border-radius:50%;background:var(--dead);display:block;}
+  .led.on{color:var(--ink);border-color:var(--on);}
+  .led.on i{background:var(--on);}
+  .led.out.on i{background:var(--lamp);}
+  .led.out.on{border-color:var(--lamp);}
+
+  .note{border:1px solid var(--line);border-left:3px solid var(--brass);background:var(--card);
+    padding:16px 20px;margin:24px 0;border-radius:0 4px 4px 0;}
+  .note p:last-child{margin-bottom:0;}
+  .note .t{font-weight:700;display:block;margin-bottom:4px;}
+  .danger{border:1px solid var(--warn);background:var(--warn-bg);padding:20px 22px;
+    margin:26px 0;border-radius:4px;}
+  .danger h3{margin-top:0;color:var(--warn);}
+  .danger ul{margin:0;padding-left:1.2em;} .danger li{margin-bottom:9px;}
+
+  table{width:100%;border-collapse:collapse;margin:22px 0;font-size:15px;
+    background:var(--card);border:1px solid var(--line);}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font-size:12.5px;letter-spacing:.08em;font-weight:700;color:var(--ink-2);background:var(--tint);}
+  tr:last-child td{border-bottom:none;}
+  td .mono{color:var(--brass);}
+
+  footer{border-top:1px solid var(--line);padding-top:22px;margin-top:60px;
+    font-size:13.5px;color:var(--ink-3);}
+  :focus-visible{outline:2.5px solid var(--brass);outline-offset:2px;}
+  @media (max-width:640px){
+    body{font-size:16px;padding:0 15px 70px;}
+    figure{padding:14px 10px 12px;}
+    .hint{margin-left:0;width:100%;}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker">电工入门 · 进阶篇</p>
+  <h1>PLC 梯形图入门<br>点一下就能看懂</h1>
+  <p class="lede">PLC 说白了就是<strong>一柜子能改程序的继电器</strong>。这一篇把接触器电路搬进 PLC 里，三个梯形图都能真的按按钮跑起来——绿线就是电流，你按哪它走哪。</p>
+</header>
+
+<!-- 1 -->
+<section>
+  <div class="col">
+    <span class="snum">第 1 讲</span>
+    <h2>PLC 是什么：一柜子能改程序的继电器</h2>
+    <p>回想一下电机启停自锁那张图：一个接触器、两个按钮、一个热继电器，还有一堆按固定方式接死的线。现在要加一个功能——"按下启动，延时 3 秒再转"。</p>
+    <ul>
+      <li><strong>用继电器：</strong>买个时间继电器，断电，拆线，重新接，再调试。改一次要半天。</li>
+      <li><strong>用 PLC：</strong>在电脑上把梯形图改两笔，下载进去。<em>五分钟，一根线都不用动。</em></li>
+    </ul>
+    <p>这就是 PLC 唯一的、也是全部的优势：<strong>把"接线的逻辑"变成了"可以改的软件"</strong>。至于电从哪来、到哪去、怎么保护，跟你在前面几讲学的一模一样，一点没变。</p>
+  </div>
+
+  <table>
+    <thead><tr><th>对比</th><th>继电器接触器控制</th><th>PLC 控制</th></tr></thead>
+    <tbody>
+      <tr><td>逻辑装在哪</td><td>装在<b>线</b>里——线怎么接，逻辑就怎么走</td><td>装在<b>程序</b>里——线只管进出</td></tr>
+      <tr><td>改功能</td><td>断电拆线重接</td><td>改梯形图，下载</td></tr>
+      <tr><td>做定时/计数</td><td>要另配时间继电器、计数器</td><td>软件自带，写一行就有</td></tr>
+      <tr><td>故障排查</td><td>万用表一根根量</td><td>屏幕上直接看哪个触点通了</td></tr>
+      <tr><td>谁在真正带动电机</td><td colspan="2"><b>都是接触器 KM。PLC 自己带不动电机。</b></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 2 -->
+<section>
+  <div class="col">
+    <span class="snum">第 2 讲</span>
+    <h2>三大件：输入 → CPU → 输出</h2>
+    <p>PLC 只有三部分，认准它的端子就不会接错：<strong>左边是输入端子（接按钮、开关、传感器），右边是输出端子（接接触器线圈、指示灯）</strong>，中间是 CPU 在跑你写的程序。</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 720 340" role="img" aria-label="PLC 接线示意：按钮接入输入端子和COM，CPU 运行程序，输出端子驱动接触器线圈，接触器主触点再驱动电机">
+      <!-- 输入侧 -->
+      <text class="sm" x="86" y="34" text-anchor="middle">按钮 / 开关</text>
+      <circle class="dw" cx="60" cy="80" r="5"/><circle class="dw" cx="112" cy="80" r="5"/>
+      <line class="dw" x1="60" y1="80" x2="106" y2="62"/>
+      <text class="mo" x="86" y="110" text-anchor="middle">SB1 停止</text>
+      <circle class="dw" cx="60" cy="150" r="5"/><circle class="dw" cx="112" cy="150" r="5"/>
+      <line class="dw" x1="60" y1="150" x2="106" y2="132"/>
+      <text class="mo" x="86" y="180" text-anchor="middle">SB2 启动</text>
+      <path class="dw" d="M112 80 L200 80 M112 150 L200 150"/>
+      <path class="dw" d="M60 80 L36 80 L36 220 L200 220 M60 150 L36 150"/>
+      <text class="sm" x="120" y="240">公共端 COM</text>
+
+      <!-- PLC 主体 -->
+      <rect class="box" x="200" y="46" width="230" height="230" rx="4"/>
+      <text x="315" y="126" text-anchor="middle">PLC</text>
+      <text class="sm" x="315" y="150" text-anchor="middle">CPU 循环执行你写的程序</text>
+      <text class="mo" x="212" y="84">X0</text>
+      <text class="mo" x="212" y="154">X1</text>
+      <text class="mo" x="212" y="224">COM</text>
+      <text class="mo" x="418" y="84" text-anchor="end">Y0</text>
+      <text class="mo" x="418" y="154" text-anchor="end">Y1</text>
+      <text class="mo" x="418" y="224" text-anchor="end">COM</text>
+      <text class="sm" x="240" y="66">输入端子</text>
+      <text class="sm" x="390" y="66" text-anchor="end">输出端子</text>
+
+      <!-- 输出侧 -->
+      <path class="dw" d="M430 80 L520 80"/>
+      <rect class="box" x="520" y="60" width="56" height="40" rx="3"/>
+      <text class="mo" x="548" y="85" text-anchor="middle">KM</text>
+      <path class="dw" d="M576 80 L660 80 L660 220 L430 220"/>
+      <text class="sm" x="548" y="122" text-anchor="middle">接触器线圈</text>
+      <text class="sm" x="612" y="60" text-anchor="middle">AC 220V</text>
+
+      <!-- 主电路 -->
+      <path class="dw" d="M548 140 L548 176"/>
+      <circle class="dw" cx="548" cy="200" r="26"/>
+      <text class="mo" x="548" y="205" text-anchor="middle">M</text>
+      <text class="sm" x="548" y="252" text-anchor="middle">电机（走主电路的大电流）</text>
+      <text class="sm" x="592" y="160">KM 主触点</text>
+    </svg>
+    <figcaption><b>最要命的一条：PLC 的输出端子带不动电机。</b>它只能输出几百毫安，负责去"点"接触器线圈；真正扛几十安培大电流的还是 <b>KM 主触点</b>。所以第 8 讲那套主电路（断路器 → 接触器 → 热继电器 → 电机）<b>原封不动照旧</b>，PLC 只是替换了控制回路里那几个按钮和自锁触点。</figcaption>
+  </figure>
+
+  <div class="col">
+    <h3>扫描周期：PLC 其实一直在原地转圈</h3>
+    <p>PLC 不像继电器那样"实时响应"。它在<strong>循环</strong>做三件事，一圈通常几毫秒到几十毫秒：</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 640 190" role="img" aria-label="PLC 扫描周期：读输入、算程序、刷输出三步循环">
+      <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+      <rect class="box" x="30" y="50" width="150" height="56" rx="3"/>
+      <text x="105" y="76" text-anchor="middle">① 读输入</text>
+      <text class="sm" x="105" y="96" text-anchor="middle">按钮按了没？存起来</text>
+      <line class="dw" x1="180" y1="78" x2="230" y2="78" marker-end="url(#a1)"/>
+      <rect class="box" x="234" y="50" width="150" height="56" rx="3"/>
+      <text x="309" y="76" text-anchor="middle">② 算程序</text>
+      <text class="sm" x="309" y="96" text-anchor="middle">梯形图从上到下跑一遍</text>
+      <line class="dw" x1="384" y1="78" x2="434" y2="78" marker-end="url(#a1)"/>
+      <rect class="box" x="438" y="50" width="150" height="56" rx="3"/>
+      <text x="513" y="76" text-anchor="middle">③ 刷输出</text>
+      <text class="sm" x="513" y="96" text-anchor="middle">该通的端子通电</text>
+      <path class="dw" d="M588 78 L612 78 L612 150 L105 150 L105 110" marker-end="url(#a1)"/>
+      <text class="sm" x="358" y="170" text-anchor="middle">一圈几毫秒，周而复始 —— 这一圈叫「扫描周期」</text>
+    </svg>
+    <figcaption>因为是循环扫描，PLC 天生就能<b>数圈数当计时器</b>——这就是软件定时器 T 的来历，也是它比时间继电器方便的原因。</figcaption>
+  </figure>
+</section>
+
+<!-- 3 -->
+<section>
+  <div class="col">
+    <span class="snum">第 3 讲</span>
+    <h2>梯形图怎么读：像看电路图一样看它</h2>
+    <p>梯形图（Ladder）长得像一架梯子：<strong>左边一根竖线是"左母线"，永远带电</strong>；每一横档叫一个"梯级"，从左往右走，走得通，右边的线圈就得电。</p>
+    <p>它其实就是把第 8 讲的控制电路<strong>竖着画改成横着画</strong>，符号也几乎照搬：</p>
+  </div>
+
+  <table>
+    <thead><tr><th>梯形图符号</th><th>叫什么</th><th>什么时候能通过</th><th>对应实物</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">─┤ ├─</td><td>常开触点</td><td>对应的位<b>为 1（ON）</b>时接通</td><td>启动按钮、接触器常开辅助触点</td></tr>
+      <tr><td class="mono">─┤/├─</td><td>常闭触点</td><td>对应的位<b>为 0（OFF）</b>时接通</td><td>停止按钮、热继电器常闭触点</td></tr>
+      <tr><td class="mono">─( )─</td><td>输出线圈</td><td>左边走通就得电，驱动 <span class="mono">Y</span> 端子</td><td>接触器 KM 线圈</td></tr>
+      <tr><td class="mono">X0 X1…</td><td>输入继电器</td><td colspan="2">外面接进来的按钮、开关的状态（只能读）</td></tr>
+      <tr><td class="mono">Y0 Y1…</td><td>输出继电器</td><td colspan="2">输出端子，也可以当触点在程序里反复用</td></tr>
+      <tr><td class="mono">M0 M1…</td><td>辅助继电器</td><td colspan="2">程序内部的"草稿纸"，不接到外面</td></tr>
+    </tbody>
+  </table>
+
+  <div class="col">
+    <div class="note">
+      <span class="t">新手最容易栽的一个坑</span>
+      <p>程序里画<strong>常闭</strong>触点 <code>─┤/├─</code>，不等于外面那个按钮是常闭的。<strong>符号说的是"这一位是 0 的时候通"</strong>，跟外面接的是什么按钮是两码事。<br>下面的仿真里，停止按钮 <code>X0</code> 在程序里画成常闭：<strong>没按 X0 时 X0＝0 → 常闭触点接通 → 电流能过去</strong>；一按 X0 变 1 → 常闭断开 → 整条路断掉。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section>
+  <div class="col">
+    <span class="snum">仿真 1</span>
+    <h2>启保停：PLC 版的自锁</h2>
+    <p>这就是第 8 讲那个自锁电路，一行梯形图搞定。<strong>按住下面的按钮试试</strong>——按钮是点动的，松手就弹起来，正好看清自锁到底锁住了什么。</p>
+    <p style="font-size:15px;color:var(--ink-3)"><strong>绿色 ＝ 有电流从这里流过去了</strong>；灰色 ＝ 要么这个触点断着，要么它前面根本没电。</p>
+  </div>
+
+  <div class="sim" id="sim1">
+    <div class="sim-h">
+      <b>启保停电路</b>
+      <p>Y0 = （X1 启动 <span class="mono">或</span> Y0 自锁）<span class="mono">且</span> 没按 X0 停止</p>
+    </div>
+    <div class="ladder"></div>
+    <div class="io"></div>
+    <div class="pad"></div>
+  </div>
+
+  <div class="col">
+    <h3>你应该看到的三件事</h3>
+    <ol>
+      <li><strong>按住启动</strong>：上面那条支路变绿 → 线圈 Y0 得电 → 输出灯亮。</li>
+      <li><strong>松开启动</strong>：上面那条灰回去了，但<strong>下面 Y0 那条支路接了上来</strong>——电流改走自锁路，输出<strong>保持</strong>。这就是"自锁 / 自保持"。</li>
+      <li><strong>按一下停止</strong>：X0 常闭断开，整条路断掉，Y0 立刻失电；松开停止后<strong>也不会自己恢复</strong>，因为自锁那条早断了。</li>
+    </ol>
+    <div class="note">
+      <span class="t">和继电器电路一模一样的对应关系</span>
+      <p><code>X0</code> ↔ 停止按钮 SB1　|　<code>X1</code> ↔ 启动按钮 SB2　|　<code>Y0</code> ↔ 接触器 KM 线圈<br>
+      梯形图里那个 <code>Y0</code> 常开触点，就是实物图里 KM 的<strong>自锁辅助触点</strong>——只不过在 PLC 里它是"软"的，想用多少个就用多少个，不用花钱买。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section>
+  <div class="col">
+    <span class="snum">仿真 2</span>
+    <h2>正反转互锁：不许两个同时来</h2>
+    <p>电机要能正转也能反转。但正反转接触器<strong>绝对不能同时吸合</strong>——那等于把两根相线直接短路，"砰"一声，主电路炸给你看。</p>
+    <p>办法叫<strong>互锁</strong>：在正转那一档串一个反转的<strong>常闭</strong>触点，反转那一档串一个正转的常闭触点。谁先动谁把对方锁死。</p>
+  </div>
+
+  <div class="sim" id="sim2">
+    <div class="sim-h">
+      <b>正反转互锁</b>
+      <p>正转 Y0 要求「没在反转」；反转 Y1 要求「没在正转」</p>
+    </div>
+    <div class="ladder"></div>
+    <div class="io"></div>
+    <div class="pad"></div>
+  </div>
+
+  <div class="col">
+    <h3>亲手验证一下</h3>
+    <ol>
+      <li>按一下<strong>正转</strong> → Y0 亮，电机正转。</li>
+      <li>这时候按<strong>反转</strong> → <strong>没反应</strong>。因为反转那一档里的 <code>Y0</code> 常闭已经被顶开了。</li>
+      <li>先按<strong>停止</strong>，再按反转 → Y1 亮。<strong>必须先停</strong>，这就是互锁的意义。</li>
+    </ol>
+    <div class="danger">
+      <h3>⚠ 只在程序里互锁是不够的</h3>
+      <p>实际工程里必须做<strong>双重互锁</strong>：程序里互锁一次，<strong>接触器的机械/电气常闭触点再硬互锁一次</strong>。因为接触器可能触点粘连、PLC 也可能死机——软件锁不住的时候，硬件是最后一道保险。这是行业铁律，不是可选项。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section>
+  <div class="col">
+    <span class="snum">仿真 3</span>
+    <h2>定时器：PLC 真正省事的地方</h2>
+    <p>需求变了：<strong>按下启动，等 3 秒再让电机转</strong>（比如先让润滑泵打上油）。用继电器要买时间继电器重新接线；用 PLC 就是加两行。</p>
+    <p><code>T0 K30</code> 的意思是：定时器 T0，设定值 30 × 100ms ＝ <strong>3.0 秒</strong>。只要它前面一直通着就开始数，数满了 <code>T0</code> 这个触点才闭合。<strong>中途断一下就清零重来。</strong></p>
+  </div>
+
+  <div class="sim" id="sim3">
+    <div class="sim-h">
+      <b>延时启动</b>
+      <p>启动 → M0 自保持 → T0 数够 3 秒 → Y0 输出</p>
+    </div>
+    <div class="ladder"></div>
+    <div class="io"></div>
+    <div class="pad"></div>
+  </div>
+
+  <div class="col">
+    <p>试试<strong>数到一半按停止</strong>——进度条立刻清零。再启动，从头数。这就是"通电延时型"定时器的脾气。</p>
+  </div>
+</section>
+
+<!-- 7 -->
+<section>
+  <div class="col">
+    <span class="snum">第 7 讲</span>
+    <h2>不同牌子，地址不一样</h2>
+    <p>梯形图的画法全世界通用，但<strong>元件地址各家各叫各的</strong>。国内新手最常上手的是三菱 FX 系列和西门子 S7-200 SMART。</p>
+  </div>
+
+  <table>
+    <thead><tr><th>作用</th><th>三菱 FX</th><th>西门子 S7</th><th>欧姆龙 CP</th></tr></thead>
+    <tbody>
+      <tr><td>输入（按钮进来）</td><td class="mono">X0 X1 X2…</td><td class="mono">I0.0 I0.1…</td><td class="mono">0.00 0.01…</td></tr>
+      <tr><td>输出（去接触器）</td><td class="mono">Y0 Y1 Y2…</td><td class="mono">Q0.0 Q0.1…</td><td class="mono">100.00…</td></tr>
+      <tr><td>内部辅助（草稿纸）</td><td class="mono">M0 M1…</td><td class="mono">M0.0 M0.1…</td><td class="mono">W0.00…</td></tr>
+      <tr><td>定时器</td><td class="mono">T0 K30</td><td class="mono">T37 (S5T#3s)</td><td class="mono">TIM 000</td></tr>
+      <tr><td>计数器</td><td class="mono">C0 K10</td><td class="mono">C0</td><td class="mono">CNT 000</td></tr>
+    </tbody>
+  </table>
+
+  <div class="col">
+    <div class="note">
+      <span class="t">注意三菱的编号是八进制</span>
+      <p>三菱 FX 的 X、Y 地址<strong>没有 X8 和 X9</strong>——数到 X7 直接跳 X10。第一次接线的人几乎都在这里数错过端子。</p>
+    </div>
+
+    <h3>接下来怎么练</h3>
+    <ol>
+      <li>把上面三个仿真<strong>每个都按到能预测结果</strong>：按之前先说出"哪条会绿、输出会不会亮"，再按下去验证。</li>
+      <li>装一个免费的编程软件（三菱 GX Works2、西门子 STEP 7 MicroWIN SMART 都有仿真器），<strong>不用买 PLC 也能跑</strong>。</li>
+      <li>把这三个梯形图照着敲一遍，用软件自带的仿真运行。</li>
+      <li>再练三个经典：<strong>两地启停</strong>（多个按钮并联）、<strong>顺序启动</strong>（A 转了 B 才能转）、<strong>闪烁</strong>（两个定时器互相触发）。</li>
+    </ol>
+
+    <div class="danger">
+      <h3>⚠ 接实物 PLC 之前</h3>
+      <ul>
+        <li><strong>先在仿真器里跑通，再下载到实物。</strong>程序错了，电机是真的会动的。</li>
+        <li><strong>接线时 PLC 必须断电</strong>，输入 COM 和输出 COM 分清楚，别把 220V 接进输入端子——那是 24V 的地盘，接错直接烧板子。</li>
+        <li><strong>输出端子接的是接触器线圈，不是电机。</strong>主电路的断路器、热继电器一个都不能省。</li>
+        <li><strong>急停按钮必须硬接线</strong>，直接切断控制回路电源，<strong>不能只靠 PLC 程序判断</strong>。PLC 死机时，急停仍然必须有效。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  PLC 梯形图入门 · 新手电工系列　|　仿真为教学演示，扫描周期做了放慢处理，实际 PLC 一圈只有几毫秒。<br>
+  实际调试请遵守当地电气规范；带电作业与配电改造应由持证电工进行。
+</footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ══ 梯形图零件 ══ */
+  // 触点：type 'no' 常开 / 'nc' 常闭；k = 能流着色的 key
+  function C(x,y,type,addr,name,k){
+    const slash = type==="nc"
+      ? `<line x1="${x-17}" y1="${y+16}" x2="${x+17}" y2="${y-16}"/>` : "";
+    return `<g class="el" data-hot="${k}">
+      <line x1="${x-34}" y1="${y}" x2="${x-12}" y2="${y}"/>
+      <line x1="${x-12}" y1="${y-15}" x2="${x-12}" y2="${y+15}"/>
+      <line x1="${x+12}" y1="${y-15}" x2="${x+12}" y2="${y+15}"/>
+      ${slash}
+      <line x1="${x+12}" y1="${y}" x2="${x+34}" y2="${y}"/>
+    </g>
+    <text class="lbl" x="${x}" y="${y-26}" text-anchor="middle">${addr}</text>
+    <text class="lbl2" x="${x}" y="${y+38}" text-anchor="middle">${name}</text>`;
+  }
+  // 线圈
+  function K(x,y,addr,name,k){
+    return `<g class="el" data-hot="${k}">
+      <path d="M${x-16} ${y-17} a 20 20 0 0 0 0 34"/>
+      <path d="M${x+16} ${y-17} a 20 20 0 0 1 0 34"/>
+    </g>
+    <text class="lbl" x="${x}" y="${y-28}" text-anchor="middle">${addr}</text>
+    <text class="lbl2" x="${x}" y="${y+40}" text-anchor="middle">${name}</text>`;
+  }
+  // 导线段 / 节点
+  const L = (d,k) => `<g class="el" data-hot="${k}"><path d="${d}"/></g>`;
+  const J = (x,y,k) => `<g class="el" data-hot="${k}"><circle class="j" cx="${x}" cy="${y}" r="4.5"/></g>`;
+  const rails = (h) => `<path class="rail" d="M40 34 V${h}"/><path class="rail" d="M600 34 V${h}"/>`;
+
+  /* ══ 仿真运行器 ══ */
+  function run(id, cfg){
+    const root = document.getElementById(id);
+    if(!root) return;
+    const M = {};
+    cfg.bits.forEach(b => M[b] = false);
+    M._t = 0;                       // 定时器累计毫秒
+    let scans = 0;
+
+    root.querySelector(".ladder").innerHTML = cfg.svg;
+    root.querySelector(".pad").innerHTML =
+      cfg.btns.map(b=>`<button class="pb ${b.cls}" data-b="${b.a}">${b.t}<small>${b.a}</small></button>`).join("")
+      + `<span class="hint">扫描 <span class="cnt">0</span> 次</span>`;
+    root.querySelector(".io").innerHTML =
+      cfg.leds.map(l=>`<span class="led ${l.out?"out":""}" data-led="${l.a}"><i></i>${l.a} ${l.n}</span>`).join("");
+
+    // 按住＝按下，松开＝弹起
+    root.querySelectorAll("[data-b]").forEach(el=>{
+      const a = el.dataset.b;
+      const dn = e => { e.preventDefault(); M[a] = true;  el.classList.add("down"); };
+      const up = e => { e.preventDefault(); M[a] = false; el.classList.remove("down"); };
+      el.addEventListener("mousedown",dn); el.addEventListener("mouseup",up);
+      el.addEventListener("mouseleave",up);
+      el.addEventListener("touchstart",dn,{passive:false});
+      el.addEventListener("touchend",up,{passive:false});
+      el.addEventListener("touchcancel",up,{passive:false});
+      el.addEventListener("keydown",e=>{ if(e.key===" "||e.key==="Enter") dn(e); });
+      el.addEventListener("keyup",e=>{ if(e.key===" "||e.key==="Enter") up(e); });
+    });
+
+    const cnt = root.querySelector(".cnt");
+    const DT = 60;
+    setInterval(()=>{
+      cfg.scan(M, DT);                       // 跑一遍梯形图
+      scans++;
+      const h = cfg.hot(M);
+      root.querySelectorAll("[data-hot]").forEach(el=>
+        el.classList.toggle("hot", !!h[el.dataset.hot]));
+      root.querySelectorAll("[data-led]").forEach(el=>
+        el.classList.toggle("on", !!M[el.dataset.led]));
+      if(cfg.extra) cfg.extra(root, M);
+      cnt.textContent = scans;
+    }, DT);
+  }
+
+  /* ══ 仿真 1 · 启保停 ══ */
+  run("sim1", {
+    bits:["X0","X1","Y0"],
+    btns:[
+      {a:"X1", t:"启动", cls:"go",   },
+      {a:"X0", t:"停止", cls:"stop", }
+    ],
+    leds:[{a:"X0",n:"停止"},{a:"X1",n:"启动"},{a:"Y0",n:"KM 输出",out:true}],
+    svg:`<svg viewBox="0 0 640 235" role="img" aria-label="启保停梯形图：启动触点与输出自锁触点并联，再串联停止常闭触点驱动输出线圈">
+      ${rails(215)}
+      ${L("M40 80 H100","p")}${J(100,80,"p")}
+      ${C(165,80,"no","X1","启动 SB2","cx1")}
+      ${L("M199 80 H230","cx1")}${J(230,80,"nb")}
+      ${L("M100 80 V160 H131","p")}
+      ${C(165,160,"no","Y0","自锁触点","cy0")}
+      ${L("M199 160 H230 V80","cy0")}
+      ${L("M230 80 H296","nb")}
+      ${C(330,80,"nc","X0","停止 SB1","cx0")}
+      ${L("M364 80 H454","out")}
+      ${K(470,80,"Y0","接触器 KM","out")}
+      ${L("M486 80 H600","out")}
+      <text class="lbl2" x="52" y="26">左母线（常带电）</text>
+    </svg>`,
+    scan(M){ M.Y0 = (M.X1 || M.Y0) && !M.X0; },
+    hot(M){
+      const nb = M.X1 || M.Y0, out = nb && !M.X0;
+      return {p:true, cx1:M.X1, cy0:M.Y0, nb:nb, cx0:out, out:out};
+    }
+  });
+
+  /* ══ 仿真 2 · 正反转互锁 ══ */
+  run("sim2", {
+    bits:["X0","X1","X2","Y0","Y1"],
+    btns:[
+      {a:"X1", t:"正转", cls:"go"},
+      {a:"X2", t:"反转", cls:"go"},
+      {a:"X0", t:"停止", cls:"stop"}
+    ],
+    leds:[{a:"X1",n:"正转"},{a:"X2",n:"反转"},{a:"X0",n:"停止"},
+          {a:"Y0",n:"正转 KM1",out:true},{a:"Y1",n:"反转 KM2",out:true}],
+    svg:`<svg viewBox="0 0 640 420" role="img" aria-label="正反转互锁梯形图：正转支路串入反转输出的常闭触点，反转支路串入正转输出的常闭触点">
+      ${rails(400)}
+      <!-- 正转 -->
+      ${L("M40 70 H100","p")}${J(100,70,"p")}
+      ${C(165,70,"no","X1","正转按钮","a1")}
+      ${L("M199 70 H230","a1")}${J(230,70,"an")}
+      ${L("M100 70 V150 H131","p")}
+      ${C(165,150,"no","Y0","自锁","a2")}
+      ${L("M199 150 H230 V70","a2")}
+      ${L("M230 70 H266","an")}
+      ${C(300,70,"nc","X0","停止","a3")}
+      ${L("M334 70 H386","a3")}
+      ${C(420,70,"nc","Y1","互锁：反转没动","a4")}
+      ${L("M454 70 H504","a4")}
+      ${K(520,70,"Y0","正转 KM1","a4")}
+      ${L("M536 70 H600","a4")}
+      <!-- 反转 -->
+      ${L("M40 260 H100","p")}${J(100,260,"p")}
+      ${C(165,260,"no","X2","反转按钮","b1")}
+      ${L("M199 260 H230","b1")}${J(230,260,"bn")}
+      ${L("M100 260 V340 H131","p")}
+      ${C(165,340,"no","Y1","自锁","b2")}
+      ${L("M199 340 H230 V260","b2")}
+      ${L("M230 260 H266","bn")}
+      ${C(300,260,"nc","X0","停止","b3")}
+      ${L("M334 260 H386","b3")}
+      ${C(420,260,"nc","Y0","互锁：正转没动","b4")}
+      ${L("M454 260 H504","b4")}
+      ${K(520,260,"Y1","反转 KM2","b4")}
+      ${L("M536 260 H600","b4")}
+      <text class="lbl2" x="52" y="26">梯级 1 · 正转</text>
+      <text class="lbl2" x="52" y="216">梯级 2 · 反转</text>
+    </svg>`,
+    scan(M){
+      const y0 = (M.X1 || M.Y0) && !M.X0 && !M.Y1;
+      const y1 = (M.X2 || M.Y1) && !M.X0 && !y0;
+      M.Y0 = y0; M.Y1 = y1;
+    },
+    hot(M){
+      const an = M.X1 || M.Y0, a3 = an && !M.X0, a4 = a3 && !M.Y1;
+      const bn = M.X2 || M.Y1, b3 = bn && !M.X0, b4 = b3 && !M.Y0;
+      return {p:true, a1:M.X1, a2:M.Y0, an:an, a3:a3, a4:a4,
+                      b1:M.X2, b2:M.Y1, bn:bn, b3:b3, b4:b4};
+    }
+  });
+
+  /* ══ 仿真 3 · 定时器 ══ */
+  const PRE = 3000;
+  run("sim3", {
+    bits:["X0","X1","M0","T0","Y0"],
+    btns:[
+      {a:"X1", t:"启动", cls:"go"},
+      {a:"X0", t:"停止", cls:"stop"}
+    ],
+    leds:[{a:"X1",n:"启动"},{a:"X0",n:"停止"},{a:"M0",n:"内部自保持"},
+          {a:"T0",n:"定时到"},{a:"Y0",n:"KM 输出",out:true}],
+    svg:`<svg viewBox="0 0 640 445" role="img" aria-label="延时启动梯形图：启动自保持后驱动定时器T0，T0到达设定值后接通输出Y0">
+      ${rails(420)}
+      ${L("M40 70 H100","p")}${J(100,70,"p")}
+      ${C(165,70,"no","X1","启动","m1")}
+      ${L("M199 70 H230","m1")}${J(230,70,"mn")}
+      ${L("M100 70 V150 H131","p")}
+      ${C(165,150,"no","M0","自保持","m2")}
+      ${L("M199 150 H230 V70","m2")}
+      ${L("M230 70 H296","mn")}
+      ${C(330,70,"nc","X0","停止","m3")}
+      ${L("M364 70 H454","m3")}
+      ${K(470,70,"M0","内部继电器","m3")}
+      ${L("M486 70 H600","m3")}
+
+      ${L("M40 270 H131","p")}
+      ${C(165,270,"no","M0","开始计时","t1")}
+      ${L("M199 270 H396","t1")}
+      <g class="el" data-hot="t1"><rect class="tbox" x="396" y="242" width="150" height="56" rx="3"/></g>
+      <text class="lbl" x="471" y="266" text-anchor="middle">T0　K30</text>
+      <text class="lbl2" x="471" y="288" text-anchor="middle" id="t0v">3.0 秒</text>
+      ${L("M546 270 H600","t1")}
+
+      ${L("M40 386 H131","p")}
+      ${C(165,386,"no","T0","定时到","y1")}
+      ${L("M199 386 H454","y1")}
+      ${K(470,386,"Y0","接触器 KM","y1")}
+      ${L("M486 386 H600","y1")}
+      <text class="lbl2" x="52" y="26">梯级 1 · 启动自保持</text>
+      <text class="lbl2" x="52" y="222">梯级 2 · 定时 3 秒</text>
+      <text class="lbl2" x="52" y="340">梯级 3 · 时间到才输出</text>
+    </svg>`,
+    scan(M, dt){
+      M.M0 = (M.X1 || M.M0) && !M.X0;
+      if(M.M0){ M._t = Math.min(PRE, M._t + dt); } else { M._t = 0; }
+      M.T0 = M._t >= PRE;
+      M.Y0 = M.T0;
+    },
+    hot(M){
+      const mn = M.X1 || M.M0, m3 = mn && !M.X0;
+      return {p:true, m1:M.X1, m2:M.M0, mn:mn, m3:m3, t1:M.M0, y1:M.T0};
+    },
+    extra(root, M){
+      const v = root.querySelector("#t0v");
+      if(v) v.textContent = M.M0
+        ? (M._t/1000).toFixed(1) + " / 3.0 秒"
+        : "3.0 秒（未计时）";
+    }
+  });
+})();
+</script>

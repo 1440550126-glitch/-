@@ -1,0 +1,565 @@
+<title>电路闯关</title>
+<meta charset="utf-8">
+
+<style>
+  :root{
+    --paper:#E9EDF1; --card:#FFFFFF; --tint:#F1F4F7;
+    --ink:#0E1F2B; --ink-2:#3E5567; --ink-3:#6B8296;
+    --line:#C6D0D9; --brass:#8F6317; --brass-bg:#F3E9D6;
+    --live:#C8322A; --neutral:#1F62C0; --earth:#4C8F2A;
+    --on:#1E8E48; --on-bg:#E3F3E8;
+    --lamp:#E8A400; --lamp-core:#FFDE7A;
+    --bad:#A33417; --bad-bg:#FBEAE4;
+    --dead:#AEBAC4;
+    --display:Charter,"Bitstream Charter",Georgia,"Songti SC","STSong","Noto Serif CJK SC",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Noto Sans Mono",monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#0C1720; --card:#132430; --tint:#1A2E3C;
+      --ink:#DEE8EF; --ink-2:#95AABA; --ink-3:#71889A;
+      --line:#27404F; --brass:#D9A552; --brass-bg:#2A2113;
+      --live:#FF7B6D; --neutral:#74ABFF; --earth:#93CE5E;
+      --on:#5FD08A; --on-bg:#13301F;
+      --lamp:#FFC93C; --lamp-core:#FFE9A8;
+      --bad:#FF9070; --bad-bg:#31170F;
+      --dead:#3A5162;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0C1720; --card:#132430; --tint:#1A2E3C;
+    --ink:#DEE8EF; --ink-2:#95AABA; --ink-3:#71889A;
+    --line:#27404F; --brass:#D9A552; --brass-bg:#2A2113;
+    --live:#FF7B6D; --neutral:#74ABFF; --earth:#93CE5E;
+    --on:#5FD08A; --on-bg:#13301F;
+    --lamp:#FFC93C; --lamp-core:#FFE9A8;
+    --bad:#FF9070; --bad-bg:#31170F;
+    --dead:#3A5162;
+  }
+
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    font-size:17px;line-height:1.8;margin:0;padding:0 18px 80px;-webkit-text-size-adjust:100%;}
+  .wrap{max-width:720px;margin:0 auto;}
+
+  header{padding:40px 0 20px;}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.22em;color:var(--brass);
+    text-transform:uppercase;margin:0 0 12px;}
+  h1{font-family:var(--display);font-size:clamp(30px,6vw,44px);line-height:1.2;
+    font-weight:700;margin:0 0 10px;}
+  .sub{color:var(--ink-2);margin:0;font-size:16px;}
+
+  /* 进度条 */
+  .hud{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:14px 0 0;margin-bottom:22px;border-top:1px solid var(--line);}
+  .pips{display:flex;gap:6px;}
+  .pip{width:22px;height:6px;border-radius:3px;background:var(--line);}
+  .pip.now{background:var(--brass);}
+  .pip.ok{background:var(--on);}
+  .pip.bad{background:var(--bad);}
+  .sc{font-family:var(--mono);font-size:13px;color:var(--ink-2);margin-left:auto;
+    font-variant-numeric:tabular-nums;}
+
+  /* 关卡卡片 */
+  .stage{background:var(--card);border:1px solid var(--line);border-radius:6px;
+    padding:24px 22px;}
+  .lv{font-family:var(--mono);font-size:12px;letter-spacing:.16em;color:var(--brass);
+    margin:0 0 8px;}
+  h2{font-family:var(--display);font-size:clamp(21px,3.6vw,27px);line-height:1.4;
+    font-weight:700;margin:0 0 10px;text-wrap:balance;}
+  .prompt{margin:0 0 4px;color:var(--ink-2);font-size:16px;}
+
+  .board{margin:14px -8px 0;overflow-x:auto;}
+  .board svg{display:block;margin:0 auto;max-width:100%;height:auto;color:var(--ink);}
+
+  svg .w{fill:none;stroke:var(--dead);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;}
+  svg .w.hot{stroke:var(--on);}
+  svg .w.red{stroke:var(--live);} svg .w.blu{stroke:var(--neutral);} svg .w.grn{stroke:var(--earth);}
+  svg .pt{fill:var(--dead);} svg .pt.hot{fill:var(--on);}
+  svg .glass{fill:none;stroke:var(--dead);stroke-width:3.2;}
+  svg .glass.hot{stroke:var(--lamp);fill:var(--lamp-core);}
+  svg .fil{fill:none;stroke:var(--dead);stroke-width:2.4;}
+  svg .fil.hot{stroke:var(--lamp);}
+  svg text{fill:var(--ink);font-family:var(--sans);font-size:14px;font-weight:500;}
+  svg text.sm{font-size:12px;fill:var(--ink-2);font-weight:400;}
+  svg text.mo{font-family:var(--mono);font-size:13px;}
+  svg .hit{fill:transparent;cursor:pointer;}
+  svg .ring{fill:none;stroke:var(--brass);stroke-width:2;stroke-dasharray:4 4;opacity:0;
+    pointer-events:none;transition:opacity .15s;}
+  svg .ring.show{opacity:.8;}
+  svg .ring.pick{opacity:1;stroke-width:2.8;stroke-dasharray:none;}
+  svg .box{fill:var(--tint);stroke:var(--ink);stroke-width:2.2;}
+
+  /* 选项 */
+  .opts{display:grid;gap:10px;margin:18px 0 0;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));}
+  button{font-family:inherit;font-size:16px;color:inherit;cursor:pointer;}
+  .opt{background:var(--tint);border:1.5px solid var(--line);border-radius:5px;
+    padding:13px 16px;text-align:left;line-height:1.5;transition:border-color .15s,background .15s;}
+  .opt:hover:not(:disabled){border-color:var(--brass);}
+  .opt:disabled{cursor:default;opacity:.55;}
+  .opt.pick{border-color:var(--on);background:var(--on-bg);opacity:1;}
+  .opt.miss{border-color:var(--bad);background:var(--bad-bg);opacity:1;}
+  .opt .n{font-family:var(--mono);font-size:12px;color:var(--brass);display:block;}
+
+  /* 反馈 */
+  .fb{margin-top:18px;padding:15px 18px;border-radius:5px;font-size:15.5px;line-height:1.75;
+    border:1px solid var(--line);background:var(--tint);}
+  .fb.good{border-color:var(--on);background:var(--on-bg);}
+  .fb.bad{border-color:var(--bad);background:var(--bad-bg);}
+  .fb b{font-weight:700;}
+  .fb.hide{display:none;}
+
+  .row{display:flex;gap:12px;align-items:center;margin-top:18px;flex-wrap:wrap;}
+  .go{background:var(--ink);color:var(--paper);border:none;border-radius:5px;
+    padding:13px 26px;font-weight:700;letter-spacing:.02em;}
+  .go:disabled{opacity:.35;cursor:default;}
+  .ghost{background:none;border:1.5px solid var(--line);border-radius:5px;padding:12px 20px;color:var(--ink-2);}
+  .ghost:hover{border-color:var(--brass);color:var(--ink);}
+  :focus-visible{outline:2.5px solid var(--brass);outline-offset:2px;}
+
+  .tip{font-size:14px;color:var(--ink-3);margin-top:14px;}
+  .tip b{color:var(--ink-2);}
+
+  /* 结算 */
+  .end{text-align:center;padding:34px 22px;}
+  .rank{font-family:var(--display);font-size:clamp(30px,7vw,46px);font-weight:700;margin:14px 0 6px;color:var(--brass);}
+  .tally{font-family:var(--mono);font-size:15px;color:var(--ink-2);font-variant-numeric:tabular-nums;}
+  .recap{text-align:left;margin:26px 0 0;padding:20px 22px;background:var(--tint);
+    border-radius:5px;border:1px solid var(--line);}
+  .recap h3{margin:0 0 10px;font-size:16px;}
+  .recap ul{margin:0;padding-left:1.25em;font-size:15px;color:var(--ink-2);}
+  .recap li{margin-bottom:7px;}
+
+  footer{border-top:1px solid var(--line);padding-top:20px;margin-top:44px;
+    font-size:13.5px;color:var(--ink-3);}
+  @media (max-width:600px){
+    body{font-size:16px;padding:0 14px 60px;}
+    .stage{padding:20px 15px;}
+    .opts{grid-template-columns:1fr;}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="kicker">电工入门 · 动手关</p>
+    <h1>电路闯关</h1>
+    <p class="sub">八关，全部要动手点。点开关、找错线、算空开——走通一遍，识图就真的会了。</p>
+  </header>
+
+  <div class="hud">
+    <div class="pips" id="pips"></div>
+    <span class="sc" id="sc">得分 0 / 8</span>
+  </div>
+
+  <div id="app"></div>
+
+  <footer>
+    电路闯关 · 新手电工系列　|　所有电路按 IEC / 国标符号绘制。<br>
+    游戏用于练习识图，实际作业请断电验电，入户线与配电箱改造请由持证电工施工。
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- 画图零件 ---------- */
+  const on = b => b ? " hot" : "";
+  // 灯泡：亮时玻璃变黄、灯丝发光
+  function lamp(x,y,r,lit){
+    return `<circle class="glass${on(lit)}" cx="${x}" cy="${y}" r="${r}"/>
+      <line class="fil${on(lit)}" x1="${x-r*0.7}" y1="${y-r*0.7}" x2="${x+r*0.7}" y2="${y+r*0.7}"/>
+      <line class="fil${on(lit)}" x1="${x+r*0.7}" y1="${y-r*0.7}" x2="${x-r*0.7}" y2="${y+r*0.7}"/>`;
+  }
+  // 电池（竖放，左侧）
+  function batt(x,y){
+    return `<line class="w hot" x1="${x-24}" y1="${y-8}" x2="${x+24}" y2="${y-8}"/>
+      <line class="w hot" x1="${x-13}" y1="${y+8}" x2="${x+13}" y2="${y+8}"/>
+      <text class="mo" x="${x+32}" y="${y-4}">+</text>
+      <text class="mo" x="${x+32}" y="${y+20}">−</text>`;
+  }
+  // 可点开关（水平），closed=闭合，act=点击标识
+  function sw(x,y,closed,act,label){
+    const blade = closed
+      ? `<line class="w${on(closed)}" x1="${x}" y1="${y}" x2="${x+56}" y2="${y}"/>`
+      : `<line class="w" x1="${x}" y1="${y}" x2="${x+52}" y2="${y-26}"/>`;
+    return `${blade}
+      <circle class="pt${on(closed)}" cx="${x}" cy="${y}" r="4.5"/>
+      <circle class="pt${on(closed)}" cx="${x+56}" cy="${y}" r="4.5"/>
+      ${label?`<text class="sm" x="${x+28}" y="${y+30}" text-anchor="middle">${label}</text>`:""}
+      <rect class="ring show" x="${x-14}" y="${y-40}" width="84" height="56" rx="6"/>
+      <rect class="hit" data-act="${act}" x="${x-14}" y="${y-40}" width="84" height="56"/>`;
+  }
+  // 竖放的可点开关（用于并联支路）
+  function swV(x,y,closed,act){
+    const blade = closed
+      ? `<line class="w hot" x1="${x}" y1="${y}" x2="${x}" y2="${y+56}"/>`
+      : `<line class="w" x1="${x}" y1="${y}" x2="${x+26}" y2="${y+50}"/>`;
+    return `${blade}
+      <circle class="pt${on(closed)}" cx="${x}" cy="${y}" r="4.5"/>
+      <circle class="pt${on(closed)}" cx="${x}" cy="${y+56}" r="4.5"/>
+      <rect class="ring show" x="${x-30}" y="${y-10}" width="72" height="76" rx="6"/>
+      <rect class="hit" data-act="${act}" x="${x-30}" y="${y-10}" width="72" height="76"/>`;
+  }
+  // 双掷开关：p=0 接上触点，p=1 接下触点
+  function spdt(x,y,p,act,label,hot){
+    const ty = p===0 ? y-26 : y+26;
+    return `<line class="w${on(hot)}" x1="${x}" y1="${y}" x2="${x+50}" y2="${ty}"/>
+      <circle class="pt${on(hot)}" cx="${x}" cy="${y}" r="4.5"/>
+      <circle class="pt" cx="${x+54}" cy="${y-26}" r="4.5"/>
+      <circle class="pt" cx="${x+54}" cy="${y+26}" r="4.5"/>
+      <text class="sm" x="${x+24}" y="${y+62}" text-anchor="middle">${label}</text>
+      <rect class="ring show" x="${x-14}" y="${y-44}" width="82" height="88" rx="6"/>
+      <rect class="hit" data-act="${act}" x="${x-14}" y="${y-44}" width="82" height="88"/>`;
+  }
+  const W = (d,hot,extra="") => `<path class="w${on(hot)}${extra?" "+extra:""}" d="${d}"/>`;
+
+  /* ---------- 关卡 ---------- */
+  const LV = [
+  /* 1 ─ 通路 */
+  {
+    kind:"circuit", title:"点亮它",
+    prompt:"最简单的一个电路。想办法让灯亮起来。",
+    tip:"电流要走成一个<b>闭合的圈</b>，缺一个口就不通。图上虚线框里的东西可以点。",
+    init:()=>({s1:false}),
+    act:(a,s)=>{ if(a==="s1") s.s1=!s.s1; },
+    lit:s=>s.s1,
+    solved:s=>s.s1,
+    draw(s){ const h=s.s1;
+      return `<svg viewBox="0 0 520 250" role="img" aria-label="一个电源、一个开关、一盏灯组成的最简电路">
+        ${W("M100 60 L200 60",h)}${sw(200,60,s.s1,"s1","开关")}${W("M256 60 L420 60 L420 96",h)}
+        ${W("M420 144 L420 190 L100 190 L100 128",h)}${W("M100 60 L100 112",h)}
+        ${batt(100,120)}${lamp(420,120,24,h)}
+        <text class="sm" x="60" y="124" text-anchor="end">电源</text>
+        <text class="sm" x="460" y="124">灯</text>
+        <text class="sm" x="260" y="214" text-anchor="middle">导线</text>
+      </svg>`; },
+    ok:"通了！开关闭合 → 回路闭合 → 电流走成一个圈 → 灯亮。这就叫<b>通路</b>；断开叫<b>断路</b>。"
+  },
+  /* 2 ─ 串联 */
+  {
+    kind:"circuit", title:"两个开关，都归它管",
+    prompt:"这两个开关是<b>串联</b>的。让灯亮起来。",
+    tip:"串联＝一条路走到底。路上任何一个口断着，整条路都不通。",
+    init:()=>({s1:false,s2:false}),
+    act:(a,s)=>{ s[a]=!s[a]; },
+    lit:s=>s.s1&&s.s2,
+    solved:s=>s.s1&&s.s2,
+    draw(s){ const a=s.s1,b=s.s1&&s.s2;
+      return `<svg viewBox="0 0 560 250" role="img" aria-label="两个开关串联在同一条回路上控制一盏灯">
+        ${W("M90 60 L160 60",true)}${sw(160,60,s.s1,"s1","开关 A")}
+        ${W("M216 60 L300 60",a)}${sw(300,60,s.s2,"s2","开关 B")}
+        ${W("M356 60 L460 60 L460 96",b)}
+        ${W("M460 144 L460 190 L90 190 L90 128",b)}${W("M90 60 L90 112",true)}
+        ${batt(90,120)}${lamp(460,120,24,b)}
+      </svg>`; },
+    ok:"对了——<b>串联的两个开关必须全部闭合，灯才亮</b>。少合一个，路上就缺个口。"
+  },
+  /* 3 ─ 并联 */
+  {
+    kind:"circuit", title:"只点亮左边那盏",
+    prompt:"两盏灯是<b>并联</b>的，各有各的开关。请让<b>左边亮、右边不亮</b>。",
+    tip:"并联＝各走各的路，互不影响。这也是家里所有灯和插座的接法。",
+    init:()=>({s1:false,s2:false}),
+    act:(a,s)=>{ s[a]=!s[a]; },
+    lit:s=>s.s1,
+    solved:s=>s.s1&&!s.s2,
+    draw(s){
+      return `<svg viewBox="0 0 560 300" role="img" aria-label="两盏灯并联在同一电源上，各自有一个开关">
+        ${W("M90 60 L500 60",true)}${W("M90 250 L500 250",true)}
+        ${W("M90 60 L90 112",true)}${W("M90 128 L90 250",true)}
+        ${batt(90,120)}
+        ${W("M260 60 L260 86",true)}${swV(260,86,s.s1,"s1")}
+        ${W("M260 142 L260 168",s.s1)}${lamp(260,190,22,s.s1)}${W("M260 212 L260 250",s.s1)}
+        ${W("M430 60 L430 86",true)}${swV(430,86,s.s2,"s2")}
+        ${W("M430 142 L430 168",s.s2)}${lamp(430,190,22,s.s2)}${W("M430 212 L430 250",s.s2)}
+        <text class="sm" x="260" y="284" text-anchor="middle">左边这盏</text>
+        <text class="sm" x="430" y="284" text-anchor="middle">右边这盏</text>
+      </svg>`; },
+    ok:"正确。<b>并联的两条支路互不干涉</b>——所以家里关掉客厅灯，卧室灯照样亮，每盏都吃满 220V。",
+    near:s=>s.s1&&s.s2 ? "两盏都亮了。任务是<b>只让左边亮</b>，把右边那个开关关掉。" : null
+  },
+  /* 4 ─ 符号 */
+  {
+    kind:"quiz", title:"这个符号是什么？",
+    prompt:"图纸上的符号全世界统一，认得它就等于识字。四题连答。",
+    tip:"想不起来就先猜，答错会告诉你为什么。",
+    qs:[
+      { svg:`<path class="w hot" d="M20 30 H70 M110 30 H160"/><line class="w hot" x1="70" y1="8" x2="70" y2="52"/><line class="w hot" x1="110" y1="18" x2="110" y2="42"/>`,
+        opts:["直流电源（电池）","电阻","熔断器","接触器线圈"], a:0,
+        why:"一长一短两条平行线＝电池。<b>长线是正极＋，短线是负极−</b>。"},
+      { svg:`<path class="w hot" d="M20 30 H60 M120 30 H160"/><rect class="w hot" x="60" y="16" width="60" height="28" fill="none"/><line class="w hot" x1="60" y1="30" x2="120" y2="30"/>`,
+        opts:["电阻","熔断器（保险丝）","电动机","开关"], a:1,
+        why:"方框中间加一条横线＝<b>熔断器 FU</b>。电流太大它先烧断，替电器挡灾。只有方框没横线才是电阻。"},
+      { svg:`<line class="w hot" x1="90" y1="4" x2="90" y2="30"/><line class="w hot" x1="60" y1="34" x2="120" y2="34"/><line class="w hot" x1="70" y1="44" x2="110" y2="44"/><line class="w hot" x1="80" y1="54" x2="100" y2="54"/>`,
+        opts:["天线","接地 PE","散热器","电容"], a:1,
+        why:"三条越来越短的横线＝<b>保护接地 PE</b>。漏电时把电引进大地，是保命用的那根黄绿线。"},
+      { svg:`<path class="w hot" d="M20 34 H62 M118 34 H160"/><circle class="pt hot" cx="62" cy="34" r="5"/><circle class="pt hot" cx="118" cy="34" r="5"/><line class="w hot" x1="62" y1="34" x2="118" y2="34"/><line class="w hot" x1="112" y1="20" x2="124" y2="48"/>`,
+        opts:["常开触点","常闭触点","二极管","按钮"], a:1,
+        why:"触点<b>平躺接通、并被一道斜杠划过</b>＝常闭触点。平时是通的，一动作才断开——停止按钮 SB1 和热继电器 FR 用的就是它。"}
+    ],
+    ok:"符号这一关过了。图纸上认得符号，剩下的就是顺着线走一遍。"
+  },
+  /* 5 ─ 找错 */
+  {
+    kind:"circuit", title:"这张图接错了，点出错的地方",
+    prompt:"一盏灯、一个开关，看着能亮——但这么接<b>会出人命</b>。点一下你认为有问题的元件。",
+    tip:"想想：关掉灯之后，站在凳子上换灯泡，手会碰到什么？",
+    init:()=>({picked:null}),
+    act:(a,s)=>{ s.picked=a; },
+    lit:()=>false,
+    solved:s=>s.picked==="sw",
+    draw(s){ const P = k => "ring show" + (s.picked===k ? " pick" : "");
+      return `<svg viewBox="0 0 620 290" role="img" aria-label="一张接线错误的单控照明电路，开关被接在零线上">
+        <rect class="box" x="20" y="70" width="86" height="140" rx="3"/>
+        <text class="sm" x="63" y="134" text-anchor="middle">配电箱</text>
+        <text class="sm" x="63" y="156" text-anchor="middle">L / N</text>
+        ${W("M106 100 L478 100 L478 166",false,"red")}
+        ${W("M106 190 L240 190",false,"blu")}
+        <circle class="pt" cx="240" cy="190" r="4.5"/><circle class="pt" cx="296" cy="190" r="4.5"/>
+        <line class="w blu" x1="240" y1="190" x2="292" y2="166"/>
+        ${W("M296 190 L454 190",false,"blu")}
+        <text class="sm" x="268" y="232" text-anchor="middle">开关</text>
+        <text class="sm" x="170" y="92">火线 L</text><text class="sm" x="150" y="222">零线 N</text>
+        ${lamp(478,190,24,false)}
+        <text class="sm" x="524" y="195">灯</text>
+        <rect class="${P("sw")}" x="224" y="150" width="86" height="60" rx="6"/>
+        <rect class="hit" data-act="sw" x="224" y="150" width="86" height="60"/>
+        <rect class="${P("lamp")}" x="448" y="160" width="60" height="60" rx="6"/>
+        <rect class="hit" data-act="lamp" x="448" y="160" width="60" height="60"/>
+        <rect class="${P("box")}" x="16" y="66" width="94" height="148" rx="6"/>
+        <rect class="hit" data-act="box" x="16" y="66" width="94" height="148"/>
+      </svg>`; },
+    ok:"就是它。<b>开关被接在零线上了</b>——关了灯，灯头照样连着火线，带着 220V。换灯泡手一碰就触电。<br>正确接法：<b>火线先进开关，再进灯；零线直接进灯</b>。这样关灯后灯头彻底没电。",
+    wrong:{
+      lamp:"灯本身没问题，它只是被接在了一条错误的回路里。再看看<b>开关装在哪根线上</b>。",
+      box:"配电箱没画错。问题出在<b>出线之后</b>——注意开关串在了哪一根线上。"
+    }
+  },
+  /* 6 ─ 双控 */
+  {
+    kind:"circuit", title:"楼梯灯",
+    prompt:"两个双控开关，一楼一个二楼一个。<b>第一步：把灯点亮。</b>",
+    tip:"两个开关都搭在同一根跨接线上，路才通。点开关可以拨到另一根线。",
+    init:()=>({p1:0,p2:1,stage:0}),
+    act:(a,s)=>{
+      if(a==="s1") s.p1=s.p1?0:1;
+      if(a==="s2"){ s.p2=s.p2?0:1; s.usedB=true; }
+      if(s.stage===0 && s.p1===s.p2){ s.stage=1; s.usedB=false; }
+    },
+    lit:s=>s.p1===s.p2,
+    solved:s=>s.stage===1 && s.p1!==s.p2 && s.usedB,
+    stagePrompt:s=>s.stage===0
+      ? "<b>第一步：把灯点亮。</b>"
+      : "亮了！<b>第二步：不许碰开关 A，只用开关 B 把灯关掉。</b>",
+    draw(s){ const h=s.p1===s.p2;
+      return `<svg viewBox="0 0 640 300" role="img" aria-label="双控照明电路，两个单刀双掷开关通过两根跨接线控制一盏灯">
+        ${W("M40 130 L150 130",true)}
+        <text class="sm" x="40" y="112">火线 L</text>
+        ${spdt(150,130,s.p1,"s1","开关 A（楼下）",true)}
+        ${W("M204 104 L400 104",s.p1===0)}${W("M204 156 L400 156",s.p1===1)}
+        <text class="sm mo" x="302" y="94" text-anchor="middle">L1</text>
+        <text class="sm mo" x="302" y="180" text-anchor="middle">L2</text>
+        <g transform="translate(858,260) rotate(180)">${spdt(400,130,s.p2===0?1:0,"s2","",h)}</g>
+        <text class="sm" x="430" y="192" text-anchor="middle">开关 B（楼上）</text>
+        ${W("M458 130 L520 130 L520 154",h)}
+        ${lamp(520,178,24,h)}
+        ${W("M520 202 L520 240 L40 240",h)}
+        <text class="sm" x="60" y="264">零线 N</text>
+      </svg>`; },
+    ok:"这就是双控的全部秘密：<b>两个开关搭在同一根跨接线上＝通，各搭一根＝断</b>。所以楼下开的灯，楼上能关。",
+    near:s=>(s.stage===1&&s.p1===s.p2)?"灯还亮着。<b>拨一下开关 B</b>（右边那个）。":null
+  },
+  /* 7 ─ 选空开 */
+  {
+    kind:"quiz", title:"这一路该配多大的空开？",
+    prompt:"客厅要装一台 <b>3000W</b> 的电热水器，走一条专线。空开选哪个？",
+    tip:"先算电流：<b>功率 ÷ 220 ≈ 电流</b>。空开要比这个电流大一点点，但不能大太多。",
+    qs:[
+      { svg:`<rect class="box" x="30" y="14" width="150" height="52" rx="4"/>
+             <text class="mo" x="105" y="38" text-anchor="middle">电热水器</text>
+             <text class="mo" x="105" y="58" text-anchor="middle">3000 W</text>
+             <path class="w hot" d="M180 40 H250"/><text class="sm" x="215" y="26" text-anchor="middle">? A</text>`,
+        opts:["10A","16A","20A","32A"], a:2,
+        why:"3000 ÷ 220 ≈ <b>13.6A</b>。10A 太小会天天跳闸；<b>16A 或 20A 都算合适，专线取 20A 更稳</b>（配 4mm² 铜线）。<br>32A 就危险了——电流到 25A 时线都烤软了空开还不跳，<b>空开保护的是电线，不是电器</b>。" }
+    ],
+    ok:"记住这个顺序：<b>先算电流 → 再定线径 → 最后选空开</b>。空开永远不能大过电线能扛的电流。"
+  },
+  /* 8 ─ 自锁排序 */
+  {
+    kind:"order", title:"电机为什么松手还转？",
+    prompt:"按一下启动按钮，电机就一直转——按<b>正确顺序</b>点出这四步。",
+    tip:"关键在 KM 线圈得电后，它自己的那个常开触点做了什么。",
+    steps:[
+      "按下启动按钮 SB2，控制回路接通",
+      "KM 线圈得电，变成电磁铁",
+      "KM 自锁触点闭合，把启动按钮短接住",
+      "松开 SB2，电流改走自锁触点，电机继续转"
+    ],
+    ok:"这就是<b>自锁（自保持）</b>：线圈用自己的触点把启动按钮「焊」住了，相当于自己按住自己。<br>它还顺带做了<b>失压保护</b>——一停电线圈就释放，来电后电机不会自己突然启动。"
+  }
+  ];
+
+  /* ---------- 状态 ---------- */
+  const app = document.getElementById("app");
+  const pipsEl = document.getElementById("pips");
+  const scEl = document.getElementById("sc");
+  let i = 0, score = 0, marks = [], st = null, qi = 0, done = false, fb = null, picked = [];
+
+  function boot(){
+    marks = LV.map(()=>null);
+    i = 0; score = 0; start();
+  }
+  function start(){
+    const L = LV[i];
+    st = L.init ? L.init() : {};
+    qi = 0; done = false; fb = null; picked = [];
+    if(L.kind==="order"){ st.chosen = []; st.shuf = shuffle(L.steps.map((t,k)=>({t,k}))); }
+    render();
+  }
+  function shuffle(a){ // 固定顺序打乱，避免 Math.random 造成的不可复现
+    const o=[...a]; const seq=[2,0,3,1];
+    return seq.map(k=>o[k]).filter(Boolean);
+  }
+
+  function hud(){
+    pipsEl.innerHTML = LV.map((_,k)=>{
+      const c = marks[k]===true?"ok":marks[k]===false?"bad":k===i?"now":"";
+      return `<span class="pip ${c}"></span>`;
+    }).join("");
+    scEl.textContent = `得分 ${score} / ${LV.length}`;
+  }
+
+  function render(){
+    hud();
+    if(i>=LV.length){ return endScreen(); }
+    const L = LV[i];
+    let body = "";
+
+    if(L.kind==="circuit"){
+      body = `<div class="board">${L.draw(st)}</div>`;
+    } else if(L.kind==="quiz"){
+      const q = L.qs[qi];
+      body = `<div class="board"><svg viewBox="0 0 280 70" role="img" aria-label="待辨认的电路符号">${q.svg}</svg></div>
+        <div class="opts">${q.opts.map((o,k)=>{
+          const cls = picked.includes(k) ? (k===q.a?"pick":"miss") : "";
+          return `<button class="opt ${cls}" data-pick="${k}" ${done||picked.includes(k)?"disabled":""}>${o}</button>`;
+        }).join("")}</div>
+        ${L.qs.length>1?`<p class="tip">第 ${qi+1} / ${L.qs.length} 题</p>`:""}`;
+    } else if(L.kind==="order"){
+      body = `<div class="opts">${st.shuf.map(s=>{
+          const at = st.chosen.indexOf(s.k);
+          return `<button class="opt ${at>-1?"pick":""}" data-step="${s.k}" ${at>-1||done?"disabled":""}>
+            <span class="n">${at>-1?"第 "+(at+1)+" 步":"点击选择"}</span>${s.t}</button>`;
+        }).join("")}</div>`;
+    }
+
+    const prompt = L.stagePrompt ? L.stagePrompt(st) : L.prompt;
+    app.innerHTML = `<div class="stage">
+      <p class="lv">第 ${i+1} 关 / ${LV.length}</p>
+      <h2>${L.title}</h2>
+      <p class="prompt">${prompt}</p>
+      ${body}
+      <div class="fb ${fb?fb.cls:"hide"}">${fb?fb.html:""}</div>
+      <p class="tip"><b>提示：</b>${L.tip}</p>
+      <div class="row">
+        <button class="go" id="next" ${done?"":"disabled"}>${i===LV.length-1?"看结果":"下一关 →"}</button>
+        ${done?"":`<button class="ghost" id="skip">跳过这关</button>`}
+      </div>
+    </div>`;
+    wire();
+  }
+
+  function say(cls,html){ fb = {cls,html}; }
+
+  function wire(){
+    const L = LV[i];
+
+    app.querySelectorAll("[data-act]").forEach(el=>{
+      el.addEventListener("click",()=>{
+        if(done) return;
+        L.act(el.dataset.act, st);
+        if(L.solved(st)){ done = true; mark(true); say("good", L.ok); }
+        else if(L.wrong && L.wrong[st.picked]){ say("bad", L.wrong[st.picked]); }
+        else if(L.near && L.near(st)){ say("", L.near(st)); }
+        else { fb = null; }
+        render();
+      });
+    });
+
+    app.querySelectorAll("[data-pick]").forEach(el=>{
+      el.addEventListener("click",()=>{
+        if(done) return;
+        const q = L.qs[qi], k = +el.dataset.pick;
+        picked.push(k);
+        if(k===q.a){
+          if(qi < L.qs.length-1){
+            say("good", q.why + "<br><b>下一题 →</b>");
+            qi++; picked = [];
+          } else {
+            done = true; mark(true); say("good", q.why + "<br><br>" + L.ok);
+          }
+        } else {
+          say("bad", "不对。再想想——" + L.tip);
+        }
+        render();
+      });
+    });
+
+    app.querySelectorAll("[data-step]").forEach(el=>{
+      el.addEventListener("click",()=>{
+        if(done) return;
+        const k = +el.dataset.step;
+        if(k === st.chosen.length){
+          st.chosen.push(k);
+          if(st.chosen.length===L.steps.length){ done = true; mark(true); say("good", L.ok); }
+          else { say("", `第 ${st.chosen.length} 步选对了，继续。`); }
+        } else {
+          st.chosen = [];
+          say("bad", "顺序不对，从头再来一次。想想：<b>线圈先得电，触点才动作。</b>");
+        }
+        render();
+      });
+    });
+
+    const n = document.getElementById("next");
+    if(n) n.addEventListener("click",()=>{ i++; if(i>=LV.length){ render(); } else start(); });
+    const sk = document.getElementById("skip");
+    if(sk) sk.addEventListener("click",()=>{ mark(false); i++; if(i>=LV.length){ render(); } else start(); });
+  }
+
+  function mark(good){ if(marks[i]===null){ marks[i]=good; if(good) score++; } }
+
+  function endScreen(){
+    const rank = score>=8?"合格电工" : score>=6?"入门电工" : score>=4?"见习电工" : "再来一遍";
+    const word = score>=8?"八关全过——识图这一层你已经站稳了。"
+      : score>=6?"基本功有了，回头把跳过的那两关补上。"
+      : score>=4?"能看懂图了，多练几遍就熟。"
+      : "别急，回去把讲义再走一遍，图是看会的，不是背会的。";
+    app.innerHTML = `<div class="stage end">
+      <p class="lv">通关结算</p>
+      <p class="rank">${rank}</p>
+      <p class="tally">${score} / ${LV.length} 关</p>
+      <p class="prompt" style="max-width:26em;margin:12px auto 0">${word}</p>
+      <div class="recap">
+        <h3>这八关其实只讲了四件事</h3>
+        <ul>
+          <li><b>通路</b>——电流必须走成一个闭合的圈，断一处就全断。</li>
+          <li><b>串联与并联</b>——串联一起死，并联各活各的；家里全是并联。</li>
+          <li><b>开关必须切火线</b>——这是唯一一条会出人命的接线规矩。</li>
+          <li><b>自锁</b>——线圈用自己的触点把按钮短接住，松手也不停。</li>
+        </ul>
+      </div>
+      <div class="row" style="justify-content:center">
+        <button class="go" id="again">再玩一次</button>
+      </div>
+    </div>`;
+    document.getElementById("again").addEventListener("click",boot);
+    hud();
+  }
+
+  boot();
+})();
+</script>
