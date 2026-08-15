@@ -1,0 +1,899 @@
+<title>新手电工电路图</title>
+<meta charset="utf-8">
+
+<style>
+  :root{
+    --paper:#E9EDF1;
+    --card:#FFFFFF;
+    --tint:#F1F4F7;
+    --ink:#0E1F2B;
+    --ink-2:#3E5567;
+    --ink-3:#6B8296;
+    --line:#C6D0D9;
+    --brass:#8F6317;
+    --brass-bg:#F3E9D6;
+    --live:#C8322A;
+    --neutral:#1F62C0;
+    --earth:#4C8F2A;
+    --warn:#A33417;
+    --warn-bg:#FBEAE4;
+
+    --display:Charter,"Bitstream Charter",Georgia,"Songti SC","STSong","Noto Serif CJK SC",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Noto Sans Mono",monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#0C1720;
+      --card:#132430;
+      --tint:#1A2E3C;
+      --ink:#DEE8EF;
+      --ink-2:#95AABA;
+      --ink-3:#71889A;
+      --line:#27404F;
+      --brass:#D9A552;
+      --brass-bg:#2A2113;
+      --live:#FF7B6D;
+      --neutral:#74ABFF;
+      --earth:#93CE5E;
+      --warn:#FF9070;
+      --warn-bg:#31170F;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0C1720;
+    --card:#132430;
+    --tint:#1A2E3C;
+    --ink:#DEE8EF;
+    --ink-2:#95AABA;
+    --ink-3:#71889A;
+    --line:#27404F;
+    --brass:#D9A552;
+    --brass-bg:#2A2113;
+    --live:#FF7B6D;
+    --neutral:#74ABFF;
+    --earth:#93CE5E;
+    --warn:#FF9070;
+    --warn-bg:#31170F;
+  }
+
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:17px;
+    line-height:1.85;
+    margin:0;
+    padding:0 20px 100px;
+    -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:960px;margin:0 auto;}
+  .col{max-width:40em;}
+
+  /* ---------- masthead ---------- */
+  .masthead{
+    padding:64px 0 40px;
+    border-bottom:1px solid var(--line);
+    margin-bottom:48px;
+  }
+  .kicker{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.22em;
+    color:var(--brass);
+    text-transform:uppercase;
+    margin:0 0 18px;
+  }
+  h1{
+    font-family:var(--display);
+    font-size:clamp(34px,6vw,52px);
+    line-height:1.2;
+    letter-spacing:-.01em;
+    font-weight:700;
+    margin:0 0 18px;
+    text-wrap:balance;
+  }
+  .lede{font-size:18px;color:var(--ink-2);margin:0;max-width:34em;}
+
+  /* ---------- sections ---------- */
+  section{margin:0 0 72px;}
+  .snum{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.18em;
+    color:var(--brass);
+    display:block;
+    margin-bottom:8px;
+  }
+  h2{
+    font-family:var(--display);
+    font-size:clamp(24px,3.4vw,31px);
+    line-height:1.35;
+    font-weight:700;
+    margin:0 0 16px;
+    text-wrap:balance;
+  }
+  h3{
+    font-size:17px;
+    font-weight:700;
+    margin:32px 0 10px;
+    letter-spacing:.01em;
+  }
+  p{margin:0 0 16px;}
+  strong{font-weight:700;}
+  code,.mono{font-family:var(--mono);font-size:.88em;}
+  .col ul,.col ol{margin:0 0 16px;padding-left:1.3em;}
+  .col li{margin-bottom:8px;}
+  em{font-style:normal;color:var(--brass);font-weight:700;}
+
+  /* ---------- figures ---------- */
+  figure{
+    margin:32px 0;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:24px 20px 18px;
+    overflow-x:auto;
+  }
+  figure svg{
+    display:block;
+    margin:0 auto;
+    max-width:100%;
+    height:auto;
+    color:var(--ink);
+  }
+  figcaption{
+    margin-top:18px;
+    padding-top:14px;
+    border-top:1px solid var(--line);
+    font-size:14.5px;
+    line-height:1.7;
+    color:var(--ink-2);
+  }
+  figcaption b{color:var(--ink);}
+
+  /* svg drawing language */
+  svg .dw{fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+  svg .thin{stroke-width:1.6;}
+  svg .lead{fill:none;stroke:var(--ink-3);stroke-width:1.1;stroke-dasharray:4 4;}
+  svg .l{stroke:var(--live);}
+  svg .n{stroke:var(--neutral);}
+  svg .e{stroke:var(--earth);}
+  svg .box{fill:var(--tint);stroke:currentColor;stroke-width:2.2;}
+  svg .dot{fill:currentColor;stroke:none;}
+  svg .fillbg{fill:var(--card);stroke:none;}
+  svg text{fill:var(--ink);font-family:var(--sans);font-size:13.5px;font-weight:500;}
+  svg text.sm{font-size:11.5px;fill:var(--ink-2);font-weight:400;}
+  svg text.mo{font-family:var(--mono);font-size:12.5px;}
+  svg text.big{font-family:var(--display);font-size:22px;font-weight:700;}
+  svg text.tl{fill:var(--live);}
+  svg text.tn{fill:var(--neutral);}
+  svg text.te{fill:var(--earth);}
+  svg .arw{fill:currentColor;stroke:none;}
+
+  /* ---------- symbol grid ---------- */
+  .syms{
+    list-style:none;
+    margin:28px 0;
+    padding:0;
+    display:grid;
+    gap:1px;
+    grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+    background:var(--line);
+    border:1px solid var(--line);
+    border-radius:4px;
+    overflow:hidden;
+  }
+  .syms li{
+    background:var(--card);
+    padding:16px 16px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .syms svg{width:100px;height:44px;color:var(--ink);}
+  .syms b{font-size:15px;}
+  .syms .code{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;color:var(--brass);}
+  .syms p{margin:0;font-size:13.5px;line-height:1.6;color:var(--ink-2);}
+
+  /* ---------- notes ---------- */
+  .note{
+    border:1px solid var(--line);
+    border-left:3px solid var(--brass);
+    background:var(--card);
+    padding:16px 20px;
+    margin:24px 0;
+    border-radius:0 4px 4px 0;
+  }
+  .note p:last-child{margin-bottom:0;}
+  .note .t{font-weight:700;display:block;margin-bottom:4px;}
+
+  .danger{
+    border:1px solid var(--warn);
+    background:var(--warn-bg);
+    padding:22px 24px;
+    margin:28px 0;
+    border-radius:4px;
+  }
+  .danger h3{margin-top:0;color:var(--warn);}
+  .danger p:last-child,.danger ul:last-child{margin-bottom:0;}
+  .danger ul{margin:0;padding-left:1.25em;}
+  .danger li{margin-bottom:10px;}
+
+  .mnemonic{
+    font-family:var(--display);
+    font-size:clamp(21px,3.6vw,28px);
+    font-weight:700;
+    line-height:1.6;
+    letter-spacing:.04em;
+    margin:0;
+  }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    margin:24px 0;
+    font-size:15px;
+    background:var(--card);
+    border:1px solid var(--line);
+  }
+  th,td{
+    text-align:left;
+    padding:11px 14px;
+    border-bottom:1px solid var(--line);
+    vertical-align:top;
+  }
+  th{
+    font-size:12.5px;
+    letter-spacing:.1em;
+    font-weight:700;
+    color:var(--ink-2);
+    background:var(--tint);
+  }
+  tr:last-child td{border-bottom:none;}
+  .swatch{
+    display:inline-block;
+    width:26px;
+    height:10px;
+    border-radius:2px;
+    vertical-align:middle;
+    margin-right:8px;
+  }
+
+  footer{
+    border-top:1px solid var(--line);
+    padding-top:24px;
+    margin-top:72px;
+    font-size:14px;
+    color:var(--ink-3);
+  }
+  @media (max-width:640px){
+    body{font-size:16px;padding:0 16px 72px;}
+    figure{padding:16px 12px 14px;}
+  }
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker">给零基础的第一份图纸</p>
+  <h1>新手电工电路图<br>中文标注版</h1>
+  <p class="lede">八张图，从"一个电路要有哪四样东西"一路画到电工考证必考的"电机启停自锁"。每根线都标了中文，每个符号都写了白话解释。看完你能看懂家里配电箱和墙上的开关插座是怎么接的。</p>
+</header>
+
+<!-- ============ 1 ============ -->
+<section>
+  <div class="col">
+    <span class="snum">第 1 讲</span>
+    <h2>电路是一个圈：四样东西缺一不可</h2>
+    <p>电和水很像。水要流动，得有水泵、水管、水龙头、还有用水的花洒；电要流动，也得凑齐四样东西，而且必须连成一个<strong>闭合的圈</strong>——断开任何一处，电就不走了，灯就灭了。</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 660 300" role="img" aria-label="最简单的电路：电源、开关、灯泡、导线连成一个闭合回路，电流从电源正极出发经开关流过灯泡回到负极">
+      <!-- 导线回路 -->
+      <path class="dw" d="M140 138 L140 80 L290 80"/>
+      <path class="dw" d="M360 80 L520 80 L520 128"/>
+      <path class="dw" d="M520 172 L520 230 L140 230 L140 152"/>
+
+      <!-- 电池 -->
+      <line class="dw" x1="116" y1="138" x2="164" y2="138"/>
+      <line class="dw" x1="128" y1="154" x2="152" y2="154"/>
+      <text class="mo" x="174" y="136">+</text>
+      <text class="mo" x="174" y="160">−</text>
+      <text x="108" y="140" text-anchor="end">电源</text>
+      <text class="sm" x="108" y="160" text-anchor="end">提供电压（推力）</text>
+
+      <!-- 开关 -->
+      <circle class="dot" cx="290" cy="80" r="4"/>
+      <circle class="dot" cx="360" cy="80" r="4"/>
+      <line class="dw" x1="290" y1="80" x2="354" y2="54"/>
+      <text x="325" y="30" text-anchor="middle">开关</text>
+      <text class="sm" x="272" y="48" text-anchor="end">断开＝停电</text>
+
+      <!-- 灯 -->
+      <circle class="dw" cx="520" cy="150" r="22"/>
+      <line class="dw thin" x1="504" y1="134" x2="536" y2="166"/>
+      <line class="dw thin" x1="536" y1="134" x2="504" y2="166"/>
+      <text x="556" y="146">灯泡（用电器）</text>
+      <text class="sm" x="556" y="166">把电变成光和热</text>
+
+      <!-- 导线 -->
+      <text x="330" y="258" text-anchor="middle">导线</text>
+      <text class="sm" x="330" y="278" text-anchor="middle">电流走的路，本身不干活</text>
+
+      <!-- 电流方向 -->
+      <polygon class="arw" points="214,74 228,80 214,86"/>
+      <polygon class="arw" points="514,110 520,124 526,110"/>
+      <polygon class="arw" points="386,236 372,230 386,224"/>
+      <text class="sm" x="200" y="64" text-anchor="middle">电流方向</text>
+    </svg>
+    <figcaption><b>看图要点：</b>电流从电源"＋"极出发 → 经开关 → 流过灯泡 → 回到"−"极，走成一个圈。把开关断开，圈就缺了一个口，整条路都不通。<b>四件套：电源、开关、用电器、导线。</b></figcaption>
+  </figure>
+
+  <div class="col">
+    <h3>图上的线交叉了，到底是不是接在一起？</h3>
+    <p>这是新手最容易看错的地方，规矩只有一条：<em>有实心黑点＝连在一起，没有点＝只是画面上交叉而过</em>（现实中是两根线一上一下跨过去，互不相干）。</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 460 168" role="img" aria-label="两根导线交叉的两种画法：带实心圆点表示电气连接，无圆点表示只是交叉不连接">
+      <path class="dw" d="M40 72 L180 72 M110 18 L110 126"/>
+      <circle class="dot" cx="110" cy="72" r="5.5"/>
+      <text x="110" y="156" text-anchor="middle">有点 ＝ 接通</text>
+
+      <path class="dw" d="M280 72 L420 72 M350 18 L350 126"/>
+      <circle class="fillbg" cx="350" cy="72" r="7"/>
+      <path class="dw" d="M280 72 L420 72"/>
+      <text x="350" y="156" text-anchor="middle">无点 ＝ 不接</text>
+    </svg>
+    <figcaption><b>连接点 vs 交叉点。</b>看漏了一个小黑点，整张图就读反了——养成习惯，先找黑点。</figcaption>
+  </figure>
+</section>
+
+<!-- ============ 2 ============ -->
+<section>
+  <div class="col">
+    <span class="snum">第 2 讲</span>
+    <h2>常用符号速查：图纸上的"汉字"</h2>
+    <p>电路图不画实物，画的是<strong>符号</strong>——全世界统一，认得它就等于识字。下面 12 个符号覆盖了新手能碰到的九成场合。右上角那串英文字母是<strong>文字符号</strong>（器件代号），图纸上都用它来点名。</p>
+  </div>
+
+  <ul class="syms">
+    <li>
+      <svg viewBox="0 0 100 44" role="img" aria-label="直流电源符号">
+        <path class="dw" d="M6 22 H42 M58 22 H94"/>
+        <line class="dw" x1="42" y1="8" x2="42" y2="36"/>
+        <line class="dw" x1="58" y1="14" x2="58" y2="30"/>
+      </svg>
+      <b>直流电源 / 电池</b><span class="code">GB</span>
+      <p>长线是正极＋，短线是负极−。电池、充电器出来的都是它。</p>
+    </li>
+    <li>
+      <svg viewBox="0 0 100 44" role="img" aria-label="交流电源符号">
+        <path class="dw" d="M6 22 H36 M64 22 H94"/>
+        <circle class="dw" cx="50" cy="22" r="14"/>
+        <path class="dw thin" d="M42 24 q4 -8 8 0 t8 0"/>
+      </svg>
+      <b>交流电源</b><span class="code">AC</span>
+      <p>圆圈里一条波浪线。家里插座的 220V 就是交流。</p>
+    </li>
+    <li>
+      <svg viewBox="0 0 100 44" role="img" aria-label="单极开关符号">
+        <path class="dw" d="M6 22 H36 M64 22 H94"/>
+        <circle class="dot" cx="36" cy="22" r="3.5"/>
+        <circle class="dot" cx="64" cy="22" r="3.5"/>
+        <line class="dw" x1="36" y1="22" x2="62" y2="8"/>
+      </svg>
+      <b>开关</b><span class="code">SA / S</span>
+      <p>一条抬起来的"闸刀"。抬起＝断开，压下去＝接通。</p>
+    </li>
+    <li>
+      <svg viewBox="0 0 100 44" role="img" aria-label="常开按钮符号">
+        <path class="dw" d="M6 26 H34 M66 26 H94"/>
+        <circle class="dot" cx="34" cy="26" r="3.5"/>
+        <circle class="dot" cx="66" cy="26" r="3.5"/>
+        <line class="dw" x1="34" y1="26" x2="66" y2="14"/>
+        <line class="dw thin" x1="50" y1="20" x2="50" y2="6"/>
+        <line class="dw" x1="40" y1="6" x2="60" y2="6"/>
+      </svg>
+      <b>按钮（常开）</b><span class="code">SB</span>
+      <p>按住才通，手一松就弹开。门铃、启动按钮都是它。</p>
+    </li>
+    <li>
+      <svg viewBox="0 0 100 44" role="img" aria-label="照明灯符号">
+        <path class="dw" d="M6 22 H36 M64 22 H94"/>
+        <circle class="dw" cx="50" cy="22" r="14"/>
+        <line class="dw thin" x1="40" y1="12" x2="60" y2="32"/>
+        <line class="dw thin" x1="60" y1="12" x2="40" y2="32"/>
+      </svg>
+      <b>照明灯</b><span class="code">EL</span>
+      <p>圆圈里打个叉。灯泡、灯管、吸顶灯统统这么画。</p>
+    </li>
+    <li>
+      <svg viewBox="0 0 100 44" role="img" aria-label="电阻符号">
+        <path class="dw" d="M6 22 H34 M66 22 H94"/>
+        <rect class="dw" x="34" y="13" width="32" height="18"/>
+      </svg>
+      <b>电阻</b><span class="code">R</span>
+      <p>一个小方块。作用是"卡住"电流，顺便发热。</p>
+    </li>
+    <li>
+      <svg viewBox="0 0 100 44" role="img" aria-label="熔断器保险丝符号">
+        <path class="dw" d="M6 22 H34 M66 22 H94"/>
+        <rect class="dw" x="34" y="14" width="32" height="16"/>
+        <line class="dw thin" x1="34" y1="22" x2="66" y2="22"/>
+      </svg>
+      <b>熔断器 / 保险丝</b><span class="code">FU</span>
+      <p>电流太大它先烧断，替电器挡灾。烧了必须换同规格的。</p>
+    </li>
+    <li>
+      <svg viewBox="0 0 100 44" role="img" aria-label="断路器空气开关符号">
+        <path class="dw" d="M6 26 H36 M64 26 H94"/>
+        <circle class="dot" cx="36" cy="26" r="3.5"/>
+        <circle class="dot" cx="64" cy="26" r="3.5"/>
+        <line class="dw" x1="36" y1="26" x2="62" y2="12"/>
+        <path class="dw thin" d="M56 6 L68 18 M68 6 L56 18"/>
+      </svg>
+      <b>断路器（空开）</b><span class="code">QF</span>
+      <p>开关头上加个"×"。会自己跳闸的开关，配电箱里全是它。</p>
+    </li>
+    <li>
+      <svg viewBox="0 0 100 44" role="img" aria-label="保护接地符号">
+        <line class="dw" x1="50" y1="4" x2="50" y2="24"/>
+        <line class="dw" x1="34" y1="26" x2="66" y2="26"/>
+        <line class="dw" x1="40" y1="32" x2="60" y2="32"/>
+        <line class="dw" x1="45" y1="38" x2="55" y2="38"/>
+      </svg>
+      <b>保护接地</b><span class="code">PE</span>
+      <p>三条越来越短的横线。漏电时把电引进大地，保命用的。</p>
+    </li>
+    <li>
+      <svg viewBox="0 0 100 44" role="img" aria-label="三相电动机符号">
+        <path class="dw" d="M6 22 H36"/>
+        <circle class="dw" cx="52" cy="22" r="16"/>
+        <text class="mo" x="52" y="27" text-anchor="middle">M</text>
+      </svg>
+      <b>电动机</b><span class="code">M</span>
+      <p>圆圈里写 M。水泵、风机、机床转的都是它。</p>
+    </li>
+    <li>
+      <svg viewBox="0 0 100 44" role="img" aria-label="接触器线圈符号">
+        <path class="dw" d="M6 22 H32 M68 22 H94"/>
+        <rect class="dw" x="32" y="10" width="36" height="24"/>
+        <text class="mo" x="50" y="27" text-anchor="middle">KM</text>
+      </svg>
+      <b>接触器线圈</b><span class="code">KM</span>
+      <p>通电就变电磁铁，"吸"住一堆触点。小电流指挥大电流靠它。</p>
+    </li>
+    <li>
+      <svg viewBox="0 0 100 44" role="img" aria-label="常开触点与常闭触点符号">
+        <path class="dw" d="M4 14 H22 M44 14 H62"/>
+        <line class="dw" x1="22" y1="14" x2="44" y2="4"/>
+        <path class="dw" d="M4 36 H22 M44 36 H62"/>
+        <line class="dw" x1="22" y1="36" x2="44" y2="36"/>
+        <line class="dw thin" x1="40" y1="28" x2="48" y2="42"/>
+        <text class="sm" x="70" y="18">常开</text>
+        <text class="sm" x="70" y="40">常闭</text>
+      </svg>
+      <b>触点（常开 / 常闭）</b><span class="code">KM / FR</span>
+      <p>常开＝平时断着，线圈一通电才闭合；常闭＝平时通着，一动作就断开。</p>
+    </li>
+  </ul>
+</section>
+
+<!-- ============ 3 ============ -->
+<section>
+  <div class="col">
+    <span class="snum">第 3 讲</span>
+    <h2>串联和并联：家里为什么全是并联</h2>
+    <p>两个灯泡接到同一个电源上，只有两种接法。这两种接法的差别，决定了你家一盏灯坏了、其他灯会不会跟着灭。</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 700 300" role="img" aria-label="串联电路与并联电路对比：串联中两灯首尾相接共用一条通路，拆一个全灭；并联中两灯各自跨接在电源两端，互不影响">
+      <!-- 串联 -->
+      <text x="180" y="34" text-anchor="middle">串联 · 一条路走到底</text>
+      <path class="dw" d="M60 132 L60 70 L132 70"/>
+      <path class="dw" d="M168 70 L300 70 L300 122"/>
+      <path class="dw" d="M300 158 L300 210 L60 210 L60 148"/>
+      <line class="dw" x1="38" y1="132" x2="82" y2="132"/>
+      <line class="dw" x1="48" y1="148" x2="72" y2="148"/>
+      <circle class="dw" cx="150" cy="70" r="18"/>
+      <line class="dw thin" x1="137" y1="57" x2="163" y2="83"/>
+      <line class="dw thin" x1="163" y1="57" x2="137" y2="83"/>
+      <circle class="dw" cx="300" cy="140" r="18"/>
+      <line class="dw thin" x1="287" y1="127" x2="313" y2="153"/>
+      <line class="dw thin" x1="313" y1="127" x2="287" y2="153"/>
+      <text class="sm" x="180" y="248" text-anchor="middle">拆掉一盏 → 另一盏也灭</text>
+      <text class="sm" x="180" y="268" text-anchor="middle">电压被两盏分掉，都偏暗</text>
+
+      <line class="dw thin" x1="350" y1="24" x2="350" y2="276" stroke="var(--line)"/>
+
+      <!-- 并联 -->
+      <text x="530" y="34" text-anchor="middle">并联 · 各走各的路</text>
+      <path class="dw" d="M420 132 L420 70 L660 70"/>
+      <path class="dw" d="M420 148 L420 210 L660 210"/>
+      <line class="dw" x1="398" y1="132" x2="442" y2="132"/>
+      <line class="dw" x1="408" y1="148" x2="432" y2="148"/>
+      <path class="dw" d="M540 70 L540 122 M540 158 L540 210"/>
+      <circle class="dw" cx="540" cy="140" r="18"/>
+      <line class="dw thin" x1="527" y1="127" x2="553" y2="153"/>
+      <line class="dw thin" x1="553" y1="127" x2="527" y2="153"/>
+      <path class="dw" d="M650 70 L650 122 M650 158 L650 210"/>
+      <circle class="dw" cx="650" cy="140" r="18"/>
+      <line class="dw thin" x1="637" y1="127" x2="663" y2="153"/>
+      <line class="dw thin" x1="663" y1="127" x2="637" y2="153"/>
+      <circle class="dot" cx="540" cy="70" r="4"/>
+      <circle class="dot" cx="540" cy="210" r="4"/>
+      <text class="sm" x="530" y="248" text-anchor="middle">拆掉一盏 → 另一盏照常亮</text>
+      <text class="sm" x="530" y="268" text-anchor="middle">每盏都吃满 220V，一样亮</text>
+    </svg>
+    <figcaption><b>记住结论：</b>家里的灯、插座、电器<b>全部是并联</b>——所以每个都能拿到完整的 220V，坏一个不影响别人。串联只用在特殊场合（比如老式串灯、开关和它控制的灯之间）。</figcaption>
+  </figure>
+
+  <div class="col">
+    <div class="note">
+      <span class="t">顺带记住三个名词</span>
+      <p><strong>电压（V，伏）</strong>＝推力，水压；<strong>电流（A，安）</strong>＝流量，水流大小；<strong>功率（W，瓦）</strong>＝干活的速度。家用记一个换算就够：<code class="mono">功率 ÷ 220 ≈ 电流</code>。比如 2200W 的浴霸，约 10A，所以它那路空开至少要 16A。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4 ============ -->
+<section>
+  <div class="col">
+    <span class="snum">第 4 讲</span>
+    <h2>一个开关控制一盏灯（单控）</h2>
+    <p>这是电工的第一个实操。整条回路只有三根线：火线、零线、地线。<strong>关键规矩：开关必须接在火线上。</strong></p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 700 300" role="img" aria-label="单控照明电路：火线从配电箱先进开关再进灯，零线直接进灯的另一端，地线接灯具金属外壳">
+      <rect class="box" x="24" y="80" width="96" height="150" rx="3"/>
+      <text x="72" y="146" text-anchor="middle">配电箱</text>
+      <text class="sm" x="72" y="168" text-anchor="middle">空开 / 漏保</text>
+
+      <!-- 火线 -->
+      <path class="dw l" d="M120 110 L280 110"/>
+      <path class="dw l" d="M330 110 L600 110 L600 160 L584 160"/>
+      <circle class="dot" cx="280" cy="110" r="4"/>
+      <circle class="dot" cx="330" cy="110" r="4"/>
+      <line class="dw l" x1="280" y1="110" x2="326" y2="88"/>
+      <text class="tl" x="180" y="98">火线 L</text>
+      <text x="305" y="46" text-anchor="middle">开关</text>
+      <text class="sm" x="305" y="66" text-anchor="middle">必须装在火线上 ✓</text>
+
+      <!-- 零线 -->
+      <path class="dw n" d="M120 160 L536 160"/>
+      <text class="tn" x="180" y="184">零线 N</text>
+
+      <!-- 地线 -->
+      <path class="dw e" d="M120 216 L560 216 L560 196"/>
+      <text class="te" x="180" y="240">地线 PE</text>
+      <line class="lead" x1="560" y1="196" x2="560" y2="184"/>
+      <text class="sm" x="586" y="240">接灯具金属外壳</text>
+
+      <!-- 灯 -->
+      <circle class="dw" cx="560" cy="160" r="24"/>
+      <line class="dw thin" x1="543" y1="143" x2="577" y2="177"/>
+      <line class="dw thin" x1="577" y1="143" x2="543" y2="177"/>
+      <text x="518" y="134" text-anchor="end">灯</text>
+      <line class="lead" x1="522" y1="138" x2="544" y2="150"/>
+    </svg>
+    <figcaption><b>为什么开关一定要切火线？</b>因为开关断开后，灯头那一段就彻底没电了——你站在凳子上换灯泡才是安全的。要是接反了（开关切零线），关了灯，灯头照样带 220V 火线电，手一碰就触电。<b>这是最容易出人命的接反。</b></figcaption>
+  </figure>
+</section>
+
+<!-- ============ 5 ============ -->
+<section>
+  <div class="col">
+    <span class="snum">第 5 讲</span>
+    <h2>楼梯灯：两个地方管一盏灯（双控）</h2>
+    <p>楼下开灯、楼上关灯，靠的是两个<strong>单刀双掷开关</strong>，中间用两根线（叫"跨接线"）连起来。你只要盯住一件事：<em>电流能不能从头走到尾</em>。</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 700 300" role="img" aria-label="双控照明电路：火线进第一个双控开关的公共端，两根跨接线连到第二个开关，第二个开关的公共端出线接灯，零线回配电箱">
+      <rect class="box" x="20" y="88" width="90" height="150" rx="3"/>
+      <text x="65" y="158" text-anchor="middle">配电箱</text>
+
+      <!-- 火线到 SA1 -->
+      <path class="dw l" d="M110 110 L250 110"/>
+      <circle class="dot" cx="250" cy="110" r="4"/>
+      <circle class="dot" cx="300" cy="90" r="4"/>
+      <circle class="dot" cx="300" cy="130" r="4"/>
+      <line class="dw l" x1="250" y1="110" x2="298" y2="92"/>
+      <text class="tl" x="165" y="98">火线 L</text>
+      <text class="sm" x="262" y="180" text-anchor="middle">开关 A（楼下）</text>
+
+      <!-- 跨接线 -->
+      <path class="dw" d="M300 90 L450 90"/>
+      <path class="dw" d="M300 130 L450 130"/>
+      <text class="sm mo" x="330" y="80" text-anchor="middle">L1</text>
+      <text class="sm mo" x="330" y="150" text-anchor="middle">L2</text>
+      <text class="sm" x="392" y="116" text-anchor="middle">两根跨接线</text>
+
+      <!-- SA2 -->
+      <circle class="dot" cx="450" cy="90" r="4"/>
+      <circle class="dot" cx="450" cy="130" r="4"/>
+      <circle class="dot" cx="500" cy="110" r="4"/>
+      <line class="dw" x1="500" y1="110" x2="452" y2="92"/>
+      <text class="sm" x="488" y="180" text-anchor="middle">开关 B（楼上）</text>
+
+      <!-- 出线到灯 -->
+      <path class="dw" d="M500 110 L610 110 L610 140"/>
+      <circle class="dw" cx="610" cy="164" r="24"/>
+      <line class="dw thin" x1="593" y1="147" x2="627" y2="181"/>
+      <line class="dw thin" x1="627" y1="147" x2="593" y2="181"/>
+      <path class="dw n" d="M610 188 L610 240 L110 240"/>
+      <text class="tn" x="300" y="264" text-anchor="middle">零线 N 回配电箱</text>
+    </svg>
+    <figcaption><b>图上这个状态：</b>两个开关都搭在上面那根跨接线 L1 上 → 路通了 → <b>灯亮</b>。随便拨动其中一个开关，它就换到 L2，两头对不上 → 路断了 → <b>灯灭</b>。所以任何一个开关都能单独控制这盏灯。</figcaption>
+  </figure>
+</section>
+
+<!-- ============ 6 ============ -->
+<section>
+  <div class="col">
+    <span class="snum">第 6 讲</span>
+    <h2>家里的配电箱：电是怎么分出去的</h2>
+    <p>打开你家配电箱盖子，一排小开关，其实是一条流水线：<strong>先总管、再保命、最后分路</strong>。分路的意义是——空调跳闸不影响你家灯亮着。</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 720 340" role="img" aria-label="家用配电箱结构：电表进线经总断路器、漏电保护器到汇流排，再分成照明、插座、空调三条支路，另有独立的接地排">
+      <defs>
+        <marker id="ah6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <rect class="box" x="16" y="72" width="96" height="56" rx="3"/>
+      <text x="64" y="96" text-anchor="middle">电表进线</text>
+      <text class="sm mo" x="64" y="116" text-anchor="middle">L / N</text>
+
+      <line class="dw" x1="112" y1="100" x2="146" y2="100" marker-end="url(#ah6)"/>
+
+      <rect class="box" x="150" y="72" width="110" height="56" rx="3"/>
+      <text x="205" y="96" text-anchor="middle">总开关</text>
+      <text class="sm mo" x="205" y="116" text-anchor="middle">QF0 · 2P 40A</text>
+
+      <line class="dw" x1="260" y1="100" x2="296" y2="100" marker-end="url(#ah6)"/>
+
+      <rect class="box" x="300" y="72" width="122" height="56" rx="3"/>
+      <text x="361" y="96" text-anchor="middle">漏电保护器</text>
+      <text class="sm mo" x="361" y="116" text-anchor="middle">RCD · 30mA</text>
+
+      <path class="dw" d="M422 100 L470 100 L470 258"/>
+      <text class="sm" x="470" y="58" text-anchor="middle">汇流排</text>
+      <line class="dw" x1="470" y1="72" x2="470" y2="100"/>
+
+      <!-- 支路 -->
+      <line class="dw" x1="470" y1="100" x2="516" y2="100" marker-end="url(#ah6)"/>
+      <rect class="box" x="520" y="78" width="140" height="44" rx="3"/>
+      <text class="mo" x="590" y="106" text-anchor="middle">照明 1P 10A</text>
+      <text class="sm" x="590" y="140" text-anchor="middle">→ 客厅 / 卧室灯</text>
+
+      <line class="dw" x1="470" y1="180" x2="516" y2="180" marker-end="url(#ah6)"/>
+      <circle class="dot" cx="470" cy="180" r="4"/>
+      <rect class="box" x="520" y="158" width="140" height="44" rx="3"/>
+      <text class="mo" x="590" y="186" text-anchor="middle">插座 2P 16A</text>
+      <text class="sm" x="590" y="220" text-anchor="middle">→ 各房间插座</text>
+
+      <line class="dw" x1="470" y1="258" x2="516" y2="258" marker-end="url(#ah6)"/>
+      <circle class="dot" cx="470" cy="258" r="4"/>
+      <rect class="box" x="520" y="236" width="140" height="44" rx="3"/>
+      <text class="mo" x="590" y="264" text-anchor="middle">空调 2P 20A</text>
+      <text class="sm" x="590" y="298" text-anchor="middle">→ 空调专线</text>
+
+      <!-- 接地 -->
+      <path class="dw e" d="M64 128 L64 268"/>
+      <line class="dw e" x1="46" y1="272" x2="82" y2="272"/>
+      <line class="dw e" x1="52" y1="280" x2="76" y2="280"/>
+      <line class="dw e" x1="58" y1="288" x2="70" y2="288"/>
+      <text class="sm te" x="96" y="252">接地排 PE</text>
+      <text class="sm" x="96" y="272">→ 每个插座的地脚</text>
+      <text class="sm" x="96" y="292">→ 所有金属外壳</text>
+    </svg>
+    <figcaption><b>三道防线，各管各的：</b>总开关管"全家断电检修"；<b>漏电保护器（漏保）管人</b>——发现电从你身上漏走了，30 毫秒内跳闸；<b>各路空开管线</b>——某一路电流超了就跳它自己，不牵连别人。<b>漏保和空开不是一回事，缺一不可。</b></figcaption>
+  </figure>
+
+  <div class="col">
+    <div class="note">
+      <span class="t">跳闸了怎么查？</span>
+      <p>先看是<strong>哪一个</strong>跳的：跳的是某一路空开 → 那一路超载或短路，拔掉那路上的大功率电器再合闸。跳的是<strong>漏保</strong> → 说明有漏电（潮湿、电器坏了、或者有人触电），<strong>别硬合闸</strong>，逐路排查，查不出就叫持证电工。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 7 ============ -->
+<section>
+  <div class="col">
+    <span class="snum">第 7 讲</span>
+    <h2>三孔插座与线色：口诀背下来</h2>
+    <p>面对插座正面，三个孔的位置是<strong>国标固定死</strong>的，不能凭感觉接。接反了火零，很多电器外壳会长期带电。</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 680 300" role="img" aria-label="三孔插座正面接线：上孔接地线PE黄绿，左孔接零线N蓝色，右孔接火线L红色或棕色">
+      <rect class="box" x="60" y="46" width="240" height="208" rx="18"/>
+      <rect class="dw e" x="166" y="86" width="28" height="13" rx="3" fill="none"/>
+      <rect class="dw n" x="128" y="150" width="13" height="34" rx="3" fill="none"/>
+      <rect class="dw l" x="219" y="150" width="13" height="34" rx="3" fill="none"/>
+      <text class="te sm" x="180" y="76" text-anchor="middle">地 PE</text>
+      <text class="tn sm" x="134" y="208" text-anchor="middle">零 N</text>
+      <text class="tl sm" x="226" y="208" text-anchor="middle">火 L</text>
+      <text class="sm" x="180" y="278" text-anchor="middle">（从正面看插座）</text>
+
+      <text class="big" x="490" y="96" text-anchor="middle">左零 · 右火 · 上接地</text>
+
+      <rect x="360" y="140" width="26" height="10" rx="2" fill="var(--live)"/>
+      <text x="398" y="150">火线 L　—　红色 或 棕色</text>
+      <rect x="360" y="180" width="26" height="10" rx="2" fill="var(--neutral)"/>
+      <text x="398" y="190">零线 N　—　蓝色</text>
+      <rect x="360" y="220" width="26" height="10" rx="2" fill="var(--earth)"/>
+      <text x="398" y="230">地线 PE　—　黄绿双色</text>
+      <text class="sm" x="360" y="262">黄绿双色线永远只能当地线用，不许挪作他用。</text>
+    </svg>
+    <figcaption><b>怎么分辨哪根是火线？</b>用<b>验电笔</b>（试电笔）：笔尖碰线芯、手指按住笔尾金属，<b>氖管发亮的就是火线</b>。零线和地线都不亮。这是电工每天都在用的第一件工具，几块钱一支，必须常备。</figcaption>
+  </figure>
+</section>
+
+<!-- ============ 8 ============ -->
+<section>
+  <div class="col">
+    <span class="snum">第 8 讲</span>
+    <h2>电机启停自锁：电工考证必考的一张图</h2>
+    <p>到这里才算进了"工业电工"的门。要求很简单：<strong>按一下启动按钮，电机就一直转；按一下停止按钮，电机就停。</strong>难点在于按钮一松手就弹开了，靠什么让电机继续转？答案是<em>自锁</em>。</p>
+    <p>这类图纸永远分成左右两半：<strong>主电路</strong>（粗线，几十安培的大电流，真正驱动电机）和<strong>控制电路</strong>（细线，几安培的小电流，负责发号施令）。</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 720 470" role="img" aria-label="电机启停自锁电路：左侧主电路为三相电源经断路器、接触器主触点、热继电器到三相电动机；右侧控制电路为梯形图，热继电器常闭触点、停止按钮、启动按钮与接触器线圈串联，接触器常开触点并联在启动按钮两端形成自锁">
+      <text x="175" y="32" text-anchor="middle">主电路 · 大电流干活</text>
+
+      <text class="sm mo tl" x="80" y="60" text-anchor="middle">L1</text>
+      <text class="sm mo tl" x="130" y="60" text-anchor="middle">L2</text>
+      <text class="sm mo tl" x="180" y="60" text-anchor="middle">L3</text>
+      <text class="sm tl" x="216" y="60">三相电源</text>
+      <path class="dw l" d="M80 68 L80 96 M130 68 L130 96 M180 68 L180 96"/>
+
+      <rect class="box" x="52" y="96" width="156" height="40" rx="3"/>
+      <text class="mo" x="130" y="121" text-anchor="middle">QF 断路器</text>
+
+      <path class="dw" d="M80 136 L80 168 M130 136 L130 168 M180 136 L180 168"/>
+
+      <rect class="box" x="52" y="168" width="156" height="40" rx="3"/>
+      <text class="mo" x="130" y="193" text-anchor="middle">KM 主触点</text>
+
+      <path class="dw" d="M80 208 L80 240 M130 208 L130 240 M180 208 L180 240"/>
+
+      <rect class="box" x="52" y="240" width="156" height="40" rx="3"/>
+      <text class="mo" x="130" y="265" text-anchor="middle">FR 热继电器</text>
+
+      <path class="dw" d="M80 280 L80 300 L130 320 M130 280 L130 320 M180 280 L180 300 L130 320"/>
+      <circle class="dw" cx="130" cy="356" r="34"/>
+      <text class="mo" x="130" y="352" text-anchor="middle">M</text>
+      <text class="sm" x="130" y="372" text-anchor="middle">3~</text>
+      <text class="sm" x="130" y="418" text-anchor="middle">三相电动机</text>
+
+      <line class="dw thin" x1="352" y1="30" x2="352" y2="440" stroke="var(--line)"/>
+
+      <!-- 控制电路 -->
+      <text x="545" y="32" text-anchor="middle">控制电路 · 小电流指挥</text>
+
+      <path class="dw l" d="M400 80 L400 150"/>
+      <text class="tl mo" x="400" y="70" text-anchor="middle">L</text>
+      <path class="dw n" d="M690 80 L690 150"/>
+      <text class="tn mo" x="690" y="70" text-anchor="middle">N</text>
+
+      <!-- 主回路横档 -->
+      <path class="dw" d="M400 150 L428 150"/>
+      <circle class="dot" cx="428" cy="150" r="3.5"/>
+      <circle class="dot" cx="466" cy="150" r="3.5"/>
+      <line class="dw" x1="428" y1="150" x2="466" y2="150"/>
+      <line class="dw thin" x1="462" y1="140" x2="470" y2="160"/>
+      <path class="dw" d="M466 150 L500 150"/>
+
+      <circle class="dot" cx="500" cy="150" r="3.5"/>
+      <circle class="dot" cx="538" cy="150" r="3.5"/>
+      <line class="dw" x1="500" y1="150" x2="538" y2="150"/>
+      <line class="dw thin" x1="534" y1="140" x2="542" y2="160"/>
+      <path class="dw" d="M538 150 L562 150"/>
+
+      <circle class="dot" cx="562" cy="150" r="3.5"/>
+      <circle class="dot" cx="614" cy="150" r="3.5"/>
+      <line class="dw" x1="562" y1="150" x2="610" y2="136"/>
+      <path class="dw" d="M614 150 L626 150"/>
+
+      <rect class="box" x="626" y="130" width="44" height="40" rx="3"/>
+      <text class="mo" x="648" y="155" text-anchor="middle">KM</text>
+      <path class="dw" d="M670 150 L690 150"/>
+
+      <text class="sm" x="447" y="128" text-anchor="middle">FR 常闭</text>
+      <text class="sm" x="519" y="128" text-anchor="middle">SB1 停止</text>
+      <text class="sm" x="588" y="118" text-anchor="middle">SB2 启动</text>
+      <text class="sm" x="648" y="192" text-anchor="middle">线圈</text>
+
+      <!-- 自锁支路 -->
+      <path class="dw" d="M562 150 L562 240 L578 240"/>
+      <path class="dw" d="M614 150 L614 240 L602 240"/>
+      <circle class="dot" cx="578" cy="240" r="3.5"/>
+      <circle class="dot" cx="602" cy="240" r="3.5"/>
+      <line class="dw" x1="578" y1="240" x2="602" y2="228"/>
+      <text class="sm" x="588" y="272" text-anchor="middle">KM 自锁触点（常开）</text>
+      <text class="sm" x="588" y="292" text-anchor="middle">线圈一得电，它就闭合，把 SB2 短接住</text>
+
+      <text class="sm" x="400" y="336">① 按下 SB2 → 回路接通 → KM 线圈得电</text>
+      <text class="sm" x="400" y="360">② KM 主触点闭合 → 电机转；自锁触点同时闭合</text>
+      <text class="sm" x="400" y="384">③ 松开 SB2 → 电流改走自锁触点 → 电机继续转</text>
+      <text class="sm" x="400" y="408">④ 按下 SB1 停止 → 整条回路断 → 全部释放，电机停</text>
+    </svg>
+    <figcaption><b>自锁的精髓：</b>KM 线圈通电后，用它自己的一个常开触点把启动按钮"短接"住——相当于自己按住了自己。这也是<b>失压保护</b>：一旦停电，线圈释放、自锁断开，来电后电机<b>不会自己突然启动</b>，避免伤人。<b>FR 热继电器</b>则在电机长时间过载发烫时，用它的常闭触点切断控制回路。</figcaption>
+  </figure>
+</section>
+
+<!-- ============ 9 ============ -->
+<section>
+  <div class="col">
+    <span class="snum">第 9 讲</span>
+    <h2>安全铁律：这一节比前面八节都重要</h2>
+
+    <div class="danger">
+      <h3>⚠ 动手之前，这五条一条都不能省</h3>
+      <ul>
+        <li><strong>先断电，再验电。</strong>拉下空开只是第一步，必须用验电笔<strong>实测确认不带电</strong>才能动手。空开可能是坏的，也可能你拉错了那一路。</li>
+        <li><strong>挂牌上锁。</strong>在配电箱上贴张纸："有人作业，禁止合闸"。别人顺手一推闸，你就在里面。</li>
+        <li><strong>单手操作，站在干燥处。</strong>双手作业时电流可能穿过心脏。不要站在水里、湿手作业。</li>
+        <li><strong>金属外壳必须接地。</strong>地线不是可有可无的第三根线，它是漏电时唯一替你挡枪的东西。</li>
+        <li><strong>36V 以下才算安全电压，220V 完全足以致命。</strong>只要 30mA 电流通过人体就可能引起心室颤动——这也是漏保定 30mA 的原因。</li>
+      </ul>
+      <p style="margin-top:16px"><strong>入户线、配电箱改造、任何需要动电表和总闸的活，请交给持证电工。</strong>这份讲义帮你看懂图纸和原理，不等于授权你带电作业。</p>
+    </div>
+  </div>
+
+  <div class="col">
+    <h3>一次背完的口诀</h3>
+  </div>
+  <figure>
+    <p class="mnemonic">左零右火上接地<br>火线进开关，零线进灯头<br>黄绿是地线，永不做他用<br>断电先验电，验电再动手</p>
+    <figcaption>贴在工具箱盖里，比什么都管用。</figcaption>
+  </figure>
+
+  <div class="col">
+    <h3>常用文字符号（图纸上的"名字"）</h3>
+    <table>
+      <thead>
+        <tr><th>代号</th><th>中文</th><th>它是干什么的</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">L / N / PE</td><td>火线 / 零线 / 地线</td><td><span class="swatch" style="background:var(--live)"></span>红/棕　<span class="swatch" style="background:var(--neutral)"></span>蓝　<span class="swatch" style="background:var(--earth)"></span>黄绿</td></tr>
+        <tr><td class="mono">QF</td><td>断路器（空开）</td><td>过流自动跳闸，保护线路</td></tr>
+        <tr><td class="mono">RCD</td><td>漏电保护器</td><td>发现漏电立刻跳闸，保护人</td></tr>
+        <tr><td class="mono">FU</td><td>熔断器（保险丝）</td><td>电流过大自己烧断</td></tr>
+        <tr><td class="mono">SA / S</td><td>开关</td><td>手动通断，掰上去就停在那</td></tr>
+        <tr><td class="mono">SB</td><td>按钮</td><td>按住才动作，松手弹回</td></tr>
+        <tr><td class="mono">KM</td><td>交流接触器</td><td>小电流控制大电流的"电磁开关"</td></tr>
+        <tr><td class="mono">FR</td><td>热继电器</td><td>电机长时间过载时切断控制回路</td></tr>
+        <tr><td class="mono">EL</td><td>照明灯</td><td>灯具</td></tr>
+        <tr><td class="mono">M</td><td>电动机</td><td>把电变成转动</td></tr>
+      </tbody>
+    </table>
+
+    <h3>接下来练什么</h3>
+    <ol>
+      <li>拿一个电池、一个小灯泡、一个开关，把<strong>第 1 讲</strong>的圈亲手接一遍，再试着接成串联和并联。</li>
+      <li>买一支验电笔，在自家插座上找出哪个孔是火线，验证"左零右火"。</li>
+      <li>打开自家配电箱盖（<strong>只看不动手</strong>），对照第 6 讲认一遍：哪个是总闸、哪个是漏保、每一路管什么。</li>
+      <li>再回头看第 8 讲的自锁图，用手指顺着线走一遍电流，走通了就说明你真看懂了。</li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  新手电工电路图 · 中文标注版　|　图中所有符号按 IEC / 国标画法绘制，线色按中国国标标注。<br>
+  本讲义用于学习原理与识图，实际作业请遵守当地电气规范，涉及入户线与配电箱改造请由持证电工施工。
+</footer>
+
+</div>
